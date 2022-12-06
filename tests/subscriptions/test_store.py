@@ -1,11 +1,12 @@
 from typing import Sequence
 from uuid import uuid1
 
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
@@ -17,7 +18,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 time_window_sec=500 * 60,
                 resolution_sec=60,
-                entity_subscription=create_entity_subscription(),
+                entity=get_entity(EntityKey.EVENTS),
                 metadata={},
             ),
             SubscriptionData(
@@ -25,7 +26,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 time_window_sec=500 * 60,
                 resolution_sec=60,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
-                entity_subscription=create_entity_subscription(),
+                entity=get_entity(EntityKey.EVENTS),
                 metadata={},
             ),
         ]

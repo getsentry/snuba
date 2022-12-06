@@ -66,8 +66,7 @@ def test_scheduler_consumer() -> None:
         entity_key,
         PartitionId(partition_index),
     )
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     store.create(
         uuid.uuid4(),
         SubscriptionData(
@@ -75,7 +74,7 @@ def test_scheduler_consumer() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=entity_subscription,
+            entity=entity,
             metadata={},
         ),
     )

@@ -545,8 +545,7 @@ def test_produce_scheduled_subscription_message() -> None:
         entity_key,
         PartitionId(partition_index),
     )
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     # Create 2 subscriptions
     # Subscription 1
     store.create(
@@ -556,7 +555,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=entity_subscription,
+            entity=entity,
             metadata={},
         ),
     )
@@ -569,7 +568,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
-            entity_subscription=entity_subscription,
+            entity=entity,
             metadata={},
         ),
     )
@@ -663,8 +662,7 @@ def test_produce_stale_message() -> None:
         PartitionId(partition_index),
     )
 
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     # Create subscription
     store.create(
         uuid.uuid4(),
@@ -673,7 +671,7 @@ def test_produce_stale_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=entity_subscription,
+            entity=entity,
             metadata={},
         ),
     )

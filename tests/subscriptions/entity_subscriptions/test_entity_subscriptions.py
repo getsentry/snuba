@@ -209,10 +209,11 @@ def test_entity_subscription_processors(
     exception: Optional[Type[Exception]],
     offset: Optional[int],
 ) -> None:
-    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    entity = get_entity(entity_key)
+    subscription_processors = entity.get_subscription_processors()
 
-    if entity_subscription and entity_subscription.processors:
-        for processor in entity_subscription.processors:
+    if subscription_processors:
+        for processor in subscription_processors:
             if exception is not None:
                 with pytest.raises(exception):
                     processor.to_dict(metadata) == {}
@@ -235,9 +236,10 @@ def test_entity_subscription_validators(
     exception: Optional[Type[Exception]],
     offset: Optional[int],
 ) -> None:
-    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    entity = get_entity(entity_key)
+    subscription_validators = entity.get_subscription_validators()
 
-    if entity_subscription and entity_subscription.validators:
-        for validator in entity_subscription.validators:
+    if subscription_validators:
+        for validator in subscription_validators:
             if isinstance(validator, AggregationValidator):
                 validator.validate(query)

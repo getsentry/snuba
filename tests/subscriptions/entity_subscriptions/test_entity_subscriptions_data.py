@@ -3,7 +3,6 @@ from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
@@ -14,8 +13,6 @@ from snuba.utils.metrics.timer import Timer
 dataset = get_dataset("generic_metrics")
 entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 entity_key = get_entity_name(entity)
-entity_subscription = entity.get_entity_subscription()
-assert isinstance(entity_subscription, EntitySubscription)
 storage = entity.get_writable_storage()
 assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
@@ -33,22 +30,19 @@ timer = Timer("test_entity_subscription_data")
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
-def subscription_data_builder(
-    entity_subscription: EntitySubscription,
-) -> SubscriptionData:
+def subscription_data_builder() -> SubscriptionData:
     return SubscriptionData(
         project_id=project_id,
         resolution_sec=resolution_sec,
         time_window_sec=time_window_sec,
-        entity_subscription=entity_subscription,
+        entity=entity,
         query=query,
         metadata=metadata,
     )
 
 
 def test_entity_subscriptions_data() -> None:
-    assert entity_subscription is not None
-    subscription_data = subscription_data_builder(entity_subscription)
+    subscription_data = subscription_data_builder()
 
     subscription_identifier = SubscriptionCreator(dataset, entity_key).create(
         subscription_data, timer
@@ -74,5 +68,5 @@ def test_entity_subscriptions_data() -> None:
     assert result.project_id == project_id
     assert result.resolution_sec == resolution_sec
     assert result.time_window_sec == time_window_sec
-    assert isinstance(result.entity_subscription, EntitySubscription)
+    assert result.entity == entity
     assert result.query == query

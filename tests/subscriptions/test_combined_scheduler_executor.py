@@ -27,8 +27,7 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 def create_subscription() -> None:
     store = RedisSubscriptionDataStore(redis_client, EntityKey.EVENTS, PartitionId(0))
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     store.create(
         uuid.uuid4(),
         SubscriptionData(
@@ -36,7 +35,7 @@ def create_subscription() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH (events) SELECT count()",
-            entity_subscription=entity_subscription,
+            entity=entity,
             metadata={},
         ),
     )

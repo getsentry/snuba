@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
+from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -35,7 +36,8 @@ class Entity(Describable, ABC):
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
-        entity_subscription: Optional[EntitySubscription],
+        subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
+        subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
@@ -47,7 +49,8 @@ class Entity(Describable, ABC):
         self.__data_model = EntityColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
-        self.__entity_subscription = entity_subscription
+        self.__subscription_processors = subscription_processors
+        self.__subscription_validators = subscription_validators
         self.required_time_column = required_time_column
 
         columns_exist_validator = EntityContainsColumnsValidator(
@@ -128,12 +131,21 @@ class Entity(Describable, ABC):
         """
         return self.__writable_storage
 
-    def get_entity_subscription(self) -> Optional[EntitySubscription]:
+    def get_subscription_processors(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
         """
-        Provides an entity subscription object which contains defined validators and
-        processors to be run on on subscription queries.
+        Provides an entity subscription processors to be run on on subscription queries.
         """
-        return self.__entity_subscription
+        return self.__subscription_processors
+
+    def get_subscription_validators(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+        """
+        Provides an entity subscription validators to be run on on subscription queries.
+        """
+        return self.__subscription_validators
 
     def describe(self) -> Description:
         relationships = []

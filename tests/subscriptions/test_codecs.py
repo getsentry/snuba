@@ -9,7 +9,7 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -27,7 +27,6 @@ from snuba.subscriptions.data import (
     SubscriptionWithMetadata,
 )
 from snuba.utils.metrics.timer import Timer
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 def build_snql_subscription_data(
@@ -39,7 +38,7 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        entity_subscription=create_entity_subscription(entity_key),
+        entity=get_entity(entity_key),
         metadata=metadata,
     )
 
@@ -93,10 +92,6 @@ def test_encode_snql(
     assert data["resolution"] == subscription.resolution_sec
     assert data["query"] == subscription.query
     assert metadata == subscription.metadata
-    assert isinstance(
-        subscription.entity_subscription,
-        type(get_entity(entity_key).get_entity_subscription()),
-    )
 
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
@@ -124,14 +119,13 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=entity_subscription,
+        entity=entity,
         metadata={},
     )
 
@@ -175,13 +169,13 @@ def test_subscription_task_result_encoder() -> None:
 
 METRICS_CASES = [
     pytest.param(
-        get_entity(EntityKey.METRICS_COUNTERS).get_entity_subscription(),
+        get_entity(EntityKey.METRICS_COUNTERS),
         "sum",
         EntityKey.METRICS_COUNTERS,
         id="metrics_counters subscription",
     ),
     pytest.param(
-        get_entity(EntityKey.METRICS_SETS).get_entity_subscription(),
+        get_entity(EntityKey.METRICS_SETS),
         "uniq",
         EntityKey.METRICS_SETS,
         id="metrics_sets subscription",
@@ -189,9 +183,9 @@ METRICS_CASES = [
 ]
 
 
-@pytest.mark.parametrize("entity_subscription, aggregate, entity_key", METRICS_CASES)
+@pytest.mark.parametrize("entity, aggregate, entity_key", METRICS_CASES)
 def test_metrics_subscription_task_result_encoder(
-    entity_subscription: EntitySubscription, aggregate: str, entity_key: EntityKey
+    entity: Entity, aggregate: str, entity_key: EntityKey
 ) -> None:
     codec = SubscriptionTaskResultEncoder()
     metadata = {"organization": 1}
@@ -207,7 +201,7 @@ def test_metrics_subscription_task_result_encoder(
         ),
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=entity_subscription,
+        entity=entity,
         metadata=metadata,
     )
 
@@ -256,14 +250,13 @@ def test_metrics_subscription_task_result_encoder(
 
 def test_subscription_task_encoder() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=entity_subscription,
+        entity=entity,
         metadata={},
     )
 

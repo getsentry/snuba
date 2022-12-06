@@ -119,14 +119,13 @@ def test_executor_consumer() -> None:
         executor._run_once()
 
     # Produce a scheduled task to the scheduled subscriptions topic
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=entity_subscription,
+        entity=entity,
         metadata={},
     )
 
@@ -186,8 +185,7 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         metadata.update({"organization": 1})
 
-    entity_subscription = get_entity(entity_key).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(entity_key)
 
     while True:
         payload = codec.encode(
@@ -202,7 +200,7 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
-                            entity_subscription=entity_subscription,
+                            entity=entity,
                             metadata=metadata,
                         ),
                     ),
@@ -315,14 +313,13 @@ def test_produce_result() -> None:
 
     strategy = ProduceResult(producer, result_topic.name, commit)
 
-    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
-    assert entity_subscription is not None
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=entity_subscription,
+        entity=entity,
         metadata={},
     )
 

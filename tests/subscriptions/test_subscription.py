@@ -5,6 +5,7 @@ import pytest
 from pytest import raises
 
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
@@ -15,7 +16,6 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from tests.subscriptions import BaseSubscriptionTest
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 TESTS_CREATE = [
     pytest.param(
@@ -29,7 +29,7 @@ TESTS_CREATE = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
         id="SnQL subscription",
@@ -48,7 +48,7 @@ TESTS_INVALID = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
         id="SnQL subscription",
@@ -94,7 +94,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=10 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
-                    entity_subscription=create_entity_subscription(),
+                    entity=get_entity(EntityKey.EVENTS),
                     metadata={},
                 ),
                 self.timer,
@@ -109,7 +109,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    entity_subscription=create_entity_subscription(),
+                    entity=get_entity(EntityKey.EVENTS),
                     metadata={},
                 ),
                 self.timer,
@@ -127,7 +127,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     ),
                     time_window_sec=0,
                     resolution_sec=60,
-                    entity_subscription=create_entity_subscription(),
+                    entity=get_entity(EntityKey.EVENTS),
                     metadata={},
                 ),
                 self.timer,
@@ -140,7 +140,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=48 * 60 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    entity_subscription=create_entity_subscription(),
+                    entity=get_entity(EntityKey.EVENTS),
                     metadata={},
                 ),
                 self.timer,
@@ -155,7 +155,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    entity_subscription=create_entity_subscription(),
+                    entity=get_entity(EntityKey.EVENTS),
                     metadata={},
                 ),
                 self.timer,
@@ -169,7 +169,7 @@ TESTS_CREATE_METRICS = [
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
+            entity=get_entity(EntityKey.METRICS_COUNTERS),
             metadata={"organization": 1},
         ),
         EntityKey.METRICS_COUNTERS,
@@ -181,7 +181,7 @@ TESTS_CREATE_METRICS = [
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
+            entity=get_entity(EntityKey.METRICS_SETS),
             metadata={"organization": 1},
         ),
         EntityKey.METRICS_SETS,
@@ -197,7 +197,7 @@ TESTS_INVALID_METRICS = [
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
+            entity=get_entity(EntityKey.METRICS_COUNTERS),
             metadata={"organization": 1},
         ),
         id="Metrics Counters subscription missing tags[3] condition",
@@ -208,7 +208,7 @@ TESTS_INVALID_METRICS = [
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
+            entity=get_entity(EntityKey.METRICS_COUNTERS),
             metadata={"organization": 1},
         ),
         id="Metrics Counters subscription missing project_id condition",
@@ -219,7 +219,7 @@ TESTS_INVALID_METRICS = [
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
+            entity=get_entity(EntityKey.METRICS_SETS),
             metadata={"organization": 1},
         ),
         id="Metrics Sets subscription missing tags[3] condition",
@@ -230,7 +230,7 @@ TESTS_INVALID_METRICS = [
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
+            entity=get_entity(EntityKey.METRICS_SETS),
             metadata={"organization": 1},
         ),
         id="Metrics Sets subscription missing project_id condition",
@@ -280,7 +280,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         )
         identifier = creator.create(subscription, Timer("test"))

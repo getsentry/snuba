@@ -79,7 +79,8 @@ class Events(FakeEntity):
             writable_storage=None,
             validators=None,
             required_time_column=None,
-            entity_subscription=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
 
@@ -106,7 +107,8 @@ class GroupedMessage(FakeEntity):
             writable_storage=None,
             validators=None,
             required_time_column=None,
-            entity_subscription=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
 
@@ -133,5 +135,6 @@ class GroupAssignee(FakeEntity):
             writable_storage=None,
             validators=None,
             required_time_column=None,
-            entity_subscription=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )

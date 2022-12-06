@@ -21,9 +21,14 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
-from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
-from snuba.datasets.entity_subscriptions.validators import AggregationValidator
+from snuba.datasets.entity_subscriptions.processors import (
+    AddColumnCondition,
+    EntitySubscriptionProcessor,
+)
+from snuba.datasets.entity_subscriptions.validators import (
+    AggregationValidator,
+    EntitySubscriptionValidator,
+)
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -55,7 +60,8 @@ class MetricsEntity(Entity, ABC):
         mappers: TranslationMappers,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
-        entity_subscription: Optional[EntitySubscription] = None,
+        subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None,
+        subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None,
     ) -> None:
         writable_storage = (
             get_writable_storage(writable_storage_key) if writable_storage_key else None
@@ -101,7 +107,8 @@ class MetricsEntity(Entity, ABC):
             writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
-            entity_subscription=entity_subscription,
+            subscription_processors=subscription_processors,
+            subscription_validators=subscription_validators,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -131,12 +138,10 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
-            entity_subscription=EntitySubscription(
-                validators=[
-                    AggregationValidator(3, ["having", "orderby"], "timestamp")
-                ],
-                processors=[AddColumnCondition("organization", "org_id")],
-            ),
+            subscription_processors=[AddColumnCondition("organization", "org_id")],
+            subscription_validators=[
+                AggregationValidator(3, ["having", "orderby"], "timestamp")
+            ],
         )
 
 
@@ -152,12 +157,10 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
-            entity_subscription=EntitySubscription(
-                validators=[
-                    AggregationValidator(3, ["having", "orderby"], "timestamp")
-                ],
-                processors=[AddColumnCondition("organization", "org_id")],
-            ),
+            subscription_processors=[AddColumnCondition("organization", "org_id")],
+            subscription_validators=[
+                AggregationValidator(3, ["having", "orderby"], "timestamp")
+            ],
         )
 
 
@@ -178,7 +181,8 @@ class OrgMetricsCountersEntity(MetricsEntity):
                 ]
             ),
             validators=[GranularityValidator(minimum=3600)],
-            entity_subscription=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
 
@@ -234,5 +238,6 @@ class MetricsDistributionsEntity(MetricsEntity):
                     ),
                 ],
             ),
-            entity_subscription=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )

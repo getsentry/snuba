@@ -4,12 +4,13 @@ from typing import Optional, Type, Union
 import pytest
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import SubscriptionData
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 TESTS = [
     pytest.param(
@@ -23,7 +24,7 @@ TESTS = [
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
         None,
@@ -40,7 +41,7 @@ TESTS = [
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
         InvalidQueryException,
@@ -57,7 +58,7 @@ TESTS = [
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
         InvalidQueryException,
