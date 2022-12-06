@@ -307,7 +307,10 @@ class SearchIssuesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.search_issues")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_search_issues", "0002_search_issues_add_tags_hash_map"]
+        return [
+            "0001_search_issues",
+            "0002_search_issues_add_tags_hash_map",
+        ]
 
 
 _REGISTERED_GROUPS = {

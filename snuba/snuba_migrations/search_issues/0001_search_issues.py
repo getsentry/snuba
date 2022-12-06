@@ -14,7 +14,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import OperationTarget
+from snuba.migrations.operations import OperationTarget, SqlOperation
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
@@ -53,11 +53,11 @@ columns: List[Column[Modifiers]] = [
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_local",
+                table_name=params[0],
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(organization_id, project_id, toStartOfDay(detection_timestamp))",
@@ -68,38 +68,23 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     ttl="detection_timestamp + toIntervalDay(retention_days)",
                 ),
-                target=OperationTarget.LOCAL,
+                target=params[1],
             )
+            for params in [
+                ("search_issues_local", OperationTarget.LOCAL),
+                ("search_issues_dist", OperationTarget.DISTRIBUTED),
+            ]
         ]
 
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_local",
-                target=OperationTarget.LOCAL,
+                table_name=params[0],
+                target=params[1],
             )
-        ]
-
-    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_dist",
-                columns=columns,
-                engine=table_engines.Distributed(
-                    local_table_name="search_issues_local",
-                    sharding_key="project_id",
-                ),
-                target=OperationTarget.DISTRIBUTED,
-            )
-        ]
-
-    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_dist",
-                target=OperationTarget.DISTRIBUTED,
-            )
+            for params in [
+                ("search_issues_local", OperationTarget.LOCAL),
+                ("search_issues_dist", OperationTarget.DISTRIBUTED),
+            ]
         ]

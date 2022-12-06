@@ -3,15 +3,18 @@ from typing import Any, Callable
 
 import simplejson as json
 
+from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from tests.base import BaseApiTest
+from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_raw_unprocessed_events
 
 
-class TestSearchIssuesSnQLApi(BaseApiTest):
+class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
+        initialize_snuba()
         self.events_storage = get_entity(EntityKey.SEARCH_ISSUES).get_writable_storage()
         assert self.events_storage is not None
 
@@ -42,6 +45,7 @@ class TestSearchIssuesSnQLApi(BaseApiTest):
         evt = dict(
             organization_id=1,
             project_id=2,
+            group_id=3,
             detection_timestamp=now.timestamp(),
         )
 
