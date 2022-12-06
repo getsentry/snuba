@@ -299,11 +299,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             message, result_future = self.__queue.popleft()
 
             self.__next_step.submit(
-                Message(
-                    message.value.replace(
-                        SubscriptionTaskResult(
-                            result_future.task, result_future.future.result()
-                        )
+                message.replace(
+                    SubscriptionTaskResult(
+                        result_future.task, result_future.future.result()
                     )
                 )
             )
@@ -384,9 +382,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 result_future.task, result_future.future.result(remaining)
             )
 
-            self.__next_step.submit(
-                Message(message.value.replace(subscription_task_result))
-            )
+            self.__next_step.submit(message.replace(subscription_task_result))
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
         self.__executor.shutdown()

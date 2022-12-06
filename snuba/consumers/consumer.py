@@ -36,7 +36,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import BrokerValue, Message, Partition, Position, Topic
+from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -428,14 +428,14 @@ class MultistorageCollector(
         assert not self.__closed
 
         for storage_key, payload in message.payload:
-            writer_message = Message(message.value.replace(payload))
+            writer_message = message.replace(payload)
             self.__steps[storage_key].submit(writer_message)
 
             # we collect the messages in self.__messages in the off chance
             # that we get an error submitting a batch and need to forward
             # these message to the dead letter topic. The payload doesn't
             # have storage information so we need to keep the storage_key
-            other_message = Message(message.value.replace((storage_key, payload)))
+            other_message = message.replace((storage_key, payload))
 
             self.__messages[storage_key].append(other_message)
 
@@ -773,7 +773,7 @@ class MultistorageConsumerProcessingStrategyFactory(
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return TransformStep(

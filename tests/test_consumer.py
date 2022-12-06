@@ -9,7 +9,6 @@ from unittest.mock import Mock, call
 
 import pytest
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.types import BrokerValue, Message, Partition, Position, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -21,6 +20,7 @@ from snuba.consumers.consumer import (
     ReplacementBatchWriter,
     process_message,
 )
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch

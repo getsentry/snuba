@@ -102,11 +102,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         offset_to_commit = self.__offset_high_watermark if should_commit else None
 
         self.__next_step.submit(
-            Message(
-                message.value.replace(
-                    CommittableTick(message.payload, offset_to_commit)
-                )
-            )
+            message.replace(CommittableTick(message.payload, offset_to_commit))
         )
         if should_commit:
             self.__offset_low_watermark = self.__offset_high_watermark

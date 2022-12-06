@@ -216,9 +216,7 @@ def test_tick_buffer_wait_slowest() -> None:
 def make_message_for_next_step(
     message: Message[Tick], offset_to_commit: Optional[int]
 ) -> Message[CommittableTick]:
-    return Message(
-        message.value.replace(CommittableTick(message.payload, offset_to_commit))
-    )
+    return message.replace(CommittableTick(message.payload, offset_to_commit))
 
 
 def test_provide_commit_strategy() -> None:
