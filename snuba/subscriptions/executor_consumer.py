@@ -16,7 +16,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit
+from arroyo.types import BrokerValue, Commit
 
 from snuba import state
 from snuba.consumers.utils import get_partition_count
@@ -41,6 +41,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ def build_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    slice_id: Optional[int],
     producer: Producer[KafkaPayload],
     total_concurrent_queries: int,
     auto_offset_reset: str,
@@ -122,14 +124,16 @@ def build_executor_consumer(
             result_topic_spec,
         ), "All entities must have same scheduled and result topics"
 
+    physical_scheduled_topic = scheduled_topic_spec.get_physical_topic_name(slice_id)
+
     consumer_configuration = build_kafka_consumer_configuration(
-        scheduled_topic_spec.topic,
+        SnubaTopic(physical_scheduled_topic),
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=strict_offset_reset,
     )
 
-    total_partition_count = get_partition_count(scheduled_topic_spec.topic)
+    total_partition_count = get_partition_count(SnubaTopic(physical_scheduled_topic))
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
     # for the consumer group, or use the default.
@@ -156,7 +160,7 @@ def build_executor_consumer(
 
     return StreamProcessor(
         KafkaConsumer(consumer_configuration),
-        Topic(scheduled_topic_spec.topic_name),
+        Topic(physical_scheduled_topic),
         SubscriptionExecutorProcessingFactory(
             total_concurrent_queries,
             total_partition_count,
@@ -296,12 +300,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             self.__next_step.submit(
                 Message(
-                    message.partition,
-                    message.offset,
-                    SubscriptionTaskResult(
-                        result_future.task, result_future.future.result()
-                    ),
-                    message.timestamp,
+                    message.value.replace(
+                        SubscriptionTaskResult(
+                            result_future.task, result_future.future.result()
+                        )
+                    )
                 )
             )
 
@@ -382,12 +385,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
             self.__next_step.submit(
-                Message(
-                    message.partition,
-                    message.offset,
-                    subscription_task_result,
-                    message.timestamp,
-                )
+                Message(message.value.replace(subscription_task_result))
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
@@ -416,7 +414,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self.__encoder = SubscriptionTaskResultEncoder()
 
         self.__queue: Deque[
-            Tuple[Message[SubscriptionTaskResult], Future[Message[KafkaPayload]]]
+            Tuple[Message[SubscriptionTaskResult], Future[BrokerValue[KafkaPayload]]]
         ] = deque()
 
         self.__max_buffer_size = 10000
@@ -431,7 +429,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             self.__queue.popleft()
 
-            self.__commit({message.partition: message.position_to_commit})
+            self.__commit(message.committable)
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
@@ -466,7 +464,5 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             future.result(remaining)
 
-            offset = {message.partition: message.position_to_commit}
-
-            logger.info("Committing offset: %r", offset)
-            self.__commit(offset, force=True)
+            logger.info("Committing offset: %r", message.committable)
+            self.__commit(message.committable, force=True)

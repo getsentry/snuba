@@ -67,6 +67,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["environment"] = maybe(to_string, replay_event.get("environment"))
         processed["dist"] = maybe(to_string, replay_event.get("dist"))
         processed["platform"] = maybe(to_string, replay_event["platform"])
+        processed["replay_type"] = maybe(
+            to_enum(["session", "error"]), replay_event.get("replay_type")
+        )
 
         # Archived can only be 1 or null.
         processed["is_archived"] = (
@@ -240,6 +243,16 @@ def to_string(value: Any) -> str:
         return ""
     else:
         return _encode_utf8(str(value))
+
+
+def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
+    def inline(value: Any) -> str | None:
+        for enum in enumeration:
+            if value == enum:
+                return enum
+        return None
+
+    return inline
 
 
 def to_capped_list(metric_name: str, value: Any) -> list[Any]:

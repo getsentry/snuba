@@ -58,10 +58,7 @@ from snuba.web import QueryException, QueryResult, constants
 MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
-redis_cache_clients = [
-    get_redis_client(RedisClientKey.CACHE),
-    get_redis_client(RedisClientKey.CACHE_V2),
-]
+redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -87,7 +84,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        redis_cache_clients,
+        redis_cache_client,
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
@@ -440,7 +437,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
                 cache_partitions[partition_id] = RedisCache(
-                    redis_cache_clients,
+                    redis_cache_client,
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
@@ -754,6 +751,7 @@ def raw_query(
             stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
             error_code = None
+            status = QueryStatus.ERROR
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
@@ -769,8 +767,10 @@ def raw_query(
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code == errors.ErrorCodes.TIMEOUT_EXCEEDED:
                             sentry_sdk.set_tag("timeout", "query_timeout")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code in (
                             errors.ErrorCodes.SOCKET_TIMEOUT,
                             errors.ErrorCodes.NETWORK_ERROR,
@@ -782,9 +782,10 @@ def raw_query(
                 ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
+                        status = QueryStatus.TIMEOUT
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status(QueryStatus.ERROR, error_code=error_code)
+            stats = update_with_status(status, error_code=error_code)
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly

@@ -1,19 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
 
-import { QuerylogRequest, QuerylogResult } from "./types";
+import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<QuerylogRequest>;
 
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QuerylogResult) => JSX.Element;
+  predefinedQuery: PredefinedQuery | null;
 }) {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<
     QuerylogResult[]
   >([]);
+
+  useEffect(() => {
+    if (props.predefinedQuery) {
+      setQuery({ sql: props.predefinedQuery.sql });
+    }
+  }, [props.predefinedQuery]);
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -58,6 +65,7 @@ function QueryDisplay(props: {
     <div>
       <form>
         <h2>Construct a Querylog Query</h2>
+        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
         </div>

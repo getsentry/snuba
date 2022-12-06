@@ -20,7 +20,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Position
 
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -80,7 +80,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         # Store the last message we received for each partition so know when
         # to commit offsets.
         self.__latest_messages_by_partition: MutableMapping[
-            int, Optional[Message[Tick]]
+            int, Optional[BrokerValue[Tick]]
         ] = {index: None for index in range(self.__partitions)}
         self.__offset_low_watermark: Optional[int] = None
         self.__offset_high_watermark: Optional[int] = None
@@ -93,18 +93,19 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
     def submit(self, message: Message[Tick]) -> None:
         assert not self.__closed
 
+        assert isinstance(message.value, BrokerValue)
+
         # Update self.__offset_high_watermark
-        self.__update_offset_high_watermark(message)
+        self.__update_offset_high_watermark(message.value)
 
         should_commit = self.__should_commit(message)
         offset_to_commit = self.__offset_high_watermark if should_commit else None
 
         self.__next_step.submit(
             Message(
-                message.partition,
-                message.offset,
-                CommittableTick(message.payload, offset_to_commit),
-                message.timestamp,
+                message.value.replace(
+                    CommittableTick(message.payload, offset_to_commit)
+                )
             )
         )
         if should_commit:
@@ -119,22 +120,22 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         return self.__offset_high_watermark > self.__offset_low_watermark
 
-    def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
-        assert message.partition.index == 0, "Commit log cannot be partitioned"
-        tick_partition = message.payload.partition
+    def __update_offset_high_watermark(self, value: BrokerValue[Tick]) -> None:
+        assert value.partition.index == 0, "Commit log cannot be partitioned"
+        tick_partition = value.payload.partition
         assert tick_partition is not None
-        self.__latest_messages_by_partition[tick_partition] = message
+        self.__latest_messages_by_partition[tick_partition] = value
 
         # Keep track of the slowest/fastest partition based on the tick's lower timestamp.
         # This is only used for recording the partition lag metric.
-        slowest = message.payload.timestamps.lower
-        fastest = message.payload.timestamps.lower
+        slowest = value.payload.timestamps.lower
+        fastest = value.payload.timestamps.lower
 
         # Keep track of the earliest partition based on its offset in the commit log topic.
         # This is used to determine the offset that we can safely commit.
         # The offset to be committed is the `next_offset`: 1 higher than the offset of
         # the current message
-        earliest = message.next_offset
+        earliest = value.next_offset
 
         for partition_message in self.__latest_messages_by_partition.values():
             if partition_message is None:
@@ -307,8 +308,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
 
 class TickSubscription(NamedTuple):
-    tick_message: Message[CommittableTick]
-    subscription_future: Future[Message[KafkaPayload]]
+    tick_message: BrokerValue[CommittableTick]
+    subscription_future: Future[BrokerValue[KafkaPayload]]
     offset_to_commit: Optional[int]
 
 
@@ -319,13 +320,15 @@ class ScheduledSubscriptionQueue:
 
     def __init__(self) -> None:
         self.__queues: Deque[
-            Tuple[Message[CommittableTick], Deque[Future[Message[KafkaPayload]]]]
+            Tuple[
+                BrokerValue[CommittableTick], Deque[Future[BrokerValue[KafkaPayload]]]
+            ]
         ] = deque()
 
     def append(
         self,
-        tick_message: Message[CommittableTick],
-        futures: Deque[Future[Message[KafkaPayload]]],
+        tick_message: BrokerValue[CommittableTick],
+        futures: Deque[Future[BrokerValue[KafkaPayload]]],
     ) -> None:
         if len(futures) > 0:
             self.__queues.append((tick_message, futures))
@@ -437,6 +440,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
     def submit(self, message: Message[CommittableTick]) -> None:
         assert not self.__closed
+        assert isinstance(message.value, BrokerValue)
 
         # If queue is full, raise MessageRejected to tell the stream
         # processor to pause consuming
@@ -463,8 +467,8 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
             offset = {
-                message.partition: Position(
-                    message.payload.offset_to_commit, message.timestamp
+                message.value.partition: Position(
+                    message.value.payload.offset_to_commit, message.value.timestamp
                 )
             }
             logger.info("Committing offset: %r", offset)
@@ -475,11 +479,11 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # for that timestamp occurs
         self.__metrics.timing(
             "scheduling_latency",
-            (time.time() - datetime.timestamp(message.timestamp)) * 1000,
+            (time.time() - datetime.timestamp(message.value.timestamp)) * 1000,
         )
 
         self.__queue.append(
-            message,
+            message.value,
             deque(
                 [
                     self.__producer.produce(self.__scheduled_topic, task)

@@ -141,3 +141,15 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         raise InvalidCustomQuery(
             f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
         )
+
+
+class PreDefinedQuery:
+    sql: str
+
+    @classmethod
+    def to_json(cls) -> dict[str, str]:
+        return {
+            "sql": cls.sql,
+            "description": cls.__doc__ or "",
+            "name": cls.__name__,
+        }
