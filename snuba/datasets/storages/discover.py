@@ -16,10 +16,8 @@ from snuba.datasets.plans.splitters.strategies import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages.errors import storage as error_storage
 from snuba.datasets.storages.errors_common import mandatory_conditions
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -112,7 +110,7 @@ storage = ReadableTableStorage(
                 "project_id",
             ]
         ),
-        NullColumnCaster([transactions_storage, error_storage]),
+        NullColumnCaster(["transactions", "errors"]),
         TableRateLimit(),
     ],
     query_splitters=[
