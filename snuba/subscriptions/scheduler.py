@@ -301,7 +301,6 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__partition_id = partition_id
         self.__metrics = metrics
 
-        self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
 
         self.__delegate_builder = DelegateTaskBuilder()
@@ -329,35 +328,34 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             # We are transitioning between jittered and immediate mode. We must use the delegate builder.
             self.__builder = self.__delegate_builder
 
-    def __get_filtered_subscriptions(self) -> List[Subscription]:
-        if self.__slice_id is not None:
-            filtered_subscriptions: List[Subscription] = []
-            for subscription in self.__subscriptions:
-                # get the EntitySubscription from the Subscription
-                sub_data = subscription.data
-                entity_sub = sub_data.entity_subscription
+    def __filter_subscriptions(
+        self, subscriptions: List[Subscription]
+    ) -> List[Subscription]:
 
-                # partition key is only defined for SessionsSubscriptions
-                if isinstance(entity_sub, SessionsSubscription):
-                    partition_key_value = entity_sub.get_partitioning_key()
+        filtered_subscriptions: List[Subscription] = []
+        for subscription in subscriptions:
+            # get the EntitySubscription from the Subscription
+            sub_data = subscription.data
+            entity_sub = sub_data.entity_subscription
 
-                    # map the partition key's value to the slice ID
-                    logical_part = map_partition_key_to_logical_partition(
-                        partition_key_value
+            # partition key is only defined for SessionsSubscriptions
+            if isinstance(entity_sub, SessionsSubscription):
+                partition_key_value = entity_sub.get_partitioning_key()
+
+                # map the partition key's value to the slice ID
+                logical_part = map_partition_key_to_logical_partition(
+                    partition_key_value
+                )
+                entity = get_entity(self.__entity_key)
+                storage = entity.get_writable_storage()
+                if storage is not None:
+                    part_slice_id = map_logical_partition_to_slice(
+                        storage.get_storage_key(), logical_part
                     )
-                    entity = get_entity(self.__entity_key)
-                    storage = entity.get_writable_storage()
-                    if storage is not None:
-                        part_slice_id = map_logical_partition_to_slice(
-                            storage.get_storage_key(), logical_part
-                        )
-                        if part_slice_id == self.__slice_id:
-                            filtered_subscriptions.append(subscription)
+                    if part_slice_id == self.__slice_id:
+                        filtered_subscriptions.append(subscription)
 
-            return filtered_subscriptions
-
-        else:
-            return self.__subscriptions
+        return filtered_subscriptions
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
@@ -366,14 +364,14 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             self.__last_refresh is None
             or (current_time - self.__last_refresh) > self.__cache_ttl
         ):
-            self.__subscriptions = [
+            subscriptions = [
                 Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
                 for uuid, data in self.__store.all()
             ]
             self.__last_refresh = current_time
             self.__metrics.gauge(
                 "schedule.size",
-                len(self.__subscriptions),
+                len(subscriptions),
                 tags={"partition": str(self.__partition_id)},
             )
 
@@ -383,7 +381,10 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             tags={"partition": str(self.__partition_id)},
         )
 
-        return self.__get_filtered_subscriptions()
+        if self.__slice_id is not None:
+            return self.__filter_subscriptions(subscriptions)
+        else:
+            return subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
