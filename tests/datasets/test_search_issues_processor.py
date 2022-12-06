@@ -20,13 +20,19 @@ class TestSearchIssuesMessageProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        message = {
-            "project_id": 1,
-            "organization_id": 2,
-            "group_id": 3,
-            "detection_timestamp": datetime.utcnow().timestamp(),
-            "retention_days": 90,
-        }
+        message = (
+            1,
+            "insert",
+            {
+                "project_id": 1,
+                "organization_id": 2,
+                "group_ids": (3,),
+                "search_title": "search me",
+                "detection_timestamp": datetime.utcnow().timestamp(),
+                "retention_days": 90,
+                "data": {},
+            },
+        )
 
         assert SearchIssuesMessageProcessor().process_message(message, meta)
 

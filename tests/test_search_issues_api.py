@@ -45,12 +45,12 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
         evt = dict(
             organization_id=1,
             project_id=2,
-            group_id=3,
+            group_ids=(3,),
             detection_timestamp=now.timestamp(),
         )
 
         assert self.events_storage
-        write_raw_unprocessed_events(self.events_storage, [evt])
+        write_raw_unprocessed_events(self.events_storage, [[1, "insert", evt]])
 
         response = self.post_query(
             f"""MATCH (search_issues)
