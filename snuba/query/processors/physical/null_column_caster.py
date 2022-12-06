@@ -56,7 +56,7 @@ class NullColumnCaster(ClickhouseQueryProcessor):
         The initialization arguments of this processor are the string
         representation of the storage keys e.g.
 
-        NullColumnCaster("errors", "transactions")
+        NullColumnCaster(["errors", "transactions"])
 
     """
 
