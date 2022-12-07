@@ -13,9 +13,9 @@ we maintain a mapping of logical partitions to physical slices in
 ``settings.LOGICAL_PARTITION_MAPPING``.
 
 In a future revision, this ``settings.LOGICAL_PARTITION_MAPPING`` will be
-used along with ``settings.SLICED_STORAGES`` to map queries and incoming
-data from consumers to different ClickHouse clusters by overriding the
-StorageSet key that exists in configuration.
+used along with ``settings.SLICED_STORAGE_SETS`` to map queries and incoming
+data from consumers to different ClickHouse clusters using a
+(StorageSetKey, slice_id) pairing that exists in configuration.
 
 ===========================
 Adding a slice
@@ -23,12 +23,12 @@ Adding a slice
 
 Add the logical:physical mapping
 --------------------------------
-To add a slice to a storage's logical:physical mapping, or repartition,
-increment the slice count in ``settings.SLICED_STORAGES`` for the relevant
-storage. Change the mapping of the relevant storage's
+To add a slice to a storage set's logical:physical mapping, or repartition,
+increment the slice count in ``settings.SLICED_STORAGE_SETS`` for the relevant
+storage set. Change the mapping of the relevant storage set's
 logical partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
 Every logical partition **must** be assigned to a slice and the
-valid values of slices are in the range of ``[0,settings.SLICED_STORAGES[storage])``.
+valid values of slices are in the range of ``[0,settings.SLICED_STORAGE_SETS[storage_set])``.
 
 Defining sliced ClickHouse clusters
 -----------------------------------
@@ -36,7 +36,7 @@ To add a cluster with an associated (storage set key, slice) pair, add cluster d
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
 sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id is in
-the range ``[0,settings.SLICED_STORAGES[storage])`` for storages relevant to the ``StorageSetKey``.
+the range ``[0,settings.SLICED_STORAGE_SETS[storage_set])`` for the relevant storage set.
 
 
 Preparing the storage for sharding

@@ -95,7 +95,8 @@ class ConsumerBuilder:
             .topic
         )
 
-        validate_passed_slice(storage_key, slice_id)
+        # Ensure that the slice, storage set combination is valid
+        validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers

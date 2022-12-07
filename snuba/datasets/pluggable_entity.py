@@ -15,7 +15,7 @@ from snuba.datasets.plans.sliced_storage import (
     ColumnBasedStorageSliceSelector,
     SlicedStorageQueryPlanBuilder,
 )
-from snuba.datasets.slicing import is_storage_sliced
+from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
@@ -69,7 +69,7 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_sliced(self.readable_storage.get_storage_key()):
+        if is_storage_set_sliced(self.readable_storage.get_storage_set_key()):
             assert (
                 self.partition_key_column_name is not None
             ), "partition key column name must be defined for a sliced storage"
