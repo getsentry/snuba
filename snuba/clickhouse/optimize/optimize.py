@@ -1,11 +1,8 @@
 import logging
-import os
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Mapping, MutableSequence, Optional, Sequence
-
-import structlog
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
@@ -18,7 +15,6 @@ from snuba.clickhouse.optimize.util import MergeInfo
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
-    OPTIMIZE_ALERT_THRESHOLD,
     OPTIMIZE_BASE_SLEEP_TIME,
     OPTIMIZE_MAX_SLEEP_TIME,
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
@@ -26,21 +22,17 @@ from snuba.settings import (
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+logger = logging.getLogger("snuba.optimize")
 
 # include thread and process info in log messages
-def _add_log_context(
-    logger: logging.Logger, method_name: str, event_dict: structlog.types.EventDict
-) -> structlog.types.EventDict:
-    event_dict["thread"] = threading.get_native_id()
-    event_dict["thread_name"] = threading.current_thread().name
-    event_dict["process_id"] = os.getpid()
-    return event_dict
-
-
-logger: logging.Logger = structlog.wrap_logger(
-    logging.getLogger("snuba.optimize"),
-    processors=([_add_log_context] + structlog.get_config()["processors"]),
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(
+    logging.Formatter(
+        "%(levelname)s %(asctime)s %(name)s %(process)d-%(threadName)s %(message)s"
+    )
 )
+logger.addHandler(log_handler)
+logger.propagate = False
 
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
@@ -138,30 +130,6 @@ def run_optimize_cron_job(
 
     logger.info(f"All partitions list: {partitions_to_optimize}")
 
-    is_done = threading.Event()
-    start_runner = time.time()
-
-    # start a thread that triggers alerts if optimize runner takes too long
-    def monitor() -> None:
-        while True:
-            if is_done.wait(10):
-                break
-            if time.time() - start_runner > OPTIMIZE_ALERT_THRESHOLD:
-                logger.warn(
-                    f"Optimizing job is running longer than {OPTIMIZE_ALERT_THRESHOLD}s"
-                )
-                metrics.events(
-                    title="optimize_job_long_running",
-                    text=f"Optimizing job is running longer than {OPTIMIZE_ALERT_THRESHOLD}s",
-                    priority="error",
-                    alert_type="error",
-                    tags=_get_metrics_tags(table, clickhouse_host),
-                )
-                break
-
-    monitor_thread = threading.Thread(target=monitor)
-    monitor_thread.start()
-
     optimize_partition_runner(
         clickhouse=clickhouse,
         database=database,
@@ -171,9 +139,6 @@ def run_optimize_cron_job(
         scheduler=optimize_scheduler,
         clickhouse_host=clickhouse_host,
     )
-
-    is_done.set()
-    monitor_thread.join()
 
     metrics.timing(
         "optimized_all_parts",
@@ -406,7 +371,6 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
-
         clickhouse.execute(query, retryable=False)
         metrics.timing(
             "optimized_part",
@@ -427,7 +391,7 @@ def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bo
         if merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF:
             logger.info(
                 "large ongoing merge detected  "
-                f"result part: {merge.result_part_name}, size: {merge.size} "
+                f"result part: {merge.result_part_name}, size: {merge.size}"
                 f"progress: {merge.progress}, elapsed: {merge.elapsed}"
             )
             return True

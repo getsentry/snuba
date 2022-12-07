@@ -1,5 +1,3 @@
-import logging
-import os
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -155,7 +153,7 @@ def test_run_optimize_with_partition_tracker() -> None:
     assert num_optimized == original_num_partitions
 
 
-def test_run_optimize_with_ongoing_merges(caplog) -> None:
+def test_run_optimize_with_ongoing_merges() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(
             writable_storage,
@@ -236,7 +234,6 @@ def test_run_optimize_with_ongoing_merges(caplog) -> None:
         ]  # first & second call returns large ongoing merges, third call returns small ongoing merges
 
         with patch.object(time, "sleep") as sleep_mock:
-            caplog.set_level(logging.INFO)
             num_optimized = run_optimize_cron_job(
                 clickhouse=clickhouse_pool,
                 storage=storage,
@@ -254,17 +251,6 @@ def test_run_optimize_with_ongoing_merges(caplog) -> None:
                 call(settings.OPTIMIZE_BASE_SLEEP_TIME),
                 call(settings.OPTIMIZE_BASE_SLEEP_TIME),
             ]
-
-            # check logs
-            assert " large ongoing merge detected" in caplog.text
-            assert (
-                f"busy merging, sleeping for 300s process_id={os.getpid()}"
-                in caplog.text
-            )
-            assert (
-                f" Optimizing partition: (90,'2022-12-05') process_id={os.getpid()}"
-                in caplog.text
-            )
 
 
 def test_merge_info() -> None:
