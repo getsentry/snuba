@@ -97,7 +97,7 @@ def optimize(
         hour=0, minute=0, second=0, microsecond=0
     )
     cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-    logger.info("Cutoff time: %s", str(cutoff_time))
+    logger.info("Cutoff time: %s" % str(cutoff_time))
 
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)

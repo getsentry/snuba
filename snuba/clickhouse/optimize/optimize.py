@@ -144,8 +144,6 @@ def run_optimize_cron_job(
     # start a thread that triggers alerts if optimize runner takes too long
     def monitor() -> None:
         while True:
-            if is_done.wait(10):
-                break
             if time.time() - start_runner > OPTIMIZE_ALERT_THRESHOLD:
                 logger.warn(
                     f"Optimizing job is running longer than {OPTIMIZE_ALERT_THRESHOLD}s"
@@ -157,6 +155,8 @@ def run_optimize_cron_job(
                     alert_type="error",
                     tags=_get_metrics_tags(table, clickhouse_host),
                 )
+                break
+            if is_done.wait(10):
                 break
 
     monitor_thread = threading.Thread(target=monitor)

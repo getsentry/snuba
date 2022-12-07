@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from unittest.mock import call, patch
 
 import pytest
+from pytest import LogCaptureFixture
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
@@ -155,7 +156,7 @@ def test_run_optimize_with_partition_tracker() -> None:
     assert num_optimized == original_num_partitions
 
 
-def test_run_optimize_with_ongoing_merges(caplog) -> None:
+def write_some_messages(storage: WritableTableStorage) -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(
             writable_storage,
@@ -175,6 +176,20 @@ def test_run_optimize_with_ongoing_merges(caplog) -> None:
             ],
         )
 
+    # Write some messages to the database
+    for week in range(0, 4):
+        write_error_message(
+            writable_storage=storage,
+            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+        )
+        write_error_message(
+            writable_storage=storage,
+            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+        )
+
+
+def test_run_optimize_with_ongoing_merges(caplog: LogCaptureFixture) -> None:
+
     storage = get_writable_storage(StorageKey.ERRORS)
     cluster = storage.get_cluster()
     clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
@@ -190,16 +205,7 @@ def test_run_optimize_with_ongoing_merges(caplog) -> None:
     )
     tracker.delete_all_states()
 
-    # Write some messages to the database
-    for week in range(0, 4):
-        write_error_message(
-            writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
-        )
-        write_error_message(
-            writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
-        )
+    write_some_messages(storage)
 
     partitions = optimize.get_partitions_to_optimize(
         clickhouse_pool, storage, database, table
@@ -265,6 +271,47 @@ def test_run_optimize_with_ongoing_merges(caplog) -> None:
                 f" Optimizing partition: (90,'2022-12-05') process_id={os.getpid()}"
                 in caplog.text
             )
+
+
+def test_merge_alert(caplog: LogCaptureFixture) -> None:
+    storage = get_writable_storage(StorageKey.ERRORS)
+    cluster = storage.get_cluster()
+    clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+    table = storage.get_table_writer().get_schema().get_local_table_name()
+    database = cluster.get_database()
+    tracker = OptimizedPartitionTracker(
+        redis_client=redis_client,
+        host=cluster.get_host(),
+        port=cluster.get_port(),
+        database=database,
+        table=table,
+        expire_time=(datetime.now() + timedelta(minutes=3)),
+    )
+    tracker.delete_all_states()
+
+    write_some_messages(storage)
+
+    with patch.object(optimize, "OPTIMIZE_ALERT_THRESHOLD", 0):
+        with patch.object(time, "sleep"):
+            with patch.object(optimize.metrics, "events") as mock_events:
+                caplog.set_level(logging.INFO)
+                run_optimize_cron_job(
+                    clickhouse=clickhouse_pool,
+                    storage=storage,
+                    database=database,
+                    parallel=1,
+                    clickhouse_host="localhost",
+                    tracker=tracker,
+                )
+                # mock_events.assert_called()
+                assert "Optimizing job is running longer than" in caplog.text
+                mock_events.assert_called_with(
+                    title="optimize_job_long_running",
+                    text="Optimizing job is running longer than 0s",
+                    priority="error",
+                    alert_type="error",
+                    tags={"table": "errors_local", "host": "localhost"},
+                )
 
 
 def test_merge_info() -> None:
