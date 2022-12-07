@@ -36,6 +36,8 @@ class ReplaysEntity(Entity):
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
             validate_data_model=ColumnValidationMode.WARN,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

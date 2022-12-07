@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -56,10 +56,10 @@ class BaseSubscriptionTest:
         )
 
 
-def __entity_subscription_eq__(self: EntitySubscription, other: object) -> bool:
-    if not isinstance(other, EntitySubscription):
+def __entity_eq__(self: Entity, other: object) -> bool:
+    if not isinstance(other, Entity):
         return False
-    return self.to_dict() == other.to_dict() and isinstance(other, type(self))
+    return type(self) == type(other)
 
 
-EntitySubscription.__eq__ = __entity_subscription_eq__  # type: ignore
+Entity.__eq__ = __entity_eq__  # type: ignore
