@@ -1,4 +1,5 @@
 from copy import deepcopy
+from unittest import mock
 
 import pytest
 
@@ -201,17 +202,34 @@ test_data = [
 ]
 
 
+def _mock_get_storage(storage_key: StorageKey) -> ReadableTableStorage:
+    if storage_key == StorageKey("storage1"):
+        return Storage1
+    elif storage_key == StorageKey("storage2"):
+        return Storage2
+    else:
+        raise Exception("UNKNOWN STORAGE KEY " + str(storage_key))
+
+
 def test_find_mismatched_columns():
-    caster = NullColumnCaster([Storage1, Storage2])
-    assert caster.mismatched_null_columns.keys() == {"mismatched1", "mismatched2"}
+    with mock.patch(
+        "snuba.datasets.storages.factory.get_storage",
+        side_effect=_mock_get_storage,
+    ):
+        caster = NullColumnCaster(["storage1", "storage2"])
+        assert caster.mismatched_null_columns.keys() == {"mismatched1", "mismatched2"}
 
 
 @pytest.mark.parametrize("input_q, expected_q", test_data)
 def test_caster(input_q, expected_q):
-    for caster in (
-        NullColumnCaster([Storage2, Storage1]),
-        NullColumnCaster([Storage1, Storage2]),
+    with mock.patch(
+        "snuba.datasets.storages.factory.get_storage",
+        side_effect=_mock_get_storage,
     ):
-        input_query = deepcopy(input_q)
-        caster.process_query(input_query, HTTPQuerySettings())
-        assert input_query == expected_q
+        for caster in (
+            NullColumnCaster(["storage2", "storage1"]),
+            NullColumnCaster(["storage1", "storage2"]),
+        ):
+            input_query = deepcopy(input_q)
+            caster.process_query(input_query, HTTPQuerySettings())
+            assert input_query == expected_q

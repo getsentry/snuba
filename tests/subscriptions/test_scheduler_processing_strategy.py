@@ -10,7 +10,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.types import Position
+from arroyo.types import BrokerValue
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -48,14 +48,16 @@ def test_tick_buffer_immediate() -> None:
     partition = Partition(topic, 0)
 
     message = Message(
-        partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(1, 3),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
-        ),
-        epoch,
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
+            ),
+            partition,
+            4,
+            epoch,
+        )
     )
 
     strategy.submit(message)
@@ -78,14 +80,16 @@ def test_tick_buffer_wait_slowest() -> None:
 
     # First message in partition 0, do not submit to next step
     message_0_0 = Message(
-        commit_log_partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(1, 3),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
-        ),
-        now,
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
+            ),
+            commit_log_partition,
+            4,
+            now,
+        )
     )
     strategy.submit(message_0_0)
 
@@ -93,16 +97,18 @@ def test_tick_buffer_wait_slowest() -> None:
 
     # Another message in partition 0, do not submit to next step
     message_0_1 = Message(
-        commit_log_partition,
-        5,
-        Tick(
-            0,
-            offsets=Interval(3, 4),
-            timestamps=Interval(
-                epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(3, 4),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            5,
+            now,
+        )
     )
     strategy.submit(message_0_1)
 
@@ -110,14 +116,16 @@ def test_tick_buffer_wait_slowest() -> None:
 
     # Message in partition 1 has the lowest timestamp so we submit to the next step
     message_1_0 = Message(
-        commit_log_partition,
-        6,
-        Tick(
-            1,
-            offsets=Interval(100, 120),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
-        ),
-        now,
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(100, 120),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+            ),
+            commit_log_partition,
+            6,
+            now,
+        )
     )
     strategy.submit(message_1_0)
 
@@ -128,16 +136,18 @@ def test_tick_buffer_wait_slowest() -> None:
     # Message in partition 1 has the same timestamp as the earliest message
     # in partition 0. Both should be submitted to the next step.
     message_1_1 = Message(
-        commit_log_partition,
-        7,
-        Tick(
-            1,
-            offsets=Interval(120, 130),
-            timestamps=Interval(
-                epoch + timedelta(seconds=4), epoch + timedelta(seconds=5)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(120, 130),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=5)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            7,
+            now,
+        )
     )
     strategy.submit(message_1_1)
 
@@ -153,16 +163,18 @@ def test_tick_buffer_wait_slowest() -> None:
     # in partition 0. Two more messages should be submitted and the
     # the partition lag should be 0 now.
     message_1_2 = Message(
-        commit_log_partition,
-        7,
-        Tick(
-            1,
-            offsets=Interval(130, 140),
-            timestamps=Interval(
-                epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(130, 140),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            7,
+            now,
+        )
     )
     strategy.submit(message_1_2)
 
@@ -180,17 +192,19 @@ def test_tick_buffer_wait_slowest() -> None:
     messages = []
     for i in range(11):
         message = Message(
-            commit_log_partition,
-            8 + i,
-            Tick(
-                1,
-                offsets=Interval(4 + i, 5 + i),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=10 + i),
-                    epoch + timedelta(seconds=11 + i),
+            BrokerValue(
+                Tick(
+                    1,
+                    offsets=Interval(4 + i, 5 + i),
+                    timestamps=Interval(
+                        epoch + timedelta(seconds=10 + i),
+                        epoch + timedelta(seconds=11 + i),
+                    ),
                 ),
-            ),
-            now + timedelta(seconds=i),
+                commit_log_partition,
+                8 + i,
+                now + timedelta(seconds=i),
+            )
         )
         messages.append(message)
         strategy.submit(message)
@@ -202,12 +216,7 @@ def test_tick_buffer_wait_slowest() -> None:
 def make_message_for_next_step(
     message: Message[Tick], offset_to_commit: Optional[int]
 ) -> Message[CommittableTick]:
-    return Message(
-        message.partition,
-        message.offset,
-        CommittableTick(message.payload, offset_to_commit),
-        message.timestamp,
-    )
+    return message.replace(CommittableTick(message.payload, offset_to_commit))
 
 
 def test_provide_commit_strategy() -> None:
@@ -220,16 +229,18 @@ def test_provide_commit_strategy() -> None:
 
     # First message for partition 0 -> do not commit offset
     message_0_0 = Message(
-        partition,
-        1,
-        Tick(
-            0,
-            offsets=Interval(1, 2),
-            timestamps=Interval(
-                epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 2),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
+                ),
             ),
-        ),
-        epoch,
+            partition,
+            1,
+            epoch,
+        )
     )
 
     strategy.submit(message_0_0)
@@ -241,16 +252,18 @@ def test_provide_commit_strategy() -> None:
 
     # Offset 2 on partition 1, now we can safely commit offset 1
     message_1_0 = Message(
-        partition,
-        2,
-        Tick(
-            1,
-            offsets=Interval(11, 12),
-            timestamps=Interval(
-                epoch + timedelta(seconds=2), epoch + timedelta(seconds=3)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(11, 12),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=2), epoch + timedelta(seconds=3)
+                ),
             ),
-        ),
-        epoch,
+            partition,
+            2,
+            epoch,
+        )
     )
 
     strategy.submit(message_1_0)
@@ -263,16 +276,18 @@ def test_provide_commit_strategy() -> None:
 
     # Another message on partition 1, can't commit since partition 0 is still on offset 1
     message_1_1 = Message(
-        partition,
-        3,
-        Tick(
-            1,
-            offsets=Interval(12, 13),
-            timestamps=Interval(
-                epoch + timedelta(seconds=3), epoch + timedelta(seconds=6)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(12, 13),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=3), epoch + timedelta(seconds=6)
+                ),
             ),
-        ),
-        epoch,
+            partition,
+            3,
+            epoch,
+        )
     )
 
     strategy.submit(message_1_1)
@@ -286,16 +301,18 @@ def test_provide_commit_strategy() -> None:
     # A message on partition 0, now we can commit offset 3 since partition 1 is
     # still up to 3.
     message_0_1 = Message(
-        partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(2, 4),
-            timestamps=Interval(
-                epoch + timedelta(seconds=2), epoch + timedelta(seconds=5)
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(2, 4),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=2), epoch + timedelta(seconds=5)
+                ),
             ),
-        ),
-        epoch,
+            partition,
+            4,
+            epoch,
+        )
     )
 
     strategy.submit(message_0_1)
@@ -328,14 +345,16 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
     # It is submitted for scheduling straight away because we're in partition mode
     # but we cannot commit yet because we need an offset for partition 1 before we can do that
     message_0_0 = Message(
-        commit_log_partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(1, 2),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
-        ),
-        now,
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 2),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+            ),
+            commit_log_partition,
+            4,
+            now,
+        )
     )
     strategy.submit(message_0_0)
 
@@ -347,16 +366,18 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
 
     # Message in partition 1 - submitted for scheduling immediately. Now we can commit offset 4
     message_1_0 = Message(
-        commit_log_partition,
-        5,
-        Tick(
-            1,
-            offsets=Interval(3, 6),
-            timestamps=Interval(
-                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(3, 6),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            5,
+            now,
+        )
     )
     strategy.submit(message_1_0)
 
@@ -369,16 +390,18 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
     # Another message in partition 0. The timestamp is earlier than message_1_0 but it doesn't matter
     # We still submit immediately and the offset moves to 5
     message_0_1 = Message(
-        commit_log_partition,
-        6,
-        Tick(
-            0,
-            offsets=Interval(2, 3),
-            timestamps=Interval(
-                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(2, 3),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            6,
+            now,
+        )
     )
     strategy.submit(message_0_1)
 
@@ -408,14 +431,16 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
 
     # First message in partition 0, not submitted to next step
     message_0_0 = Message(
-        commit_log_partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(1, 3),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
-        ),
-        now,
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+            ),
+            commit_log_partition,
+            4,
+            now,
+        )
     )
     strategy.submit(message_0_0)
 
@@ -423,16 +448,18 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
 
     # Another message in partition 0, cannot submit yet
     message_0_1 = Message(
-        commit_log_partition,
-        5,
-        Tick(
-            0,
-            offsets=Interval(3, 6),
-            timestamps=Interval(
-                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(3, 6),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            5,
+            now,
+        )
     )
     strategy.submit(message_0_1)
 
@@ -441,14 +468,16 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
     # Message in partition 1, submitted to next step since it has the earliest timestamp.
     # Does not commit since we have not submitted anything on the other partition yet.
     message_1_0 = Message(
-        commit_log_partition,
-        6,
-        Tick(
-            1,
-            offsets=Interval(100, 120),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=3)),
-        ),
-        now,
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(100, 120),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=3)),
+            ),
+            commit_log_partition,
+            6,
+            now,
+        )
     )
     strategy.submit(message_1_0)
 
@@ -463,16 +492,18 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
     # (message_0_0 and message_1_1). We can only safely commit the offset
     # of message_0_0 (4) when we are submitting it.
     message_1_1 = Message(
-        commit_log_partition,
-        7,
-        Tick(
-            1,
-            offsets=Interval(120, 140),
-            timestamps=Interval(
-                epoch + timedelta(seconds=3), epoch + timedelta(seconds=4)
+        BrokerValue(
+            Tick(
+                1,
+                offsets=Interval(120, 140),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=3), epoch + timedelta(seconds=4)
+                ),
             ),
-        ),
-        now,
+            commit_log_partition,
+            7,
+            now,
+        )
     )
     strategy.submit(message_1_1)
 
@@ -493,9 +524,7 @@ def test_scheduled_subscription_queue() -> None:
     epoch = datetime(1970, 1, 1)
     partition = Partition(Topic("test"), 0)
 
-    tick_message = Message(
-        partition,
-        1,
+    tick_message = BrokerValue(
         CommittableTick(
             Tick(
                 0,
@@ -504,10 +533,12 @@ def test_scheduled_subscription_queue() -> None:
             ),
             1,
         ),
+        partition,
+        1,
         epoch,
     )
 
-    futures: Sequence[Future[Message[KafkaPayload]]] = [Future(), Future()]
+    futures: Sequence[Future[BrokerValue[KafkaPayload]]] = [Future(), Future()]
 
     queue.append(tick_message, deque(futures))
 
@@ -593,17 +624,19 @@ def test_produce_scheduled_subscription_message() -> None:
     )
 
     message = Message(
-        partition,
-        1,
-        CommittableTick(
-            Tick(
-                0,
-                offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+        BrokerValue(
+            CommittableTick(
+                Tick(
+                    0,
+                    offsets=Interval(1, 3),
+                    timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+                ),
+                2,
             ),
-            True,
-        ),
-        epoch,
+            partition,
+            1,
+            epoch,
+        )
     )
 
     strategy.submit(message)
@@ -632,7 +665,7 @@ def test_produce_scheduled_subscription_message() -> None:
     assert commit.call_count == 0
     strategy.poll()
     assert commit.call_count == 1
-    assert commit.call_args == mock.call({partition: Position(message.offset, epoch)})
+    assert commit.call_args == mock.call(message.committable)
 
     # Close the strategy
     strategy.close()
@@ -697,19 +730,21 @@ def test_produce_stale_message() -> None:
     # the subscription will be executed once in this window (no matter what
     # jitter gets applied to it)
     stale_message = Message(
-        partition,
-        1,
-        CommittableTick(
-            Tick(
-                0,
-                offsets=Interval(1, 3),
-                timestamps=Interval(
-                    now - timedelta(minutes=3), now - timedelta(seconds=60)
+        BrokerValue(
+            CommittableTick(
+                Tick(
+                    0,
+                    offsets=Interval(1, 3),
+                    timestamps=Interval(
+                        now - timedelta(minutes=3), now - timedelta(seconds=60)
+                    ),
                 ),
+                2,
             ),
-            True,
-        ),
-        now,
+            partition,
+            1,
+            now,
+        )
     )
 
     strategy.submit(stale_message)
@@ -719,23 +754,23 @@ def test_produce_stale_message() -> None:
 
     # Offset gets committed
     assert commit.call_count == 1
-    assert commit.call_args == mock.call(
-        {partition: Position(stale_message.offset, now)}
-    )
+    assert commit.call_args == mock.call(stale_message.committable)
 
     # Produce a non stale message
     non_stale_message = Message(
-        partition,
-        1,
-        CommittableTick(
-            Tick(
-                0,
-                offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(seconds=60), now),
+        BrokerValue(
+            CommittableTick(
+                Tick(
+                    0,
+                    offsets=Interval(3, 4),
+                    timestamps=Interval(now - timedelta(seconds=60), now),
+                ),
+                2,
             ),
-            True,
-        ),
-        now,
+            partition,
+            1,
+            now,
+        )
     )
 
     strategy.submit(non_stale_message)
@@ -746,9 +781,7 @@ def test_produce_stale_message() -> None:
     # Offset gets committed on poll
     strategy.poll()
     assert commit.call_count == 2
-    assert commit.call_args == mock.call(
-        {partition: Position(non_stale_message.offset, now)}
-    )
+    assert commit.call_args == mock.call(non_stale_message.committable)
 
     # Close the strategy
     strategy.close()

@@ -51,3 +51,19 @@ class DummyMetricsBackend(MetricsBackend):
             assert isinstance(value, (int, float))
             if tags is not None:
                 self.__validate_tags(tags)
+
+    def events(
+        self,
+        title: str,
+        text: str,
+        alert_type: str,
+        priority: str,
+        tags: Optional[Tags] = None,
+    ) -> None:
+        if self.__strict:
+            assert isinstance(title, str)
+            assert isinstance(text, str)
+            assert isinstance(alert_type, str)
+            assert isinstance(priority, str)
+            if tags is not None:
+                self.__validate_tags(tags)

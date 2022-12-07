@@ -50,3 +50,14 @@ class MetricsBackend(ABC):
         metrics.timing("request.latency", request_latency_in_ms)
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def events(
+        self,
+        title: str,
+        text: str,
+        alert_type: str,
+        priority: str,
+        tags: Optional[Tags] = None,
+    ) -> None:
+        raise NotImplementedError
