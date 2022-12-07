@@ -1,8 +1,10 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -21,12 +23,15 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 class OutcomesRawEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.OUTCOMES_RAW)
+        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers())]
         read_columns = storage.get_schema().get_columns()
         time_columns = ColumnSet([("time", DateTime())])
         super().__init__(
-            storages=[storage],
+            storages=storage_and_mappers,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storage_and_mappers=storage_and_mappers, selector=None
+                ),
             ),
             abstract_column_set=read_columns + time_columns,
             join_relationships={},

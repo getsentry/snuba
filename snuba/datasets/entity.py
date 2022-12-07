@@ -5,7 +5,7 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.storage import Storage, WritableTableStorage
+from snuba.datasets.storage import Storage, StorageAndMappers, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -28,7 +28,7 @@ class Entity(Describable, ABC):
     def __init__(
         self,
         *,
-        storages: Sequence[Storage],
+        storages: Sequence[StorageAndMappers],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
@@ -97,13 +97,19 @@ class Entity(Describable, ABC):
         """
         return self.__query_pipeline_builder
 
+    def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
+        """
+        Returns all storages and associated mappers for this entity.
+        """
+        return self.__storages
+
     def get_all_storages(self) -> Sequence[Storage]:
         """
         Returns all storages for this entity.
         This method should be used for schema bootstrap and migrations.
         It is not supposed to be used during query processing.
         """
-        return self.__storages
+        return [storage_and_mappers.storage for storage_and_mappers in self.__storages]
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """

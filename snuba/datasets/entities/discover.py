@@ -28,7 +28,8 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -184,9 +185,8 @@ class DiscoverEntity(Entity):
         self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         discover_storage = get_storage(StorageKey.DISCOVER)
-        discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
-            storage=discover_storage,
-            mappers=events_translation_mappers.concat(transaction_translation_mappers)
+        discover_translation_mappers = (
+            events_translation_mappers.concat(transaction_translation_mappers)
             .concat(null_function_translation_mappers)
             .concat(
                 TranslationMappers(
@@ -251,14 +251,21 @@ class DiscoverEntity(Entity):
                         SubscriptableMapper(None, "contexts", None, "contexts"),
                     ],
                 )
-            ),
+            )
+        )
+        storage_and_mappers = [
+            StorageAndMappers(discover_storage, discover_translation_mappers)
+        ]
+        discover_storage_plan_builder = StorageQueryPlanBuilder(
+            storage_and_mappers=storage_and_mappers,
+            selector=None,
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder
         )
 
         super().__init__(
-            storages=[discover_storage],
+            storages=storage_and_mappers,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns

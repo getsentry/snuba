@@ -12,10 +12,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
+from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -223,7 +220,10 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self.raw_storage = get_storage(StorageKey.SESSIONS_RAW)
 
     def select_storage(
-        self, query: Query, query_settings: QuerySettings
+        self,
+        query: Query,
+        query_settings: QuerySettings,
+        storage_and_mappers_list: Sequence[StorageAndMappers],
     ) -> StorageAndMappers:
 
         # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
@@ -252,28 +252,31 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
                 else "raw",
             },
         )
-
         if use_materialized_storage:
-            return StorageAndMappers(
-                self.materialized_storage, sessions_hourly_translators
+            return self.get_storage_mapping_pair(
+                self.materialized_storage, storage_and_mappers_list
             )
-        else:
-            return StorageAndMappers(self.raw_storage, sessions_raw_translators)
+        return self.get_storage_mapping_pair(self.raw_storage, storage_and_mappers_list)
 
 
 class SessionsEntity(Entity):
     def __init__(self) -> None:
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
+        storage_and_mappers = [
+            StorageAndMappers(materialized_storage, sessions_hourly_translators),
+            StorageAndMappers(writable_storage, sessions_raw_translators),
+        ]
         read_schema = materialized_storage.get_schema()
 
         read_columns = read_schema.get_columns()
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
-            storages=[writable_storage, materialized_storage],
+            storages=storage_and_mappers,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=SessionsQueryStorageSelector()
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storage_and_mappers=storage_and_mappers,
+                    selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
@@ -302,11 +305,14 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
+        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers())]
 
         super().__init__(
-            storages=[storage],
+            storages=storage_and_mappers,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage)
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storage_and_mappers=storage_and_mappers, selector=None
+                )
             ),
             abstract_column_set=ColumnSet(
                 [

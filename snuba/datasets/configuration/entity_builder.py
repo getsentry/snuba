@@ -17,6 +17,7 @@ from snuba.datasets.entities.entity_key import register_entity_key
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
+from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -40,6 +41,20 @@ def _build_entity_query_processors(
             **(config_qp["args"] if config_qp.get("args") else {})
         )
         for config_qp in config_query_processors
+    ]
+
+
+def _build_storage_and_mappers(
+    config_storages: list[dict[str, Any]]
+) -> Sequence[StorageAndMappers]:
+    return [
+        StorageAndMappers(
+            get_storage(StorageKey(config_storage_and_mappers["storage"])),
+            _build_entity_translation_mappers(
+                config_storage_and_mappers["translation_mappers"]
+            ),
+        )
+        for config_storage_and_mappers in config_storages
     ]
 
 
@@ -122,6 +137,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
+        storages=_build_storage_and_mappers(config["storages"]),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
         readable_storage=get_storage(StorageKey(config["readable_storage"])),
@@ -130,9 +146,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         translation_mappers=_build_entity_translation_mappers(
             config["translation_mappers"]
         ),
-        writeable_storage=get_writable_storage(StorageKey(config["writable_storage"]))
-        if "writable_storage" in config
-        else None,
+        writeable_storage=_build_writable_storage(config["storages"]),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),

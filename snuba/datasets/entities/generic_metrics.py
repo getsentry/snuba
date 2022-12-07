@@ -19,6 +19,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+<<<<<<< HEAD
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
     EntitySubscriptionProcessor,
@@ -29,6 +30,14 @@ from snuba.datasets.entity_subscriptions.validators import (
 )
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+=======
+from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.storage import (
+    ReadableTableStorage,
+    StorageAndMappers,
+    WritableTableStorage,
+)
+>>>>>>> d6616ea9 (Join query plan builders and update entities to use StorageAndMappers)
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -76,36 +85,39 @@ class GenericMetricsEntity(Entity, ABC):
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None,
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None,
     ) -> None:
-        storages = [readable_storage]
+        translation_mappers = TranslationMappers(
+            subscriptables=[
+                SubscriptableMapper(
+                    from_column_table=None,
+                    from_column_name="tags_raw",
+                    to_nested_col_table=None,
+                    to_nested_col_name="tags",
+                    value_subcolumn_name="raw_value",
+                ),
+                SubscriptableMapper(
+                    from_column_table=None,
+                    from_column_name="tags",
+                    to_nested_col_table=None,
+                    to_nested_col_name="tags",
+                    value_subcolumn_name="indexed_value",
+                ),
+            ],
+        ).concat(mappers)
+        storage_and_mappers = [StorageAndMappers(readable_storage, translation_mappers)]
         if writable_storage:
-            storages.append(writable_storage)
+            storage_and_mappers.append(
+                StorageAndMappers(writable_storage, translation_mappers)
+            )
 
         if validators is None:
             validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]
 
         super().__init__(
-            storages=storages,
+            storages=storage_and_mappers,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(
-                    readable_storage,
-                    mappers=TranslationMappers(
-                        subscriptables=[
-                            SubscriptableMapper(
-                                from_column_table=None,
-                                from_column_name="tags_raw",
-                                to_nested_col_table=None,
-                                to_nested_col_name="tags",
-                                value_subcolumn_name="raw_value",
-                            ),
-                            SubscriptableMapper(
-                                from_column_table=None,
-                                from_column_name="tags",
-                                to_nested_col_table=None,
-                                to_nested_col_name="tags",
-                                value_subcolumn_name="indexed_value",
-                            ),
-                        ],
-                    ).concat(mappers),
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storage_and_mappers=storage_and_mappers,
+                    selector=None,
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),

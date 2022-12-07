@@ -43,11 +43,13 @@ class PluggableEntity(Entity):
     entity_key: EntityKey
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
+    storages: Sequence[StorageAndMappers]
     readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
     required_time_column: str
     writeable_storage: Optional[WritableTableStorage] = None
+    storage_selector: Optional[QueryStorageSelector] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -77,6 +79,7 @@ class PluggableEntity(Entity):
             assert (
                 self.partition_key_column_name is not None
             ), "partition key column name must be defined for a sliced storage"
+            # TODO: add consolidated here
             query_plan_builder: ClickhouseQueryPlanBuilder = (
                 SlicedStorageQueryPlanBuilder(
                     storage=self.readable_storage,

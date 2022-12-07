@@ -181,6 +181,10 @@ class StorageAndMappers(NamedTuple):
     mappers: TranslationMappers
 
 
+class StorageAndMapperNotFound(Exception):
+    pass
+
+
 class QueryStorageSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
@@ -189,6 +193,21 @@ class QueryStorageSelector(ABC):
 
     @abstractmethod
     def select_storage(
-        self, query: Query, query_settings: QuerySettings
+        self,
+        query: Query,
+        query_settings: QuerySettings,
+        storage_and_mappers: Sequence[StorageAndMappers],
     ) -> StorageAndMappers:
         raise NotImplementedError
+
+    def get_storage_mapping_pair(
+        self,
+        storage: ReadableStorage,
+        storage_and_mappers_list: Sequence[StorageAndMappers],
+    ) -> StorageAndMappers:
+        for sm_tuple in storage_and_mappers_list:
+            if storage == sm_tuple.storage:
+                return sm_tuple
+        raise StorageAndMapperNotFound(
+            f"Unable to find storage and translation mappers pair for {storage.__class__}"
+        )

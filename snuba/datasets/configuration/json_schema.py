@@ -475,6 +475,23 @@ V1_READABLE_STORAGE_SCHEMA = {
     "additionalProperties": False,
 }
 
+ENTITY_STORAGE_AND_MAPPERS = {
+    "type": "object",
+    "properties": {
+        "storage": {
+            "type": "string",
+            "description": "Name of a storage class which provides an abstraction to access ClickHouse",
+        },
+        "is_writable": {
+            "type": "boolean",
+            "description": "Determines whether the storage is a writable storage or readable storage",
+        },
+        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
+    },
+    "required": ["storage", "is_writable", "translation_mappers"],
+    "additionalProperties": False,
+}
+
 V1_ENTITY_SCHEMA = {
     "title": "Entity Schema",
     "type": "object",
@@ -483,22 +500,16 @@ V1_ENTITY_SCHEMA = {
         "kind": {"const": "entity", "description": "Component kind"},
         "schema": SCHEMA_COLUMNS,
         "name": {**TYPE_STRING, **{"description": "Name of the entity"}},
-        "readable_storage": {
-            **TYPE_STRING,
-            **{
-                "description": "Name of a ReadableStorage class which provides an abstraction to read from a table or a view in ClickHouse"
-            },
-        },
-        "writable_storage": {
-            "type": ["string", "null"],
-            "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
+        "storages": {
+            "type": "array",
+            "items": ENTITY_STORAGE_AND_MAPPERS,
+            "description": "Array of storages and their respective translation mappers",
         },
         "query_processors": {
             "type": "array",
             "items": ENTITY_QUERY_PROCESSOR,
             "description": "Represents a transformation applied to the ClickHouse query",
         },
-        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
         "validators": {
             "type": "array",
             "items": ENTITY_VALIDATOR,
@@ -522,7 +533,7 @@ V1_ENTITY_SCHEMA = {
         "kind",
         "schema",
         "name",
-        "readable_storage",
+        "storages",
         "query_processors",
         "validators",
         "required_time_column",

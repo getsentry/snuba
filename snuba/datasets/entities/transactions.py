@@ -11,8 +11,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -93,24 +94,30 @@ transaction_translator = TranslationMappers(
 
 class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        storage = get_writable_storage(StorageKey.TRANSACTIONS)
-        schema = storage.get_table_writer().get_schema()
+        transactions_storage = get_writable_storage(StorageKey.TRANSACTIONS)
+        transactions_translation_mappers = (
+            transaction_translator
+            if custom_mappers is None
+            else transaction_translator.concat(custom_mappers)
+        )
+        storage_and_mappers = [
+            StorageAndMappers(transactions_storage, transactions_translation_mappers),
+        ]
 
         pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=get_storage(StorageKey.TRANSACTIONS),
-                mappers=transaction_translator
-                if custom_mappers is None
-                else transaction_translator.concat(custom_mappers),
+            query_plan_builder=StorageQueryPlanBuilder(
+                storage_and_mappers=storage_and_mappers,
+                selector=None,
             )
         )
+        schema = transactions_storage.get_table_writer().get_schema()
 
         super().__init__(
-            storages=[storage],
+            storages=storage_and_mappers,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=storage,
+            writable_storage=transactions_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
             subscription_processors=None,
