@@ -1,0 +1,106 @@
+version: v1
+kind: readable_storage
+name: discover
+storage:
+  key: discover
+  set_key: discover
+schema:
+  columns: [
+      {name: event_id, type: UUID},
+      {name: project_id, type: UInt, args: {size: 64}},
+      {name: type, type: String},
+      {name: timestamp, type: DateTime},
+      {name: platform, type: String},
+      {name: environment, type: String, args: {schema_modifiers: [nullable]}},
+      {name: release, type: String, args: {schema_modifiers: [nullable]}},
+      {name: dist, type: String, args: {schema_modifiers: [nullable]}},
+      {name: transaction_name, type: String},
+      {name: message, type: String},
+      {name: title, type: String},
+      {name: user, type: String},
+      {name: user_hash, type: UInt, args: {size: 64}},
+      {name: user_id, type: String, args: {schema_modifiers: [nullable]}},
+      {name: user_name, type: String, args: {schema_modifiers: [nullable]}},
+      {name: user_email, type: String, args: {schema_modifiers: [nullable]}},
+      {name: ip_address_v4, type: IPv4, args: {schema_modifiers: [nullable]}},
+      {name: ip_address_v6, type: IPv6, args: {schema_modifiers: [nullable]}},
+      {name: sdk_name, type: String, args: {schema_modifiers: [nullable]}},
+      {name: sdk_version, type: String, args: {schema_modifiers: [nullable]}},
+      {name: http_method, type: String, args: {schema_modifiers: [nullable]}},
+      {name: http_referer, type: String, args: {schema_modifiers: [nullable]}},
+      {
+          name: tags,
+          type: Nested,
+          args: {subcolumns: [{name: key, type: String}, {name: value, type: String}]},
+      },
+      {
+          name: _tags_hash_map,
+          type: Array,
+          args: {inner_type: {type: UInt, args: {size: 64}}},
+      },
+      {
+          name: contexts,
+          type: Nested,
+          args: {subcolumns: [{name: key, type: String}, {name: value, type: String}]},
+      },
+      {name: trace_id, type: UUID, args: {schema_modifiers: [nullable]}},
+      {name: span_id, type: UInt, args: {schema_modifiers: [nullable], size: 64}},
+      {name: deleted, type: UInt, args: {size: 8}},
+  ]
+  local_table_name: discover_local
+  dist_table_name: discover_dist
+query_processors:
+- processor: MappingColumnPromoter
+  args:
+    mapping_specs:
+      tags:
+        environment: environment
+        sentry:release: release
+        sentry:dist: dist
+        sentry:user: user
+      contexts:
+        trace.trace_id: trace_id
+        trace.span_id: span_id
+- processor: MappingOptimizer
+  args:
+    column_name: tags
+    hash_map_name: _tags_hash_map
+    killswitch: tags_hash_map_enabled
+- processor: EmptyTagConditionProcessor
+- processor: ArrayJoinKeyValueOptimizer
+  args:
+    column_name: tags
+- processor: UUIDColumnProcessor
+  args:
+    columns: !!set
+      event_id: null
+      trace_id: null
+- processor: HexIntColumnProcessor
+  args:
+    columns: !!set
+      span_id: null
+- processor: EventsBooleanContextsProcessor
+- processor: PrewhereProcessor
+  args:
+    prewhere_candidates:
+    - event_id
+    - release
+    - message
+    - transaction_name
+    - environment
+    - project_id
+- processor: NullColumnCaster
+  args:
+    merge_table_sources:
+    - transactions
+    - errors
+- processor: TableRateLimit
+query_splitters:
+- splitter: ColumnSplitQueryStrategy
+  args:
+    id_column: event_id
+    project_column: project_id
+    timestamp_column: timestamp
+- splitter: TimeSplitQueryStrategy
+  args:
+    timestamp_col: timestamp
