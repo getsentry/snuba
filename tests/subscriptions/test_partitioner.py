@@ -1,12 +1,13 @@
 import pytest
 
 from snuba import settings
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.utils.streams.topics import Topic
 from tests.subscriptions import BaseSubscriptionTest
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 TESTS = [
     pytest.param(
@@ -15,7 +16,8 @@ TESTS = [
             query="MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
+            metadata={},
         ),
         id="Legacy subscription",
     ),
@@ -30,7 +32,8 @@ TESTS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(),
+            entity=get_entity(EntityKey.EVENTS),
+            metadata={},
         ),
         id="SnQL subscription",
     ),

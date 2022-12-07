@@ -35,6 +35,8 @@ class FunctionsEntity(Entity):
                 EntityRequiredColumnValidator({"project_id"}),
             ],
             required_time_column="timestamp",
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
