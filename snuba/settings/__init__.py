@@ -291,8 +291,6 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
-# how long to wait for an optimize runner to complete before sending an alert
-OPTIMIZE_ALERT_THRESHOLD = 14 * 60 * 60  # 14 hours
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
