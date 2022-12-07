@@ -98,7 +98,7 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
         ), "sliced mapping must be defined for sliced storage set {storage_set}"
 
         storage_set_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage_set]
-        defined_slice_count = locals["SLICED_STORAGES"][storage_set]
+        defined_slice_count = locals["SLICED_STORAGE_SETS"][storage_set]
 
         for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
             slice_id = storage_set_mapping.get(logical_part)
