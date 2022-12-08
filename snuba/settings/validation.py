@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Set, Tuple
 
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
@@ -129,3 +129,17 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
         assert (
             logical_topic not in locals["KAFKA_TOPIC_MAP"]
         ), f"logical topic {logical_topic} is not sliced. It is defined in KAFKA_TOPIC_MAP and should only be in KAFKA_BROKER_CONFIG, not SLICED_KAFKA_BROKER_CONFIG"
+
+    sliced_storage_sets: Set[Tuple[str, int]] = set()
+    for cluster in locals["SLICED_CLUSTERS"]:
+        storage_sets = cluster["storage_set_slices"]
+        sliced_storage_sets = sliced_storage_sets.union(storage_sets)
+
+    for storage_set in locals["SLICED_STORAGE_SETS"]:
+        num_slices = locals["SLICED_STORAGE_SETS"][storage_set]
+
+        for i in range(num_slices):
+            assert (
+                storage_set,
+                i,
+            ) in sliced_storage_sets, f"storage set, slice id pair ({storage_set}, {i}) is not assigned any cluster in SLICED_CLUSTERS in settings"
