@@ -185,6 +185,8 @@ BROKER_CONFIG: Mapping[str, Any] = {
 KAFKA_TOPIC_MAP: Mapping[str, str] = {}
 
 # Mapping of default Kafka topic name to broker config
+# Sliced Kafka topics and their corresponding broker configs
+# should be configured in SLICED_KAFKA_BROKER_CONFIG instead
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
