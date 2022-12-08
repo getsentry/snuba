@@ -13,6 +13,16 @@ schema:
     { name: occurrence_type_id, type: UInt, args: { size: 8 } },
     { name: detection_timestamp, type: DateTime },
 
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [ { name: key, type: String }, { name: value, type: String } ],
+        },
+    },
+
     # TODO: fill out more fields
   ]
 
@@ -32,15 +42,20 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
-  - processor: TimeSeriesProcessor
-    args:
-      time_group_columns:
-        bucketed_time: detection_timestamp
-      time_parse_columns: [ detection_timestamp ]
-translation_mappers: {}
+  - processor: TagsExpanderProcessor
+
+translation_mappers:
+  subscriptables:
+    - mapper: SubscriptableMapper
+      args:
+        from_column_table:
+        from_column_name: tags
+        to_nested_col_table:
+        to_nested_col_name: tags
+
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: ["organization_id", "project_id"]
+      required_filter_columns: ["project_id"]
 
 required_time_column: detection_timestamp

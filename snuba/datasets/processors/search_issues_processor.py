@@ -85,6 +85,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
                     "project_id": event["project_id"],
                     "organization_id": event["organization_id"],
                     "group_id": group_id,
+                    "search_title": event["search_title"],
                     "detection_timestamp": detection_timestamp,
                     "retention_days": retention_days,
                 }

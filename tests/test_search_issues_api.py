@@ -46,6 +46,7 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
             organization_id=1,
             project_id=2,
             group_ids=(3,),
+            search_title="search me",
             detection_timestamp=now.timestamp(),
         )
 
