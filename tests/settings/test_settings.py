@@ -164,9 +164,33 @@ def test_sliced_kafka_broker_config() -> None:
     del topic_map[("events")]
     del sliced_kafka_broker_config[("events", 0)]
 
-    print(all_settings["SLICED_KAFKA_TOPIC_MAP"])
-    print(all_settings["KAFKA_TOPIC_MAP"])
 
-    print(all_settings["BROKER_CONFIG"])
-    print(all_settings["KAFKA_BROKER_CONFIG"])
-    print(all_settings["SLICED_KAFKA_BROKER_CONFIG"])
+SLICED_CLUSTERS_CONFIG = [
+    {
+        "host": "host_slice",
+        "port": 9001,
+        "user": "default",
+        "password": "",
+        "database": "slice_1_default",
+        "http_port": 8124,
+        "storage_set_slices": {("generic_metrics_distributions", 1)},
+        "single_node": True,
+    },
+]
+
+
+@patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
+def test_sliced_clusters() -> None:
+    importlib.reload(validation)
+
+    all_settings = build_settings_dict()
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+
+    # All (storage set, slice id) pairs are not assigned
+    # a cluster in SLICED_CLUSTERS
+    sliced_storage_sets["generic_metrics_distributions"] = 2
+
+    with pytest.raises(AssertionError):
+        validate_slicing_settings(all_settings)
+
+    del sliced_storage_sets["generic_metrics_distributions"]
