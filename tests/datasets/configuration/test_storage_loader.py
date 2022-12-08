@@ -149,7 +149,6 @@ class TestStorageConfiguration(ConfigurationTest):
             storage.get_storage_key() in CONFIG_BUILT_STORAGES
             for storage in self.python_storages
         )
-        assert len(CONFIG_BUILT_STORAGES) == len(self.python_storages)
 
     def test_compare_storages(self) -> None:
         for storage in self.python_storages:
