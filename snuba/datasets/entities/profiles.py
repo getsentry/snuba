@@ -66,6 +66,8 @@ class ProfilesEntity(Entity, ABC):
                 EntityRequiredColumnValidator({"organization_id", "project_id"}),
             ],
             required_time_column="received",
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

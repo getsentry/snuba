@@ -10,6 +10,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -112,6 +113,10 @@ class BaseTransactionsEntity(Entity, ABC):
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
+            subscription_processors=None,
+            subscription_validators=[
+                AggregationValidator(1, ["groupby", "having", "orderby"], "finish_ts")
+            ],
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

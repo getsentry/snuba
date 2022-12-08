@@ -8,7 +8,7 @@ from arroyo.backends.kafka import KafkaProducer
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.combined_scheduler_executor import (
@@ -27,6 +27,7 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 def create_subscription() -> None:
     store = RedisSubscriptionDataStore(redis_client, EntityKey.EVENTS, PartitionId(0))
+    entity = get_entity(EntityKey.EVENTS)
     store.create(
         uuid.uuid4(),
         SubscriptionData(
@@ -34,7 +35,8 @@ def create_subscription() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH (events) SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity=entity,
+            metadata={},
         ),
     )
 
