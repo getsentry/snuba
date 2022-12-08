@@ -138,8 +138,8 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
     for storage_set in locals["SLICED_STORAGE_SETS"]:
         num_slices = locals["SLICED_STORAGE_SETS"][storage_set]
 
-        for i in range(num_slices):
+        for slice_id in range(num_slices):
             assert (
                 storage_set,
-                i,
-            ) in sliced_storage_sets, f"storage set, slice id pair ({storage_set}, {i}) is not assigned any cluster in SLICED_CLUSTERS in settings"
+                slice_id,
+            ) in sliced_storage_sets, f"storage set, slice id pair ({storage_set}, {slice_id}) is not assigned any cluster in SLICED_CLUSTERS in settings"
