@@ -81,7 +81,7 @@ test_data = [
 ]
 
 
-@patch("snuba.settings.SLICED_STORAGES", {"generic_metrics_distributions": 2})
+@patch("snuba.settings.SLICED_STORAGE_SETS", {"generic_metrics_distributions": 2})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.parametrize("org_id, expected_slice_db, set_override", test_data)
