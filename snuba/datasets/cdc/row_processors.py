@@ -1,19 +1,32 @@
+from abc import ABC, abstractmethod
+from typing import Type, cast
+
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeRow
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageRow
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.snapshots import SnapshotTableRow
+from snuba.utils.registered_class import RegisteredClass
 from snuba.writer import WriterTableRow
 
 
-def __group_assignee_row_processor(row: SnapshotTableRow) -> WriterTableRow:
-    return GroupAssigneeRow.from_bulk(row).to_clickhouse()
+class CdcRowProcessor(ABC, metaclass=RegisteredClass):
+    @abstractmethod
+    def process(self, row: SnapshotTableRow) -> WriterTableRow:
+        raise NotImplementedError
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["CdcRowProcessor"]:
+        return cast(Type["CdcRowProcessor"], cls.class_from_name(name))
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
 
 
-def __grouped_message_row_processor(row: SnapshotTableRow) -> WriterTableRow:
-    return GroupedMessageRow.from_bulk(row).to_clickhouse()
+class GroupAssigneeRowProcessor(CdcRowProcessor):
+    def process(self, row: SnapshotTableRow) -> WriterTableRow:
+        return GroupAssigneeRow.from_bulk(row).to_clickhouse()
 
 
-CDC_ROW_PROCESSORS = {
-    StorageKey.GROUPASSIGNEES: __group_assignee_row_processor,
-    StorageKey.GROUPEDMESSAGES: __grouped_message_row_processor,
-}
+class GroupedMessageRowProcessor(CdcRowProcessor):
+    def process(self, row: SnapshotTableRow) -> WriterTableRow:
+        return GroupedMessageRow.from_bulk(row).to_clickhouse()
