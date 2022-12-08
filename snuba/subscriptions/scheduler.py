@@ -16,10 +16,6 @@ from typing import (
 from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    GenericMetricsDistributionsSubscription,
-    GenericMetricsSetsSubscription,
-)
 from snuba.datasets.slicing import (
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
@@ -339,20 +335,16 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         for subscription in subscriptions:
             # get the EntitySubscription from the Subscription
             sub_data = subscription.data
-            entity_sub = sub_data.entity_subscription
+            sub_metadata = sub_data.metadata
+            org_id = sub_metadata["organization"]
 
             # partition key is only defined for SessionsSubscriptions
             if isinstance(
-                entity_sub,
-                (
-                    GenericMetricsSetsSubscription,
-                    GenericMetricsDistributionsSubscription,
-                ),
+                self.__entity_key,
+                (),
             ):
-                partition_key_value = entity_sub.get_partitioning_key()
-
                 # map the partition key's value to the slice ID
-                logical_part = map_org_id_to_logical_partition(partition_key_value)
+                logical_part = map_org_id_to_logical_partition(org_id)
                 entity = get_entity(self.__entity_key)
                 storage = entity.get_writable_storage()
                 if storage is not None:
