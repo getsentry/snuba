@@ -236,7 +236,7 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "querylog",
     "profiles",
     "functions",
-    "test_migration",
+    # "test_migration",
 }
 
 MAX_RESOLUTION_FOR_JITTER = 60
