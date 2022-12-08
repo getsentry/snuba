@@ -36,7 +36,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=operations.OperationTarget.DISTRIBUTED,
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="querylog_local",
+                    local_table_name="test_migration_local",
                     sharding_key=None,
                 ),
             ),
