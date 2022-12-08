@@ -1,0 +1,92 @@
+version: v1
+kind: entity
+name: replays
+
+schema:
+  [
+    { name: replay_id, type: UUID },
+    { name: event_hash, type: UUID },
+    {
+      name: segment_id,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 16 },
+    },
+    { name: timestamp, type: DateTime },
+    {
+      name: replay_start_timestamp,
+      type: DateTime,
+      args: { schema_modifiers: [nullable] },
+    },
+    { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
+    { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
+    { name: title, type: String, args: { schema_modifiers: [readonly] } },
+    { name: url, type: String, args: { schema_modifiers: [nullable] } },
+    { name: urls, type: Array, args: { inner_type: { type: String } } },
+    {
+      name: is_archived,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 8 },
+    },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: platform, type: String },
+    { name: environment, type: String, args: { schema_modifiers: [nullable] } },
+    { name: release, type: String, args: { schema_modifiers: [nullable] } },
+    { name: dist, type: String, args: { schema_modifiers: [nullable] } },
+    { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [nullable] } },
+    { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [nullable] } },
+    { name: user, type: String },
+    { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_email, type: String, args: { schema_modifiers: [nullable] } },
+    { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
+    { name: os_version, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: browser_name,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: browser_version,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    { name: device_name, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: device_brand,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: device_family,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: device_model,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    { name: sdk_name, type: String },
+    { name: sdk_version, type: String },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+  ]
+
+readable_storage: replays
+writable_storage: replays
+query_processors:
+  [{ processor: TagsTypeTransformer }, { processor: TableRateLimit }]
+translation_mappers: {}
+validators: []
+
+required_time_column: timestamp
