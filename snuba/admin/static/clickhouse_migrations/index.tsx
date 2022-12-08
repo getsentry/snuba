@@ -17,6 +17,12 @@ function ClickhouseMigrations(props: { api: Client }) {
   const [migrationId, setMigrationId] = useState<string | null>(null);
   const [SQLText, setSQLText] = useState<string | null>(null);
 
+  const [header, setHeader] = useState<string | null>(null);
+  const [show_action, setShowAction] = useState<boolean | null>(false);
+
+  const dry_run_header = "Raw SQL for running a migration (forwards) or reversing \n (backwards). Good to do before executing a migration for real."
+  const real_run_header = "Run log output"
+
   useEffect(() => {
     props.api.getAllMigrationGroups().then((res) => {
       let options: GroupOptions = {};
@@ -32,12 +38,14 @@ function ClickhouseMigrations(props: { api: Client }) {
     setMigrationGroup(() => migrationGroup);
     setSQLText(() => null);
     setMigrationId(() => null);
+    setShowAction(()=> false)
     refreshStatus(migrationGroup.group);
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(() => null);
+    setSQLText(()=>null)
+    setShowAction(()=> false)
   }
 
   function execute(action: Action) {
@@ -83,18 +91,25 @@ function ClickhouseMigrations(props: { api: Client }) {
       .catch((err) => {
         console.log(err);
         setSQLText(() => JSON.stringify(err));
+
       });
   }
 
   function executeDryRun(action: Action) {
     console.log("executing dry run !", migrationId, action);
-    executeRun(action, true, false);
+    setHeader(()=> dry_run_header)
+    executeRun(action, true, false)
+    setShowAction(()=> true)
+
   }
 
   function executeRealRun(action: Action, force: boolean) {
     console.log("executing real run !", migrationId, action);
-    executeRun(action, false, force);
-    if (migrationGroup) refreshStatus(migrationGroup.group);
+    setHeader(()=> real_run_header)
+    executeRun(action, false, false)
+
+    if (migrationGroup)
+      refreshStatus(migrationGroup.group)
   }
 
   function refreshStatus(group: string) {
@@ -159,7 +174,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   }
 
   function renderActions() {
-    if (!(migrationGroup && migrationId)) {
+    if (!(migrationGroup && migrationId) || !show_action) {
       return null;
     }
     const data = migrationGroup?.migration_ids.find(
@@ -205,6 +220,7 @@ function ClickhouseMigrations(props: { api: Client }) {
       </div>
     );
   }
+
   return (
     <div style={{ display: "flex" }}>
       <form>
@@ -233,9 +249,10 @@ function ClickhouseMigrations(props: { api: Client }) {
         <div>
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
-            <div style={{ display: "inline-block" }}>
-              <button
-                type="button"
+            <div style={{ display: "block" }}>
+              <br />
+              {"Dry Run: "}
+              <button type="button"
                 onClick={() => executeDryRun(Action.Run)}
                 style={buttonStyle}
               >
@@ -254,8 +271,9 @@ function ClickhouseMigrations(props: { api: Client }) {
         {migrationGroup && migrationId && SQLText && (
           <div style={sqlBox}>
             <p style={textStyle}>
-              Raw SQL for running a migration (forwards) or reversing
-              (backwards). Good to do before executing a migration for real.
+              {header}
+              {/* Raw SQL for running a migration (forwards) or reversing
+              (backwards). Good to do before executing a migration for real. */}
             </p>
             <textarea style={textareaStyle} readOnly value={SQLText} />
           </div>
