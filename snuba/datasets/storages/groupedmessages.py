@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
+from snuba.datasets.cdc.row_processors import GroupedMessageRowProcessor
 from snuba.datasets.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
@@ -68,4 +69,5 @@ storage = CdcStorage(
     ),
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
+    row_processor=GroupedMessageRowProcessor(),
 )
