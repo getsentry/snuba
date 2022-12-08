@@ -333,17 +333,17 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
         filtered_subscriptions: List[Subscription] = []
         for subscription in subscriptions:
-            # get the EntitySubscription from the Subscription
+            # get the metadata and org_id from the Subscription
             sub_data = subscription.data
             sub_metadata = sub_data.metadata
             org_id = sub_metadata["organization"]
 
-            # partition key is only defined for SessionsSubscriptions
-            if isinstance(
-                self.__entity_key,
-                (),
+            # only generic metrics storage sets are currently sliced
+            if (
+                self.__entity_key == EntityKey.GENERIC_METRICS_SETS
+                or self.__entity_key == EntityKey.GENERIC_METRICS_DISTRIBUTIONS
             ):
-                # map the partition key's value to the slice ID
+                # map the org_id to the slice ID
                 logical_part = map_org_id_to_logical_partition(org_id)
                 entity = get_entity(self.__entity_key)
                 storage = entity.get_writable_storage()
