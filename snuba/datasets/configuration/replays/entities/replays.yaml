@@ -84,8 +84,7 @@ schema:
 
 readable_storage: replays
 writable_storage: replays
-query_processors:
-  [{ processor: TagsTypeTransformer }, { processor: TableRateLimit }]
+query_processors: [{ processor: TagsTypeTransformer }]
 translation_mappers: {}
 validators: []
 
