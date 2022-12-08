@@ -96,7 +96,9 @@ def optimize(
     last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+
+    # add 1 hour to make the reddit TTL past the optimize job cuttoff time
+    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(hours=1)
     logger.info("Cutoff time: %s", str(cutoff_time))
 
     schema = storage.get_schema()
