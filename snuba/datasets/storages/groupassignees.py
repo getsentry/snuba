@@ -3,10 +3,7 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.cdc.groupassignee_processor import (
-    GroupAssigneeProcessor,
-    GroupAssigneeRow,
-)
+from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor
 from snuba.datasets.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
@@ -41,6 +38,7 @@ schema = WritableTableSchema(
 
 POSTGRES_TABLE = "sentry_groupasignee"
 
+
 storage = CdcStorage(
     storage_key=StorageKey.GROUPASSIGNEES,
     storage_set_key=StorageSetKey.CDC,
@@ -56,5 +54,4 @@ storage = CdcStorage(
     ),
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
-    row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),
 )
