@@ -97,7 +97,7 @@ def optimize(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    # add 1 hour to make the reddit TTL past the optimize job cuttoff time
+    # add 1 hour to make the redis TTL past the optimize job cuttoff time
     cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(hours=1)
     logger.info("Cutoff time: %s", str(cutoff_time))
 
