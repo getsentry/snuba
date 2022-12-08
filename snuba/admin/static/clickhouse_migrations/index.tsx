@@ -46,15 +46,22 @@ function ClickhouseMigrations(props: { api: Client }) {
       (m) => m.migration_id == migrationId
     );
     if (data?.blocking) {
-      window.confirm(
-        `Migration ${migrationId} is blocking, are you sure you want to execute?`
-      );
+      if (
+        window.confirm(
+          `Migration ${migrationId} is blocking, are you sure you want to execute?`
+        )
+      ) {
+        force = true;
+      }
     }
     if (data?.status !== "not_started" && action === Action.Reverse) {
-      window.confirm(
-        `Migration ${migrationId} is ${data?.status}, are you sure you want to reverse?`
-      );
-      force = true;
+      if (
+        window.confirm(
+          `Migration ${migrationId} is ${data?.status}, are you sure you want to reverse?`
+        )
+      ) {
+        force = true;
+      }
     }
     executeRealRun(action, force);
   }
