@@ -34,14 +34,14 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
     have to remove those rows manually or to run the query in FINAL mode.
     """
 
-    def __init__(
-        self, project_column: str, replacer_state_name: Optional[ReplacerState]
-    ) -> None:
+    def __init__(self, project_column: str, replacer_state_name: Optional[str]) -> None:
         self.__project_column = project_column
         self.__groups_column = "group_id"
         # This is used to allow us to keep the replacement state in redis for multiple
         # replacers on multiple tables. replacer_state_name is part of the redis key.
-        self.__replacer_state_name = replacer_state_name
+        self.__replacer_state_name = (
+            ReplacerState(replacer_state_name) if replacer_state_name else None
+        )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         if query_settings.get_turbo():
