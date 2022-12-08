@@ -497,7 +497,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
-        state_name: ReplacerState,
+        state_name: str,
     ) -> None:
         super().__init__(schema=schema)
         self.__required_columns = required_columns
@@ -507,7 +507,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
-        self.__state_name = state_name
+        self.__state_name = ReplacerState(state_name)
         self.__schema = schema
         self.__replacement_context = ReplacementContext(
             all_columns=self.__all_columns,
