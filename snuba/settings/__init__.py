@@ -7,6 +7,7 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -150,6 +151,7 @@ RECORD_QUERIES = False
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
+CONFIG_STATE: Mapping[str, Optional[Any]] = {}
 
 # Sentry Options
 SENTRY_DSN: str | None = None
