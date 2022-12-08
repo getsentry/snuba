@@ -41,6 +41,8 @@ class GroupedMessageEntity(Entity):
             writable_storage=storage,
             validators=None,
             required_time_column=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

@@ -18,7 +18,7 @@ from snuba.datasets.plans.single_storage import (
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.slicing import (
-    is_storage_sliced,
+    is_storage_set_sliced,
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
@@ -112,7 +112,7 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         Selects the cluster to use for a query if the storage set is sliced.
         If the storage set is not sliced, it returns the default cluster.
         """
-        if not is_storage_sliced(self.storage):
+        if not is_storage_set_sliced(self.storage_set):
             return get_cluster(self.storage_set)
 
         org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
@@ -124,7 +124,9 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         if _should_use_mega_cluster(self.storage_set, logical_partition):
             return get_cluster(self.storage_set)
         else:
-            slice_id = map_logical_partition_to_slice(self.storage, logical_partition)
+            slice_id = map_logical_partition_to_slice(
+                self.storage_set, logical_partition
+            )
             cluster = get_cluster(self.storage_set, slice_id)
             return cluster
 

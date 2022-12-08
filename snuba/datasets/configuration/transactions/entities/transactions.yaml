@@ -355,3 +355,15 @@ validators:
   ]
 
 required_time_column: finish_ts
+subscription_validators:
+  [
+    {
+      validator: AggregationValidator,
+      args:
+        {
+          max_allowed_aggregations: 1,
+          disallowed_aggregations: [groupby, having, orderby],
+          required_time_column: finish_ts
+        },
+    },
+  ]

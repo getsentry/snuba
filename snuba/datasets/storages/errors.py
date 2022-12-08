@@ -15,7 +15,6 @@ from snuba.datasets.storages.errors_common import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.condition_checkers.checkers import ProjectIdEnforcer
-from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -51,6 +50,6 @@ storage = WritableTableStorage(
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
-        state_name=ReplacerState.ERRORS,
+        state_name="errors",
     ),
 )

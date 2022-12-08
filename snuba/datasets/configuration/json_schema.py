@@ -382,6 +382,44 @@ ENTITY_TRANSLATION_MAPPERS = {
     "additionalProperties": False,
 }
 
+ENTITY_SUBSCRIPTION_PROCESSORS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "processor": {
+                "type": "string",
+                "description": "Entity Subscription Processor class name",
+            },
+            "args": {
+                "type": "object",
+                "description": "Key/value mappings required to instantiate Entity Subscription Processor class",
+            },
+        },
+        "required": ["processor"],
+        "additionalProperties": False,
+    },
+}
+
+ENTITY_SUBSCRIPTION_VALIDATORS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "validator": {
+                "type": "string",
+                "description": "Entity Subscription Validator class name",
+            },
+            "args": {
+                "type": "object",
+                "description": "Key/value mappings required to instantiate Entity Subscription Validator class",
+            },
+        },
+        "required": ["validator"],
+        "additionalProperties": False,
+    },
+}
+
 # Full schemas:
 
 V1_WRITABLE_STORAGE_SCHEMA = {
@@ -476,6 +514,8 @@ V1_ENTITY_SCHEMA = {
             "type": ["string", "null"],
             "description": "The column name, if this entity is partitioned, to select slice",
         },
+        "subscription_processors": ENTITY_SUBSCRIPTION_PROCESSORS,
+        "subscription_validators": ENTITY_SUBSCRIPTION_VALIDATORS,
     },
     "required": [
         "version",
@@ -517,33 +557,6 @@ V1_DATASET_SCHEMA = {
     "additionalProperties": False,
 }
 
-V1_ENTITY_SUBSCIPTION_SCHEMA = {
-    "title": "Entity Subscription Schema",
-    "type": "object",
-    "properties": {
-        "version": {"const": "v1", "description": "Version of schema"},
-        "kind": {"const": "entity_subscription", "description": "Component kind"},
-        "name": {"type": "string", "description": "Name of the entity subscription"},
-        "max_allowed_aggregations": {
-            "type": ["integer", "null"],
-            "description": "Maximum number of allowed aggregations",
-        },
-        "disallowed_aggregations": {
-            "type": ["array", "null"],
-            "items": {
-                "type": "string",
-            },
-            "description": "Name of aggregation clauses that are not allowed",
-        },
-    },
-    "required": [
-        "version",
-        "kind",
-        "name",
-    ],
-    "additionalProperties": False,
-}
-
 
 V1_MIGRATION_GROUP_SCHEMA = {
     "title": "Migration Group Schema",
@@ -575,10 +588,6 @@ with sentry_sdk.start_span(op="compile", description="Storage Validators"):
 with sentry_sdk.start_span(op="compile", description="Entity Validators"):
     ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-with sentry_sdk.start_span(op="compile", description="Enitity Subscription Validators"):
-    ENIITY_SUBSCRIPTION_VALIDATORS = {
-        "entity_subscription": fastjsonschema.compile(V1_ENTITY_SUBSCIPTION_SCHEMA)
-    }
 
 with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
     DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
@@ -587,7 +596,6 @@ with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
 ALL_VALIDATORS = {
     **STORAGE_VALIDATORS,
     **ENTITY_VALIDATORS,
-    **ENIITY_SUBSCRIPTION_VALIDATORS,
     **DATASET_VALIDATORS,
     # TODO: MIGRATION_GROUP_VALIDATORS if migration groups will be config'd
 }
@@ -595,7 +603,6 @@ ALL_VALIDATORS = {
 V1_ALL_SCHEMAS = {
     "dataset": V1_DATASET_SCHEMA,
     "entity": V1_ENTITY_SCHEMA,
-    "entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA,
     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
     "migration_group": V1_MIGRATION_GROUP_SCHEMA,

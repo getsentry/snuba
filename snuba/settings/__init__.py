@@ -7,6 +7,7 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -150,6 +151,7 @@ RECORD_QUERIES = False
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
+CONFIG_STATE: Mapping[str, Optional[Any]] = {}
 
 # Sentry Options
 SENTRY_DSN: str | None = None
@@ -308,11 +310,11 @@ COUNTER_WINDOW_SIZE = timedelta(minutes=10)
 
 # Slicing Configuration
 
-# Mapping of storage key to slice count
-# This is only for sliced storages
-SLICED_STORAGES: Mapping[str, int] = {}
+# Mapping of storage set key to slice count
+# This is only for sliced storage sets
+SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
-# Mapping storage key to a mapping of logical partition
+# Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 

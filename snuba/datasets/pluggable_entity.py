@@ -6,6 +6,8 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
+from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -15,7 +17,7 @@ from snuba.datasets.plans.sliced_storage import (
     ColumnBasedStorageSliceSelector,
     SlicedStorageQueryPlanBuilder,
 )
-from snuba.datasets.slicing import is_storage_sliced
+from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
@@ -53,6 +55,8 @@ class PluggableEntity(Entity):
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
+    subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
+    subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -69,7 +73,7 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_sliced(self.readable_storage.get_storage_key()):
+        if is_storage_set_sliced(self.readable_storage.get_storage_set_key()):
             assert (
                 self.partition_key_column_name is not None
             ), "partition key column name must be defined for a sliced storage"
@@ -107,6 +111,16 @@ class PluggableEntity(Entity):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
+
+    def get_subscription_processors(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
+        return self.subscription_processors
+
+    def get_subscription_validators(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+        return self.subscription_validators
 
     def __eq__(self, other: Any) -> bool:
         return (

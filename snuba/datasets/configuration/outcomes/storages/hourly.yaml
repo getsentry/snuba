@@ -1,0 +1,30 @@
+version: v1
+kind: readable_storage
+name: outcomes_hourly
+storage:
+  key: outcomes_hourly
+  set_key: outcomes
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: key_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: outcome, type: UInt, args: { size: 8 } },
+      { name: reason, type: String },
+      { name: quantity, type: UInt, args: { size: 64 } },
+      { name: category, type: UInt, args: { size: 8 } },
+      { name: times_seen, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: outcomes_hourly_local
+  dist_table_name: outcomes_hourly_dist
+query_processors:
+  - processor: PrewhereProcessor
+    args:
+      prewhere_candidates:
+        - project_id
+        - org_id
+  - processor: TableRateLimit
+mandatory_condition_checkers:
+  - condition: OrgIdEnforcer
