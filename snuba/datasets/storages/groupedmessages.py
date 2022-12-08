@@ -2,7 +2,7 @@ from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
 from snuba.datasets.cdc.row_processors import GroupedMessageRowProcessor
 from snuba.datasets.message_filters import CdcTableNameMessageFilter
