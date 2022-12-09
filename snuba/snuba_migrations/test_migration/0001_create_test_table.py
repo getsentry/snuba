@@ -46,12 +46,12 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.QUERYLOG,
-                table_name="test_migration_local",
-                target=operations.OperationTarget.LOCAL,
+                table_name="test_migration_dist",
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.QUERYLOG,
-                table_name="test_migration_dist",
-                target=operations.OperationTarget.DISTRIBUTED,
+                table_name="test_migration_local",
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
