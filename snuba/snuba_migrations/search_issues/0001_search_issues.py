@@ -38,7 +38,7 @@ columns: List[Column[Modifiers]] = [
     Column(
         "user_hash", UInt(64, Modifiers(nullable=True, materialized="cityHash64(user)"))
     ),
-    Column("user_id", UInt(64, Modifiers(nullable=True))),
+    Column("user_id", String(Modifiers(nullable=True))),
     Column("user_name", String(Modifiers(nullable=True))),
     Column("user_email", String(Modifiers(nullable=True))),
     Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
@@ -48,6 +48,8 @@ columns: List[Column[Modifiers]] = [
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
+    Column("partition", UInt(16)),
+    Column("offset", UInt(64)),
     Column("retention_days", UInt(16)),
 ]
 
@@ -62,9 +64,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="search_issues_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, toStartOfDay(detection_timestamp))",
+                    order_by="(project_id, toStartOfDay(detection_timestamp), cityHash64(occurrence_id))",
                     partition_by="(retention_days, toMonday(detection_timestamp))",
-                    sample_by="project_id",
+                    sample_by="cityHash64(occurrence_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     ttl="detection_timestamp + toIntervalDay(retention_days)",
@@ -77,7 +79,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="search_issues_local",
-                    sharding_key="cityHash64(project_id)",
+                    sharding_key="cityHash64(occurrence_id)",
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),

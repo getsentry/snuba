@@ -13,6 +13,14 @@ schema:
     { name: occurrence_type_id, type: UInt, args: { size: 8 } },
     { name: detection_timestamp, type: DateTime },
 
+    { name: event_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
+    { name: trace_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
+    { name: platform, type: String, args: { schema_modifiers: [ low_cardinality ] } },
+    { name: environment, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: release, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: dist, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: receive_timestamp, type: DateTime },
+    { name: client_timestamp, type: DateTime },
     {
       name: tags,
       type: Nested,
@@ -22,8 +30,34 @@ schema:
             [ { name: key, type: String }, { name: value, type: String } ],
         },
     },
+    { name: user, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_hash, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: user_id, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_name, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_email, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [ nullable ] } },
+    { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [ nullable ] } },
+    { name: sdk_name, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: sdk_version, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    {
+      name: contexts,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [ { name: key, type: String }, { name: value, type: String } ],
+        },
+    },
+    { name: http_method, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    {
+      name: http_referer,
+      type: String,
+      args: { schema_modifiers: [ nullable ] },
+    },
 
-    # TODO: fill out more fields
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+    { name: retention_days, type: UInt, args: { size: 16 } },
   ]
 
 readable_storage: search_issues
