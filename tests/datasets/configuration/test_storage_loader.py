@@ -24,6 +24,7 @@ from snuba.utils.schemas import AggregateFunction
 # this has to be done before the storage import because there's a cyclical dependency error
 CONFIG_BUILT_STORAGES = get_config_built_storages()
 
+from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.functions import agg_storage as functions
 from snuba.datasets.storages.functions import raw_storage as functions_raw
 from snuba.datasets.storages.generic_metrics import (
@@ -122,6 +123,7 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
+        discover,
         functions,
         functions_raw,
         sessions_raw,
