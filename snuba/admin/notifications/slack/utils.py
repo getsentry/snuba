@@ -45,9 +45,9 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
 
 
 def build_migration_run_text(data: Any, action: AuditLogAction) -> Optional[str]:
-    if action == AuditLogAction.RAN_MIGRATION:
+    if action == AuditLogAction.RAN_MIGRATION_STARTED:
         action_text = f":runner: ran migration {data['migration']}"
-    elif action == AuditLogAction.REVERSED_MIGRATION:
+    elif action == AuditLogAction.REVERSED_MIGRATION_STARTED:
         action_text = f":uno-reverse: reversed migration {data['migration']}"
     else:
         return None
