@@ -40,6 +40,8 @@ def _convert_stream_loader(stream_loader: KafkaStreamLoader) -> dict[str, Any]:
         "processor": _convert_registered_class(stream_loader.get_processor(), "name"),
         "default_topic": stream_loader.get_default_topic_spec().topic_name,
     }
+    if spec := stream_loader.get_replacement_topic_spec():
+        res["replacement_topic"] = spec.topic_name
     if spec := stream_loader.get_commit_log_topic_spec():
         res["commit_log_topic"] = spec.topic_name
     if mode := stream_loader.get_subscription_scheduler_mode():
