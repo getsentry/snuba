@@ -65,6 +65,11 @@ def set_logging_context() -> None:
     bind_contextvars(endpoint=request.endpoint, user_ip=request.remote_addr)
 
 
+@application.teardown_request
+def clear_logging_context(exception: Optional[BaseException]) -> None:
+    clear_contextvars()
+
+
 @application.before_request
 def authorize() -> None:
     logger.debug("authorize.entered")

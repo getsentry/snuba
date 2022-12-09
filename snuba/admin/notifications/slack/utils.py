@@ -45,9 +45,9 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
 
 
 def build_migration_run_text(data: Any, action: AuditLogAction) -> Optional[str]:
-    if action == AuditLogAction.RAN_MIGRATION:
+    if action == AuditLogAction.RAN_MIGRATION_COMPLETED:
         action_text = f":athletic_shoe: ran migration `{data['migration']}`"
-    elif action == AuditLogAction.REVERSED_MIGRATION:
+    elif action == AuditLogAction.REVERSED_MIGRATION_COMPLETED:
         action_text = f":back: reversed migration `{data['migration']}`"
     else:
         return None
