@@ -30,6 +30,7 @@ def _record_timer_metrics(
         tags={
             "status": query_metadata.status.value,
             "referrer": referrer,
+            "parent_api": request.query_settings.get_parent_api(),
             "final": final,
             "dataset": query_metadata.dataset,
             "app_id": app_id,
@@ -37,6 +38,7 @@ def _record_timer_metrics(
         mark_tags={
             "final": final,
             "referrer": referrer,
+            "parent_api": request.query_settings.get_parent_api(),
             "dataset": query_metadata.dataset,
         },
     )
@@ -49,6 +51,7 @@ def _record_attribution_metrics(
     attr_data = AttributionData(
         app_id=request.attribution_info.app_id,
         referrer=request.referrer,
+        parent_api=request.query_settings.get_parent_api(),
         request_id=request.id,
         dataset=query_metadata.dataset,
         entity=query_metadata.entity,

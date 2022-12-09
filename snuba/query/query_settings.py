@@ -29,6 +29,14 @@ class QuerySettings(ABC):
         pass
 
     @abstractmethod
+    def get_parent_api(self) -> str:
+        """
+        This is an identifier used to denote the higher level request. That could be an API endpoint,
+        a celery task or something else entirely.
+        """
+        pass
+
+    @abstractmethod
     def get_dry_run(self) -> bool:
         pass
 
@@ -71,6 +79,7 @@ class HTTPQuerySettings(QuerySettings):
         # TODO: is this flag still relevant?
         legacy: bool = False,
         referrer: str = "unknown",
+        parent_api: str = "<unknown>",
     ) -> None:
         super().__init__()
         self.__turbo = turbo
@@ -81,6 +90,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
         self.referrer = referrer
+        self.__parent_api = parent_api
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -90,6 +100,9 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_debug(self) -> bool:
         return self.__debug
+
+    def get_parent_api(self) -> str:
+        return self.__parent_api
 
     def get_dry_run(self) -> bool:
         return self.__dry_run
@@ -119,11 +132,11 @@ class SubscriptionQuerySettings(QuerySettings):
     def __init__(
         self,
         consistent: bool = True,
-        parent_api: str = "subscription",
         team: str = "workflow",
         feature: str = "subscription",
         app_id: str = "default",
         referrer: str = "subscription",
+        parent_api: str = "subscription",
     ) -> None:
         self.__consistent = consistent
         self.__parent_api = parent_api
