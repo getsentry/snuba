@@ -112,3 +112,57 @@ class QueryDurationForReferrerByProject(QuerylogQuery):
     )
     ORDER BY projects ASC, time ASC
     """
+
+
+class BeforeAfterBytesScannedComparison(QuerylogQuery):
+    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in bytes_scanned. In the example, the abuse started on Dec 7. at 21:54:50."""
+
+    sql = """
+    SELECT referrer, before_scanned, after_scanned, (after_scanned - ifNull(before_scanned, 0)) as diff, (diff / if(equals(after_scanned, 0), 1, after_scanned))  * 100 as pct_diff
+    FROM
+    (
+        SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as after_scanned
+        FROM querylog_local
+        WHERE timestamp >= toDateTime('2022-12-07T21:55:00')
+        AND timestamp <= toDateTime('2022-12-07T22:20:00')
+        AND dataset IN ('events', 'discover')
+        GROUP BY referrer
+    ) `after` LEFT OUTER JOIN
+    (
+        SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as before_scanned
+        FROM querylog_local
+        WHERE timestamp >= toDateTime('2022-12-07T21:24:00')
+        AND timestamp <= toDateTime('2022-12-07T21:54:00')
+        AND dataset IN ('events', 'discover')
+        GROUP BY referrer
+    ) `before` USING referrer
+    ORDER BY pct_diff DESC
+    LIMIT 10
+    """
+
+
+class BeforeAfterDurationComparison(QuerylogQuery):
+    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in duration. In the example, the abuse started on Dec 7. at 21:54:50."""
+
+    sql = """
+    SELECT referrer, before_duration, after_duration, (after_duration - ifNull(before_duration, 0)) as diff, (diff / if(equals(after_duration, 0), 1, after_duration))  * 100 as pct_diff
+    FROM
+    (
+        SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as after_duration
+        FROM querylog_local
+        WHERE timestamp >= toDateTime('2022-12-07T21:55:00')
+        AND timestamp <= toDateTime('2022-12-07T22:20:00')
+        AND dataset IN ('events', 'discover')
+        GROUP BY referrer
+    ) `after` LEFT OUTER JOIN
+    (
+        SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as before_duration
+        FROM querylog_local
+        WHERE timestamp >= toDateTime('2022-12-07T21:24:00')
+        AND timestamp <= toDateTime('2022-12-07T21:54:00')
+        AND dataset IN ('events', 'discover')
+        GROUP BY referrer
+    ) `before` USING referrer
+    ORDER BY pct_diff DESC
+    LIMIT 10
+    """

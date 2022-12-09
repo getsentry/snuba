@@ -13,6 +13,7 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
@@ -20,7 +21,7 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.settings import SLICED_KAFKA_TOPIC_MAP
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
-from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
+from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.schemas import ReadOnly
@@ -293,7 +294,7 @@ class TableWriter:
         self,
         source: BulkLoadSource,
         source_table: str,
-        row_processor: RowProcessor,
+        row_processor: CdcRowProcessor,
         table_name: Optional[str] = None,
     ) -> BulkLoader:
         """

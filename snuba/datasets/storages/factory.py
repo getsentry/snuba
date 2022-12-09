@@ -7,7 +7,7 @@ from typing import Generator
 import sentry_sdk
 
 from snuba import settings
-from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
