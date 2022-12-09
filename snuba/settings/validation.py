@@ -58,7 +58,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-attribution",
         "profiles-call-tree",
         "ingest-replay-events",
-        "search-issues",
+        "eventstream-issue-platform",
         "snuba-replay-events",
         "snuba-dead-letter-replays",
         "snuba-generic-metrics",

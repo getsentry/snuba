@@ -41,7 +41,7 @@ class Topic(Enum):
     GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
         "snuba-generic-metrics-distributions-commit-log"
     )
-    SEARCH_ISSUES = "search-issues"
+    SEARCH_ISSUES = "eventstream-issue-platform"
 
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
     ATTRIBUTION = "snuba-attribution"
