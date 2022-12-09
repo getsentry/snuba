@@ -61,15 +61,21 @@ class ReplacerProcessor(ABC, Generic[R]):
     instance of this class that will be used by the ReplacementWorker.
     """
 
-    def __init__(self, schema: WritableTableSchema) -> None:
-        self.__schema = schema
-
     @abstractmethod
     def process_message(self, message: ReplacementMessage) -> Optional[R]:
         """
         Processes one message from the topic.
         """
         raise NotImplementedError
+
+    def initialize_schema(self, schema: WritableTableSchema) -> None:
+        """
+        Schema is initialized by the parent storage after ReplacerProcessor is
+        instantiated.
+
+        This method should be called before any processing is done by the processor!
+        """
+        self.__schema = schema
 
     def get_schema(self) -> WritableTableSchema:
         return self.__schema

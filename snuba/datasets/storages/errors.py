@@ -46,7 +46,6 @@ storage = WritableTableStorage(
     # This is the default, just showing where it goes for the PR
     write_format=WriteFormat.JSON,
     replacer_processor=ErrorsReplacer(
-        schema=schema,
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},

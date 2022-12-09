@@ -493,22 +493,23 @@ class ProjectsQueryFlags:
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
-        schema: WritableTableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: str,
     ) -> None:
-        super().__init__(schema=schema)
+        self.__schema: WritableTableSchema | None = None
         self.__required_columns = required_columns
-        self.__all_columns = [
-            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
-        ]
-
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = ReplacerState(state_name)
+
+    def initialize_schema(self, schema: WritableTableSchema) -> None:
+        super().initialize_schema(schema)
         self.__schema = schema
+        self.__all_columns = [
+            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
+        ]
         self.__replacement_context = ReplacementContext(
             all_columns=self.__all_columns,
             state_name=self.__state_name,
@@ -519,6 +520,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         )
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
+        assert (
+            self.__schema is not None
+        ), "Schema is None, call initialize_schema() first!"
         type_ = message.action_type
 
         attributes_json = json.dumps({"message_type": type_, **message.data})
