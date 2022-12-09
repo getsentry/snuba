@@ -3,7 +3,7 @@
 import argparse
 import re
 from collections import OrderedDict
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from clickhouse_driver import Client
 
@@ -123,6 +123,7 @@ def copy_tables(
         tables = [result[0] for result in source_client.execute("SHOW TABLES")]
 
     show_table_statements = OrderedDict()
+    show_mv_statements = OrderedDict()
 
     for name in tables:
         ((engine,),) = source_client.execute(
@@ -143,28 +144,38 @@ def copy_tables(
             print("\nReplicated Table Check:")
             verify_zk_replica_path(source_client, curr_create_table_statement, name)
 
-        show_table_statements[name] = curr_create_table_statement
+        if engine == "MaterializedView":
+            show_mv_statements[name] = curr_create_table_statement
+        else:
+            show_table_statements[name] = curr_create_table_statement
 
     ((_, target_replica), (_, target_shard)) = target_client.execute(
         "SELECT macro, substitution FROM system.macros"
     )
-    for table_name, statement in show_table_statements.items():
-        if source_database != target_database:
+
+    def execute_statements(statements: Mapping[str, str]) -> None:
+        for table_name, statement in statements.items():
+            if source_database != target_database:
+                print(
+                    f"Mismatched databases.. Replacing: {source_database}.{table_name} with {target_database}.{table_name}"
+                )
+                statement = statement.replace(
+                    f"CREATE TABLE {source_database}.{table_name}",
+                    f"CREATE TABLE {target_database}.{table_name}",
+                )
             print(
-                f"Mismatched databases.. Replacing: {source_database}.{table_name} with {target_database}.{table_name}"
+                f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
             )
-            statement = statement.replace(
-                f"CREATE TABLE {source_database}.{table_name}",
-                f"CREATE TABLE {target_database}.{table_name}",
-            )
-        print(
-            f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
-        )
-        if execute:
-            target_client.execute(statement)
-            print(f"created {table_name} !")
-        else:
-            print(f"\ncreate table statement: \n {statement}\n")
+            if execute:
+                target_client.execute(statement)
+                print(f"created {table_name} !")
+            else:
+                print(f"\ncreate table statement: \n {statement}\n")
+
+    # make sure materialzied views are created after the local tables
+    # they depend on
+    execute_statements(show_table_statements)
+    execute_statements(show_mv_statements)
 
 
 if __name__ == "__main__":
