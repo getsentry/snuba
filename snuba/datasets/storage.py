@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, NamedTuple, Optional, Sequence
+from typing import Any, NamedTuple, Optional, Sequence, Type, cast
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
@@ -18,6 +18,7 @@ from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.utils.registered_class import RegisteredClass
 
 
 class Storage(ABC):
@@ -65,6 +66,10 @@ class ReadableStorage(Storage):
         These are applied in sequence in the same order as they are defined and are supposed
         to be stateless.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_storage_key(self) -> StorageKey:
         raise NotImplementedError
 
     def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
@@ -169,6 +174,9 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         )
         self.__ignore_write_errors = ignore_write_errors
 
+    def get_storage_key(self) -> StorageKey:
+        return self.__storage_key
+
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
 
@@ -181,15 +189,23 @@ class StorageAndMappers(NamedTuple):
     mappers: TranslationMappers
 
 
-class StorageAndMapperNotFound(Exception):
+class StorageAndMappersNotFound(Exception):
     pass
 
 
-class QueryStorageSelector(ABC):
+class QueryStorageSelector(ABC, metaclass=RegisteredClass):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage query should be executed onto.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["QueryStorageSelector"]:
+        return cast(Type["QueryStorageSelector"], cls.class_from_name(name))
 
     @abstractmethod
     def select_storage(
@@ -208,6 +224,40 @@ class QueryStorageSelector(ABC):
         for sm_tuple in storage_and_mappers_list:
             if storage == sm_tuple.storage:
                 return sm_tuple
-        raise StorageAndMapperNotFound(
+        raise StorageAndMappersNotFound(
             f"Unable to find storage and translation mappers pair for {storage.__class__}"
         )
+
+
+class QueryStorageSelectorError(Exception):
+    pass
+
+
+class SimpleQueryStorageSelector(QueryStorageSelector):
+    def __init__(self) -> None:
+        pass
+
+    def select_storage(
+        self,
+        query: Query,
+        query_settings: QuerySettings,
+        storage_and_mappers_list: Sequence[StorageAndMappers],
+    ) -> StorageAndMappers:
+        if len(storage_and_mappers_list) < 1:
+            raise QueryStorageSelectorError("No storages specified to select from.")
+        # Select the one and only storage available (can be readable or writable)
+        elif len(storage_and_mappers_list) == 1:
+            return storage_and_mappers_list[0]
+        readable_storages = []
+        writable_storages = []
+        for storage_and_mappers in storage_and_mappers_list:
+            if isinstance(storage_and_mappers.storage, ReadableTableStorage):
+                readable_storages.append(storage_and_mappers)
+            if isinstance(storage_and_mappers.storage, WritableTableStorage):
+                writable_storages.append(storage_and_mappers)
+        if len(writable_storages) > 1:
+            raise QueryStorageSelectorError(
+                "Multiple writable storages is not supported."
+            )
+        # Select the readable storage if there is one readable and one writable storage specified
+        return readable_storages[0]

@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import DateTime, String, UInt
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey

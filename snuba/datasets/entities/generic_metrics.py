@@ -20,6 +20,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 <<<<<<< HEAD
+<<<<<<< HEAD
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
     EntitySubscriptionProcessor,
@@ -32,6 +33,9 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 =======
 from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+=======
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+>>>>>>> 989599db (Combine sliced storage plan builder)
 from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageAndMappers,

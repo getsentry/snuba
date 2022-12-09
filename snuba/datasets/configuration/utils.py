@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Type, TypedDict
+from typing import Any, Callable, Optional, Sequence, Type, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -20,6 +20,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import UUID, AggregateFunction, ColumnType, IPv4, IPv6
@@ -93,6 +94,15 @@ def get_mandatory_condition_checkers(
         )
         for mc in mandatory_condition_checkers_objects
     ]
+
+
+def get_writable_storage(
+    storage_and_mappers_list: Sequence[StorageAndMappers],
+) -> Optional[StorageAndMappers]:
+    for sm in storage_and_mappers_list:
+        if isinstance(sm.storage, WritableTableStorage):
+            return sm
+    return None
 
 
 NUMBER_COLUMN_TYPES: dict[str, Any] = {

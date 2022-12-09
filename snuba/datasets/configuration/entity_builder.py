@@ -12,13 +12,13 @@ from snuba.clickhouse.translators.snuba.allowed import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.configuration.json_schema import ENTITY_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
-from snuba.datasets.configuration.utils import parse_columns
+from snuba.datasets.configuration.utils import get_writable_storage, parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
@@ -135,18 +135,18 @@ def _build_subscription_validators(
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    storages = _build_storage_and_mappers(config["storages"])
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
-        storages=_build_storage_and_mappers(config["storages"]),
+        storages=storages,
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
-        readable_storage=get_storage(StorageKey(config["readable_storage"])),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
         translation_mappers=_build_entity_translation_mappers(
             config["translation_mappers"]
         ),
-        writeable_storage=_build_writable_storage(config["storages"]),
+        writeable_storage=get_writable_storage(storages),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),

@@ -12,13 +12,8 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.plans.sliced_storage import (
-    ColumnBasedStorageSliceSelector,
-    SlicedStorageQueryPlanBuilder,
-)
-from snuba.datasets.slicing import is_storage_set_sliced
-from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import Storage, StorageAndMappers, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -34,22 +29,15 @@ class PluggableEntity(Entity):
     static YAML-based configuration files. It is intentionally less flexible
     than Entity. See the documentation of Entity for explanation about how
     overridden methods are supposed to behave.
-
-    At the time of writing, it makes certain assumptions, specifically that
-    the query pipeline builder will map all queries to a single storage, the
-    provided readable storage.
     """
 
     entity_key: EntityKey
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     storages: Sequence[StorageAndMappers]
-    readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
     required_time_column: str
-    writeable_storage: Optional[WritableTableStorage] = None
-    storage_selector: Optional[QueryStorageSelector] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -75,36 +63,19 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_set_sliced(self.readable_storage.get_storage_set_key()):
-            assert (
-                self.partition_key_column_name is not None
-            ), "partition key column name must be defined for a sliced storage"
-            # TODO: add consolidated here
-            query_plan_builder: ClickhouseQueryPlanBuilder = (
-                SlicedStorageQueryPlanBuilder(
-                    storage=self.readable_storage,
-                    mappers=self.translation_mappers,
-                    storage_cluster_selector=ColumnBasedStorageSliceSelector(
-                        storage=self.readable_storage.get_storage_key(),
-                        storage_set=self.readable_storage.get_storage_set_key(),
-                        partition_key_column_name=self.partition_key_column_name,
-                    ),
-                )
-            )
-        else:
-            query_plan_builder = SingleStorageQueryPlanBuilder(
-                storage=self.readable_storage, mappers=self.translation_mappers
-            )
+        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+            storage_and_mappers=self.storages,
+            selector=None,
+            partition_key_column_name=self.partition_key_column_name,
+        )
 
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
+    def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
+        return self.__storages
+
     def get_all_storages(self) -> Sequence[Storage]:
-        return (
-            [self.readable_storage]
-            if not self.writeable_storage
-            or self.writeable_storage == self.readable_storage
-            else [self.readable_storage, self.writeable_storage]
-        )
+        return [storage_and_mappers.storage for storage_and_mappers in self.__storages]
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         return self.function_call_validators
