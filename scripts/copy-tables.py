@@ -2,7 +2,6 @@
 
 import argparse
 import re
-import sys
 from collections import OrderedDict
 from typing import Optional, Sequence
 
