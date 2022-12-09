@@ -30,11 +30,13 @@ def _record_init_args(cls: RegisteredClass) -> None:
 
     orig_init = getattr(cls, "__init__")
     orig_signature = signature(orig_init)
-    if not orig_signature or [p for p in orig_signature.parameters] == [
+    if not orig_signature.parameters or [p for p in orig_signature.parameters] == [
         "self",
         "args",
         "kwargs",
     ]:
+        # hack around the fact that there is no __init__ constructor for a dataclass when
+        # the class is defined (it's applied afterwards through the dataclass decorator)
 
         def __post_init__(self):
             object.__setattr__(self, "init_kwargs", asdict(self))

@@ -80,6 +80,10 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
         self.__query_plan_builder = query_plan_builder
 
+    @property
+    def query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+        return self.__query_plan_builder
+
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:

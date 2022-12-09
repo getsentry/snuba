@@ -119,6 +119,10 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         # candidate to be added here as post process.
         self.__post_processors = post_processors or []
 
+    @property
+    def mappers(self):
+        return self.__mappers
+
     @with_span()
     def build_and_rank_plans(
         self, query: LogicalQuery, settings: QuerySettings
