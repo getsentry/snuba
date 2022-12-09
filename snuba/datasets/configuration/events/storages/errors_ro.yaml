@@ -1,0 +1,292 @@
+version: v1
+kind: readable_storage
+name: errors_ro
+storage:
+  key: errors_ro
+  set_key: events_ro
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: event_id, type: UUID },
+      { name: platform, type: String },
+      {
+        name: environment,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: release, type: String, args: { schema_modifiers: [nullable] } },
+      { name: dist, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: ip_address_v4,
+        type: IPv4,
+        args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: ip_address_v6,
+        type: IPv6,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: user, type: String },
+      {
+        name: user_hash,
+        type: UInt,
+        args: { schema_modifiers: [readonly], size: 64 },
+      },
+      { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
+      { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: user_email,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: sdk_version,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: http_method,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: http_referer,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [{ name: key, type: String }, { name: value, type: String }],
+          },
+      },
+      {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
+      {
+        name: contexts,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [{ name: key, type: String }, { name: value, type: String }],
+          },
+      },
+      { name: transaction_name, type: String },
+      {
+        name: transaction_hash,
+        type: UInt,
+        args: { schema_modifiers: [readonly], size: 64 },
+      },
+      {
+        name: span_id,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 64 },
+      },
+      { name: trace_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+      { name: message_timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: deleted, type: UInt, args: { size: 8 } },
+      { name: group_id, type: UInt, args: { size: 64 } },
+      { name: primary_hash, type: UUID },
+      {
+        name: hierarchical_hashes,
+        type: Array,
+        args: { inner_type: { type: UUID } },
+      },
+      { name: received, type: DateTime },
+      { name: message, type: String },
+      { name: title, type: String },
+      { name: culprit, type: String },
+      { name: level, type: String, args: { schema_modifiers: [nullable] } },
+      { name: location, type: String, args: { schema_modifiers: [nullable] } },
+      { name: version, type: String, args: { schema_modifiers: [nullable] } },
+      { name: type, type: String },
+      {
+        name: exception_stacks,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                {
+                  name: type,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: value,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: mechanism_type,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: mechanism_handled,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 8 },
+                },
+              ],
+          },
+      },
+      {
+        name: exception_frames,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                {
+                  name: abs_path,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: colno,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 32 },
+                },
+                {
+                  name: filename,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: function,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: lineno,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 32 },
+                },
+                {
+                  name: in_app,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 8 },
+                },
+                {
+                  name: package,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: module,
+                  type: String,
+                  args: { schema_modifiers: [nullable] },
+                },
+                {
+                  name: stack_level,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 16 },
+                },
+              ],
+          },
+      },
+      {
+        name: sdk_integrations,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: modules,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [{ name: name, type: String }, { name: version, type: String }],
+          },
+      },
+    ]
+  local_table_name: errors_local
+  dist_table_name: errors_dist_ro
+query_processors:
+  - processor: UniqInSelectAndHavingProcessor
+  - processor: TupleUnaliaser
+  - processor: PostReplacementConsistencyEnforcer
+    args:
+      project_column: project_id
+      replacer_state_name: errors
+  - processor: MappingColumnPromoter
+    args:
+      mapping_specs:
+        tags:
+          environment: environment
+          sentry:release: release
+          sentry:dist: dist
+          sentry:user: user
+          transaction: transaction_name
+          level: level
+        contexts:
+          trace.trace_id: trace_id
+          trace.span_id: span_id
+  - processor: UserColumnProcessor
+  - processor: UUIDColumnProcessor
+    args:
+      columns: !!set
+        trace_id: null
+        primary_hash: null
+        event_id: null
+  - processor: HexIntColumnProcessor
+    args:
+      columns: !!set
+        span_id: null
+  - processor: UUIDArrayColumnProcessor
+    args:
+      columns: !!set
+        hierarchical_hashes: null
+  - processor: SliceOfMapOptimizer
+  - processor: EventsBooleanContextsProcessor
+  - processor: TypeConditionOptimizer
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _tags_hash_map
+      killswitch: events_tags_hash_map_enabled
+  - processor: EmptyTagConditionProcessor
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+  - processor: PrewhereProcessor
+    args:
+      omit_if_final:
+        - environment
+        - release
+        - group_id
+      prewhere_candidates:
+        - event_id
+        - trace_id
+        - group_id
+        - tags[sentry:release]
+        - release
+        - message
+        - environment
+        - project_id
+  - processor: TableRateLimit
+query_splitters:
+  - splitter: ColumnSplitQueryStrategy
+    args:
+      id_column: event_id
+      project_column: project_id
+      timestamp_column: timestamp
+  - splitter: TimeSplitQueryStrategy
+    args:
+      timestamp_col: timestamp
