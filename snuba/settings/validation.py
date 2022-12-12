@@ -159,7 +159,11 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
 
     for storage_set_key in all_storage_set_keys:
         single_node_vals: Set[bool] = set()
-        single_node_vals.add(_STORAGE_SET_CLUSTER_MAP[storage_set_key]["single_node"])
+
+        if storage_set_key in _STORAGE_SET_CLUSTER_MAP:
+            single_node_vals.add(
+                _STORAGE_SET_CLUSTER_MAP[storage_set_key]["single_node"]
+            )
 
         for storage_set_tuple in _SLICED_STORAGE_SET_CLUSTER_MAP.keys():
             if storage_set_key in storage_set_tuple:
