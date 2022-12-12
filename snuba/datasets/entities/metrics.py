@@ -29,7 +29,8 @@ from snuba.datasets.entity_subscriptions.validators import (
     AggregationValidator,
     EntitySubscriptionValidator,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -67,9 +68,18 @@ class MetricsEntity(Entity, ABC):
             get_writable_storage(writable_storage_key) if writable_storage_key else None
         )
         readable_storage = get_storage(readable_storage_key)
+        all_mappers = TranslationMappers(
+            subscriptables=[
+                SubscriptableMapper(None, "tags", None, "tags"),
+            ],
+        ).concat(mappers)
         storages = [readable_storage]
+        storage_and_mappers = [StorageAndMappers(readable_storage, all_mappers, False)]
         if writable_storage:
             storages.append(writable_storage)
+            storage_and_mappers.append(
+                StorageAndMappers(writable_storage, all_mappers, True)
+            )
 
         if abstract_column_set is None:
             abstract_column_set = ColumnSet(
@@ -93,13 +103,8 @@ class MetricsEntity(Entity, ABC):
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(
-                    readable_storage,
-                    mappers=TranslationMappers(
-                        subscriptables=[
-                            SubscriptableMapper(None, "tags", None, "tags"),
-                        ],
-                    ).concat(mappers),
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=storage_and_mappers,
                 )
             ),
             abstract_column_set=abstract_column_set,

@@ -28,7 +28,8 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -184,9 +185,8 @@ class DiscoverEntity(Entity):
         self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         discover_storage = get_storage(StorageKey.DISCOVER)
-        discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
-            storage=discover_storage,
-            mappers=events_translation_mappers.concat(transaction_translation_mappers)
+        mappers = (
+            events_translation_mappers.concat(transaction_translation_mappers)
             .concat(null_function_translation_mappers)
             .concat(
                 TranslationMappers(
@@ -242,16 +242,18 @@ class DiscoverEntity(Entity):
                             (Column(None, None, "user"), Literal(None, "")),
                         ),
                     ]
-                )
+                ).concat(
+                    TranslationMappers(
+                        subscriptables=[
+                            SubscriptableMapper(None, "tags", None, "tags"),
+                            SubscriptableMapper(None, "contexts", None, "contexts"),
+                        ],
+                    )
+                ),
             )
-            .concat(
-                TranslationMappers(
-                    subscriptables=[
-                        SubscriptableMapper(None, "tags", None, "tags"),
-                        SubscriptableMapper(None, "contexts", None, "contexts"),
-                    ],
-                )
-            ),
+        )
+        discover_storage_plan_builder = StorageQueryPlanBuilder(
+            storages=[StorageAndMappers(discover_storage, mappers, False)],
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder

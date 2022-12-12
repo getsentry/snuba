@@ -12,11 +12,11 @@ from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.splitters.strategies import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
+from snuba.datasets.plans.storage_builder import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table

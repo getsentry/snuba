@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -12,13 +12,13 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.plans.sliced_storage import (
-    ColumnBasedStorageSliceSelector,
-    SlicedStorageQueryPlanBuilder,
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import (
+    ReadableTableStorage,
+    Storage,
+    StorageAndMappers,
+    WritableTableStorage,
 )
-from snuba.datasets.slicing import is_storage_set_sliced
-from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -73,25 +73,20 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_set_sliced(self.readable_storage.get_storage_set_key()):
-            assert (
-                self.partition_key_column_name is not None
-            ), "partition key column name must be defined for a sliced storage"
-            query_plan_builder: ClickhouseQueryPlanBuilder = (
-                SlicedStorageQueryPlanBuilder(
-                    storage=self.readable_storage,
-                    mappers=self.translation_mappers,
-                    storage_cluster_selector=ColumnBasedStorageSliceSelector(
-                        storage=self.readable_storage.get_storage_key(),
-                        storage_set=self.readable_storage.get_storage_set_key(),
-                        partition_key_column_name=self.partition_key_column_name,
-                    ),
+        storages: List[StorageAndMappers] = [
+            StorageAndMappers(self.readable_storage, self.translation_mappers, False)
+        ]
+        if self.writeable_storage:
+            storages.append(
+                StorageAndMappers(
+                    self.writeable_storage, self.translation_mappers, True
                 )
             )
-        else:
-            query_plan_builder = SingleStorageQueryPlanBuilder(
-                storage=self.readable_storage, mappers=self.translation_mappers
-            )
+        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+            storages=storages,
+            selector=None,
+            partition_key_column_name=self.partition_key_column_name,
+        )
 
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 

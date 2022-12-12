@@ -1,8 +1,10 @@
 from typing import Sequence
 
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -27,7 +29,9 @@ class GroupedMessageEntity(Entity):
         super().__init__(
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[StorageAndMappers(storage, TranslationMappers(), True)]
+                ),
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={

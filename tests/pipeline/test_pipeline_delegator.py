@@ -5,8 +5,10 @@ from unittest.mock import ANY, Mock, call
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.pipeline_delegator import (
@@ -64,14 +66,22 @@ def test() -> None:
     query, _ = parse_snql_query(query_body["query"], events)
 
     errors_pipeline = SimplePipelineBuilder(
-        query_plan_builder=SingleStorageQueryPlanBuilder(
-            storage=get_storage(StorageKey.ERRORS)
-        ),
+        query_plan_builder=StorageQueryPlanBuilder(
+            storages=[
+                StorageAndMappers(
+                    get_storage(StorageKey.ERRORS), TranslationMappers(), True
+                )
+            ]
+        )
     )
 
     errors_ro_pipeline = SimplePipelineBuilder(
-        query_plan_builder=SingleStorageQueryPlanBuilder(
-            storage=get_storage(StorageKey.ERRORS_RO)
+        query_plan_builder=StorageQueryPlanBuilder(
+            storages=[
+                StorageAndMappers(
+                    get_storage(StorageKey.ERRORS_RO), TranslationMappers(), True
+                )
+            ]
         ),
     )
 

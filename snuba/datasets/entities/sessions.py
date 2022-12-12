@@ -12,10 +12,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -255,10 +252,10 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
 
         if use_materialized_storage:
             return StorageAndMappers(
-                self.materialized_storage, sessions_hourly_translators
+                self.materialized_storage, sessions_hourly_translators, False
             )
         else:
-            return StorageAndMappers(self.raw_storage, sessions_raw_translators)
+            return StorageAndMappers(self.raw_storage, sessions_raw_translators, True)
 
 
 class SessionsEntity(Entity):
@@ -272,8 +269,16 @@ class SessionsEntity(Entity):
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=SessionsQueryStorageSelector()
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[
+                        StorageAndMappers(
+                            materialized_storage, sessions_hourly_translators, False
+                        ),
+                        StorageAndMappers(
+                            writable_storage, sessions_raw_translators, True
+                        ),
+                    ],
+                    selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
@@ -306,7 +311,9 @@ class OrgSessionsEntity(Entity):
         super().__init__(
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage)
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[StorageAndMappers(storage, TranslationMappers(), False)]
+                )
             ),
             abstract_column_set=ColumnSet(
                 [

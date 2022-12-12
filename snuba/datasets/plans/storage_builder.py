@@ -1,11 +1,11 @@
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 import sentry_sdk
 
 from snuba import state
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -16,7 +16,13 @@ from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.slicing import is_storage_set_sliced
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    QueryStorageSelectorError,
+    ReadableTableStorage,
+    StorageAndMappers,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -27,12 +33,12 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
+from snuba.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
-from snuba.util import with_span
 from snuba.web import QueryResult
 
 
@@ -92,112 +98,79 @@ def get_query_data_source(
     )
 
 
-class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
+class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
-    Builds the Clickhouse Query Execution Plan for a dataset that is based on
-    a single storage.
-    """
-
-    def __init__(
-        self,
-        storage: ReadableStorage,
-        mappers: Optional[TranslationMappers] = None,
-        post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-    ) -> None:
-        # The storage the query is based on
-        self.__storage = storage
-        # The translation mappers to be used when translating the logical query
-        # into the clickhouse query.
-        self.__mappers = mappers if mappers is not None else TranslationMappers()
-        # This is a set of query processors that have to be executed on the
-        # query after the storage selection but that are defined by the dataset.
-        # Query processors defined by a Storage must be executable independently
-        # from the context the Storage is used (whether the storage is used by
-        # itself or whether it is joined with another storage).
-        # In a joined query we would have processors defined by multiple storages.
-        # that would have to be executed only once (like Prewhere). That is a
-        # candidate to be added here as post process.
-        self.__post_processors = post_processors or []
-
-    @with_span()
-    def build_and_rank_plans(
-        self, query: LogicalQuery, settings: QuerySettings
-    ) -> Sequence[ClickhouseQueryPlan]:
-        with sentry_sdk.start_span(
-            op="build_plan.single_storage", description="translate"
-        ):
-            # The QueryTranslator class should be instantiated once for each call to build_plan,
-            # to avoid cache conflicts.
-            clickhouse_query = QueryTranslator(self.__mappers).translate(query)
-
-        with sentry_sdk.start_span(
-            op="build_plan.single_storage", description="set_from_clause"
-        ):
-            clickhouse_query.set_from_clause(
-                get_query_data_source(
-                    self.__storage.get_schema().get_data_source(),
-                    final=query.get_final(),
-                    sampling_rate=query.get_sample(),
-                )
-            )
-
-        cluster = self.__storage.get_cluster()
-
-        db_query_processors = [
-            *self.__storage.get_query_processors(),
-            *self.__post_processors,
-            MandatoryConditionApplier(),
-            MandatoryConditionEnforcer(
-                self.__storage.get_mandatory_condition_checkers()
-            ),
-        ]
-
-        return [
-            ClickhouseQueryPlan(
-                query=clickhouse_query,
-                plan_query_processors=[],
-                db_query_processors=db_query_processors,
-                storage_set_key=self.__storage.get_storage_set_key(),
-                execution_strategy=SimpleQueryPlanExecutionStrategy(
-                    cluster=cluster,
-                    db_query_processors=db_query_processors,
-                    splitters=self.__storage.get_query_splitters(),
-                ),
-            )
-        ]
-
-
-class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
-    """
-    A query plan builder that selects one of multiple storages in the dataset.
+    Builds the Clickhouse Query Execution Plan for a dataset which supports single storages,
+    multiple storages, unsliced storages, and sliced storages.
     """
 
     def __init__(
         self,
-        selector: QueryStorageSelector,
+        storages: List[StorageAndMappers],
+        selector: Optional[QueryStorageSelector] = None,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
+        partition_key_column_name: Optional[str] = None,
     ) -> None:
+        self.__storages = storages
         self.__selector = selector
         self.__post_processors = post_processors or []
+        self.__partition_key_column_name = partition_key_column_name
 
     @with_span()
     def build_and_rank_plans(
         self, query: LogicalQuery, settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
-        with sentry_sdk.start_span(
-            op="build_plan.selected_storage", description="select_storage"
-        ):
-            storage, mappers = self.__selector.select_storage(query, settings)
+        if len(self.__storages) < 1:
+            raise QueryStorageSelectorError("No storages specified to select from.")
+
+        if not self.__selector:
+            # Default to the first and only storage and mapper
+            if len(self.__storages) == 1:
+                print(self.__storages)
+                storage, mappers, _ = self.__storages[0]
+            else:
+                # If there are both readable and writable storages, select the readable one.
+                # Multiple writable storages are not supported.
+                readable_storages = [
+                    storage for storage in self.__storages if not storage.is_writable
+                ]
+                if len(readable_storages) > 1:
+                    raise QueryStorageSelectorError(
+                        "Multiple readable storages requires a storage selector."
+                    )
+
+                storage, mappers, _ = readable_storages[0]
+        else:
+            with sentry_sdk.start_span(
+                op="build_plan.storage_query_plan_builder", description="select_storage"
+            ):
+                storage, mappers, _ = self.__selector.select_storage(query, settings)
+
+        if is_storage_set_sliced(storage.get_storage_set_key()):
+            with sentry_sdk.start_span(
+                op="build_plan.sliced_storage", description="select_storage"
+            ):
+                assert (
+                    self.__partition_key_column_name is not None
+                ), "partition key column name must be defined for a sliced storage"
+                assert isinstance(storage, ReadableTableStorage)
+                cluster = ColumnBasedStorageSliceSelector(
+                    storage=storage.get_storage_key(),
+                    storage_set=storage.get_storage_set_key(),
+                    partition_key_column_name=self.__partition_key_column_name,
+                ).select_cluster(query, settings)
+        else:
+            cluster = storage.get_cluster()
 
         with sentry_sdk.start_span(
-            op="build_plan.selected_storage", description="translate"
+            op="build_plan.storage_query_plan_builder", description="translate"
         ):
             # The QueryTranslator class should be instantiated once for each call to build_plan,
             # to avoid cache conflicts.
             clickhouse_query = QueryTranslator(mappers).translate(query)
 
         with sentry_sdk.start_span(
-            op="build_plan.selected_storage", description="set_from_clause"
+            op="build_plan.storage_query_plan_builder", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
                 get_query_data_source(
@@ -206,8 +179,6 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     sampling_rate=query.get_sample(),
                 )
             )
-
-        cluster = storage.get_cluster()
 
         db_query_processors = [
             *storage.get_query_processors(),
