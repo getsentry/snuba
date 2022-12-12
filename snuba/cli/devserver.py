@@ -372,10 +372,10 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
-    if settings.ENABLE_SEARCH_ISSUES_CONSUMER:
+    if settings.ENABLE_ISSUE_OCCURRENCE_CONSUMER:
         daemons += [
             (
-                "search-issues-consumer",
+                "issue-occurrence-consumer",
                 [
                     "snuba",
                     "consumer",
