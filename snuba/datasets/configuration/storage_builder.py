@@ -44,6 +44,7 @@ MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
+REPLACER_PROCESSOR = "replacer_processor"
 
 
 def build_storage_from_config(
@@ -57,12 +58,13 @@ def build_storage_from_config(
     storage_kwargs[WRITER_OPTIONS] = (
         config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
     )
-    storage_kwargs["replacer_processor"] = (
+    storage_kwargs[REPLACER_PROCESSOR] = (
         ReplacerProcessor.get_from_name(
-            config["replacer_processor"]["processor"]
-        ).from_kwargs(**config["replacer_processor"].get("args", {}))
-        if "replacer_processor" in config
+            config[REPLACER_PROCESSOR]["processor"]
+        ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
+        if REPLACER_PROCESSOR in config
         else {}
+        # TODO: Rest of writable storage optional args
     )
     return WritableTableStorage(**storage_kwargs)
 

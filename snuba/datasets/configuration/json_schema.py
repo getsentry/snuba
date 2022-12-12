@@ -271,7 +271,18 @@ STORAGE_SCHEMA = {
 }
 
 
-def register1(property_name: str, class_name: str, description: str) -> dict[str, Any]:
+def registered_class_schema(
+    property_name: str, class_name: str, description: str
+) -> dict[str, Any]:
+    """
+    There are a number of registered classes that are represented in the
+    YAML in a very similar structure, just with different key names.
+    This function reduces the duplicate schema code.
+
+    :param property_name: The key in the configuration for the class name
+    :param class_name: The name of the class being represented.
+    :param description: The description added to the documentation.
+    """
     return {
         "type": "object",
         "properties": {
@@ -289,52 +300,35 @@ def register1(property_name: str, class_name: str, description: str) -> dict[str
     }
 
 
-def registered_class_schema(
+def registered_class_array_schema(
     property_name: str, class_name: str, description: str
 ) -> dict[str, Any]:
-    """
-    There are a number of registered classes that are represented in the
-    YAML in a very similar structure, just with different key names.
-    This function reduces the duplicate schema code.
-
-    :param property_name: The key in the configuration for the class name
-    :param class_name: The name of the class being represented.
-    :param description: The description added to the documentation.
-    """
-    single_class = {
-        "type": "object",
-        "properties": {
-            property_name: {
-                "type": "string",
-                "description": description,
-            },
-            "args": {
-                "type": "object",
-                "description": f"Key/value mappings required to instantiate {class_name} class.",
-            },  # args are a flexible dict
-        },
-        "required": [property_name],
-        "additionalProperties": False,
+    return {
+        "type": "array",
+        "items": registered_class_schema(property_name, class_name, description),
     }
-    return {"type": "array", "items": single_class}
 
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_schema(
+STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_array_schema(
     "processor",
     "QueryProcessor",
     "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
 )
-STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_schema(
+STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_array_schema(
     "splitter",
     "QuerySplitStrategy",
     "Name of QuerySplitStrategy class config key. Responsible for splitting a query into two at runtime and combining the results.",
 )
-STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_schema(
+STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "condition",
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
-BRUH = register1("processor", "ReplacerProcessor", "name")
+STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
+    "processor",
+    "ReplacerProcessor",
+    "Name of ReplacerProcessor class config key. Responsible for optimizing queries on a storage which can have replacements, eg deletions/updates.",
+)
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -453,7 +447,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
-        "replacer_processor": BRUH,
+        "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
             "description": "Extra Clickhouse fields that are used for consumer writes",
