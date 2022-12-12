@@ -1,5 +1,6 @@
-from typing import Any, Mapping, MutableMapping, Set, Tuple
+from typing import Any, Dict, Mapping, MutableMapping, Set, Tuple
 
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
 
@@ -143,3 +144,37 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
                 storage_set,
                 slice_id,
             ) in sliced_storage_sets, f"storage set, slice id pair ({storage_set}, {slice_id}) is not assigned any cluster in SLICED_CLUSTERS in settings"
+
+    _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, Mapping[str, Any]] = {}
+
+    _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[
+        Tuple[StorageSetKey, int], Mapping[str, Any]
+    ] = {}
+    for cluster in locals["CLUSTERS"]:
+        for storage_set in cluster["storage_sets"]:
+            _STORAGE_SET_CLUSTER_MAP[StorageSetKey(storage_set)] = cluster
+
+    for cluster in locals["SLICED_CLUSTERS"]:
+        for storage_set_tuple in cluster["storage_set_slices"]:
+            _SLICED_STORAGE_SET_CLUSTER_MAP[
+                (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
+            ] = cluster
+
+    all_storage_set_keys = set()
+    all_storage_set_keys = set(_STORAGE_SET_CLUSTER_MAP.keys()).union(
+        {key[0] for key in _SLICED_STORAGE_SET_CLUSTER_MAP.keys()}
+    )
+
+    for storage_set_key in all_storage_set_keys:
+        single_node_vals: Set[bool] = set()
+        single_node_vals.add(_STORAGE_SET_CLUSTER_MAP[storage_set_key]["single_node"])
+
+        for storage_set_tuple in _SLICED_STORAGE_SET_CLUSTER_MAP.keys():
+            if storage_set_key in storage_set_tuple:
+                single_node_vals.add(
+                    _SLICED_STORAGE_SET_CLUSTER_MAP[storage_set_tuple]["single_node"]
+                )
+
+        assert (
+            len(single_node_vals) == 1
+        ), f"Storage set key {storage_set_key} must have the same single_node value for all of its associated clusters"
