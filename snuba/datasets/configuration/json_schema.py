@@ -271,6 +271,24 @@ STORAGE_SCHEMA = {
 }
 
 
+def register1(property_name: str, class_name: str, description: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            property_name: {
+                "type": "string",
+                "description": description,
+            },
+            "args": {
+                "type": "object",
+                "description": f"Key/value mappings required to instantiate {class_name} class.",
+            },  # args are a flexible dict
+        },
+        "required": [property_name],
+        "additionalProperties": False,
+    }
+
+
 def registered_class_schema(
     property_name: str, class_name: str, description: str
 ) -> dict[str, Any]:
@@ -316,7 +334,7 @@ STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_schema(
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
-
+BRUH = register1("processor", "ReplacerProcessor", "name")
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -435,6 +453,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "replacer_processor": BRUH,
         "writer_options": {
             "type": "object",
             "description": "Extra Clickhouse fields that are used for consumer writes",

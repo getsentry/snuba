@@ -24,6 +24,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.processor import MessageProcessor
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.util import PartSegment
 from snuba.utils.registered_class import InvalidConfigKeyError
@@ -55,6 +56,13 @@ def build_storage_from_config(
     storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
     storage_kwargs[WRITER_OPTIONS] = (
         config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
+    )
+    storage_kwargs["replacer_processor"] = (
+        ReplacerProcessor.get_from_name(
+            config["replacer_processor"]["processor"]
+        ).from_kwargs(**config["replacer_processor"].get("args", {}))
+        if "replacer_processor" in config
+        else {}
     )
     return WritableTableStorage(**storage_kwargs)
 
