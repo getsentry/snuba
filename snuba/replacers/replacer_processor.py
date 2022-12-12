@@ -68,17 +68,9 @@ class ReplacerProcessor(ABC, Generic[R]):
         """
         raise NotImplementedError
 
-    def initialize_schema(self, schema: WritableTableSchema) -> None:
-        """
-        Schema is initialized by the parent storage after ReplacerProcessor is
-        instantiated.
-
-        This method should be called before any processing is done by the processor!
-        """
-        self.__schema = schema
-
+    @abstractmethod
     def get_schema(self) -> WritableTableSchema:
-        return self.__schema
+        raise NotImplementedError
 
     @abstractmethod
     def get_state(self) -> ReplacerState:
