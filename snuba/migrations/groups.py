@@ -20,6 +20,7 @@ class MigrationGroup(Enum):
     FUNCTIONS = "functions"
     REPLAYS = "replays"
     GENERIC_METRICS = "generic_metrics"
+    TEST_MIGRATION = "test_migration"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -32,6 +33,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.FUNCTIONS,
     MigrationGroup.REPLAYS,
     MigrationGroup.GENERIC_METRICS,
+    MigrationGroup.TEST_MIGRATION,
 }
 
 
@@ -251,6 +253,14 @@ class QuerylogLoader(DirectoryLoader):
         ]
 
 
+class TestMigrationLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.test_migration")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_create_test_table", "0002_add_test_col"]
+
+
 class ProfilesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.profiles")
@@ -303,6 +313,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.FUNCTIONS: FunctionsLoader(),
     MigrationGroup.REPLAYS: ReplaysLoader(),
     MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
+    MigrationGroup.TEST_MIGRATION: TestMigrationLoader(),
 }
 
 
