@@ -33,7 +33,6 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import (
     REPLACEMENT_EVENT_TYPES,
@@ -509,6 +508,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__storage_key_str = storage_key_str
 
     def __initialize_schema(self) -> None:
+        from snuba.datasets.storages.factory import get_storage
+
         storage = get_storage(StorageKey(self.__storage_key_str))
         assert isinstance(schema := storage.get_schema(), WritableTableSchema)
         self.__schema = schema
