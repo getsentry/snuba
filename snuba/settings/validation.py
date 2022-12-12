@@ -1,6 +1,5 @@
 from typing import Any, Dict, Mapping, MutableMapping, Set, Tuple
 
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
 
@@ -131,10 +130,18 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
             logical_topic not in locals["KAFKA_TOPIC_MAP"]
         ), f"logical topic {logical_topic} is not sliced. It is defined in KAFKA_TOPIC_MAP and should only be in KAFKA_BROKER_CONFIG, not SLICED_KAFKA_BROKER_CONFIG"
 
-    sliced_storage_sets: Set[Tuple[str, int]] = set()
-    for cluster in locals["SLICED_CLUSTERS"]:
-        storage_sets = cluster["storage_set_slices"]
-        sliced_storage_sets = sliced_storage_sets.union(storage_sets)
+    _STORAGE_SET_CLUSTER_MAP: Dict[str, Mapping[str, Any]] = {}
+
+    _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[str, int], Mapping[str, Any]] = {}
+    for cluster in locals["CLUSTERS"]:
+        for storage_set in cluster["storage_sets"]:
+            _STORAGE_SET_CLUSTER_MAP[storage_set] = cluster
+
+    for sliced_cluster in locals["SLICED_CLUSTERS"]:
+        for storage_set_tuple in sliced_cluster["storage_set_slices"]:
+            _SLICED_STORAGE_SET_CLUSTER_MAP[
+                (storage_set_tuple[0], storage_set_tuple[1])
+            ] = sliced_cluster
 
     for storage_set in locals["SLICED_STORAGE_SETS"]:
         num_slices = locals["SLICED_STORAGE_SETS"][storage_set]
@@ -143,22 +150,7 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
             assert (
                 storage_set,
                 slice_id,
-            ) in sliced_storage_sets, f"storage set, slice id pair ({storage_set}, {slice_id}) is not assigned any cluster in SLICED_CLUSTERS in settings"
-
-    _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, Mapping[str, Any]] = {}
-
-    _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[
-        Tuple[StorageSetKey, int], Mapping[str, Any]
-    ] = {}
-    for cluster in locals["CLUSTERS"]:
-        for storage_set in cluster["storage_sets"]:
-            _STORAGE_SET_CLUSTER_MAP[StorageSetKey(storage_set)] = cluster
-
-    for cluster in locals["SLICED_CLUSTERS"]:
-        for storage_set_tuple in cluster["storage_set_slices"]:
-            _SLICED_STORAGE_SET_CLUSTER_MAP[
-                (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
-            ] = cluster
+            ) in _SLICED_STORAGE_SET_CLUSTER_MAP, f"storage set, slice id pair ({storage_set}, {slice_id}) is not assigned any cluster in SLICED_CLUSTERS in settings"
 
     all_storage_set_keys = set()
     all_storage_set_keys = set(_STORAGE_SET_CLUSTER_MAP.keys()).union(
