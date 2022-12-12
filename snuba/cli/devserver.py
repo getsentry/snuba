@@ -372,6 +372,20 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
+    if settings.ENABLE_SEARCH_ISSUES_CONSUMER:
+        daemons += [
+            (
+                "search-issues-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=search_issues",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(

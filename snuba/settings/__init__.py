@@ -278,6 +278,10 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
+# Enable issue occurrence ingestion
+ENABLE_SEARCH_ISSUES_CONSUMER = os.environ.get("ENABLE_SEARCH_ISSUES_CONSUMER", False)
+
+
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 # Start time from UTC 00:00:00 after which we are allowed to run optimize
