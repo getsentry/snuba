@@ -119,16 +119,16 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
             sliced_logical_topic not in locals["KAFKA_BROKER_CONFIG"]
         ), f"logical topic {sliced_logical_topic} is sliced. It is defined in SLICED_KAFKA_TOPIC_MAP and should only be in SLICED_KAFKA_BROKER_CONFIG, not KAFKA_BROKER_CONFIG"
 
+        assert (
+            topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
+        ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
+
     for topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]:
         logical_topic = topic_tuple[0]
 
         assert (
             logical_topic not in locals["KAFKA_TOPIC_MAP"]
         ), f"logical topic {logical_topic} is not sliced. It is defined in KAFKA_TOPIC_MAP and should only be in KAFKA_BROKER_CONFIG, not SLICED_KAFKA_BROKER_CONFIG"
-
-        assert (
-            topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
-        ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
 
     _STORAGE_SET_CLUSTER_MAP: Dict[str, Mapping[str, Any]] = {}
 

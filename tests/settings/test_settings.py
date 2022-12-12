@@ -233,6 +233,7 @@ def test_sliced_clusters() -> None:
         validate_slicing_settings(all_settings)
 
     del sliced_storage_sets["generic_metrics_distributions"]
+    del all_settings["LOGICAL_PARTITION_MAPPING"]["generic_metrics_distributions"]
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
@@ -265,3 +266,4 @@ def test_single_node_vals() -> None:
         validate_slicing_settings(all_settings)
 
     del sliced_storage_sets["generic_metrics_distributions"]
+    del all_settings["LOGICAL_PARTITION_MAPPING"]["generic_metrics_distributions"]
