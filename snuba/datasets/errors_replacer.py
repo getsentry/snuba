@@ -508,6 +508,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__storage_key_str = storage_key_str
 
     def __initialize_schema(self) -> None:
+        # This has to be imported here since the storage factory will also initialize this processor
+        # and importing it at the top will create an import cycle
+
+        # This could be avoided by passing the schema in as an argument for this class but that
+        # would inflate the config representation of any storage using this replacer
         from snuba.datasets.storages.factory import get_storage
 
         storage = get_storage(StorageKey(self.__storage_key_str))
