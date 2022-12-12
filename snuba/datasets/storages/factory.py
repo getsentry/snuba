@@ -24,6 +24,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
             self._config_built_storages: dict[StorageKey, Storage] = {}
             self._writable_storages: dict[StorageKey, Storage] = {}
+            self._config_built_writable_storages: dict[StorageKey, Storage] = {}
             self._dev_writable_storages: dict[StorageKey, Storage] = {}
             self._cdc_storages: dict[StorageKey, Storage] = {}
             self._dev_cdc_storages: dict[StorageKey, Storage] = {}
@@ -41,6 +42,12 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
                 )
             ]
+        }
+
+        self._config_built_writable_storages = {
+            storage_key: storage
+            for storage_key, storage in self._config_built_storages.items()
+            if type(storage) is WritableTableStorage
         }
 
         # TODO: Remove these as they are converted to configs
@@ -130,6 +137,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 ]
             },
             **(self._dev_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
+            **self._config_built_writable_storages,
         }
 
         self._non_writable_storages = {
