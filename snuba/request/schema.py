@@ -175,7 +175,7 @@ SETTINGS_SCHEMAS: Mapping[Type[QuerySettings], Schema] = {
             # TODO: move this to attribution
             "legacy": {"type": "boolean", "default": False},
             "referrer": {"type": "string", "default": "<unknown>"},
-            "parent_api": {"type": "string", "default": "<unknown>"},
+            # "parent_api": {"type": "string", "default": "<unknown>"},
         },
         "additionalProperties": False,
     },
