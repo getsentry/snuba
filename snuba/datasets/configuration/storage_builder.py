@@ -64,8 +64,8 @@ def build_storage_from_config(
         ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
         if REPLACER_PROCESSOR in config
         else {}
-        # TODO: Rest of writable storage optional args
     )
+    # TODO: Rest of writable storage optional args
     return WritableTableStorage(**storage_kwargs)
 
 
