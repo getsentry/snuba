@@ -55,6 +55,7 @@ schema:
       args: { schema_modifiers: [ nullable ] },
     },
 
+    { name: message_timestamp, type: DateTime },
     { name: partition, type: UInt, args: { size: 16 } },
     { name: offset, type: UInt, args: { size: 64 } },
     { name: retention_days, type: UInt, args: { size: 16 } },
@@ -86,7 +87,12 @@ translation_mappers:
         from_column_name: tags
         to_nested_col_table:
         to_nested_col_name: tags
-
+    - mapper: SubscriptableMapper
+      args:
+        from_column_table:
+        from_column_name: contexts
+        to_nested_col_table:
+        to_nested_col_name: contexts
 validators:
   - validator: EntityRequiredColumnValidator
     args:

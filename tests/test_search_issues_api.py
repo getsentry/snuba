@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import datetime, timedelta
 from typing import Any, Callable
 
 import simplejson as json
@@ -39,15 +40,21 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
         )
 
     def test_simple_search_query(self) -> None:
-        now = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
+        now = datetime.now().replace(minute=0, second=0, microsecond=0)
+
         evt = dict(
             organization_id=1,
             project_id=2,
-            group_ids=(3,),
-            search_title="search me",
-            detection_timestamp=now.timestamp(),
+            group_ids=[3],
+            data={},
+            occurrence_data=dict(
+                id=str(uuid.uuid4()),
+                type=1,
+                issue_title="search me",
+                fingerprint=["one", "two"],
+                detection_time=now.timestamp(),
+            ),
+            retention_days=90,
         )
 
         assert self.events_storage
@@ -55,9 +62,8 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
 
         response = self.post_query(
             f"""MATCH (search_issues)
-                                    SELECT count() AS count BY organization_id, project_id
-                                    WHERE organization_id = {evt["organization_id"]}
-                                    AND project_id = {evt["project_id"]}
+                                    SELECT count() AS count BY project_id
+                                    WHERE project_id = {evt["project_id"]}
                                     AND detection_timestamp >= toDateTime('{(now - timedelta(minutes=1)).isoformat()}')
                                     AND detection_timestamp < toDateTime('{(now + timedelta(minutes=1)).isoformat()}')
                                     LIMIT 1000
@@ -70,7 +76,6 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
         assert data["stats"]["consistent"]
         assert data["data"] == [
             {
-                "organization_id": 1,
                 "project_id": 2,
                 "count": 1,
             }

@@ -48,6 +48,7 @@ columns: List[Column[Modifiers]] = [
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
+    Column("message_timestamp", DateTime()),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
     Column("retention_days", UInt(16)),

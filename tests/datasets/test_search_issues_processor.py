@@ -10,16 +10,16 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.processors.search_issues_processor import (
     SearchIssuesMessageProcessor,
 )
+from snuba.processor import InvalidMessageType, InvalidMessageVersion
 from snuba.query.snql.parser import parse_snql_query
 
 
-# TODO: add more tests
 class TestSearchIssuesMessageProcessor:
-    def test_process_message(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+    KAFKA_META = KafkaMessageMetadata(
+        offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+    )
 
+    def test_process_message(self) -> None:
         message = (
             1,
             "insert",
@@ -27,14 +27,37 @@ class TestSearchIssuesMessageProcessor:
                 "project_id": 1,
                 "organization_id": 2,
                 "group_ids": (3,),
-                "search_title": "search me",
-                "detection_timestamp": datetime.utcnow().timestamp(),
                 "retention_days": 90,
                 "data": {},
+                "occurrence_data": {
+                    "id": "",
+                    "type": 1,
+                    "issue_title": "search me",
+                    "fingerprint": ["one", "two"],
+                    "detection_time": datetime.utcnow().timestamp(),
+                },
             },
         )
 
-        assert SearchIssuesMessageProcessor().process_message(message, meta)
+        assert SearchIssuesMessageProcessor().process_message(message, self.KAFKA_META)
+
+    def test_fails_unsupported_version(self):
+        with pytest.raises(InvalidMessageVersion):
+            SearchIssuesMessageProcessor().process_message(
+                (0, "doesnt_matter", None), self.KAFKA_META
+            )
+
+    def test_fails_invalid_message_type(self):
+        with pytest.raises(InvalidMessageType):
+            SearchIssuesMessageProcessor().process_message(
+                (1, "unsupported_operation", None), self.KAFKA_META
+            )
+
+    def test_fails_invalid_occurrence_data(self):
+        with pytest.raises(KeyError):
+            SearchIssuesMessageProcessor().process_message(
+                (1, "insert", {"data": {"hi": "mom"}}), self.KAFKA_META
+            )
 
 
 test_data = [
