@@ -61,9 +61,6 @@ class ReplacerProcessor(ABC, Generic[R]):
     instance of this class that will be used by the ReplacementWorker.
     """
 
-    def __init__(self, schema: WritableTableSchema) -> None:
-        self.__schema = schema
-
     @abstractmethod
     def process_message(self, message: ReplacementMessage) -> Optional[R]:
         """
@@ -71,8 +68,9 @@ class ReplacerProcessor(ABC, Generic[R]):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_schema(self) -> WritableTableSchema:
-        return self.__schema
+        raise NotImplementedError
 
     @abstractmethod
     def get_state(self) -> ReplacerState:

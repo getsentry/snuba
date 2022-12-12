@@ -41,6 +41,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "profiles": "NonBlockingMigrationsPolicy",
     "functions": "NonBlockingMigrationsPolicy",
     "replays": "NonBlockingMigrationsPolicy",
+    "test_migration": "AllMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -231,7 +232,12 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {
+    "querylog",
+    "profiles",
+    "functions",
+    "test_migration",
+}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
