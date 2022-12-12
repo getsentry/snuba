@@ -64,9 +64,6 @@ class MetricsEntity(Entity, ABC):
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None,
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None,
     ) -> None:
-        writable_storage = (
-            get_writable_storage(writable_storage_key) if writable_storage_key else None
-        )
         readable_storage = get_storage(readable_storage_key)
         translation_mappers = TranslationMappers(
             subscriptables=[
@@ -75,11 +72,13 @@ class MetricsEntity(Entity, ABC):
         ).concat(mappers)
 
         storage_and_mappers = [
-            StorageAndMappers(readable_storage, translation_mappers),
+            StorageAndMappers(readable_storage, translation_mappers, False),
         ]
-        if writable_storage:
+        writable_storage = None
+        if writable_storage_key:
+            writable_storage = get_writable_storage(writable_storage_key)
             storage_and_mappers.append(
-                StorageAndMappers(writable_storage, translation_mappers)
+                StorageAndMappers(writable_storage, translation_mappers, True)
             )
 
         if abstract_column_set is None:

@@ -56,7 +56,7 @@ class ProfilesEntity(Entity, ABC):
     ) -> None:
         writable_storage = get_writable_storage(StorageKey.PROFILES)
         storage_and_mappers = [
-            StorageAndMappers(writable_storage, TranslationMappers())
+            StorageAndMappers(writable_storage, TranslationMappers(), True)
         ]
 
         super().__init__(

@@ -90,7 +90,7 @@ class TestEntityConfiguration(ConfigurationTest):
         pluggable_entity = build_entity_from_config(
             "tests/datasets/configuration/entity_with_column_mappers.yaml"
         )
-        column_mappers = pluggable_entity.translation_mappers.columns
+        column_mappers = pluggable_entity.storages[0].mappers.columns
 
         # Check that ColumnToIpAdress mapper was successfully loaded from config
         column_to_ip_address = get_object_in_list_by_class(

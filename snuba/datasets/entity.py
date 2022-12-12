@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from typing import List, Mapping, Optional, Sequence
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
@@ -28,7 +28,7 @@ class Entity(Describable, ABC):
     def __init__(
         self,
         *,
-        storages: Sequence[StorageAndMappers],
+        storages: List[StorageAndMappers],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],

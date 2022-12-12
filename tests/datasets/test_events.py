@@ -1,12 +1,11 @@
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.events import (
-    ErrorsQueryStorageSelector,
-    errors_translators,
-)
+from snuba.datasets.entities.events import ErrorsQueryStorageSelector
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Entity
@@ -58,16 +57,26 @@ def test_storage_selector() -> None:
 
     query = Query(Entity(EntityKey.EVENTS, ColumnSet([])), selected_columns=[])
 
-    storage_selector = ErrorsQueryStorageSelector(mappers=errors_translators)
+    storage_selector = ErrorsQueryStorageSelector()
     assert (
         storage_selector.select_storage(
-            query, HTTPQuerySettings(consistent=False)
+            query,
+            HTTPQuerySettings(consistent=False),
+            [
+                StorageAndMappers(storage, TranslationMappers(), True),
+                StorageAndMappers(storage_ro, TranslationMappers(), False),
+            ],
         ).storage
         == storage_ro
     )
     assert (
         storage_selector.select_storage(
-            query, HTTPQuerySettings(consistent=True)
+            query,
+            HTTPQuerySettings(consistent=True),
+            [
+                StorageAndMappers(storage, TranslationMappers(), True),
+                StorageAndMappers(storage_ro, TranslationMappers(), False),
+            ],
         ).storage
         == storage
     )

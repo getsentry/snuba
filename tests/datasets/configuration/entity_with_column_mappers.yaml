@@ -11,62 +11,100 @@ schema:
     { name: bucketed_time, type: DateTime },
   ]
 
-readable_storage: generic_metrics_sets
-writable_storage: generic_metrics_sets_raw
+storages:
+  - storage: generic_metrics_sets
+    is_writable: false
+    translation_mappers:
+      columns:
+      - mapper: ColumnToIPAddress
+        args:
+          from_table_name:
+          from_col_name: ip_address
+          to_function_name: coalesce
+      - mapper: ColumnToNullIf
+        args:
+          from_table_name:
+          from_col_name: userColumnToNullIf
+      - mapper: ColumnToMapping
+        args:
+          from_table_name:
+          from_col_name: geo_country_code
+          to_nested_col_table_name:
+          to_nested_col_name: contexts
+          to_nested_mapping_key: geo.country_code
+          nullable: True
+      - mapper: ColumnToColumn
+        args:
+          from_table_name:
+          from_col_name: email
+          to_table_name:
+          to_col_name: user_email
+      functions:
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniq
+          to_name: uniqCombined64Merge
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniqIf
+          to_name: uniqCombined64MergeIf
+      subscriptables:
+      - mapper: SubscriptableMapper
+        args:
+          from_column_table:
+          from_column_name: tags_raw
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: raw_value
+  - storage: generic_metrics_sets_raw
+    is_writable: true
+    translation_mappers:
+      columns:
+      - mapper: ColumnToIPAddress
+        args:
+          from_table_name:
+          from_col_name: ip_address
+          to_function_name: coalesce
+      - mapper: ColumnToNullIf
+        args:
+          from_table_name:
+          from_col_name: userColumnToNullIf
+      - mapper: ColumnToMapping
+        args:
+          from_table_name:
+          from_col_name: geo_country_code
+          to_nested_col_table_name:
+          to_nested_col_name: contexts
+          to_nested_mapping_key: geo.country_code
+          nullable: True
+      - mapper: ColumnToColumn
+        args:
+          from_table_name:
+          from_col_name: email
+          to_table_name:
+          to_col_name: user_email
+      functions:
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniq
+          to_name: uniqCombined64Merge
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniqIf
+          to_name: uniqCombined64MergeIf
+      subscriptables:
+      - mapper: SubscriptableMapper
+        args:
+          from_column_table:
+          from_column_name: tags_raw
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: raw_value
 query_processors:
   -
     processor: TagsTypeTransformer
   -
     processor: ReferrerRateLimiterProcessor
-translation_mappers:
-  columns:
-    -
-      mapper: ColumnToIPAddress
-      args:
-        from_table_name:
-        from_col_name: ip_address
-        to_function_name: coalesce
-    -
-      mapper: ColumnToNullIf
-      args:
-        from_table_name:
-        from_col_name: userColumnToNullIf
-    -
-      mapper: ColumnToMapping
-      args:
-        from_table_name:
-        from_col_name: geo_country_code
-        to_nested_col_table_name:
-        to_nested_col_name: contexts
-        to_nested_mapping_key: geo.country_code
-        nullable: True
-    -
-      mapper: ColumnToColumn
-      args:
-        from_table_name:
-        from_col_name: email
-        to_table_name:
-        to_col_name: user_email
-  functions:
-    -
-      mapper: FunctionNameMapper
-      args:
-        from_name: uniq
-        to_name: uniqCombined64Merge
-    -
-      mapper: FunctionNameMapper
-      args:
-        from_name: uniqIf
-        to_name: uniqCombined64MergeIf
-  subscriptables:
-    -
-      mapper: SubscriptableMapper
-      args:
-        from_column_table:
-        from_column_name: tags_raw
-        to_nested_col_table:
-        to_nested_col_name: tags
-        value_subcolumn_name: raw_value
 validators:
   -
     validator: EntityRequiredColumnValidator

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, NamedTuple, Optional, Sequence, Type, cast
+from typing import Any, List, NamedTuple, Optional, Sequence, Type, cast
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
@@ -175,7 +175,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         self.__ignore_write_errors = ignore_write_errors
 
     def get_storage_key(self) -> StorageKey:
-        return self.__storage_key
+        return super().get_storage_key()
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
@@ -187,6 +187,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
 class StorageAndMappers(NamedTuple):
     storage: ReadableStorage
     mappers: TranslationMappers
+    is_writable: bool
 
 
 class StorageAndMappersNotFound(Exception):
@@ -212,7 +213,7 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers: Sequence[StorageAndMappers],
+        storage_and_mappers: List[StorageAndMappers],
     ) -> StorageAndMappers:
         raise NotImplementedError
 
@@ -231,33 +232,3 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
 
 class QueryStorageSelectorError(Exception):
     pass
-
-
-class SimpleQueryStorageSelector(QueryStorageSelector):
-    def __init__(self) -> None:
-        pass
-
-    def select_storage(
-        self,
-        query: Query,
-        query_settings: QuerySettings,
-        storage_and_mappers_list: Sequence[StorageAndMappers],
-    ) -> StorageAndMappers:
-        if len(storage_and_mappers_list) < 1:
-            raise QueryStorageSelectorError("No storages specified to select from.")
-        # Select the one and only storage available (can be readable or writable)
-        elif len(storage_and_mappers_list) == 1:
-            return storage_and_mappers_list[0]
-        readable_storages = []
-        writable_storages = []
-        for storage_and_mappers in storage_and_mappers_list:
-            if isinstance(storage_and_mappers.storage, ReadableTableStorage):
-                readable_storages.append(storage_and_mappers)
-            if isinstance(storage_and_mappers.storage, WritableTableStorage):
-                writable_storages.append(storage_and_mappers)
-        if len(writable_storages) > 1:
-            raise QueryStorageSelectorError(
-                "Multiple writable storages is not supported."
-            )
-        # Select the readable storage if there is one readable and one writable storage specified
-        return readable_storages[0]

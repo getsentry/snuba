@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
@@ -34,10 +33,10 @@ class PluggableEntity(Entity):
     entity_key: EntityKey
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
-    storages: Sequence[StorageAndMappers]
+    storages: List[StorageAndMappers]
     validators: Sequence[QueryValidator]
-    translation_mappers: TranslationMappers
     required_time_column: str
+    writeable_storage: Optional[WritableTableStorage] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -72,10 +71,10 @@ class PluggableEntity(Entity):
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
-        return self.__storages
+        return self.storages
 
     def get_all_storages(self) -> Sequence[Storage]:
-        return [storage_and_mappers.storage for storage_and_mappers in self.__storages]
+        return [storage_and_mappers.storage for storage_and_mappers in self.storages]
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         return self.function_call_validators

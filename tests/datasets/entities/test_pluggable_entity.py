@@ -17,6 +17,7 @@ from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import Query
@@ -57,9 +58,36 @@ def end_time(start_time: datetime) -> datetime:
 
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
+    translation_mappers = TranslationMappers(
+        subscriptables=[
+            SubscriptableMapper(
+                from_column_table=None,
+                from_column_name="tags_raw",
+                to_nested_col_table=None,
+                to_nested_col_name="tags",
+                value_subcolumn_name="raw_value",
+            ),
+            SubscriptableMapper(
+                from_column_table=None,
+                from_column_name="tags",
+                to_nested_col_table=None,
+                to_nested_col_name="tags",
+                value_subcolumn_name="indexed_value",
+            ),
+        ],
+        functions=[
+            FunctionNameMapper("uniq", "uniqCombined64Merge"),
+            FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
+        ],
+    )
+    storages = [
+        StorageAndMappers(
+            get_storage(StorageKey.GENERIC_METRICS_SETS), translation_mappers, False
+        )
+    ]
     return PluggableEntity(
         entity_key=EntityKey.GENERIC_METRICS_SETS,
-        readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
+        storages=storages,
         query_processors=[
             TagsTypeTransformer(),
             MappedGranularityProcessor(
@@ -82,28 +110,6 @@ def pluggable_sets_entity() -> PluggableEntity:
             SchemaColumn("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
             SchemaColumn("value", AggregateFunction("uniqCombined64", [UInt(64)])),
         ],
-        translation_mappers=TranslationMappers(
-            subscriptables=[
-                SubscriptableMapper(
-                    from_column_table=None,
-                    from_column_name="tags_raw",
-                    to_nested_col_table=None,
-                    to_nested_col_name="tags",
-                    value_subcolumn_name="raw_value",
-                ),
-                SubscriptableMapper(
-                    from_column_table=None,
-                    from_column_name="tags",
-                    to_nested_col_table=None,
-                    to_nested_col_name="tags",
-                    value_subcolumn_name="indexed_value",
-                ),
-            ],
-            functions=[
-                FunctionNameMapper("uniq", "uniqCombined64Merge"),
-                FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
-            ],
-        ),
         validators=[],
         required_time_column="timestamp",
     )

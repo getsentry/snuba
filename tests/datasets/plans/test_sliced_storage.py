@@ -7,7 +7,7 @@ import pytest
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.plans.sliced_storage import (
+from snuba.datasets.plans.storage_builder import (
     MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX,
     ColumnBasedStorageSliceSelector,
     _should_use_mega_cluster,
@@ -113,11 +113,9 @@ def test_column_based_partition_selector(
 
     settings = HTTPQuerySettings()
     selector = ColumnBasedStorageSliceSelector(
-        DISTS_STORAGE_KEY,
-        DISTS_STORAGE_SET_KEY,
         "org_id",
     )
-    cluster = selector.select_cluster(query, settings)
+    cluster = selector.select_cluster(query, settings, DISTS_STORAGE_SET_KEY)
 
     assert cluster.get_database() == expected_slice_db
     if set_override:

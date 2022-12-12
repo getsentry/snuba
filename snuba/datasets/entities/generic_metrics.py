@@ -19,8 +19,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-<<<<<<< HEAD
-<<<<<<< HEAD
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
     EntitySubscriptionProcessor,
@@ -29,19 +27,12 @@ from snuba.datasets.entity_subscriptions.validators import (
     AggregationValidator,
     EntitySubscriptionValidator,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-=======
-from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
-=======
 from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
->>>>>>> 989599db (Combine sliced storage plan builder)
 from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageAndMappers,
     WritableTableStorage,
 )
->>>>>>> d6616ea9 (Join query plan builders and update entities to use StorageAndMappers)
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -107,20 +98,20 @@ class GenericMetricsEntity(Entity, ABC):
                 ),
             ],
         ).concat(mappers)
-        storage_and_mappers = [StorageAndMappers(readable_storage, translation_mappers)]
+        storages = [StorageAndMappers(readable_storage, translation_mappers, False)]
         if writable_storage:
-            storage_and_mappers.append(
-                StorageAndMappers(writable_storage, translation_mappers)
+            storages.append(
+                StorageAndMappers(writable_storage, translation_mappers, True)
             )
 
         if validators is None:
             validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]
 
         super().__init__(
-            storages=storage_and_mappers,
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storage_and_mappers=storage_and_mappers,
+                    storage_and_mappers=storages,
                     selector=None,
                 )
             ),

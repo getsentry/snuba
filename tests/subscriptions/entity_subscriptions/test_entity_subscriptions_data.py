@@ -15,6 +15,7 @@ entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 entity_key = get_entity_name(entity)
 storage = entity.get_writable_storage()
 assert storage is not None
+print(type(storage))
 stream_loader = storage.get_table_writer().get_stream_loader()
 topic_spec = stream_loader.get_default_topic_spec()
 org_id = 1

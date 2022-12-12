@@ -23,7 +23,7 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 class OutcomesRawEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.OUTCOMES_RAW)
-        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers())]
+        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers(), False)]
         read_columns = storage.get_schema().get_columns()
         time_columns = ColumnSet([("time", DateTime())])
         super().__init__(

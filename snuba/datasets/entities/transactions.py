@@ -10,6 +10,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_writable_storage
@@ -100,7 +101,9 @@ class BaseTransactionsEntity(Entity, ABC):
             else transaction_translator.concat(custom_mappers)
         )
         storage_and_mappers = [
-            StorageAndMappers(transactions_storage, transactions_translation_mappers),
+            StorageAndMappers(
+                transactions_storage, transactions_translation_mappers, True
+            ),
         ]
 
         pipeline_builder = SimplePipelineBuilder(

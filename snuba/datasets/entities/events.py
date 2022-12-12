@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -11,6 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -99,7 +100,7 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers_list: Sequence[StorageAndMappers],
+        storage_and_mappers_list: List[StorageAndMappers],
     ) -> StorageAndMappers:
         use_readonly_storage = (
             state.get_config("enable_events_readonly_table", False)
@@ -130,8 +131,8 @@ class BaseEventsEntity(Entity, ABC):
             else errors_translators.concat(custom_mappers)
         )
         storage_and_mappers = [
-            StorageAndMappers(events_storage, error_translation_mappers),
-            StorageAndMappers(events_read_storage, error_translation_mappers),
+            StorageAndMappers(events_storage, error_translation_mappers, True),
+            StorageAndMappers(events_read_storage, error_translation_mappers, False),
         ]
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
@@ -163,6 +164,10 @@ class BaseEventsEntity(Entity, ABC):
             writable_storage=events_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
+            subscription_processors=None,
+            subscription_validators=[
+                AggregationValidator(1, ["groupby", "having", "orderby"], "timestamp")
+            ],
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

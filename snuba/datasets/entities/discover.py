@@ -28,7 +28,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -254,7 +254,7 @@ class DiscoverEntity(Entity):
             )
         )
         storage_and_mappers = [
-            StorageAndMappers(discover_storage, discover_translation_mappers)
+            StorageAndMappers(discover_storage, discover_translation_mappers, False)
         ]
         discover_storage_plan_builder = StorageQueryPlanBuilder(
             storage_and_mappers=storage_and_mappers,

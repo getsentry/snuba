@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 import sentry_sdk
 
@@ -26,10 +26,8 @@ from snuba.datasets.slicing import (
 from snuba.datasets.storage import (
     QueryStorageSelector,
     QueryStorageSelectorError,
-    ReadableTableStorage,
     StorageAndMappers,
 )
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -120,7 +118,6 @@ class StorageClusterSelector(ABC):
         self,
         query: LogicalQuery,
         query_settings: QuerySettings,
-        storage: StorageKey,
         storage_set: StorageSetKey,
     ) -> ClickhouseCluster:
         raise NotImplementedError
@@ -179,7 +176,6 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         self,
         query: LogicalQuery,
         query_settings: QuerySettings,
-        storage: StorageKey,
         storage_set: StorageSetKey,
     ) -> ClickhouseCluster:
         """
@@ -211,7 +207,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storage_and_mappers: Sequence[StorageAndMappers],
+        storage_and_mappers: List[StorageAndMappers],
         selector: Optional[QueryStorageSelector] = None,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
@@ -231,25 +227,26 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         if not self.__selector:
             # Default to the first and only storage and mapper
             if len(self.__storage_and_mappers) == 1:
-                storage, mappers = self.__storage_and_mappers[0]
+                storage, mappers, _ = self.__storage_and_mappers[0]
             else:
                 # If there are both readable and writable storages, select the readable one.
                 # Multiple writable storages are not supported.
-                readable_sm = [
-                    sm
-                    for sm in self.__storage_and_mappers
-                    if isinstance(sm.storage, ReadableTableStorage)
+                readable_storages = [
+                    storage
+                    for storage in self.__storage_and_mappers
+                    if not storage.is_writable
                 ]
-                if len(readable_sm) > 1:
+                if len(readable_storages) > 1:
                     raise QueryStorageSelectorError(
                         "Multiple readable storages requires a storage selector."
                     )
-                storage, mappers = readable_sm[0]
+
+                storage, mappers, _ = readable_storages[0]
         else:
             with sentry_sdk.start_span(
                 op="build_plan.storage_query_plan_builder", description="select_storage"
             ):
-                storage, mappers = self.__selector.select_storage(
+                storage, mappers, _ = self.__selector.select_storage(
                     query, settings, self.__storage_and_mappers
                 )
 
@@ -265,7 +262,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 ).select_cluster(
                     query,
                     settings,
-                    storage.get_storage_key(),
                     storage.get_storage_set_key(),
                 )
         else:

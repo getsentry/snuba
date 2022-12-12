@@ -264,8 +264,8 @@ class SessionsEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         storage_and_mappers = [
-            StorageAndMappers(materialized_storage, sessions_hourly_translators),
-            StorageAndMappers(writable_storage, sessions_raw_translators),
+            StorageAndMappers(materialized_storage, sessions_hourly_translators, False),
+            StorageAndMappers(writable_storage, sessions_raw_translators, True),
         ]
         read_schema = materialized_storage.get_schema()
 
@@ -305,7 +305,7 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
-        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers())]
+        storage_and_mappers = [StorageAndMappers(storage, TranslationMappers(), False)]
 
         super().__init__(
             storages=storage_and_mappers,

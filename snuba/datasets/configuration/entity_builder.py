@@ -53,6 +53,7 @@ def _build_storage_and_mappers(
             _build_entity_translation_mappers(
                 config_storage_and_mappers["translation_mappers"]
             ),
+            config_storage_and_mappers["is_writable"],
         )
         for config_storage_and_mappers in config_storages
     ]
@@ -143,9 +144,6 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         columns=parse_columns(config["schema"]),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
-        translation_mappers=_build_entity_translation_mappers(
-            config["translation_mappers"]
-        ),
         writeable_storage=get_writable_storage(storages),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),

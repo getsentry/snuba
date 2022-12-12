@@ -51,8 +51,8 @@ class OutcomesEntity(Entity):
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
         storage_and_mappers = [
-            StorageAndMappers(writable_storage, TranslationMappers()),
-            StorageAndMappers(materialized_storage, TranslationMappers()),
+            StorageAndMappers(writable_storage, TranslationMappers(), True),
+            StorageAndMappers(materialized_storage, TranslationMappers(), False),
         ]
 
         super().__init__(

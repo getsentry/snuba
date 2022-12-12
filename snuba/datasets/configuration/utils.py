@@ -98,10 +98,10 @@ def get_mandatory_condition_checkers(
 
 def get_writable_storage(
     storage_and_mappers_list: Sequence[StorageAndMappers],
-) -> Optional[StorageAndMappers]:
+) -> Optional[WritableTableStorage]:
     for sm in storage_and_mappers_list:
-        if isinstance(sm.storage, WritableTableStorage):
-            return sm
+        if sm.is_writable and isinstance(sm.storage, WritableTableStorage):
+            return sm.storage
     return None
 
 

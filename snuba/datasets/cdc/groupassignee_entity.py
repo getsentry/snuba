@@ -1,8 +1,10 @@
 from typing import Sequence
 
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -26,11 +28,13 @@ class GroupAssigneeEntity(Entity):
     def __init__(self) -> None:
         storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
         schema = storage.get_table_writer().get_schema()
-
+        storages = [StorageAndMappers(storage, TranslationMappers(), True)]
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storage_and_mappers=storages
+                ),
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={

@@ -22,8 +22,8 @@ class FunctionsEntity(Entity):
         readable_storage = get_storage(StorageKey.FUNCTIONS)
         writable_storage = get_writable_storage(StorageKey.FUNCTIONS_RAW)
         storage_and_mappers = [
-            StorageAndMappers(readable_storage, TranslationMappers()),
-            StorageAndMappers(writable_storage, TranslationMappers()),
+            StorageAndMappers(readable_storage, TranslationMappers(), False),
+            StorageAndMappers(writable_storage, TranslationMappers(), True),
         ]
         schema = readable_storage.get_schema()
 
