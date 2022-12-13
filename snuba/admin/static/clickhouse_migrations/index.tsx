@@ -100,7 +100,7 @@ function ClickhouseMigrations(props: { api: Client }) {
     executeRealRun(action, force);
   }
 
-  function executeRun(action: Action, dry_run: boolean, force: boolean, cb: (stdout: string) => void ) {
+  function executeRun(action: Action, dry_run: boolean, force: boolean, cb?: (stdout: string) => void ) {
     let req = {
       action: action,
       migration_id: migrationId,
@@ -132,7 +132,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   function executeDryRun(action: Action) {
     console.log("executing dry run !", migrationId, action);
     setHeader(()=> dry_run_header)
-    executeRun(action, true, false, null)
+    executeRun(action, true, false)
     setShowAction(()=> true)
 
   }
@@ -311,8 +311,6 @@ function ClickhouseMigrations(props: { api: Client }) {
           <div style={sqlBox}>
             <p style={textStyle}>
               {header}
-              {/* Raw SQL for running a migration (forwards) or reversing
-              (backwards). Good to do before executing a migration for real. */}
             </p>
             <textarea style={textareaStyle} readOnly value={SQLText} />
           </div>
