@@ -17,10 +17,7 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
-from snuba.consumers.strategy_factory import (
-    CommitLogConfig,
-    KafkaConsumerStrategyFactory,
-)
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -31,6 +28,9 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
+)
+from snuba.utils.streams.kafka_consumer_with_commit_log import (
+    KafkaConsumerWithCommitLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -224,10 +224,18 @@ class ConsumerBuilder:
                 }
             )
 
-        consumer = KafkaConsumer(
-            configuration,
-            commit_retry_policy=self.__commit_retry_policy,
-        )
+        if self.commit_log_topic is None:
+            consumer = KafkaConsumer(
+                configuration,
+                commit_retry_policy=self.__commit_retry_policy,
+            )
+        else:
+            consumer = KafkaConsumerWithCommitLog(
+                configuration,
+                producer=self.producer,
+                commit_log_topic=self.commit_log_topic,
+                commit_retry_policy=self.__commit_retry_policy,
+            )
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
@@ -239,13 +247,6 @@ class ConsumerBuilder:
         stream_loader = table_writer.get_stream_loader()
 
         processor = stream_loader.get_processor()
-
-        if self.commit_log_topic:
-            commit_log_config = CommitLogConfig(
-                self.producer, self.commit_log_topic, self.group_id
-            )
-        else:
-            commit_log_config = None
 
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
@@ -279,8 +280,6 @@ class ConsumerBuilder:
             initialize_parallel_transform=setup_sentry,
             dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
             parallel_collect=self.__parallel_collect,
-            # If a commit log config is passed, offsets will be produced to the topic specified
-            commit_log_config=commit_log_config,
         )
 
         if self.__profile_path is not None:
