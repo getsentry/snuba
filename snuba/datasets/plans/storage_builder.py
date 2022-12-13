@@ -126,7 +126,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         if not self.__selector:
             # Default to the first and only storage and mapper
             if len(self.__storages) == 1:
-                print(self.__storages)
                 storage, mappers, _ = self.__storages[0]
             else:
                 # If there are both readable and writable storages, select the readable one.
