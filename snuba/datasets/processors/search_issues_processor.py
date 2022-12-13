@@ -67,7 +67,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         if not event_data:
             return
 
-        user_data = {}
+        user_data: MutableMapping[str, Any] = {}
 
         extract_user(user_data, event_data.get("user", {}))
         processed["user_name"] = user_data["username"]
@@ -90,9 +90,15 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         event_occurrence_data = event["occurrence_data"]
 
         # required fields
-        detection_timestamp = datetime.fromtimestamp(
+        detection_timestamp = datetime.fromisoformat(
             event_occurrence_data["detection_time"]
         )
+        # datetime.strptime(event_occurrence_data["detection_time"], settings.PAYLOAD_DATETIME_FORMAT)
+        # )
+
+        # detection_timestamp = datetime.fromtimestamp(
+        #     event_occurrence_data["detection_time"]
+        # )
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )

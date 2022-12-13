@@ -52,7 +52,7 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
                 type=1,
                 issue_title="search me",
                 fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
+                detection_time=now.isoformat(),
             ),
             retention_days=90,
         )
