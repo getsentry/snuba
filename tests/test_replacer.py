@@ -14,8 +14,7 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 from snuba import replacer, settings
 from snuba.clickhouse.optimize.optimize import run_optimize
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets import errors_replacer
-from snuba.datasets.errors_replacer import ProjectsQueryFlags
+from snuba.datasets.replacements.projects_query_flags import ProjectsQueryFlags
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
@@ -205,14 +204,14 @@ class TestReplacer:
         p = redis_client.pipeline()
 
         exclude_groups_keys = [
-            errors_replacer.ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
+            ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
         ]
 
         project_needs_final_keys = [
-            errors_replacer.ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
+            ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
@@ -293,7 +292,7 @@ class TestReplacer:
 
     def test_query_time_flags_project(self) -> None:
         """
-        Tests errors_replacer.set_project_needs_final()
+        Tests ProjectsQueryFlags.set_project_needs_final()
 
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
@@ -304,14 +303,14 @@ class TestReplacer:
             project_ids, ReplacerState.ERRORS
         ) == ProjectsQueryFlags(False, set(), set(), None)
 
-        errors_replacer.set_project_needs_final(
+        ProjectsQueryFlags.set_project_needs_final(
             100, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.ERRORS
         ) == ProjectsQueryFlags(False, set(), set(), None)
 
-        errors_replacer.set_project_needs_final(
+        ProjectsQueryFlags.set_project_needs_final(
             1, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)
@@ -325,7 +324,7 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
-        errors_replacer.set_project_needs_final(
+        ProjectsQueryFlags.set_project_needs_final(
             2, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)
@@ -341,17 +340,17 @@ class TestReplacer:
 
     def test_query_time_flags_groups(self) -> None:
         """
-        Tests errors_replacer.set_project_exclude_groups()
+        Tests ProjectsQueryFlags.set_project_exclude_groups()
 
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
         redis_client.flushdb()
         project_ids = [4, 5, 6]
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             4, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             5, [3, 4], ReplacerState.ERRORS, ReplacementType.START_MERGE
         )
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)
@@ -365,13 +364,13 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
 
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             4, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             5, [3, 4], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             6, [5, 6], ReplacerState.ERRORS, ReplacementType.START_UNMERGE
         )
 
@@ -416,7 +415,7 @@ class TestReplacer:
         redis_client.flushdb()
         project_id = 256
         for i in range(10):
-            errors_replacer.set_project_exclude_groups(
+            ProjectsQueryFlags.set_project_exclude_groups(
                 project_id,
                 [i],
                 ReplacerState.ERRORS,
@@ -430,7 +429,7 @@ class TestReplacer:
 
         project_id = 5
 
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             project_id,
             list(range(10)),
             ReplacerState.ERRORS,
@@ -444,8 +443,8 @@ class TestReplacer:
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
-        Tests errors_replacer.set_project_needs_final() and
-        errors_replacer.set_project_exclude_groups() work together as expected.
+        Tests ProjectsQueryFlags.set_project_needs_final() and
+        ProjectsQueryFlags.set_project_exclude_groups() work together as expected.
 
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
@@ -453,10 +452,10 @@ class TestReplacer:
         redis_client.flushdb()
         project_ids = [7, 8, 9]
 
-        errors_replacer.set_project_needs_final(
+        ProjectsQueryFlags.set_project_needs_final(
             7, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        errors_replacer.set_project_exclude_groups(
+        ProjectsQueryFlags.set_project_exclude_groups(
             7, [1, 2], ReplacerState.ERRORS, ReplacementType.START_MERGE
         )
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)
