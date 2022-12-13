@@ -130,42 +130,6 @@ def test_validation_catches_unmapped_topic_pair() -> None:
     del sliced_topics[("events", 1)]
 
 
-def test_sliced_kafka_broker_config() -> None:
-    importlib.reload(validation)
-    all_settings = build_settings_dict()
-
-    sliced_topic_map = all_settings["SLICED_KAFKA_TOPIC_MAP"]
-    sliced_topic_map[("events", 0)] = "events-0"
-    sliced_topic_map[("events", 1)] = "events-1"
-
-    default_broker_config = all_settings["BROKER_CONFIG"]
-    kafka_broker_config = all_settings["KAFKA_BROKER_CONFIG"]
-
-    # Mistakenly add a sliced topic to regular Kafka broker config
-    kafka_broker_config["events"] = default_broker_config
-
-    with pytest.raises(AssertionError):
-        validate_slicing_settings(all_settings)
-
-    del sliced_topic_map[("events", 0)]
-    del sliced_topic_map[("events", 1)]
-    del kafka_broker_config["events"]
-
-    topic_map = all_settings["KAFKA_TOPIC_MAP"]
-    topic_map["events"] = "events-custom"
-
-    sliced_kafka_broker_config = all_settings["SLICED_KAFKA_BROKER_CONFIG"]
-
-    # Mistakenly add an unsliced topic to sliced Kafka broker config
-    sliced_kafka_broker_config[("events", 0)] = default_broker_config
-
-    with pytest.raises(AssertionError):
-        validate_slicing_settings(all_settings)
-
-    del topic_map[("events")]
-    del sliced_kafka_broker_config[("events", 0)]
-
-
 CLUSTERS_CONFIG = [
     {
         "host": "host",
