@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
@@ -191,7 +192,15 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     try:
         # temporarily redirect stdout to a buffer so we can return it
         with io.StringIO() as output:
-            with redirect_stdout(output):
+            # write output to both the buffer and stdout
+            class OutputRedirector(io.StringIO):
+                stdout = sys.stdout
+
+                def write(self, s: str) -> int:
+                    self.stdout.write(s)
+                    return output.write(s)
+
+            with redirect_stdout(OutputRedirector()):
                 do_action()
             return make_response(jsonify({"stdout": output.getvalue()}), 200)
 

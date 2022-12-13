@@ -26,7 +26,7 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
-from snuba.datasets.errors_replacer import Replacement as ErrorReplacement
+from snuba.datasets.replacements.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.redis import RedisClientKey, get_redis_client

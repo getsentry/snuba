@@ -9,7 +9,7 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import ProjectsQueryFlags
+from snuba.datasets.replacements.projects_query_flags import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.physical import ClickhouseQueryProcessor

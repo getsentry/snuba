@@ -8,7 +8,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
+from snuba.datasets.replacements.errors_replacer import NEEDS_FINAL, LegacyReplacement
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
