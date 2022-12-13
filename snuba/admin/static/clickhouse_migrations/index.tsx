@@ -100,7 +100,8 @@ function ClickhouseMigrations(props: { api: Client }) {
     executeRealRun(action, force);
   }
 
-  function executeRun(action: Action, dry_run: boolean, force: boolean, cb?: (stdout: string) => void ) {
+  function executeRun(action: Action, dry_run: boolean, force: boolean,
+    cb?: (stdout: string, err?: string) => void ) {
     let req = {
       action: action,
       migration_id: migrationId,
@@ -124,8 +125,11 @@ function ClickhouseMigrations(props: { api: Client }) {
         }
       })
       .catch((err) => {
-        console.log(err);
+        console.error(err);
         setSQLText(() => JSON.stringify(err));
+        if (cb) {
+          cb("", JSON.stringify(err))
+        }
       });
   }
 
@@ -134,15 +138,17 @@ function ClickhouseMigrations(props: { api: Client }) {
     setHeader(()=> dry_run_header)
     executeRun(action, true, false)
     setShowAction(()=> true)
-
   }
 
   function executeRealRun(action: Action, force: boolean) {
     console.log("executing real run !", migrationId, action, force);
     setHeader(()=> real_run_header)
-    executeRun(action, false, force, (stdout: string) => {
+    executeRun(action, false, force, (stdout: string, err?: string) => {
       if (stdout.indexOf("migration.completed") > -1) {
         alert(`Migration ${migrationId} ${action} completed successfully`)
+      } else {
+        alert(`Migration ${migrationId} ${action} didn't complete.` +
+              `See run log output. \n\n ${err||""} \n ${stdout}`)
       }
     })
 
