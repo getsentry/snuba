@@ -92,10 +92,10 @@ errors_translators = TranslationMappers(
 
 
 class ErrorsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, errors_translators: TranslationMappers) -> None:
+    def __init__(self, mappers: TranslationMappers) -> None:
         self.__errors_table = get_writable_storage(StorageKey.ERRORS)
         self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
-        self.__mappers = errors_translators
+        self.__mappers = mappers
 
     def select_storage(
         self,
