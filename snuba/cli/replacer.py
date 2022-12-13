@@ -86,7 +86,7 @@ def replacer(
 
     from arroyo import Topic, configure_metrics
     from arroyo.backends.kafka import KafkaConsumer
-    from arroyo.commit import IMMEDIATE
+    from arroyo.commit import ONCE_PER_SECOND
     from arroyo.processing import StreamProcessor
 
     from snuba.replacer import ReplacerStrategyFactory, ReplacerWorker
@@ -130,7 +130,7 @@ def replacer(
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
         ),
-        IMMEDIATE,
+        ONCE_PER_SECOND,
     )
 
     def handler(signum: int, frame: Any) -> None:
