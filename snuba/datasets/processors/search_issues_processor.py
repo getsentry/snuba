@@ -93,12 +93,6 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         detection_timestamp = datetime.fromisoformat(
             event_occurrence_data["detection_time"]
         )
-        # datetime.strptime(event_occurrence_data["detection_time"], settings.PAYLOAD_DATETIME_FORMAT)
-        # )
-
-        # detection_timestamp = datetime.fromtimestamp(
-        #     event_occurrence_data["detection_time"]
-        # )
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )

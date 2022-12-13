@@ -34,7 +34,7 @@ class TestSearchIssuesMessageProcessor:
                     "type": 1,
                     "issue_title": "search me",
                     "fingerprint": ["one", "two"],
-                    "detection_time": datetime.utcnow().timestamp(),
+                    "detection_time": datetime.now().isoformat(),
                 },
             },
         )
