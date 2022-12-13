@@ -23,11 +23,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
         with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
             self._config_built_storages: dict[StorageKey, Storage] = {}
-            self._dev_writable_storages: dict[StorageKey, Storage] = {}
             self._cdc_storages: dict[StorageKey, Storage] = {}
-            self._dev_cdc_storages: dict[StorageKey, Storage] = {}
-            self._non_writable_storages: dict[StorageKey, Storage] = {}
-            self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
             self._all_storages: dict[StorageKey, Storage] = {}
             self.__initialize()
 
@@ -100,11 +96,8 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._cdc_storages = {
-            **{
-                storage.get_storage_key(): storage
-                for storage in [groupedmessages_storage, groupassignees_storage]
-            },
-            **(self._dev_cdc_storages if settings.ENABLE_DEV_FEATURES else {}),
+            storage.get_storage_key(): storage
+            for storage in [groupedmessages_storage, groupassignees_storage]
         }
 
         self._all_storages = {
@@ -143,8 +136,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     gen_metrics_dists_aggregate_storage,
                 ]
             },
-            **(self._dev_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
-            **(self._dev_non_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
         }
 
     def iter_all(self) -> Generator[Storage, None, None]:
