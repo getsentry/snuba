@@ -29,6 +29,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
@@ -262,7 +263,9 @@ class SchedulerBuilder:
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
-            Topic(self.__commit_log_topic_spec.topic_name),
+            Topic(
+                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
+            ),
             self.__build_strategy_factory(),
             IMMEDIATE,
         )
@@ -282,7 +285,9 @@ class SchedulerBuilder:
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         consumer_configuration = build_kafka_consumer_configuration(
-            self.__commit_log_topic_spec.topic,
+            SnubaTopic(
+                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
+            ),
             self.__consumer_group,
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
@@ -372,6 +377,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             commit,
             self.__stale_threshold_seconds,
             self.__metrics,
+            self.__slice_id,
         )
 
         return TickBuffer(
