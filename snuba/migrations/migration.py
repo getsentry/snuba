@@ -179,6 +179,8 @@ class ClickhouseNodeMigration(Migration, ABC):
                 print(f"Local op: {op.format_sql()}")
             elif op.target == OperationTarget.DISTRIBUTED:
                 print_dist_op(op)
+            else:
+                print("Skipped operation - no target specified")
 
 
 class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):

@@ -35,6 +35,25 @@ RUN set -ex; \
     apt-get purge -y --auto-remove $buildDeps; \
     rm -rf /var/lib/apt/lists/*;
 
+# Install nodejs and yarn and build the admin UI
+ENV NODE_VERSION=19
+COPY ./snuba/admin ./snuba/admin
+RUN set -ex; \
+    apt-get update && \
+    apt-get install -y curl gnupg --no-install-recommends && \
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - &&\
+    apt-get update && \
+    apt-get install -y yarn nodejs --no-install-recommends && \
+    cd snuba/admin && \
+    yarn install && \
+    yarn run build && \
+    yarn cache clean && \
+    rm -rf node_modules && \
+    apt-get purge -y --auto-remove yarn curl nodejs gnupg && \
+    rm -rf /var/lib/apt/lists/*
+
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
 COPY . ./

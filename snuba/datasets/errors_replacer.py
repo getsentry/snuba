@@ -33,6 +33,7 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import (
     REPLACEMENT_EVENT_TYPES,
     InvalidMessageType,
@@ -493,22 +494,33 @@ class ProjectsQueryFlags:
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
-        schema: WritableTableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
-        state_name: ReplacerState,
+        state_name: str,
+        storage_key_str: str,
     ) -> None:
-        super().__init__(schema=schema)
+        self.__schema: WritableTableSchema | None = None
         self.__required_columns = required_columns
+        self.__tag_column_map = tag_column_map
+        self.__promoted_tags = promoted_tags
+        self.__state_name = ReplacerState(state_name)
+        self.__storage_key_str = storage_key_str
+
+    def __initialize_schema(self) -> None:
+        # This has to be imported here since the storage factory will also initialize this processor
+        # and importing it at the top will create an import cycle
+
+        # This could be avoided by passing the schema in as an argument for this class but that
+        # would inflate the config representation of any storage using this replacer
+        from snuba.datasets.storages.factory import get_storage
+
+        storage = get_storage(StorageKey(self.__storage_key_str))
+        assert isinstance(schema := storage.get_schema(), WritableTableSchema)
+        self.__schema = schema
         self.__all_columns = [
             col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
         ]
-
-        self.__tag_column_map = tag_column_map
-        self.__promoted_tags = promoted_tags
-        self.__state_name = state_name
-        self.__schema = schema
         self.__replacement_context = ReplacementContext(
             all_columns=self.__all_columns,
             state_name=self.__state_name,
@@ -519,6 +531,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         )
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
+        if not self.__schema:
+            self.__initialize_schema()
+        assert self.__schema is not None
+
         type_ = message.action_type
 
         attributes_json = json.dumps({"message_type": type_, **message.data})
@@ -590,6 +606,12 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 return None
 
         return processed
+
+    def get_schema(self) -> WritableTableSchema:
+        if not self.__schema:
+            self.__initialize_schema()
+        assert self.__schema is not None
+        return self.__schema
 
     def get_state(self) -> ReplacerState:
         return self.__state_name

@@ -65,8 +65,8 @@ def test_validation_catches_bad_partition_mapping() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
-    sliced_storages = all_settings["SLICED_STORAGES"]
-    sliced_storages["events"] = 2
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+    sliced_storage_sets["events"] = 2
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
     part_mapping["events"] = {0: 2, 1: 0}
@@ -77,7 +77,7 @@ def test_validation_catches_bad_partition_mapping() -> None:
         validate_slicing_settings(all_settings)
 
     del part_mapping["events"]
-    del sliced_storages["events"]
+    del sliced_storage_sets["events"]
 
 
 @patch("snuba.datasets.slicing.SENTRY_LOGICAL_PARTITIONS", 2)
@@ -85,8 +85,8 @@ def test_validation_catches_unmapped_logical_parts() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
-    sliced_storages = all_settings["SLICED_STORAGES"]
-    sliced_storages["events"] = 2
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+    sliced_storage_sets["events"] = 2
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
     part_mapping["events"] = {0: 1, 1: 0}
@@ -96,7 +96,7 @@ def test_validation_catches_unmapped_logical_parts() -> None:
         validate_slicing_settings(all_settings)
 
     del part_mapping["events"]
-    del sliced_storages["events"]
+    del sliced_storage_sets["events"]
 
 
 @patch("snuba.datasets.slicing.SENTRY_LOGICAL_PARTITIONS", 2)
@@ -104,15 +104,15 @@ def test_validation_catches_empty_slice_mapping() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
-    sliced_storages = all_settings["SLICED_STORAGES"]
-    sliced_storages["events"] = 2
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+    sliced_storage_sets["events"] = 2
 
     # We forgot to add logical:slice mapping for events
 
     with pytest.raises(AssertionError):
         validate_slicing_settings(all_settings)
 
-    del sliced_storages["events"]
+    del sliced_storage_sets["events"]
 
 
 def test_validation_catches_unmapped_topic_pair() -> None:

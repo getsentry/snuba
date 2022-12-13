@@ -16,3 +16,5 @@ conftest.py
 htmlcov/
 snuba.egg-info/
 .github/
+snuba/admin/dist/bundle.js*
+*/node_modules

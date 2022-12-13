@@ -1,13 +1,12 @@
 import logging
-from typing import Callable, Iterable, Optional
+from typing import Iterable, Optional
 
 from snuba.clickhouse.http import JSONRow
 from snuba.clickhouse.native import ClickhousePool
-from snuba.snapshots import BulkLoadSource, SnapshotTableRow
+from snuba.datasets.cdc.row_processors import CdcRowProcessor
+from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader, ProgressCallback
 from snuba.writer import BatchWriter, BufferedWriterWrapper, WriterTableRow
-
-RowProcessor = Callable[[SnapshotTableRow], WriterTableRow]
 
 logger = logging.getLogger("snuba.bulk-loader")
 
@@ -22,7 +21,7 @@ class SingleTableBulkLoader(BulkLoader):
         source: BulkLoadSource,
         dest_table: str,
         source_table: str,
-        row_processor: RowProcessor,
+        row_processor: CdcRowProcessor,
         clickhouse: ClickhousePool,
     ):
         self.__source = source
@@ -58,7 +57,7 @@ class SingleTableBulkLoader(BulkLoader):
             row_count = 0
             with writer as buffer_writer:
                 for row in table:
-                    clickhouse_data = self.__row_processor(row)
+                    clickhouse_data = self.__row_processor.process(row)
                     buffer_writer.write(clickhouse_data)
                     row_count += 1
             logger.info("Load complete %d records loaded", row_count)

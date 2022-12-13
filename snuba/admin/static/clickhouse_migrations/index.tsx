@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import { MigrationData, MigrationGroupResult, GroupOptions, RunMigrationRequest, RunMigrationResult, Action } from "./types";
+import {
+  MigrationData,
+  MigrationGroupResult,
+  GroupOptions,
+  RunMigrationRequest,
+  RunMigrationResult,
+  Action,
+} from "./types";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});
@@ -23,58 +30,71 @@ function ClickhouseMigrations(props: { api: Client }) {
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
-    setSQLText(()=>null)
+    setSQLText(() => null);
     setMigrationId(() => null);
     refreshStatus(migrationGroup.group);
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(()=>null)
+    setSQLText(() => null);
   }
 
   function execute(action: Action) {
+    let force = false;
     const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
     if (data?.blocking) {
-      window.confirm(
-        `Migration ${migrationId} is blocking, are you sure you want to execute?`
-      );
+      if (
+        window.confirm(
+          `Migration ${migrationId} is blocking, are you sure you want to execute?`
+        )
+      ) {
+        force = true;
+      }
     }
-    executeRealRun(action);
+    if (data?.status !== "not_started" && action === Action.Reverse) {
+      if (
+        window.confirm(
+          `Migration ${migrationId} is ${data?.status}, are you sure you want to reverse?`
+        )
+      ) {
+        force = true;
+      }
+    }
+    executeRealRun(action, force);
   }
 
   function executeRun(action: Action, dry_run: boolean, force: boolean) {
-      let req = {
-        action: action,
-        migration_id: migrationId,
-        group: migrationGroup?.group,
-        dry_run: dry_run,
-        force: force
-      }
-      props.api
+    let req = {
+      action: action,
+      migration_id: migrationId,
+      group: migrationGroup?.group,
+      dry_run: dry_run,
+      force: force,
+    };
+    props.api
       .runMigration(req as RunMigrationRequest)
       .then((res) => {
-        console.log(res)
+        console.log(res);
         setSQLText(() => res.stdout);
       })
       .catch((err) => {
-        console.log(err)
+        console.log(err);
         setSQLText(() => JSON.stringify(err));
       });
   }
 
   function executeDryRun(action: Action) {
     console.log("executing dry run !", migrationId, action);
-    executeRun(action, true, false)
+    executeRun(action, true, false);
   }
 
-  function executeRealRun(action: Action) {
+  function executeRealRun(action: Action, force: boolean) {
     console.log("executing real run !", migrationId, action);
-    executeRun(action, false, false)
-    if (migrationGroup)
-      refreshStatus(migrationGroup.group)
+    executeRun(action, false, force);
+    if (migrationGroup) refreshStatus(migrationGroup.group);
   }
 
   function refreshStatus(group: string) {
@@ -87,7 +107,6 @@ function ClickhouseMigrations(props: { api: Client }) {
       setMigrationGroup(options[group]);
     });
   }
-
 
   function rowData() {
     if (migrationGroup) {
@@ -215,13 +234,15 @@ function ClickhouseMigrations(props: { api: Client }) {
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
             <div style={{ display: "inline-block" }}>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => executeDryRun(Action.Run)}
                 style={buttonStyle}
               >
                 forwards
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => executeDryRun(Action.Reverse)}
                 style={buttonStyle}
               >

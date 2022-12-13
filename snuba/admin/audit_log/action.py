@@ -7,8 +7,10 @@ class AuditLogAction(Enum):
     REMOVED_OPTION = "removed.option"
     UPDATED_OPTION = "updated.option"
     RAN_QUERY = "ran.query"
-    RAN_MIGRATION = "ran.migration"
-    REVERSED_MIGRATION = "reversed.migration"
+    RAN_MIGRATION_STARTED = "ran.migration.started"
+    REVERSED_MIGRATION_STARTED = "reversed.migration.started"
+    RAN_MIGRATION_COMPLETED = "ran.migration.completed"
+    REVERSED_MIGRATION_COMPLETED = "reversed.migration.completed"
 
 
 RUNTIME_CONFIG_ACTIONS = [
@@ -18,6 +20,8 @@ RUNTIME_CONFIG_ACTIONS = [
 ]
 
 MIGRATION_ACTIONS = [
-    AuditLogAction.RAN_MIGRATION,
-    AuditLogAction.REVERSED_MIGRATION,
+    AuditLogAction.RAN_MIGRATION_STARTED,
+    AuditLogAction.REVERSED_MIGRATION_STARTED,
+    AuditLogAction.RAN_MIGRATION_COMPLETED,
+    AuditLogAction.REVERSED_MIGRATION_COMPLETED,
 ]

@@ -24,6 +24,7 @@ from snuba.utils.schemas import AggregateFunction
 # this has to be done before the storage import because there's a cyclical dependency error
 CONFIG_BUILT_STORAGES = get_config_built_storages()
 
+from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.functions import agg_storage as functions
 from snuba.datasets.storages.functions import raw_storage as functions_raw
 from snuba.datasets.storages.generic_metrics import (
@@ -43,6 +44,8 @@ from snuba.datasets.storages.metrics import (
 from snuba.datasets.storages.metrics import org_counters_storage
 from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
+from snuba.datasets.storages.outcomes import materialized_storage as outcomes_hourly
+from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
@@ -120,6 +123,7 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
+        discover,
         functions,
         functions_raw,
         sessions_raw,
@@ -134,6 +138,8 @@ class TestStorageConfiguration(ConfigurationTest):
         metrics_distributions_storage,
         metrics_raw,
         org_counters_storage,
+        outcomes_hourly,
+        outcomes_raw,
         transactions,
         profiles,
         replays,
@@ -145,7 +151,6 @@ class TestStorageConfiguration(ConfigurationTest):
             storage.get_storage_key() in CONFIG_BUILT_STORAGES
             for storage in self.python_storages
         )
-        assert len(CONFIG_BUILT_STORAGES) == len(self.python_storages)
 
     def test_compare_storages(self) -> None:
         for storage in self.python_storages:

@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import Optional, Sequence, Set, Union
+from typing import Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -11,12 +10,12 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
-    ColumnMapper,
-    CurriedFunctionCallMapper,
-    FunctionCallMapper,
-    SubscriptableReferenceMapper,
+    DefaultIfNullCurriedFunctionMapper,
+    DefaultIfNullFunctionMapper,
+    DefaultNoneColumnMapper,
+    DefaultNoneFunctionMapper,
+    DefaultNoneSubscriptMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
@@ -33,19 +32,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.dsl import identity
-from snuba.query.expressions import (
-    Column,
-    CurriedFunctionCall,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.matchers import Any
-from snuba.query.matchers import FunctionCall as FunctionCallMatch
-from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or
-from snuba.query.matchers import String as StringMatch
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -57,145 +44,6 @@ from snuba.query.processors.logical.quota_processor import ResourceQuotaProcesso
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.util import qualified_column
-
-
-@dataclass(frozen=True)
-class DefaultNoneColumnMapper(ColumnMapper):
-    """
-    This maps a list of column names to None (NULL in SQL) as it is done
-    in the discover column_expr method today. It should not be used for
-    any other reason or use case, thus it should not be moved out of
-    the discover dataset file.
-    """
-
-    columns: ColumnSet
-
-    def attempt_map(
-        self,
-        expression: Column,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
-        if expression.column_name in self.columns:
-            return identity(
-                Literal(None, None),
-                expression.alias
-                or qualified_column(
-                    expression.column_name, expression.table_name or ""
-                ),
-            )
-        else:
-            return None
-
-
-@dataclass
-class DefaultNoneFunctionMapper(FunctionCallMapper):
-    """
-    Maps the list of function names to NULL.
-    """
-
-    function_names: Set[str]
-
-    def __post_init__(self) -> None:
-        self.function_match = FunctionCallMatch(
-            Or([StringMatch(func) for func in self.function_names])
-        )
-
-    def attempt_map(
-        self,
-        expression: FunctionCall,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
-        if self.function_match.match(expression):
-            return identity(Literal(None, None), expression.alias)
-
-        return None
-
-
-@dataclass(frozen=True)
-class DefaultIfNullFunctionMapper(FunctionCallMapper):
-    """
-    If a function is being called on a column that doesn't exist, or is being
-    called on NULL, change the entire function to be NULL.
-    """
-
-    function_match = FunctionCallMatch(
-        StringMatch("identity"), (LiteralMatch(value=Any(type(None))),)
-    )
-
-    def attempt_map(
-        self,
-        expression: FunctionCall,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
-
-        # HACK: Quick fix to avoid this function dropping important conditions from the query
-        logical_functions = {"and", "or", "xor"}
-
-        if expression.function_name in logical_functions:
-            return None
-
-        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        for param in parameters:
-            # All impossible columns will have been converted to the identity function.
-            # So we know that if a function has the identity function as a parameter, we can
-            # collapse the entire expression.
-            fmatch = self.function_match.match(param)
-            if fmatch is not None:
-                return identity(Literal(None, None), expression.alias)
-
-        return None
-
-
-@dataclass(frozen=True)
-class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
-    """
-    If a curried function is being called on a column that doesn't exist, or is being
-    called on NULL, change the entire function to be NULL.
-    """
-
-    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
-
-    def attempt_map(
-        self,
-        expression: CurriedFunctionCall,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Union[CurriedFunctionCall, FunctionCall]]:
-        internal_function = expression.internal_function.accept(children_translator)
-        assert isinstance(internal_function, FunctionCall)  # mypy
-        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        for param in parameters:
-            # All impossible columns that have been converted to NULL will be the identity function.
-            # So we know that if a function has the identity function as a parameter, we can
-            # collapse the entire expression.
-            fmatch = self.function_match.match(param)
-            if fmatch is not None:
-                return identity(Literal(None, None), expression.alias)
-
-        return None
-
-
-@dataclass(frozen=True)
-class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
-    """
-    This maps a subscriptable reference to None (NULL in SQL) as it is done
-    in the discover column_expr method today. It should not be used for
-    any other reason or use case, thus it should not be moved out of
-    the discover dataset file.
-    """
-
-    subscript_names: Set[str]
-
-    def attempt_map(
-        self,
-        expression: SubscriptableReference,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
-        if expression.column.column_name in self.subscript_names:
-            return identity(Literal(None, None), expression.alias)
-        else:
-            return None
-
 
 EVENTS_COLUMNS = ColumnSet(
     [
