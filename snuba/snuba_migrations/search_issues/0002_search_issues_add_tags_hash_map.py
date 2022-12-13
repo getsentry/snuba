@@ -43,7 +43,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=params[1],
             )
             for params in [
-                ("search_issues_local", OperationTarget.LOCAL),
                 ("search_issues_dist", OperationTarget.DISTRIBUTED),
+                ("search_issues_local", OperationTarget.LOCAL),
             ]
         ]
