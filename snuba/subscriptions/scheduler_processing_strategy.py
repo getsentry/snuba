@@ -393,7 +393,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         commit: Callable[[Mapping[Partition, Position]], None],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
-        slice_id: Optional[int],
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
