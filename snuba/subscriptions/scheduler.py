@@ -349,7 +349,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                 storage = entity.get_writable_storage()
                 if storage is not None:
                     part_slice_id = map_logical_partition_to_slice(
-                        storage.get_storage_key(), logical_part
+                        storage.get_storage_set_key(), logical_part
                     )
                     if part_slice_id == self.__slice_id:
                         filtered_subscriptions.append(subscription)
