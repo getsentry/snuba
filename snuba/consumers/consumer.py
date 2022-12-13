@@ -40,7 +40,7 @@ from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.strategy_factory import ConsumerStrategyFactory
+from snuba.consumers.strategy_factory import CommitLogConfig, ConsumerStrategyFactory
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -730,6 +730,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        commit_log_config: Optional[CommitLogConfig] = None,
     ) -> None:
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -769,6 +770,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             initialize_parallel_transform=initialize_parallel_transform,
             parallel_collect=parallel_collect,
             dead_letter_queue_policy_creator=self.__dead_letter_policy_creator,
+            commit_log_config=commit_log_config,
         )
 
     def create_with_partitions(
