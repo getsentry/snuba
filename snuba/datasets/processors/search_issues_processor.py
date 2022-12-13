@@ -13,8 +13,13 @@ from snuba.processor import (
     _ensure_valid_ip,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.serializable_exception import SerializableException
 
 metrics = MetricsWrapper(environment.metrics, "search_issues.processor")
+
+
+class InvalidMessageFormat(SerializableException):
+    pass
 
 
 class IssueOccurrenceData(TypedDict, total=False):
@@ -133,7 +138,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self, message: Tuple[int, str, SearchIssueEvent], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
-            return None
+            raise InvalidMessageFormat(
+                f"Expected message format (<version:int>, <operation:str>, <event>>)), got {message} instead"
+            )
 
         version = message[0]
         if not version or version != 1:
