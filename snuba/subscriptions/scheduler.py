@@ -300,6 +300,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__partition_id = partition_id
         self.__metrics = metrics
 
+        self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
 
         self.__delegate_builder = DelegateTaskBuilder()
@@ -327,12 +328,10 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             # We are transitioning between jittered and immediate mode. We must use the delegate builder.
             self.__builder = self.__delegate_builder
 
-    def __filter_subscriptions(
-        self, subscriptions: List[Subscription]
-    ) -> List[Subscription]:
+    def __filter_subscriptions(self) -> List[Subscription]:
 
         filtered_subscriptions: List[Subscription] = []
-        for subscription in subscriptions:
+        for subscription in self.__subscriptions:
             # get the metadata and org_id from the Subscription
             sub_data = subscription.data
             sub_metadata = sub_data.metadata
@@ -363,14 +362,14 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             self.__last_refresh is None
             or (current_time - self.__last_refresh) > self.__cache_ttl
         ):
-            subscriptions = [
+            self.__subscriptions = [
                 Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
                 for uuid, data in self.__store.all()
             ]
             self.__last_refresh = current_time
             self.__metrics.gauge(
                 "schedule.size",
-                len(subscriptions),
+                len(self.__subscriptions),
                 tags={"partition": str(self.__partition_id)},
             )
 
@@ -381,9 +380,9 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         )
 
         if self.__slice_id is not None:
-            return self.__filter_subscriptions(subscriptions)
+            return self.__filter_subscriptions()
         else:
-            return subscriptions
+            return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
