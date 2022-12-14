@@ -43,10 +43,7 @@ from snuba.query.processors.logical.timeseries_processor import (
     extract_granularity_from_query,
 )
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
-from snuba.query.validation.validators import (
-    ColumnValidationMode,
-    EntityRequiredColumnValidator,
-)
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
@@ -281,7 +278,6 @@ class SessionsEntity(Entity):
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
-            validate_data_model=ColumnValidationMode.WARN,
             subscription_processors=[AddColumnCondition("organization", "org_id")],
             subscription_validators=[
                 AggregationValidator(2, ["groupby", "having", "orderby"], "started")

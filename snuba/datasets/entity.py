@@ -10,11 +10,7 @@ from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import (
-    ColumnValidationMode,
-    EntityContainsColumnsValidator,
-    QueryValidator,
-)
+from snuba.query.validation.validators import QueryValidator
 from snuba.utils.describer import Describable, Description, Property
 from snuba.utils.schemas import ColumnSet
 
@@ -35,7 +31,6 @@ class Entity(Describable, ABC):
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
-        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
@@ -52,15 +47,7 @@ class Entity(Describable, ABC):
         self.__subscription_processors = subscription_processors
         self.__subscription_validators = subscription_validators
         self.required_time_column = required_time_column
-
-        columns_exist_validator = EntityContainsColumnsValidator(
-            self.__data_model, validation_mode=validate_data_model
-        )
-        self.__validators = (
-            [*validators, columns_exist_validator]
-            if validators is not None
-            else [columns_exist_validator]
-        )
+        self.__validators = validators or []
 
     @abstractmethod
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

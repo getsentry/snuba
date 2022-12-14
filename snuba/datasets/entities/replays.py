@@ -12,10 +12,7 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
 )
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.validation.validators import (
-    ColumnValidationMode,
-    EntityRequiredColumnValidator,
-)
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 
 class ReplaysEntity(Entity):
@@ -35,7 +32,6 @@ class ReplaysEntity(Entity):
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
-            validate_data_model=ColumnValidationMode.WARN,
             subscription_processors=None,
             subscription_validators=None,
         )
