@@ -12,11 +12,7 @@ from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
-from snuba.consumers.consumer import (
-    build_batch_writer,
-    build_mock_batch_writer,
-    process_message,
-)
+from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
@@ -56,12 +52,6 @@ class ProcessingParameters:
     output_block_size: Optional[int]
 
 
-@dataclass(frozen=True)
-class MockParameters:
-    avg_write_latency: int
-    std_deviation: int
-
-
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -82,7 +72,6 @@ class ConsumerBuilder:
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
-        mock_parameters: Optional[MockParameters] = None,
         cooperative_rebalancing: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -164,7 +153,6 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__mock_parameters = mock_parameters
         self.__parallel_collect = parallel_collect
         self.__cooperative_rebalancing = cooperative_rebalancing
 
@@ -263,14 +251,6 @@ class ConsumerBuilder:
                 ),
                 replacements_topic=self.replacements_topic,
                 slice_id=slice_id,
-            )
-            if self.__mock_parameters is None
-            else build_mock_batch_writer(
-                self.storage,
-                bool(self.replacements_topic),
-                self.metrics,
-                self.__mock_parameters.avg_write_latency,
-                self.__mock_parameters.std_deviation,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
