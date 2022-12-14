@@ -20,6 +20,7 @@ from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
     QueryStorageSelector,
     QueryStorageSelectorError,
+    ReadableStorage,
     ReadableTableStorage,
     StorageAndMappers,
 )
@@ -116,17 +117,13 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
         self.__partition_key_column_name = partition_key_column_name
 
-    @with_span()
-    def build_and_rank_plans(
+    def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
-    ) -> Sequence[ClickhouseQueryPlan]:
-        if len(self.__storages) < 1:
-            raise QueryStorageSelectorError("No storages specified to select from.")
-
+    ) -> StorageAndMappers:
         if not self.__selector:
             # Default to the first and only storage and mapper
             if len(self.__storages) == 1:
-                storage, mappers, _ = self.__storages[0]
+                return self.__storages[0]
             else:
                 # If there are both readable and writable storages, select the readable one.
                 # Multiple writable storages are not supported.
@@ -138,13 +135,16 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                         "Multiple readable storages requires a storage selector."
                     )
 
-                storage, mappers, _ = readable_storages[0]
+                return readable_storages[0]
         else:
             with sentry_sdk.start_span(
                 op="build_plan.storage_query_plan_builder", description="select_storage"
             ):
-                storage, mappers, _ = self.__selector.select_storage(query, settings)
+                return self.__selector.select_storage(query, settings)
 
+    def get_cluster(
+        self, storage: ReadableStorage, query: LogicalQuery, settings: QuerySettings
+    ) -> ClickhouseCluster:
         if is_storage_set_sliced(storage.get_storage_set_key()):
             with sentry_sdk.start_span(
                 op="build_plan.sliced_storage", description="select_storage"
@@ -153,13 +153,22 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     self.__partition_key_column_name is not None
                 ), "partition key column name must be defined for a sliced storage"
                 assert isinstance(storage, ReadableTableStorage)
-                cluster = ColumnBasedStorageSliceSelector(
+                return ColumnBasedStorageSliceSelector(
                     storage=storage.get_storage_key(),
                     storage_set=storage.get_storage_set_key(),
                     partition_key_column_name=self.__partition_key_column_name,
                 ).select_cluster(query, settings)
-        else:
-            cluster = storage.get_cluster()
+        return storage.get_cluster()
+
+    @with_span()
+    def build_and_rank_plans(
+        self, query: LogicalQuery, settings: QuerySettings
+    ) -> Sequence[ClickhouseQueryPlan]:
+        if len(self.__storages) < 1:
+            raise QueryStorageSelectorError("No storages specified to select from.")
+
+        storage, mappers, _ = self.get_storage(query, settings)
+        cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"
