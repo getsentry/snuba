@@ -74,7 +74,7 @@ mandatory_condition_checkers:
 stream_loader:
   processor:
     name: SearchIssuesMessageProcessor
-  default_topic: eventstream-issue-platform
+  default_topic: generic-events
   dlq_policy:
     type: produce
-    args: [ snuba-dead-letter-search-issues ]
+    args: [ snuba-dead-letter-generic-events ]
