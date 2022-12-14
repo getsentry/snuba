@@ -1,12 +1,24 @@
 import click
 
-from snuba import settings
-
 
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-def devserver(*, bootstrap: bool, workers: bool) -> None:
+@click.option("--metrics/--no-metrics", default=False)
+@click.option("--profiles/--no-profiles", default=False)
+@click.option("--replays/--no-replays", default=False)
+@click.option(
+    "--combined-scheduler-executor/--separate-scheduler-executor", default=True
+)
+def devserver(
+    *,
+    bootstrap: bool,
+    workers: bool,
+    metrics: bool,
+    profiles: bool,
+    replays: bool,
+    combined_scheduler_executor: bool
+) -> None:
     "Starts all Snuba processes for local development."
     import os
     import sys
@@ -108,7 +120,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         ),
     ]
 
-    if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
+    if not combined_scheduler_executor:
         daemons += [
             (
                 "subscriptions-scheduler-events",
@@ -200,7 +212,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
-    if settings.ENABLE_SENTRY_METRICS_DEV:
+    if metrics:
         daemons += [
             (
                 "metrics-consumer",
@@ -239,8 +251,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 ],
             ),
         ]
-        if settings.ENABLE_METRICS_SUBSCRIPTIONS:
-            if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
+        if metrics:
+            if not combined_scheduler_executor:
                 daemons += [
                     (
                         "subscriptions-scheduler-metrics-counters",
@@ -332,7 +344,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     ),
                 ]
 
-    if settings.ENABLE_PROFILES_CONSUMER:
+    if profiles:
         daemons += [
             (
                 "profiles",
@@ -358,7 +370,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
-    if settings.ENABLE_REPLAYS_CONSUMER:
+    if replays:
         daemons += [
             (
                 "replays-consumer",

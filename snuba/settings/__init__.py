@@ -249,16 +249,6 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 # Map the Zookeeper path for the replicated merge tree to something else
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
-# Enable Sentry Metrics (used for the snuba metrics consumer)
-ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
-
-# Metric Alerts Subscription Options
-ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
-
-SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
-    "SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV", False
-)
-
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
@@ -269,12 +259,6 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
 ENABLED_MATERIALIZATION_VERSION = 4
-
-# Enable profiles ingestion
-ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
-
-# Enable replays ingestion
-ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
