@@ -15,7 +15,6 @@ from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.topics import Topic
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +143,11 @@ def subscriptions_scheduler(
 
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert scheduled_topic_spec is not None
-    physical_scheduled_topic = scheduled_topic_spec.get_physical_topic_name(slice_id)
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            Topic(physical_scheduled_topic),
+            scheduled_topic_spec.topic,
+            slice_id,
             override_params={"partitioner": "consistent"},
         )
     )
