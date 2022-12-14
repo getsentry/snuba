@@ -74,12 +74,9 @@ class MetricsEntity(Entity, ABC):
             ],
         ).concat(mappers)
         storages = [readable_storage]
-        storage_and_mappers = [StorageAndMappers(readable_storage, all_mappers, False)]
+        storage_and_mappers = [StorageAndMappers(readable_storage, all_mappers)]
         if writable_storage:
             storages.append(writable_storage)
-            storage_and_mappers.append(
-                StorageAndMappers(writable_storage, all_mappers, True)
-            )
 
         if abstract_column_set is None:
             abstract_column_set = ColumnSet(

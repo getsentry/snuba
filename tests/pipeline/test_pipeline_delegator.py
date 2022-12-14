@@ -68,9 +68,7 @@ def test() -> None:
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
-                StorageAndMappers(
-                    get_storage(StorageKey.ERRORS), TranslationMappers(), True
-                )
+                StorageAndMappers(get_storage(StorageKey.ERRORS), TranslationMappers())
             ]
         )
     )
@@ -79,7 +77,7 @@ def test() -> None:
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
                 StorageAndMappers(
-                    get_storage(StorageKey.ERRORS_RO), TranslationMappers(), True
+                    get_storage(StorageKey.ERRORS_RO), TranslationMappers()
                 )
             ]
         ),

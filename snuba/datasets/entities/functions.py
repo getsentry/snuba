@@ -29,10 +29,7 @@ class FunctionsEntity(Entity):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=[
-                        StorageAndMappers(
-                            readable_storage, TranslationMappers(), False
-                        ),
-                        StorageAndMappers(writable_storage, TranslationMappers(), True),
+                        StorageAndMappers(readable_storage, TranslationMappers())
                     ],
                 )
             ),

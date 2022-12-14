@@ -121,21 +121,11 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self, query: LogicalQuery, settings: QuerySettings
     ) -> StorageAndMappers:
         if not self.__selector:
-            # Default to the first and only storage and mapper
-            if len(self.__storages) == 1:
-                return self.__storages[0]
-            else:
-                # If there are both readable and writable storages, select the readable one.
-                # Multiple writable storages are not supported.
-                readable_storages = [
-                    storage for storage in self.__storages if not storage.is_writable
-                ]
-                if len(readable_storages) > 1:
-                    raise QueryStorageSelectorError(
-                        "Multiple readable storages requires a storage selector."
-                    )
-
-                return readable_storages[0]
+            if len(self.__storages) > 1:
+                raise QueryStorageSelectorError(
+                    "Multiple storages specified without a storage selector."
+                )
+            return self.__storages[0]
         else:
             with sentry_sdk.start_span(
                 op="build_plan.storage_query_plan_builder", description="select_storage"
@@ -167,7 +157,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         if len(self.__storages) < 1:
             raise QueryStorageSelectorError("No storages specified to select from.")
 
-        storage, mappers, _ = self.get_storage(query, settings)
+        storage, mappers = self.get_storage(query, settings)
         cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(

@@ -100,13 +100,10 @@ class GenericMetricsEntity(Entity, ABC):
         ).concat(mappers)
         storages = [readable_storage]
         storage_and_mappers = [
-            StorageAndMappers(readable_storage, generic_metrics_mappers, False),
+            StorageAndMappers(readable_storage, generic_metrics_mappers),
         ]
         if writable_storage:
             storages.append(writable_storage)
-            storage_and_mappers.append(
-                StorageAndMappers(writable_storage, generic_metrics_mappers, True)
-            )
 
         if validators is None:
             validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]

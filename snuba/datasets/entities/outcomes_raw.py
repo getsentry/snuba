@@ -29,7 +29,7 @@ class OutcomesRawEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers(), False)]
+                    storages=[StorageAndMappers(storage, TranslationMappers())]
                 ),
             ),
             abstract_column_set=read_columns + time_columns,

@@ -434,7 +434,7 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
     ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
 
     query_plan = StorageQueryPlanBuilder(
-        storages=[StorageAndMappers(storage, transaction_translator, True)]
+        storages=[StorageAndMappers(storage, transaction_translator)]
     ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query

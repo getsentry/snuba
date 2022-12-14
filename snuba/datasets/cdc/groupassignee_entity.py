@@ -33,7 +33,7 @@ class GroupAssigneeEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers(), True)]
+                    storages=[StorageAndMappers(storage, TranslationMappers())]
                 ),
             ),
             abstract_column_set=schema.get_columns(),

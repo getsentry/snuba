@@ -108,8 +108,8 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         )
 
         if use_readonly_storage:
-            return StorageAndMappers(self.__errors_ro_table, self.__mappers, False)
-        return StorageAndMappers(self.__errors_table, self.__mappers, True)
+            return StorageAndMappers(self.__errors_ro_table, self.__mappers)
+        return StorageAndMappers(self.__errors_table, self.__mappers)
 
 
 class BaseEventsEntity(Entity, ABC):
@@ -130,8 +130,8 @@ class BaseEventsEntity(Entity, ABC):
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
                 storages=[
-                    StorageAndMappers(events_read_storage, mappers, False),
-                    StorageAndMappers(events_storage, mappers, True),
+                    StorageAndMappers(events_read_storage, mappers),
+                    StorageAndMappers(events_storage, mappers),
                 ],
                 selector=ErrorsQueryStorageSelector(mappers),
             ),

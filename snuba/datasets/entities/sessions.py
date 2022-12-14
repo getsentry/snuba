@@ -252,10 +252,10 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
 
         if use_materialized_storage:
             return StorageAndMappers(
-                self.materialized_storage, sessions_hourly_translators, False
+                self.materialized_storage, sessions_hourly_translators
             )
         else:
-            return StorageAndMappers(self.raw_storage, sessions_raw_translators, True)
+            return StorageAndMappers(self.raw_storage, sessions_raw_translators)
 
 
 class SessionsEntity(Entity):
@@ -272,11 +272,9 @@ class SessionsEntity(Entity):
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=[
                         StorageAndMappers(
-                            materialized_storage, sessions_hourly_translators, False
+                            materialized_storage, sessions_hourly_translators
                         ),
-                        StorageAndMappers(
-                            writable_storage, sessions_raw_translators, True
-                        ),
+                        StorageAndMappers(writable_storage, sessions_raw_translators),
                     ],
                     selector=SessionsQueryStorageSelector(),
                 ),
@@ -312,7 +310,7 @@ class OrgSessionsEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers(), False)]
+                    storages=[StorageAndMappers(storage, TranslationMappers())]
                 )
             ),
             abstract_column_set=ColumnSet(

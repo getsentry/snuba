@@ -253,7 +253,7 @@ class DiscoverEntity(Entity):
             )
         )
         discover_storage_plan_builder = StorageQueryPlanBuilder(
-            storages=[StorageAndMappers(discover_storage, mappers, False)],
+            storages=[StorageAndMappers(discover_storage, mappers)],
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder

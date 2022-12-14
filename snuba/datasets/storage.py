@@ -183,7 +183,6 @@ class StorageAndMappersNotFound(Exception):
 class StorageAndMappers(NamedTuple):
     storage: ReadableStorage
     mappers: TranslationMappers
-    is_writable: bool
 
 
 class QueryStorageSelectorError(Exception):

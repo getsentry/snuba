@@ -60,10 +60,7 @@ class OutcomesEntity(Entity):
                     # materialized storage or the raw one here, replace this with a custom storage
                     # selector that decides when to use the materialized data.
                     storages=[
-                        StorageAndMappers(
-                            materialized_storage, TranslationMappers(), False
-                        ),
-                        StorageAndMappers(writable_storage, TranslationMappers(), True),
+                        StorageAndMappers(materialized_storage, TranslationMappers()),
                     ]
                 ),
             ),
