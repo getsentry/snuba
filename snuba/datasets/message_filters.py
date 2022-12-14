@@ -39,11 +39,6 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
         raise NotImplementedError
 
 
-class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
-    def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        return False
-
-
 @dataclass
 class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     """
