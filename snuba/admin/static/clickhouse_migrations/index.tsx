@@ -20,7 +20,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   const [header, setHeader] = useState<string | null>(null);
   const [show_action, setShowAction] = useState<boolean | null>(false);
 
-  const dry_run_header = "Raw SQL for running a migration (forwards) or reversing \n (backwards). Good to do before executing a migration for real."
+  const dry_run_header = "Dry run SQL output"
   const real_run_header = "Run log output"
 
   const [forwards_dry_run, setFowardsDryRun] = useState<string | null>(null);
@@ -36,7 +36,7 @@ function ClickhouseMigrations(props: { api: Client }) {
     });
   }, []);
 
-  function clearState() {
+  function clearBtnState() {
     setBackwardsDryRun(() => null)
     setFowardsDryRun(() => null)
     setSQLText(() => null);
@@ -45,7 +45,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
-    clearState()
+    clearBtnState()
     setMigrationId(() => null);
     setShowAction(()=> false)
     refreshStatus(migrationGroup.group);
@@ -53,7 +53,7 @@ function ClickhouseMigrations(props: { api: Client }) {
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    clearState()
+    clearBtnState()
     setShowAction(()=> false)
   }
 
@@ -142,6 +142,7 @@ function ClickhouseMigrations(props: { api: Client }) {
 
   function executeRealRun(action: Action, force: boolean) {
     console.log("executing real run !", migrationId, action, force);
+    clearBtnState()
     setHeader(()=> real_run_header)
     executeRun(action, false, force, (stdout: string, err?: string) => {
       if (stdout.indexOf("migration.completed") > -1) {
@@ -299,20 +300,24 @@ function ClickhouseMigrations(props: { api: Client }) {
               <br />
               <button type="button"
                 onClick={() => executeDryRun(Action.Run)}
-                style={buttonStyle}
+                style={forwards_dry_run? selectedButtonStyle : buttonStyle}
               >
                 DRY RUN forwards
               </button>
               <button
                 type="button"
                 onClick={() => executeDryRun(Action.Reverse)}
-                style={buttonStyle}
+                style={backwards_dry_run ? selectedButtonStyle : buttonStyle}
               >
                 DRY RUN backwards
               </button>
             </div>
           )}
         </div>
+        <p>
+        Before executing a migration, do a dry run first. This will generate the raw SQL for running a migration (forwards) or reversing (backwards) a migration so that you can verify it's contents.
+        </p>
+
         {migrationGroup && migrationId && SQLText && (
           <div style={sqlBox}>
             <p style={textStyle}>
@@ -357,6 +362,12 @@ const buttonStyle = {
   padding: "2px 5px",
   marginRight: "10px",
 };
+
+const selectedButtonStyle = {
+  color: "red",
+  padding: "2px 5px",
+  marginRight: "10px",
+}
 
 const textStyle = {
   fontSize: 14,
