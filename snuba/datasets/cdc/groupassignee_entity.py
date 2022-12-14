@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.datasets.storages.storage_key import StorageKey

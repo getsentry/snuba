@@ -27,7 +27,7 @@ from snuba.datasets.entity_subscriptions.validators import (
     AggregationValidator,
     EntitySubscriptionValidator,
 )
-from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageAndMappers,

@@ -11,7 +11,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query import SelectedExpression

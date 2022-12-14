@@ -12,7 +12,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
-from snuba.datasets.plans.storage_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import (
     ReadableTableStorage,
     Storage,

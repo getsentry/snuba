@@ -16,7 +16,7 @@ from snuba.datasets.plans.splitters.strategies import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
-from snuba.datasets.plans.storage_builder import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.storage_plan_builder import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
