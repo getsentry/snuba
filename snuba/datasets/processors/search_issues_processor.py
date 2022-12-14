@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, TypedDict
 
@@ -31,7 +32,7 @@ class IssueOccurrenceData(TypedDict, total=False):
     issue_title: str
     subtitle: str
     resource_id: Optional[str]
-    detection_time: str
+    detection_time: float
 
 
 class IssueEventData(TypedDict, total=False):
@@ -60,9 +61,14 @@ class SearchIssueEvent(TypedDict):
     project_id: int
     group_id: int  # backwards compatibility
     group_ids: Sequence[int]
+    primary_hash: str
 
     data: IssueEventData
     occurrence_data: IssueOccurrenceData
+
+
+def ensure_uuid(value: str) -> str:
+    return str(uuid.UUID(value))
 
 
 class SearchIssuesMessageProcessor(DatasetMessageProcessor):
@@ -95,7 +101,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         event_occurrence_data = event["occurrence_data"]
 
         # required fields
-        detection_timestamp = datetime.fromisoformat(
+        detection_timestamp = datetime.utcfromtimestamp(
             event_occurrence_data["detection_time"]
         )
         retention_days = enforce_retention(
@@ -105,8 +111,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "organization_id": event["organization_id"],
             "project_id": event["project_id"],
             "search_title": event_occurrence_data["issue_title"],
+            "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": event_occurrence_data["fingerprint"],
-            "occurrence_id": event_occurrence_data["id"],
+            "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
             # TODO: fix the below field assignments to actually extract from event data
@@ -143,7 +150,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             )
 
         version = message[0]
-        if not version or version != 1:
+        if not version or version != 2:
             metrics.increment("invalid_message_version")
             raise InvalidMessageVersion(f"Unsupported message version: {version}")
 

@@ -13,10 +13,12 @@ schema:
       { name: project_id, type: UInt, args: { size: 64 } },
       { name: group_id, type: UInt, args: { size: 64 } },
       { name: search_title, type: String },
+      { name: primary_hash, type: UUID },
       { name: fingerprint, type: Array, args: { inner_type: { type: String } } },
       { name: occurrence_id, type: UUID },
       { name: occurrence_type_id, type: UInt, args: { size: 8 } },
       { name: detection_timestamp, type: DateTime },
+      { name: timestamp, type: DateTime },
 
       { name: event_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
       { name: trace_id, type: UUID, args: { schema_modifiers: [ nullable ] } },

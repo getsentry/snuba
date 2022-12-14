@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Tuple, Union
 
+import pytest
 import simplejson as json
 
 from snuba.core.initialize import initialize_snuba
@@ -10,9 +11,22 @@ from snuba.datasets.entities.factory import get_entity
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.test_api import SimpleAPITest
 
 
-class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
+class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "search_issues"
+
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
+        self.post = _build_snql_post_methods
+
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
         initialize_snuba()
@@ -46,26 +60,30 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
             organization_id=1,
             project_id=2,
             group_ids=[3],
+            primary_hash=str(uuid.uuid4().hex),
             data={},
             occurrence_data=dict(
-                id=str(uuid.uuid4()),
+                id=str(uuid.uuid4().hex),
                 type=1,
                 issue_title="search me",
                 fingerprint=["one", "two"],
-                detection_time=now.isoformat(),
+                detection_time=now.timestamp(),
             ),
             retention_days=90,
         )
 
         assert self.events_storage
-        write_raw_unprocessed_events(self.events_storage, [[1, "insert", evt]])
+        write_raw_unprocessed_events(self.events_storage, [[2, "insert", evt]])
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
 
         response = self.post_query(
             f"""MATCH (search_issues)
                                     SELECT count() AS count BY project_id
                                     WHERE project_id = {evt["project_id"]}
-                                    AND detection_timestamp >= toDateTime('{(now - timedelta(minutes=1)).isoformat()}')
-                                    AND detection_timestamp < toDateTime('{(now + timedelta(minutes=1)).isoformat()}')
+                                    AND timestamp >= toDateTime('{from_date}')
+                                    AND timestamp < toDateTime('{to_date}')
                                     LIMIT 1000
                                     """
         )
@@ -80,3 +98,72 @@ class TestSearchIssuesSnQLApi(BaseApiTest, ConfigurationTest):
                 "count": 1,
             }
         ]
+
+    def test_test_evenstream_endpoint(self) -> None:
+        now = datetime.now()
+
+        event = (
+            2,
+            "insert",
+            {
+                "project_id": 1,
+                "organization_id": 2,
+                "group_ids": [3],
+                "retention_days": 90,
+                "primary_hash": str(uuid.uuid4()),
+                "data": {},
+                "occurrence_data": {
+                    "id": str(uuid.uuid4()),
+                    "type": 1,
+                    "issue_title": "search me",
+                    "fingerprint": ["one", "two"],
+                    "detection_time": now.timestamp(),
+                },
+            },
+        )
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(event)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                                            SELECT count() AS count BY project_id
+                                            WHERE project_id = 1
+                                            AND timestamp >= toDateTime('{from_date}')
+                                            AND timestamp < toDateTime('{to_date}')
+                                            LIMIT 1000
+                                            """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "project_id": 1,
+                "count": 1,
+            }
+        ]
+
+        # the below uses the snuba_sdk which currently doesn't map "from_date" and "to_date"
+        # query params to new dataset timestamp columns
+        #
+        # query = {
+        #     "project": 1,
+        #     "selected_columns": [],
+        #     "groupby": "project_id",
+        #     "aggregations": [["count()", "", "count"]],
+        #     "conditions": [["group_id", "=", 3],
+        #                    # ["detection_timestamp", ">=", (now - timedelta(minutes=1)).timestamp()],
+        #                    # ["detection_timestamp", "<", (now + timedelta(minutes=1)).timestamp()]
+        #                    ],
+        #     "from_date": (now - timedelta(days=1)).isoformat(),
+        #     "to_date": (now + timedelta(days=1)).isoformat(),
+        # }
+        # response = self.post(json.dumps(query))
+        # result = json.loads(response.data)
+        # assert result["data"] == [{"count": 1, "project_id": 1}]
