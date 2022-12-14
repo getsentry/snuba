@@ -1,15 +1,5 @@
-import time
 from abc import abstractmethod
-from typing import (
-    Any,
-    Callable,
-    Mapping,
-    MutableMapping,
-    NamedTuple,
-    Optional,
-    Protocol,
-    TypeVar,
-)
+from typing import Any, Callable, Mapping, NamedTuple, Optional, Protocol, TypeVar
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
@@ -25,7 +15,7 @@ from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
 )
 from arroyo.processing.strategies.filter import FilterStep
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
-from arroyo.types import Commit, Message, Partition, Position, Topic
+from arroyo.types import Commit, Message, Partition, Topic
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
@@ -45,9 +35,6 @@ class StreamMessageFilter(Protocol[TPayload]):
         raise NotImplementedError
 
 
-PRODUCE_FREQUENCY_SEC = 1.0
-
-
 class ProduceCommitLog(ProcessingStrategy[Any]):
     def __init__(
         self,
@@ -62,12 +49,7 @@ class ProduceCommitLog(ProcessingStrategy[Any]):
         self.__commit_codec = CommitCodec()
         self.__commit = commit
 
-        # Record offsets to be produced to the commit log
-        self.__offsets_to_produce: MutableMapping[Partition, Position] = {}
-        self.__last_flush_time = time.time()
-
     def poll(self) -> None:
-        self.__flush()
         self.__producer.poll(0.0)
 
     def __commit_message_delivery_callback(
@@ -76,13 +58,10 @@ class ProduceCommitLog(ProcessingStrategy[Any]):
         if error is not None:
             raise Exception(error.str())
 
-    def __flush(self, force: bool = False) -> None:
-        if not force and time.time() - self.__last_flush_time < PRODUCE_FREQUENCY_SEC:
-            return
+    def submit(self, message: Message[Any]) -> None:
+        self.__commit(message.committable)
 
-        self.__commit(self.__offsets_to_produce)
-
-        for partition, position in self.__offsets_to_produce.items():
+        for partition, position in message.committable.items():
             commit = CommitLogCommit(
                 self.__group_id, partition, position.offset, position.timestamp
             )
@@ -97,11 +76,6 @@ class ProduceCommitLog(ProcessingStrategy[Any]):
                 on_delivery=self.__commit_message_delivery_callback,
             )
 
-        self.__offsets_to_produce.clear()
-
-    def submit(self, message: Message[Any]) -> None:
-        self.__offsets_to_produce.update(message.committable)
-
     def close(self) -> None:
         pass
 
@@ -109,8 +83,6 @@ class ProduceCommitLog(ProcessingStrategy[Any]):
         pass
 
     def join(self, timeout: Optional[float] = None) -> None:
-        self.__flush(force=True)
-
         messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
         if messages > 0:
             raise TimeoutError(f"{messages} commit log messages pending delivery")

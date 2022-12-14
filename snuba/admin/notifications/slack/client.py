@@ -37,6 +37,7 @@ class SlackClient(object):
             )
         except Exception as exc:
             logger.error(exc, exc_info=True)
+            return
 
             # Slack error handling
             # Copied from https://github.com/getsentry/sentry/blob/601f829c9246ae73c8169510140fd7f47fc6dfc3/src/sentry/integrations/slack/client.py#L36-L53
