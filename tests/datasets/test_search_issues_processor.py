@@ -31,13 +31,15 @@ class TestSearchIssuesMessageProcessor:
                 "group_ids": (3,),
                 "retention_days": 90,
                 "primary_hash": str(uuid.uuid4()),
-                "data": {},
+                "data": {
+                    "received": datetime.now().timestamp(),
+                },
                 "occurrence_data": {
                     "id": str(uuid.uuid4()),
                     "type": 1,
                     "issue_title": "search me",
                     "fingerprint": ["one", "two"],
-                    "detection_time": datetime.utcnow().timestamp(),
+                    "detection_time": datetime.now().timestamp(),
                 },
             },
         )
@@ -73,14 +75,16 @@ class TestSearchIssuesMessageProcessor:
                     "organization_id": 2,
                     "group_ids": (3,),
                     "retention_days": 90,
-                    "data": {},
+                    "data": {
+                        "received": datetime.now().timestamp(),
+                    },
                     "primary_hash": str(uuid.uuid4()),
                     "occurrence_data": {
                         "id": bad_uuid,
                         "type": 1,
                         "issue_title": "search me",
                         "fingerprint": ["one", "two"],
-                        "detection_time": datetime.utcnow().timestamp(),
+                        "detection_time": datetime.now().timestamp(),
                     },
                 },
             )

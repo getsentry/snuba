@@ -44,7 +44,7 @@ def write_unprocessed_events(
 
 def write_raw_unprocessed_events(
     storage: WritableStorage,
-    events: Sequence[Union[InsertEvent, Mapping[str, Any], Any]],
+    events: Sequence[Union[InsertEvent, Mapping[str, Any]]],
 ) -> None:
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()

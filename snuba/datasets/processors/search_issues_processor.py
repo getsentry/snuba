@@ -42,7 +42,7 @@ class IssueEventData(TypedDict, total=False):
     environment: Optional[str]
     release: Optional[str]
     dist: Optional[str]
-    receive_timestamp: float
+    received: float
     client_timestamp: float
     tags: Mapping[str, Any]
     user: Mapping[str, Any]  # user, user_hash, user_id, user_name, user_email
@@ -104,6 +104,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         detection_timestamp = datetime.utcfromtimestamp(
             event_occurrence_data["detection_time"]
         )
+        receive_timestamp = datetime.utcfromtimestamp(event_data["received"])
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )
@@ -116,8 +117,8 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
+            "receive_timestamp": receive_timestamp,
             # TODO: fix the below field assignments to actually extract from event data
-            "receive_timestamp": detection_timestamp,
             "client_timestamp": detection_timestamp,
             "platform": "platform",
             "contexts.key": [],
