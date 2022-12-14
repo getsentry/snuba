@@ -1340,7 +1340,6 @@ def _align_max_days_date_align(
 def validate_entities_with_query(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
-    print("Validating..")
     if isinstance(query, LogicalQuery):
         entity = get_entity(query.get_from_clause().key)
         try:

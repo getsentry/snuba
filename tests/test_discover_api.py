@@ -1681,6 +1681,31 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)["data"]
         assert len(data) == 11
 
+    def test_group_by_identity_null_column(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": ["duration"],
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "groupby": ["duration"],
+                    "conditions": [
+                        ["project_id", "IN", [self.project_id]],
+                        ["type", "=", "error"],
+                    ],
+                }
+            ),
+            entity="discover",
+        )
+        assert response.status_code == 400
+        error_message = json.loads(response.data)["error"]["message"]
+        assert error_message == (
+            "validation failed for entity discover_events: "
+            "cannot group by column(s) defaulting to None: {'duration'}"
+        )
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """
