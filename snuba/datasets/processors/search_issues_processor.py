@@ -72,6 +72,8 @@ def ensure_uuid(value: str) -> str:
 
 
 class SearchIssuesMessageProcessor(DatasetMessageProcessor):
+    FINGERPRINTS_HARD_LIMIT_SIZE = 100
+
     def _process_user(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
@@ -108,12 +110,15 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )
+        fingerprints = event_occurrence_data["fingerprint"]
+        fingerprints = fingerprints[: self.FINGERPRINTS_HARD_LIMIT_SIZE - 1]
+
         fields: MutableMapping[str, Any] = {
             "organization_id": event["organization_id"],
             "project_id": event["project_id"],
             "search_title": event_occurrence_data["issue_title"],
             "primary_hash": ensure_uuid(event["primary_hash"]),
-            "fingerprint": event_occurrence_data["fingerprint"],
+            "fingerprint": fingerprints,
             "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
