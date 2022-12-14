@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -254,4 +256,28 @@ class GranularityValidator(QueryValidator):
         elif granularity < self.minimum or (granularity % self.minimum) != 0:
             raise InvalidQueryException(
                 f"granularity must be multiple of {self.minimum}"
+            )
+
+
+class DefaultNoneColumnValidator(QueryValidator):
+    """Verify that no default none column is being grouped by"""
+
+    def __init__(self, set_of_default_none_columns: set[str]) -> None:
+        self.set_of_default_none_columns = set_of_default_none_columns
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+
+        set_of_columns_in_query_group_by = set(
+            [
+                expr.column_name
+                for expr in query.get_groupby()
+                if isinstance(expr, Column)
+            ]
+        )
+
+        if intersection := self.set_of_default_none_columns.intersection(
+            set_of_columns_in_query_group_by
+        ):
+            raise InvalidQueryException(
+                f"cannot group by column(s) defaulting to None: {intersection}"
             )

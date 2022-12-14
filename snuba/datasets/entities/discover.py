@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -43,7 +45,10 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    DefaultNoneColumnValidator,
+    EntityRequiredColumnValidator,
+)
 
 EVENTS_COLUMNS = ColumnSet(
     [
@@ -183,10 +188,8 @@ class DiscoverEntity(Entity):
         self.__events_columns = EVENTS_COLUMNS
         self.__transactions_columns = TRANSACTIONS_COLUMNS
 
-        discover_storage = get_storage(StorageKey.DISCOVER)
-        discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
-            storage=discover_storage,
-            mappers=events_translation_mappers.concat(transaction_translation_mappers)
+        mappers: TranslationMappers = (
+            events_translation_mappers.concat(transaction_translation_mappers)
             .concat(null_function_translation_mappers)
             .concat(
                 TranslationMappers(
@@ -251,7 +254,13 @@ class DiscoverEntity(Entity):
                         SubscriptableMapper(None, "contexts", None, "contexts"),
                     ],
                 )
-            ),
+            )
+        )
+
+        discover_storage = get_storage(StorageKey.DISCOVER)
+        discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
+            storage=discover_storage,
+            mappers=mappers,
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder
@@ -267,7 +276,10 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[
+                EntityRequiredColumnValidator({"project_id"}),
+                DefaultNoneColumnValidator(setify(mappers)),
+            ],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=None,
@@ -293,11 +305,20 @@ class DiscoverEventsEntity(BaseEventsEntity):
     """
 
     def __init__(self) -> None:
+        mappers = events_translation_mappers.concat(null_function_translation_mappers)
         super().__init__(
-            custom_mappers=events_translation_mappers.concat(
-                null_function_translation_mappers
-            )
+            custom_mappers=mappers,
+            custom_validators=[DefaultNoneColumnValidator(setify(mappers))],
         )
+
+
+def setify(mappers: TranslationMappers) -> set[str]:
+    set_of_default_none_columns: set[str] = set()
+    for col_mapper in mappers.columns:
+        if isinstance(col_mapper, DefaultNoneColumnMapper):
+            for col in col_mapper.columns:
+                set_of_default_none_columns.add(col.name)
+    return set_of_default_none_columns
 
 
 class DiscoverTransactionsEntity(BaseTransactionsEntity):

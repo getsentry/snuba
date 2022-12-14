@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC
 from typing import Optional, Sequence
 
@@ -32,7 +34,10 @@ from snuba.query.processors.logical.quota_processor import ResourceQuotaProcesso
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    EntityRequiredColumnValidator,
+    QueryValidator,
+)
 
 event_translator = TranslationMappers(
     columns=[
@@ -117,7 +122,11 @@ class BaseEventsEntity(Entity, ABC):
     and the particular quirks of storing and querying them.
     """
 
-    def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
+    def __init__(
+        self,
+        custom_mappers: Optional[TranslationMappers] = None,
+        custom_validators: Optional[Sequence[QueryValidator]] = None,
+    ) -> None:
         events_storage = get_writable_storage(StorageKey.ERRORS)
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
@@ -130,7 +139,11 @@ class BaseEventsEntity(Entity, ABC):
         )
         schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
-
+        validators: list[QueryValidator] = [
+            EntityRequiredColumnValidator({"project_id"})
+        ]
+        if custom_validators:
+            validators += custom_validators
         super().__init__(
             storages=[events_storage],
             query_pipeline_builder=pipeline_builder,
@@ -150,7 +163,7 @@ class BaseEventsEntity(Entity, ABC):
                 ),
             },
             writable_storage=events_storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=validators,
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=[
