@@ -166,7 +166,6 @@ SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 
 SNAPSHOT_LOAD_PRODUCT = "snuba"
 
-SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
@@ -262,8 +261,6 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
-
-TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
