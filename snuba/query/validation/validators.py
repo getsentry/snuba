@@ -6,6 +6,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence, Set, Type, cast
 
+from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
+from snuba.clickhouse.translators.snuba.mapping import (
+    SnubaClickhouseMappingTranslator,
+    TranslationMappers,
+)
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -262,22 +267,24 @@ class GranularityValidator(QueryValidator):
 class DefaultNoneColumnValidator(QueryValidator):
     """Verify that no default none column is being grouped by"""
 
-    def __init__(self, set_of_default_none_columns: set[str]) -> None:
-        self.set_of_default_none_columns = set_of_default_none_columns
+    def __init__(
+        self, default_none_column_mappers: list[DefaultNoneColumnMapper]
+    ) -> None:
+        self.default_none_column_mappers = default_none_column_mappers
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
 
-        set_of_columns_in_query_group_by = set(
-            [
-                expr.column_name
-                for expr in query.get_groupby()
-                if isinstance(expr, Column)
-            ]
-        )
+        identity_null_in_group_by = set()
 
-        if intersection := self.set_of_default_none_columns.intersection(
-            set_of_columns_in_query_group_by
-        ):
+        for expr in query.get_groupby():
+            if isinstance(expr, Column):
+                for col_mapper in self.default_none_column_mappers:
+                    if col_mapper.attempt_map(
+                        expr, SnubaClickhouseMappingTranslator(TranslationMappers())
+                    ):
+                        identity_null_in_group_by.add(expr.column_name)
+
+        if identity_null_in_group_by:
             raise InvalidQueryException(
-                f"cannot group by column(s) defaulting to None: {intersection}"
+                f"cannot group by column(s) defaulting to None: {identity_null_in_group_by}"
             )

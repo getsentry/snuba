@@ -278,7 +278,7 @@ class DiscoverEntity(Entity):
             writable_storage=None,
             validators=[
                 EntityRequiredColumnValidator({"project_id"}),
-                DefaultNoneColumnValidator(setify(mappers)),
+                DefaultNoneColumnValidator(default_none_column_mappers(mappers)),
             ],
             required_time_column="timestamp",
             subscription_processors=None,
@@ -308,17 +308,21 @@ class DiscoverEventsEntity(BaseEventsEntity):
         mappers = events_translation_mappers.concat(null_function_translation_mappers)
         super().__init__(
             custom_mappers=mappers,
-            custom_validators=[DefaultNoneColumnValidator(setify(mappers))],
+            custom_validators=[
+                DefaultNoneColumnValidator(default_none_column_mappers(mappers))
+            ],
         )
 
 
-def setify(mappers: TranslationMappers) -> set[str]:
-    set_of_default_none_columns: set[str] = set()
-    for col_mapper in mappers.columns:
-        if isinstance(col_mapper, DefaultNoneColumnMapper):
-            for col in col_mapper.columns:
-                set_of_default_none_columns.add(col.name)
-    return set_of_default_none_columns
+def default_none_column_mappers(
+    mappers: TranslationMappers,
+) -> list[DefaultNoneColumnMapper]:
+    default_none_column_mappers = [
+        col_mapper
+        for col_mapper in mappers.columns
+        if isinstance(col_mapper, DefaultNoneColumnMapper)
+    ]
+    return default_none_column_mappers
 
 
 class DiscoverTransactionsEntity(BaseTransactionsEntity):
