@@ -56,7 +56,7 @@ from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.writer import BatchWriter, MockBatchWriter
+from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -219,30 +219,6 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         )
 
 
-class MockReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
-    """
-    Fake replacement writer used to run consumer load tests.
-    Contrarily to the mock writer. THis one does not introduce a delay.
-    This is because replacement are rare enough that adding the
-    delay would not change the result of the test.
-    """
-
-    def poll(self) -> None:
-        pass
-
-    def submit(self, message: Message[ReplacementBatch]) -> None:
-        pass
-
-    def close(self) -> None:
-        pass
-
-    def terminate(self) -> None:
-        pass
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
-
-
 class ProcessedMessageBatchWriter(
     ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
 ):
@@ -360,31 +336,6 @@ def build_batch_writer(
 
         return ProcessedMessageBatchWriter(
             insert_batch_writer, replacement_batch_writer
-        )
-
-    return build_writer
-
-
-def build_mock_batch_writer(
-    storage: WritableTableStorage,
-    with_replacements: bool,
-    metrics: MetricsBackend,
-    avg_write_latency: int,
-    std_deviation: int,
-) -> Callable[[], ProcessedMessageBatchWriter]:
-    def build_writer() -> ProcessedMessageBatchWriter:
-        return ProcessedMessageBatchWriter(
-            InsertBatchWriter(
-                MockBatchWriter(
-                    storage.get_storage_key(), avg_write_latency, std_deviation
-                ),
-                MetricsWrapper(
-                    metrics,
-                    "mock_insertions",
-                    {"storage": storage.get_storage_key().value},
-                ),
-            ),
-            MockReplacementBatchWriter() if with_replacements is not None else None,
         )
 
     return build_writer
