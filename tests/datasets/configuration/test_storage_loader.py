@@ -96,6 +96,13 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
             old.get_table_writer().get_schema().get_columns()
             == new.get_table_writer().get_schema().get_columns()
         )
+        old_rp = old.get_table_writer().get_replacer_processor()
+        new_rp = new.get_table_writer().get_replacer_processor()
+        if old_rp or new_rp:
+            assert old_rp is not None and new_rp is not None
+            assert old_rp.get_schema() == new_rp.get_schema()
+            assert old_rp.config_key() == new_rp.config_key()
+            assert old_rp.get_state() == new_rp.get_state()
         _compare_stream_loaders(
             old.get_table_writer().get_stream_loader(),
             new.get_table_writer().get_stream_loader(),
