@@ -154,14 +154,14 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         return [
             storage_key
             for storage_key, storage in self._all_storages.items()
-            if type(storage) is WritableTableStorage
+            if isinstance(storage, WritableTableStorage)
         ]
 
     def get_cdc_storage_keys(self) -> list[StorageKey]:
         return [
             storage_key
             for storage_key, storage in self._all_storages.items()
-            if type(storage) is CdcStorage
+            if isinstance(storage, CdcStorage)
         ]
 
     def get_all_storage_keys(self) -> list[StorageKey]:
