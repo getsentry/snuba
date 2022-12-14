@@ -29,7 +29,6 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
-from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
@@ -285,10 +284,9 @@ class SchedulerBuilder:
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         consumer_configuration = build_kafka_consumer_configuration(
-            SnubaTopic(
-                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
-            ),
+            self.__commit_log_topic_spec.topic,
             self.__consumer_group,
+            self.__slice_id,
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
         )
