@@ -314,6 +314,25 @@ class DiscoverEventsEntity(BaseEventsEntity):
         )
 
 
+class DiscoverTransactionsEntity(BaseTransactionsEntity):
+    """
+    Identical to TransactionsEntity except it maps columns and functions present
+    in the events entity to null. This logic will eventually move to Sentry and this
+    entity can be deleted and replaced with the TransactionsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        mappers = transaction_translation_mappers.concat(
+            null_function_translation_mappers
+        )
+        super().__init__(
+            custom_mappers=mappers,
+            custom_validators=[
+                DefaultNoneColumnValidator(default_none_column_mappers(mappers))
+            ],
+        )
+
+
 def default_none_column_mappers(
     mappers: TranslationMappers,
 ) -> list[DefaultNoneColumnMapper]:
@@ -323,18 +342,3 @@ def default_none_column_mappers(
         if isinstance(col_mapper, DefaultNoneColumnMapper)
     ]
     return default_none_column_mappers
-
-
-class DiscoverTransactionsEntity(BaseTransactionsEntity):
-    """
-    Identical to TransactionsEntity except it maps columns and functions present
-    in the events entity to null. This logic will eventually move to Sentry and this
-    entity can be deleted and replaced with the TransactionsEntity directly.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            custom_mappers=transaction_translation_mappers.concat(
-                null_function_translation_mappers
-            )
-        )
