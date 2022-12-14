@@ -10,7 +10,7 @@ from snuba.migrations.operations import OperationTarget
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Copy of 0004_transactions_add_tags_hash_map.py
+    Heavily influenced by 0004_transactions_add_tags_hash_map.py
 
     """
 
