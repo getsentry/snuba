@@ -112,8 +112,20 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
     ) -> None:
+        # A list of storages and the translation mappers they are associated with.
+        # This list will only contain one storage and mappers for single storage entities.
+        # If there are more than one storage and mappers, a selector is required
         self.__storages = storages
+        # A storage selector class to determine which to use in query plan
         self.__selector = selector
+        # This is a set of query processors that have to be executed on the
+        # query after the storage selection but that are defined by the dataset.
+        # Query processors defined by a Storage must be executable independently
+        # from the context the Storage is used (whether the storage is used by
+        # itself or whether it is joined with another storage).
+        # In a joined query we would have processors defined by multiple storages.
+        # that would have to be executed only once (like Prewhere). That is a
+        # candidate to be added here as post process.
         self.__post_processors = post_processors or []
         self.__partition_key_column_name = partition_key_column_name
 
