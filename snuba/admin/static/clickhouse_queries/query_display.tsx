@@ -81,6 +81,35 @@ function QueryDisplay(props: {
     window.navigator.clipboard.writeText(text);
   }
 
+  function getHosts(nodeData: ClickhouseNodeData[]) : JSX.Element[]{
+    let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
+    // populate the hosts entries marking distributed hosts that are not also local
+    if (node_info){
+      let local_hosts = node_info.local_nodes.map((node) => (
+              <option
+                key={`${node.host}:${node.port}`}
+                value={`${node.host}:${node.port}`}
+              >
+                {node.host}:{node.port}
+              </option>
+            ))
+      let dist_hosts = node_info.dist_nodes
+          .filter((node)=>!node_info.local_nodes.includes(node))
+          .map((node) => (
+              <option
+                key={`${node.host}:${node.port}`}
+                value={`${node.host}:${node.port}`}
+              >
+                {node.host}:{node.port} (distributed)
+              </option>
+            ))
+
+      return local_hosts.concat(dist_hosts)
+    }
+    return []
+
+  }
+
   return (
     <div>
       <form>
@@ -116,16 +145,7 @@ function QueryDisplay(props: {
               <option disabled value="">
                 Select a host
               </option>
-              {nodeData
-                .find((el) => el.storage_name === query.storage)
-                ?.local_nodes.map((node) => (
-                  <option
-                    key={`${node.host}:${node.port}`}
-                    value={`${node.host}:${node.port}`}
-                  >
-                    {node.host}:{node.port}
-                  </option>
-                ))}
+              {getHosts(nodeData)}
             </select>
           </div>
           <div>
