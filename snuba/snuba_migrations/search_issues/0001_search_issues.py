@@ -26,7 +26,6 @@ columns: List[Column[Modifiers]] = [
     Column("occurrence_id", UUID()),
     Column("occurrence_type_id", UInt(8)),
     Column("detection_timestamp", DateTime()),
-    Column("timestamp", DateTime(Modifiers(materialized="receive_timestamp"))),
     Column("event_id", UUID(Modifiers(nullable=True))),
     Column("trace_id", UUID(Modifiers(nullable=True))),
     Column("platform", String(Modifiers(low_cardinality=True))),
