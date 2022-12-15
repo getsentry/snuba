@@ -39,8 +39,8 @@ def pytest_configure() -> None:
             default=lambda x: list(x) if isinstance(x, set) else x.__dict__,
         ),
     )
-    print("waiting 30 seconds for clickhouse to start")
-    time.sleep(30)  # wait for clickhouse to start
+    print("waiting 10 seconds for clickhouse to start")
+    time.sleep(10)  # wait for clickhouse to start
 
     for cluster_node in settings.CLUSTERS:
         clickhouse_cluster = ClickhouseCluster(
