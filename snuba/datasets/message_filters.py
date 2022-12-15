@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Generic, TypeVar, cast
 
 from arroyo import Message
@@ -38,11 +39,7 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
         raise NotImplementedError
 
 
-class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
-    def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        return False
-
-
+@dataclass
 class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     """
     A filter over messages coming from a stream which matches whether the given message

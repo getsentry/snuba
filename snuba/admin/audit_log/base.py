@@ -10,7 +10,11 @@ from snuba.admin.notifications.slack.utils import build_blocks
 
 class AuditLog:
     def __init__(self) -> None:
-        self.logger = structlog.get_logger()
+        # because we don't previously configure structlog, we need to bind the logger otherwise
+        # we will have a lazy bound logger without processors
+        self.logger = structlog.get_logger().bind(
+            module=self.__class__.__module__, context_class=self.__class__.__qualname__
+        )
         self.client = SlackClient()
 
     def record(
