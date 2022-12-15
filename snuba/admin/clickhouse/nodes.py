@@ -18,7 +18,7 @@ Storage = TypedDict(
         "local_table_name": str,
         "local_nodes": Sequence[Node],
         "dist_nodes": Sequence[Node],
-        "query_node": Node,
+        "query_node": Optional[Node],
     },
 )
 
