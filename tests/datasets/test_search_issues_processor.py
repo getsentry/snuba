@@ -32,6 +32,7 @@ class TestSearchIssuesMessageProcessor:
                 "event_id": str(uuid.uuid4()),
                 "retention_days": 90,
                 "primary_hash": str(uuid.uuid4()),
+                "datetime": datetime.utcnow().isoformat() + "Z",
                 "data": {
                     "received": datetime.now().timestamp(),
                 },
@@ -77,6 +78,7 @@ class TestSearchIssuesMessageProcessor:
                     "group_id": 3,
                     "event_id": str(uuid.uuid4()),
                     "retention_days": 90,
+                    "datetime": datetime.utcnow().isoformat() + "Z",
                     "data": {
                         "received": datetime.now().timestamp(),
                     },
