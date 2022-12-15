@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.12.0
+
+### Various fixes & improvements
+
+- give coverage xml files different paths to prevent overwrites (#3499) by @dbanda
+- ref: Remove redundant filter (#3520) by @lynnagara
+- ref(settings): Delete unused settings (#3518) by @lynnagara
+- ref: Remove the mock batch writer (#3515) by @lynnagara
+- feat(DC): ReplacerProcessor Registered + JSON Schema'd + Built (#3505) by @rahul-kumar-saini
+- ref: Rewrite Snuba replacer to not use batch processing strategy (#3512) by @lynnagara
+- ref(replacements): Move ProjectsQueryFlags out of errors_replacer (#3504) by @rahul-kumar-saini
+- Revert "ref: Rewrite the KafkaConsumerWithCommitLog as a strategy (#3506)" (#3510) by @lynnagara
+- ref: Rewrite the KafkaConsumerWithCommitLog as a strategy (#3506) by @lynnagara
+- capture migration output on stdout (#3508) by @dbanda
+- fix(admin): bind log to configure it before using (#3503) by @dbanda
+- ref(replacements): Refactor Schema out of ReplacerProcessor init (#3496) by @rahul-kumar-saini
+- ref(admin): minor migrations audit log fixes (#3492) by @MeredithAnya
+- Add test migration (#3488) by @dbanda
+- Rename optimize.py to test_optimize.py (#3498) by @dbanda
+- ref(admin): split started/completed audit migrations (#3493) by @MeredithAnya
+- ref(migrations): add copy-tables script (#3241) by @MeredithAnya
+- add admin UI build to docker image (#3476) by @dbanda
+- feat: Arroyo 2.2.0 (#3494) by @lynnagara
+- feat(DC): Discover Storage as a Config (#3480) by @rahul-kumar-saini
+- feat(CDC): Dynamic Row Processors (#3483) by @rahul-kumar-saini
+- Increase optimize redis TTL  (#3484) by @dbanda
+- move discover mappers with all the other mappers (#3491) by @volokluev
+- ref(abuse) Add more predefined querylog queries (#3489) by @evanh
+
+_Plus 72 more_
+
 ## 22.11.0
 
 ### Various fixes & improvements
