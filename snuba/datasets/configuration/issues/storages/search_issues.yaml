@@ -67,9 +67,6 @@ query_processors:
     args:
       columns: [occurrence_id, event_id, trace_id]
 mandatory_condition_checkers:
-  - condition: OrgIdEnforcer
-    args:
-      field_name: organization_id
   - condition: ProjectIdEnforcer
 stream_loader:
   processor:

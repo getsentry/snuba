@@ -67,7 +67,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="search_issues_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, toStartOfDay(receive_timestamp), cityHash64(occurrence_id))",
+                    order_by="(project_id, toStartOfDay(receive_timestamp), primary_hash, cityHash64(occurrence_id))",
                     partition_by="(retention_days, toMonday(receive_timestamp))",
                     sample_by="cityHash64(occurrence_id)",
                     settings={"index_granularity": "8192"},
