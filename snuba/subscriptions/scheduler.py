@@ -329,34 +329,32 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             self.__builder = self.__delegate_builder
 
     def __filter_subscriptions(self) -> List[Subscription]:
+        filtered_subscriptions: List[Subscription] = []
 
-        # only generic metrics storage sets are currently sliced
-        if (
-            self.__entity_key == EntityKey.GENERIC_METRICS_SETS
-            or self.__entity_key == EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-        ):
+        # only for storage sets that are currently sliced
+        entity = get_entity(self.__entity_key)
+        storage = entity.get_writable_storage()
+        if storage is not None:
+            storage_set_key = storage.get_storage_set_key()
 
-            filtered_subscriptions: List[Subscription] = []
-            for subscription in self.__subscriptions:
-                # get the metadata and org_id from the Subscription
-                sub_data = subscription.data
-                sub_metadata = sub_data.metadata
-                org_id = sub_metadata["organization"]
+            if storage_set_key.value in settings.SLICED_STORAGE_SETS:
+                for subscription in self.__subscriptions:
+                    # get the metadata and org_id from the Subscription
+                    sub_data = subscription.data
+                    sub_metadata = sub_data.metadata
+                    org_id = sub_metadata["organization"]
 
-                # map the org_id to the slice ID
-                logical_part = map_org_id_to_logical_partition(org_id)
-                entity = get_entity(self.__entity_key)
-                storage = entity.get_writable_storage()
-                if storage is not None:
+                    # map the org_id to the slice ID
+                    logical_part = map_org_id_to_logical_partition(org_id)
                     part_slice_id = map_logical_partition_to_slice(
                         storage.get_storage_set_key(), logical_part
                     )
                     if part_slice_id == self.__slice_id:
                         filtered_subscriptions.append(subscription)
 
-            return filtered_subscriptions
-        else:
-            return self.__subscriptions
+                return filtered_subscriptions
+
+        return self.__subscriptions
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
