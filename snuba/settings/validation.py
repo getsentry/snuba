@@ -118,12 +118,13 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
             topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
         ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
 
-    _STORAGE_SET_CLUSTER_MAP: Dict[str, Mapping[str, Any]] = {}
+    _STORAGE_SET_CLUSTER_MAP = {
+        storage_set: cluster
+        for cluster in locals["CLUSTERS"]
+        for storage_set in cluster["storage_sets"]
+    }
 
     _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[str, int], Mapping[str, Any]] = {}
-    for cluster in locals["CLUSTERS"]:
-        for storage_set in cluster["storage_sets"]:
-            _STORAGE_SET_CLUSTER_MAP[storage_set] = cluster
 
     for sliced_cluster in locals["SLICED_CLUSTERS"]:
         for storage_set_tuple in sliced_cluster["storage_set_slices"]:
