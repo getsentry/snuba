@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, TypedDict
+from typing import Optional, Sequence, TypedDict
 
 from snuba import settings
 from snuba.clusters.cluster import UndefinedClickhouseCluster
@@ -18,6 +18,7 @@ Storage = TypedDict(
         "local_table_name": str,
         "local_nodes": Sequence[Node],
         "dist_nodes": Sequence[Node],
+        "query_node": Node,
     },
 )
 
@@ -46,6 +47,16 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
         return []
 
 
+def _get_query_node(storage_key: StorageKey) -> Optional[Node]:
+    try:
+        cluster = get_storage(storage_key).get_cluster()
+        query_node = cluster.get_query_node()
+        return {"host": query_node.host_name, "port": query_node.port}
+
+    except (AssertionError, KeyError, UndefinedClickhouseCluster):
+        return None
+
+
 def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
     return _get_nodes(storage_key, local=True)
 
@@ -61,6 +72,7 @@ def get_storage_info() -> Sequence[Storage]:
             "local_table_name": _get_local_table_name(storage_key),
             "local_nodes": _get_local_nodes(storage_key),
             "dist_nodes": _get_dist_nodes(storage_key),
+            "query_node": _get_query_node(storage_key),
         }
         for storage_key in sorted(
             get_all_storage_keys(), key=lambda storage_key: storage_key.value

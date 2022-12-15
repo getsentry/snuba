@@ -8,6 +8,7 @@ type ClickhouseNodeData = {
   local_table_name: string;
   local_nodes: ClickhouseNode[];
   dist_nodes: ClickhouseNode[];
+  query_node: ClickhouseNode
 };
 
 type QueryRequest = {

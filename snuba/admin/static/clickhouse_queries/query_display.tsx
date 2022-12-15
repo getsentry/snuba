@@ -103,8 +103,17 @@ function QueryDisplay(props: {
                 {node.host}:{node.port} (distributed)
               </option>
             ))
+      let query_node = node_info.query_node
 
-      return local_hosts.concat(dist_hosts)
+      return local_hosts.concat(dist_hosts).concat(
+          (<option
+            key={`${query_node.host}:${query_node.port}`}
+            value={`${query_node.host}:${query_node.port}`}
+          >
+            {query_node.host}:{query_node.port} (query node)
+          </option>
+          )
+        )
     }
     return []
 
