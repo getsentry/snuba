@@ -76,6 +76,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "search_issues",
         },
         "single_node": True,
     },
@@ -236,6 +237,7 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "profiles",
     "functions",
     "test_migration",
+    "search_issues",
 }
 
 MAX_RESOLUTION_FOR_JITTER = 60
@@ -272,6 +274,12 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
+
+# Enable issue occurrence ingestion
+ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
+    "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
+)
+
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
