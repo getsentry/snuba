@@ -12,10 +12,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -272,8 +269,14 @@ class SessionsEntity(Entity):
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=SessionsQueryStorageSelector()
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[
+                        StorageAndMappers(
+                            materialized_storage, sessions_hourly_translators
+                        ),
+                        StorageAndMappers(writable_storage, sessions_raw_translators),
+                    ],
+                    selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
@@ -306,7 +309,9 @@ class OrgSessionsEntity(Entity):
         super().__init__(
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage)
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                )
             ),
             abstract_column_set=ColumnSet(
                 [

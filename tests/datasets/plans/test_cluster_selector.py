@@ -7,7 +7,7 @@ import pytest
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.plans.sliced_storage import (
+from snuba.datasets.plans.cluster_selector import (
     MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX,
     ColumnBasedStorageSliceSelector,
     _should_use_mega_cluster,

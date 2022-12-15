@@ -58,7 +58,7 @@ def test_storage_selector() -> None:
 
     query = Query(Entity(EntityKey.EVENTS, ColumnSet([])), selected_columns=[])
 
-    storage_selector = ErrorsQueryStorageSelector(mappers=errors_translators)
+    storage_selector = ErrorsQueryStorageSelector(errors_translators)
     assert (
         storage_selector.select_storage(
             query, HTTPQuerySettings(consistent=False)
