@@ -40,10 +40,14 @@ def test_get_storage() -> None:
         assert isinstance(storage, Storage)
 
 
-def test_get_writable_storage_keys() -> None:
-    # Check that a config writable storage is return in get_writable_storage_keys()
-    config_built_writable_storage_key = StorageKey.GENERIC_METRICS_SETS_RAW
-    storage = get_storage(config_built_writable_storage_key)
-    assert isinstance(storage, WritableTableStorage)
-    assert config_built_writable_storage_key in list(get_config_built_storages().keys())
-    assert config_built_writable_storage_key in get_writable_storage_keys()
+def test_get_config_writable_storage_keys() -> None:
+    # Check that a config writable storages is returned in get_writable_storage_keys()
+    config_storage_keys = list(get_config_built_storages().keys())
+    config_writable_storage_keys = [
+        storage_key
+        for storage_key in config_storage_keys
+        if isinstance(get_storage(storage_key), WritableTableStorage)
+    ]
+    all_writable_storage_keys = get_writable_storage_keys()
+    for config_writable_storage_key in config_writable_storage_keys:
+        assert config_writable_storage_key in all_writable_storage_keys

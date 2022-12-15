@@ -11,7 +11,6 @@ from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import get_config
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
 logger = logging.getLogger(__name__)
@@ -136,6 +135,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     gen_metrics_dists_aggregate_storage,
                 ]
             },
+            **self._config_built_storages,
         }
 
     def iter_all(self) -> Generator[Storage, None, None]:
@@ -143,11 +143,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             yield storage
 
     def get(self, storage_key: StorageKey) -> Storage:
-        if (
-            get_config(USE_CONFIG_BUILT_STORAGES, 1)
-            and storage_key in self._config_built_storages
-        ):
-            return self._config_built_storages[storage_key]
         return self._all_storages[storage_key]
 
     def get_writable_storage_keys(self) -> list[StorageKey]:
