@@ -237,10 +237,11 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "profiles",
     "functions",
     "test_migration",
+    "search_issues",
 }
 
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
-    SKIPPED_MIGRATION_GROUPS.add("search_issues")
+    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
 
 
 MAX_RESOLUTION_FOR_JITTER = 60
