@@ -106,6 +106,10 @@ def convert_to_yaml(key: StorageKey, result_path: str) -> None:
         res["mandatory_condition_checkers"] = checkers
     if isinstance(storage, WritableTableStorage):
         writer_options = storage.get_table_writer()._TableWriter__writer_options  # type: ignore
+        if replacer := storage.get_table_writer().get_replacer_processor():
+            res["replacer_processor"] = _convert_registered_class(
+                replacer, "errors_replacer"
+            )
         if writer_options:
             res["writer_options"] = writer_options
         stream_loader = storage.get_table_writer().get_stream_loader()
