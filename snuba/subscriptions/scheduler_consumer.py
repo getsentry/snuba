@@ -148,9 +148,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 time_interval = Interval(
                     previous_message.orig_message_ts, commit.orig_message_ts
                 )
+                offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
                 logger.warning(
-                    "Could not construct valid time interval between %r and %r!",
+                    "Could not construct valid interval between %r and %r!",
                     previous_message,
                     MessageDetails(commit.offset, commit.orig_message_ts),
                     exc_info=True,
@@ -160,7 +161,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 result = BrokerValue(
                     Tick(
                         commit.partition.index,
-                        Interval(previous_message.offset, commit.offset),
+                        offset_interval,
                         time_interval,
                     ).time_shift(self.__time_shift),
                     value.partition,
