@@ -311,6 +311,7 @@ class ProcessedMessageBatchWriter(
                     headers=payload.headers,
                     on_delivery=self.__commit_message_delivery_callback,
                 )
+                self.__commit_log_config.producer.poll(0.0)
 
     def terminate(self) -> None:
         self.__closed = True
