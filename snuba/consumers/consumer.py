@@ -246,7 +246,6 @@ class ProcessedMessageBatchWriter(
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
-        self.__commit_codec = CommitCodec()
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
@@ -299,7 +298,7 @@ class ProcessedMessageBatchWriter(
 
         if self.__commit_log_config is not None:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
-                payload = self.__commit_codec.encode(
+                payload = commit_codec.encode(
                     CommitLogCommit(
                         self.__commit_log_config.group_id, partition, offset, timestamp
                     )
@@ -401,10 +400,13 @@ class MultistorageCollector(
             StorageKey,
             ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        # If passed, produces to the commit log after each batch is closed
+        commit_log_config: Optional[CommitLogConfig],
         ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
         self.__closed = False
+        self.__commit_log_config = commit_log_config
         self.__ignore_errors = ignore_errors
         self.__messages: MutableMapping[
             StorageKey,
@@ -414,6 +416,7 @@ class MultistorageCollector(
                 ]
             ],
         ] = defaultdict(list)
+        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -438,6 +441,11 @@ class MultistorageCollector(
             other_message = message.replace((storage_key, payload))
 
             self.__messages[storage_key].append(other_message)
+            assert isinstance(message.value, BrokerValue)
+            self.__offsets_to_produce[message.value.partition] = (
+                message.value.offset,
+                message.value.timestamp,
+            )
 
     def close(self) -> None:
         self.__closed = True
@@ -464,7 +472,30 @@ class MultistorageCollector(
 
             step.join(timeout_remaining)
 
+        if self.__commit_log_config is not None:
+            for partition, (offset, timestamp) in self.__offsets_to_produce.items():
+                payload = commit_codec.encode(
+                    CommitLogCommit(
+                        self.__commit_log_config.group_id, partition, offset, timestamp
+                    )
+                )
+                self.__commit_log_config.producer.produce(
+                    self.__commit_log_config.topic.name,
+                    key=payload.key,
+                    value=payload.value,
+                    headers=payload.headers,
+                    on_delivery=self.__commit_message_delivery_callback,
+                )
+                self.__commit_log_config.producer.poll(0.0)
+
         self.__messages = {}
+        self.__offsets_to_produce.clear()
+
+    def __commit_message_delivery_callback(
+        self, error: Optional[KafkaError], message: ConfluentMessage
+    ) -> None:
+        if error is not None:
+            raise Exception(error.str())
 
 
 class MultistorageKafkaPayload(NamedTuple):
@@ -701,12 +732,14 @@ def build_multistorage_batch_writer(
 def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
+    commit_log_config: Optional[CommitLogConfig],
 ) -> ProcessingStep[MultistorageProcessedMessage]:
     return MultistorageCollector(
         {
             storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
             for storage in storages
         },
+        commit_log_config,
         ignore_errors={
             storage.get_storage_key()
             for storage in storages
@@ -729,6 +762,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         output_block_size: Optional[int],
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
+        commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ) -> None:
         if processes is not None:
@@ -757,9 +791,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             prefilter=None,
             process_message=self.__process_message_fn,
             collector=partial(
-                build_collector,
-                self.__metrics,
-                self.__storages,
+                build_collector, self.__metrics, self.__storages, commit_log_config
             ),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time,
