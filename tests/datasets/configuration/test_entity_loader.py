@@ -61,11 +61,15 @@ class TestEntityConfiguration(ConfigurationTest):
         self, config_path: str, entity: Type[Entity], entity_key: EntityKey
     ) -> None:
         config_entity = build_entity_from_config(config_path)
+        print(config_entity.get_validators())
         py_entity = entity()  # type: ignore
 
         assert isinstance(config_entity, PluggableEntity)
         assert config_entity.entity_key == entity_key
 
+        assert len(config_entity.get_query_processors()) == len(
+            py_entity.get_query_processors()
+        )
         for (config_qp, py_qp) in zip(
             config_entity.get_query_processors(), py_entity.get_query_processors()
         ):
@@ -73,6 +77,7 @@ class TestEntityConfiguration(ConfigurationTest):
                 config_qp.__class__ == py_qp.__class__
             ), "query processor mismatch between configuration-loaded sets and python-defined"
 
+        assert len(config_entity.get_validators()) == len(py_entity.get_validators())
         for (config_v, py_v) in zip(
             config_entity.get_validators(), py_entity.get_validators()
         ):
@@ -137,3 +142,10 @@ class TestEntityConfiguration(ConfigurationTest):
         column_to_column = get_object_in_list_by_class(column_mappers, ColumnToColumn)
         assert column_to_column is not None
         assert column_to_column.from_col_name == "email"
+
+    def test_entity_loader_no_custom_validators(self) -> None:
+        pluggable_entity = build_entity_from_config(
+            "tests/datasets/configuration/entity_no_custom_validators.yaml"
+        )
+        entity_validators = set(pluggable_entity.get_validators())
+        assert len(entity_validators) == len(pluggable_entity._get_builtin_validators())

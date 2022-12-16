@@ -68,6 +68,7 @@ class PluggableEntity(Entity):
                 EntityColumnSet(self.columns), ColumnValidationMode.WARN
             )
         ]
+        return []
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -107,7 +108,7 @@ class PluggableEntity(Entity):
         return self.function_call_validators
 
     def get_validators(self) -> Sequence[QueryValidator]:
-        return [*self._get_builtin_validators(), *self.validators]
+        return [*self.validators, *self._get_builtin_validators()]
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
