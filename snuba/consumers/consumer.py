@@ -25,8 +25,6 @@ from typing import (
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.backends.kafka.commit import CommitCodec
-from arroyo.commit import Commit as CommitLogCommit
 from arroyo.processing.strategies import FilterStep
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
@@ -39,10 +37,7 @@ from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
 from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
-from confluent_kafka import KafkaError
-from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from confluent_kafka import Producer as ConfluentProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.strategy_factory import ConsumerStrategyFactory
@@ -64,14 +59,6 @@ from snuba.utils.streams.configuration_builder import build_kafka_producer_confi
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
-
-commit_codec = CommitCodec()
-
-
-class CommitLogConfig(NamedTuple):
-    producer: ConfluentProducer
-    topic: Topic
-    group_id: str
 
 
 class BytesInsertBatch(NamedTuple):
@@ -239,15 +226,9 @@ class ProcessedMessageBatchWriter(
         self,
         insert_batch_writer: InsertBatchWriter,
         replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
-        # If commit log config is passed, we will produce to the commit log topic
-        # upon closing each batch.
-        commit_log_config: Optional[CommitLogConfig] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
-        self.__commit_log_config = commit_log_config
-        self.__commit_codec = CommitCodec()
-        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
 
@@ -277,18 +258,6 @@ class ProcessedMessageBatchWriter(
         else:
             raise TypeError("unexpected payload type")
 
-        assert isinstance(message.value, BrokerValue)
-        self.__offsets_to_produce[message.value.partition] = (
-            message.value.offset,
-            message.value.timestamp,
-        )
-
-    def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
-
     def close(self) -> None:
         self.__closed = True
 
@@ -296,21 +265,6 @@ class ProcessedMessageBatchWriter(
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
-
-        if self.__commit_log_config is not None:
-            for partition, (offset, timestamp) in self.__offsets_to_produce.items():
-                payload = self.__commit_codec.encode(
-                    CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
-                    )
-                )
-                self.__commit_log_config.producer.produce(
-                    self.__commit_log_config.topic.name,
-                    key=payload.key,
-                    value=payload.value,
-                    headers=payload.headers,
-                    on_delivery=self.__commit_message_delivery_callback,
-                )
 
     def terminate(self) -> None:
         self.__closed = True
@@ -353,7 +307,6 @@ def build_batch_writer(
     metrics: MetricsBackend,
     replacements_producer: Optional[ConfluentKafkaProducer] = None,
     replacements_topic: Optional[Topic] = None,
-    commit_log_config: Optional[CommitLogConfig] = None,
     slice_id: Optional[int] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
 
@@ -382,7 +335,7 @@ def build_batch_writer(
             replacement_batch_writer = None
 
         return ProcessedMessageBatchWriter(
-            insert_batch_writer, replacement_batch_writer, commit_log_config
+            insert_batch_writer, replacement_batch_writer
         )
 
     return build_writer
