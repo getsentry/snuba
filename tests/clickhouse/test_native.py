@@ -112,7 +112,7 @@ def test_fallback_logic() -> None:
     # The execute method will try to reuse a single slot in the connection
     # pool but reestablish new connections with _create_conn if a connection
     # fails with a network-related error. It may be cleaner to move connection
-    # negotation/establishment into another class for separation of concerns.
+    # negotiation/establishment into another class for separation of concerns.
     with mock.patch.object(
         pool, "_create_conn", lambda x, y=False: network_failure_connection
     ):
