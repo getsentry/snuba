@@ -9,7 +9,7 @@ from unittest.mock import Mock, call
 
 import pytest
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.types import BrokerValue, Message, Partition, Position, Topic
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -203,7 +203,7 @@ def test_multistorage_strategy(
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): Position(3, now)})],
+            [call({Partition(Topic("topic"), 0): 3})],
         ):
             strategy.close()
             strategy.join()
@@ -256,7 +256,7 @@ def test_metrics_writing_e2e() -> None:
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): Position(1, now)})],
+            [call({Partition(Topic("topic"), 0): 1})],
         ):
             strategy.close()
             strategy.join()
