@@ -312,7 +312,7 @@ class ProcessedMessageBatchWriter(
                     on_delivery=self.__commit_message_delivery_callback,
                 )
                 self.__commit_log_config.producer.poll(0.0)
-            self.__offsets_to_produce.clear()
+        self.__offsets_to_produce.clear()
 
     def terminate(self) -> None:
         self.__closed = True
