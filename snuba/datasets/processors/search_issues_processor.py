@@ -53,7 +53,7 @@ class IssueEventData(TypedDict, total=False):
     request: Mapping[str, Any]  # http_method, http_referer
 
 
-class SearchIssueEvent(TypedDict):
+class SearchIssueEvent(TypedDict, total=False):
     # meta
     retention_days: int
 
@@ -113,11 +113,23 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )
-        client_timestamp = _ensure_valid_date(
-            datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-        )
-        if client_timestamp is None:
-            client_timestamp = receive_timestamp
+
+        if event_data.get("client_timestamp", None):
+            client_timestamp = datetime.utcfromtimestamp(event_data["client_timestamp"])
+        else:
+            if not event.get("datetime"):
+                raise InvalidMessageFormat(
+                    "message missing data.client_timestamp or datetime field"
+                )
+
+            _client_timestamp = _ensure_valid_date(
+                datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+            )
+            if _client_timestamp is None:
+                raise InvalidMessageFormat(
+                    f"datetime field has incompatible datetime format: expected({settings.PAYLOAD_DATETIME_FORMAT}), got ({event['datetime']})"
+                )
+            client_timestamp = _client_timestamp
 
         fingerprints = event_occurrence_data["fingerprint"]
         fingerprints = fingerprints[: self.FINGERPRINTS_HARD_LIMIT_SIZE - 1]
