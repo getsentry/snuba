@@ -276,8 +276,6 @@ def multistorage_consumer(
 
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
-    print(commit_log_config)
-
     dead_letter_policies = {
         storage.get_table_writer()
         .get_stream_loader()
