@@ -59,6 +59,7 @@ class SearchIssueEvent(TypedDict):
     # issue-related
     organization_id: int
     project_id: int
+    event_id: str
     group_id: int  # backwards compatibility
     group_ids: Sequence[int]
     primary_hash: str
@@ -116,6 +117,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         fields: MutableMapping[str, Any] = {
             "organization_id": event["organization_id"],
             "project_id": event["project_id"],
+            "event_id": ensure_uuid(event["event_id"]),
             "search_title": event_occurrence_data["issue_title"],
             "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": fingerprints,
@@ -137,14 +139,13 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
 
         return [
             {
-                "group_id": group_id,
+                "group_id": event["group_id"],
                 **fields,
                 "message_timestamp": metadata.timestamp,
                 "retention_days": retention_days,
                 "partition": metadata.partition,
                 "offset": metadata.offset,
             }
-            for group_id in event["group_ids"]
         ]
 
     def process_message(
