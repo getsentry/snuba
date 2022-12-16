@@ -120,7 +120,7 @@ def _build_subscription_validators(
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
-    res = PluggableEntity(
+    return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
@@ -137,4 +137,3 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),
     )
-    return res
