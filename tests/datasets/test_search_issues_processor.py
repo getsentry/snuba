@@ -1,3 +1,4 @@
+import copy
 import uuid
 from datetime import datetime
 from typing import Any, MutableMapping
@@ -9,6 +10,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.processors.search_issues_processor import (
+    InvalidMessageFormat,
     SearchIssuesMessageProcessor,
     ensure_uuid,
 )
@@ -28,9 +30,11 @@ class TestSearchIssuesMessageProcessor:
             {
                 "project_id": 1,
                 "organization_id": 2,
-                "group_ids": (3,),
+                "group_id": 3,
+                "event_id": str(uuid.uuid4()),
                 "retention_days": 90,
                 "primary_hash": str(uuid.uuid4()),
+                "datetime": datetime.utcnow().isoformat() + "Z",
                 "data": {
                     "received": datetime.now().timestamp(),
                 },
@@ -64,6 +68,75 @@ class TestSearchIssuesMessageProcessor:
                 (2, "insert", {"data": {"hi": "mom"}}), self.KAFKA_META
             )
 
+    def test_fails_unparselable_datetime(self):
+        with pytest.raises(ValueError):
+            SearchIssuesMessageProcessor().process_message(
+                (
+                    2,
+                    "insert",
+                    {
+                        "project_id": 1,
+                        "organization_id": 2,
+                        "group_id": 3,
+                        "event_id": str(uuid.uuid4()),
+                        "retention_days": 90,
+                        "primary_hash": str(uuid.uuid4()),
+                        "datetime": datetime.now().isoformat(),
+                        "data": {
+                            "received": datetime.now().timestamp(),
+                        },
+                        "occurrence_data": {
+                            "id": str(uuid.uuid4()),
+                            "type": 1,
+                            "issue_title": "search me",
+                            "fingerprint": ["one", "two"],
+                            "detection_time": datetime.now().timestamp(),
+                        },
+                    },
+                ),
+                self.KAFKA_META,
+            )
+
+    def test_extract_client_timestamp(self):
+        missing_client_timestamp = {
+            "project_id": 1,
+            "organization_id": 2,
+            "group_id": 3,
+            "event_id": str(uuid.uuid4()),
+            "retention_days": 90,
+            "primary_hash": str(uuid.uuid4()),
+            "data": {
+                "received": datetime.now().timestamp(),
+            },
+            "occurrence_data": {
+                "id": str(uuid.uuid4()),
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": datetime.now().timestamp(),
+            },
+        }
+
+        with_data_client_timestamp = copy.deepcopy(missing_client_timestamp)
+        with_data_client_timestamp["data"][
+            "client_timestamp"
+        ] = datetime.now().timestamp()
+
+        with_event_datetime = copy.deepcopy(missing_client_timestamp)
+        with_event_datetime["datetime"] = datetime.now().isoformat() + "Z"
+
+        with pytest.raises(InvalidMessageFormat):
+            SearchIssuesMessageProcessor().process_message(
+                (2, "insert", missing_client_timestamp), self.KAFKA_META
+            )
+
+        SearchIssuesMessageProcessor().process_message(
+            (2, "insert", with_data_client_timestamp), self.KAFKA_META
+        )
+        SearchIssuesMessageProcessor().process_message(
+            (2, "insert", with_event_datetime), self.KAFKA_META
+        )
+
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
             bad_uuid = "not_a_uuid"
@@ -73,8 +146,10 @@ class TestSearchIssuesMessageProcessor:
                 {
                     "project_id": 1,
                     "organization_id": 2,
-                    "group_ids": (3,),
+                    "group_id": 3,
+                    "event_id": str(uuid.uuid4()),
                     "retention_days": 90,
+                    "datetime": datetime.utcnow().isoformat() + "Z",
                     "data": {
                         "received": datetime.now().timestamp(),
                     },
