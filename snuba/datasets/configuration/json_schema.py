@@ -15,6 +15,10 @@ TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 
+def string_with_description(description: str) -> dict[str, str]:
+    return {**TYPE_STRING, "description": description}
+
+
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -245,6 +249,12 @@ SCHEMA_SCHEMA = {
             "type": "string",
             "description": "The distributed table name in distributed ClickHouse",
         },
+        "not_deleted_mandatory_condition": string_with_description(
+            "The name of the column flagging a deletion, eg `deleted` column in Errors. "
+            "Defining this column here will ensure any query served by this storage "
+            "explicitly filters out any 'deleted' rows. Should only be used for storages "
+            "supporting deletion replacement."
+        ),
         "partition_format": {
             "type": "array",
             "items": {"type": "string"},
