@@ -59,7 +59,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         evt: MutableMapping[str, Any] = dict(
             organization_id=1,
             project_id=2,
-            group_ids=[3],
+            event_id=str(uuid.uuid4().hex),
+            group_id=3,
             primary_hash=str(uuid.uuid4().hex),
             data={"received": now.timestamp()},
             occurrence_data=dict(
@@ -108,7 +109,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             {
                 "project_id": 1,
                 "organization_id": 2,
-                "group_ids": [3],
+                "event_id": str(uuid.uuid4()),
+                "group_id": 3,
                 "retention_days": 90,
                 "primary_hash": str(uuid.uuid4()),
                 "data": {
