@@ -26,7 +26,6 @@ from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.datasets.replacements.projects_query_flags import ProjectsQueryFlags
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import (
@@ -35,6 +34,7 @@ from snuba.processor import (
     ReplacementType,
     _hashify,
 )
+from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,

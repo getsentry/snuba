@@ -14,11 +14,11 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 from snuba import replacer, settings
 from snuba.clickhouse.optimize.optimize import run_optimize
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.replacements.projects_query_flags import ProjectsQueryFlags
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
