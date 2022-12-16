@@ -240,6 +240,10 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "search_issues",
 }
 
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
+    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
+
+
 MAX_RESOLUTION_FOR_JITTER = 60
 
 # These contexts will not be stored in the transactions table

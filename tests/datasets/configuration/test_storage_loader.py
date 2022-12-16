@@ -90,6 +90,10 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
 
     if isinstance(schema_old, TableSchema) and isinstance(schema_new, TableSchema):
         assert schema_old.get_table_name() == schema_new.get_table_name()
+        assert (
+            schema_old.get_data_source().get_mandatory_conditions()
+            == schema_new.get_data_source().get_mandatory_conditions()
+        )
 
     if isinstance(old, WritableTableStorage) and isinstance(new, WritableTableStorage):
         assert (
