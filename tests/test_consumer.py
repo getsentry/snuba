@@ -203,7 +203,10 @@ def test_multistorage_strategy(
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): 3})],
+            [
+                call({Partition(topic=Topic(name="topic"), index=0): 3}),
+                call({}, force=True),
+            ],
         ):
             strategy.close()
             strategy.join()
@@ -256,7 +259,10 @@ def test_metrics_writing_e2e() -> None:
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): 1})],
+            [
+                call({Partition(Topic("topic"), 0): 1}),
+                call({}, force=True),
+            ],
         ):
             strategy.close()
             strategy.join()
