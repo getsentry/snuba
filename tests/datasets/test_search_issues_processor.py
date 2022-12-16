@@ -77,7 +77,8 @@ class TestSearchIssuesMessageProcessor:
                     {
                         "project_id": 1,
                         "organization_id": 2,
-                        "group_ids": [3],
+                        "group_id": 3,
+                        "event_id": str(uuid.uuid4()),
                         "retention_days": 90,
                         "primary_hash": str(uuid.uuid4()),
                         "datetime": datetime.now().isoformat(),
@@ -100,7 +101,8 @@ class TestSearchIssuesMessageProcessor:
         missing_client_timestamp = {
             "project_id": 1,
             "organization_id": 2,
-            "group_ids": [3],
+            "group_id": 3,
+            "event_id": str(uuid.uuid4()),
             "retention_days": 90,
             "primary_hash": str(uuid.uuid4()),
             "data": {
