@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, TypedDict
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention, extract_user
 from snuba.datasets.processors import DatasetMessageProcessor
@@ -11,6 +11,7 @@ from snuba.processor import (
     InvalidMessageType,
     InvalidMessageVersion,
     ProcessedMessage,
+    _ensure_valid_date,
     _ensure_valid_ip,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -52,7 +53,7 @@ class IssueEventData(TypedDict, total=False):
     request: Mapping[str, Any]  # http_method, http_referer
 
 
-class SearchIssueEvent(TypedDict):
+class SearchIssueEvent(TypedDict, total=False):
     # meta
     retention_days: int
 
@@ -63,6 +64,7 @@ class SearchIssueEvent(TypedDict):
     group_id: int  # backwards compatibility
     group_ids: Sequence[int]
     primary_hash: str
+    datetime: str  #
 
     data: IssueEventData
     occurrence_data: IssueOccurrenceData
@@ -111,6 +113,24 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         retention_days = enforce_retention(
             event.get("retention_days", 90), detection_timestamp
         )
+
+        if event_data.get("client_timestamp", None):
+            client_timestamp = datetime.utcfromtimestamp(event_data["client_timestamp"])
+        else:
+            if not event.get("datetime"):
+                raise InvalidMessageFormat(
+                    "message missing data.client_timestamp or datetime field"
+                )
+
+            _client_timestamp = _ensure_valid_date(
+                datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+            )
+            if _client_timestamp is None:
+                raise InvalidMessageFormat(
+                    f"datetime field has incompatible datetime format: expected({settings.PAYLOAD_DATETIME_FORMAT}), got ({event['datetime']})"
+                )
+            client_timestamp = _client_timestamp
+
         fingerprints = event_occurrence_data["fingerprint"]
         fingerprints = fingerprints[: self.FINGERPRINTS_HARD_LIMIT_SIZE - 1]
 
@@ -125,8 +145,8 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
             "receive_timestamp": receive_timestamp,
+            "client_timestamp": client_timestamp,
             # TODO: fix the below field assignments to actually extract from event data
-            "client_timestamp": detection_timestamp,
             "platform": "platform",
             "contexts.key": [],
             "contexts.value": [],
