@@ -65,7 +65,7 @@ class PluggableEntity(Entity):
     def _get_builtin_validators(self) -> Sequence[QueryValidator]:
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns), ColumnValidationMode.WARN
+                EntityColumnSet(self.columns), ColumnValidationMode.DO_NOTHING
             )
         ]
         return []
