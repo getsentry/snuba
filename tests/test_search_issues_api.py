@@ -100,7 +100,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             }
         ]
 
-    def test_test_evenstream_endpoint(self) -> None:
+    def test_eventstream_endpoint(self) -> None:
         now = datetime.now()
 
         event = (

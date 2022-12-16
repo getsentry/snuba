@@ -117,7 +117,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         fields: MutableMapping[str, Any] = {
             "organization_id": event["organization_id"],
             "project_id": event["project_id"],
-            "event_id": event["event_id"],
+            "event_id": ensure_uuid(event["event_id"]),
             "search_title": event_occurrence_data["issue_title"],
             "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": fingerprints,
