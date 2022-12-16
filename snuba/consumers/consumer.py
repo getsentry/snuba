@@ -488,6 +488,8 @@ class MultistorageCollector(
                 )
                 self.__commit_log_config.producer.poll(0.0)
 
+            self.__commit_log_config.producer.flush()
+
         self.__messages = {}
         self.__offsets_to_produce.clear()
 
