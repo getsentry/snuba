@@ -37,7 +37,7 @@ class FunctionsEntity(Entity):
             join_relationships={},
             writable_storage=writable_storage,
             validators=[
-                EntityRequiredColumnValidator({"project_id"}),
+                EntityRequiredColumnValidator(["project_id"]),
             ],
             required_time_column="timestamp",
             subscription_processors=None,

@@ -67,7 +67,7 @@ class OutcomesEntity(Entity):
             abstract_column_set=outcomes_data_model,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"org_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id"])],
             required_time_column="timestamp",
             # WARN mode logged way too many events to Sentry
             validate_data_model=ColumnValidationMode.WARN,
