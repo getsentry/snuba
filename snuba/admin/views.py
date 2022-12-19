@@ -37,7 +37,7 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -87,15 +87,22 @@ def health() -> Response:
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
-    allowed_groups: Sequence[MigrationGroup] = [
-        group
-        for group in get_active_migration_groups()
-        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
-    ]
+    scopes = [scope for scope in g.user.scopes if scope.category == "migrations"]
+    allowed_groups = []
+    for scope in scopes:
+        if scope.resource == "all":
+            allowed_groups = [
+                MigrationGroup(group)
+                for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.keys()
+            ]
+            break
+        allowed_groups.append(MigrationGroup(scope.resource))
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-    for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
+    for group, migrations in run_migration_checks_for_groups(
+        allowed_groups, scopes, runner
+    ):
         migration_ids = [asdict(m) for m in migrations]
         res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)

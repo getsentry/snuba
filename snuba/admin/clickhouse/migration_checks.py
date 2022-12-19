@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Set, Tuple, Union
 
-from snuba.admin.migrations_policies import get_migration_group_polices
+from snuba.admin.auth_scopes import AuthScope
+from snuba.admin.migrations_policies import get_migration_polices_for_scopes
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
@@ -167,18 +168,17 @@ class PolicyChecker(Checker):
     setting.
     """
 
+    def __init__(self, scopes) -> None:
+        self.__group_policies = get_migration_polices_for_scopes(scopes)
+
     def can_run(self, migration_key: MigrationKey) -> RunResult:
-        if get_migration_group_polices()[migration_key.group.value].can_run(
-            migration_key
-        ):
+        if self.__group_policies[migration_key.group.value].can_run(migration_key):
             return RunResult(True)
         else:
             return RunResult(False, RunReason.RUN_POLICY)
 
     def can_reverse(self, migration_key: MigrationKey) -> ReverseResult:
-        if get_migration_group_polices()[migration_key.group.value].can_reverse(
-            migration_key
-        ):
+        if self.__group_policies[migration_key.group.value].can_reverse(migration_key):
             return ReverseResult(True)
         else:
             return ReverseResult(False, ReverseReason.REVERSE_POLICY)
@@ -212,7 +212,7 @@ def do_checks(
 
 
 def run_migration_checks_for_groups(
-    allowed_groups: Sequence[MigrationGroup], runner: Runner
+    allowed_groups: Sequence[MigrationGroup], scopes: Set[AuthScope], runner: Runner
 ) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
     """
     Gets the statuses of all the migrations within each group
@@ -229,7 +229,7 @@ def run_migration_checks_for_groups(
         migration_ids: List[MigrationData] = []
 
         status_checker = StatusChecker(group, migrations)
-        policy_checker = PolicyChecker()
+        policy_checker = PolicyChecker(scopes)
 
         checkers = [status_checker, policy_checker]
 
