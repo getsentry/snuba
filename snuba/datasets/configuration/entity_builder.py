@@ -91,13 +91,11 @@ def _build_entity_translation_mappers(
     )
 
 
-def _build_storage_selector(config: dict[str, Any]) -> Optional[QueryStorageSelector]:
-    return (
-        QueryStorageSelector.get_from_name(config["storage_selector"]["selector"])(
-            **config["storage_selector"]["args"]
-        )
-        if "storage_selector" in config
-        else None
+def _build_storage_selector(
+    config_storage_selector: dict[str, Any]
+) -> QueryStorageSelector:
+    return QueryStorageSelector.get_from_name(config_storage_selector["selector"])(
+        **config_storage_selector["args"]
     )
 
 
@@ -133,7 +131,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
-        storage_selector=_build_storage_selector(config),
+        storage_selector=_build_storage_selector(config["storage_selector"]),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
         readable_storage=get_storage(StorageKey(config["readable_storage"])),
