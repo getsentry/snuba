@@ -18,11 +18,13 @@ from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
-    QueryStorageSelector,
-    QueryStorageSelectorError,
     ReadableStorage,
     ReadableTableStorage,
     StorageAndMappers,
+)
+from snuba.datasets.storages.selectors.selector import (
+    QueryStorageSelector,
+    QueryStorageSelectorError,
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery

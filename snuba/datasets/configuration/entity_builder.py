@@ -18,6 +18,7 @@ from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionPro
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.selectors.selector import QueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
@@ -90,6 +91,16 @@ def _build_entity_translation_mappers(
     )
 
 
+def _build_storage_selector(config: dict[str, Any]) -> Optional[QueryStorageSelector]:
+    return (
+        QueryStorageSelector.get_from_name(config["storage_selector"]["selector"])(
+            **config["storage_selector"]["args"]
+        )
+        if "storage_selector" in config
+        else None
+    )
+
+
 def _build_subscription_processors(
     config: dict[str, Any]
 ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
@@ -122,6 +133,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
+        storage_selector=_build_storage_selector(config),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
         readable_storage=get_storage(StorageKey(config["readable_storage"])),

@@ -516,6 +516,21 @@ V1_ENTITY_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
         },
+        "storage_selector": {
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "QueryStorageSelector class name",
+                },
+                "args": {
+                    "type": "object",
+                    "description": "Key/value mappings required to instantiate QueryStorageSelector class",
+                },
+            },
+            "required": ["selector"],
+            "additionalProperties": False,
+        },
         "query_processors": {
             "type": "array",
             "items": ENTITY_QUERY_PROCESSOR,
