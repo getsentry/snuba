@@ -7,6 +7,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -61,7 +62,10 @@ class OutcomesEntity(Entity):
                     # selector that decides when to use the materialized data.
                     storages=[
                         StorageAndMappers(materialized_storage, TranslationMappers()),
-                    ]
+                    ],
+                    selector=DefaultQueryStorageSelector(
+                        StorageKey.OUTCOMES_HOURLY.value
+                    ),
                 ),
             ),
             abstract_column_set=outcomes_data_model,

@@ -110,7 +110,7 @@ class BaseEventsEntity(Entity, ABC):
                     StorageAndMappers(events_read_storage, mappers),
                     StorageAndMappers(events_storage, mappers),
                 ],
-                selector=ErrorsQueryStorageSelector(mappers),
+                selector=ErrorsQueryStorageSelector(),
             ),
         )
         schema = events_storage.get_table_writer().get_schema()

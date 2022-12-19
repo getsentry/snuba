@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, Type, cast
+from typing import List, Sequence, Type, cast
 
 from snuba.datasets.storage import (
     ReadableStorage,
     StorageAndMappers,
     StorageAndMappersNotFound,
 )
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.registered_class import RegisteredClass
@@ -34,6 +36,7 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         self,
         query: Query,
         query_settings: QuerySettings,
+        storage_and_mappers_list: List[StorageAndMappers],
     ) -> StorageAndMappers:
         raise NotImplementedError
 
@@ -47,4 +50,28 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
                 return sm_tuple
         raise StorageAndMappersNotFound(
             f"Unable to find storage and translation mappers pair for {storage.__class__}"
+        )
+
+
+class DefaultQueryStorageSelector(QueryStorageSelector):
+    """
+    A default query storage selector which chooses the only storage specified in config.
+    Entities which define multiple storages should not use this selector and should use
+    custom ones.
+    """
+
+    def __init__(self, storage: str) -> None:
+        self.storage = get_storage(StorageKey(storage))
+
+    def select_storage(
+        self,
+        query: Query,
+        query_settings: QuerySettings,
+        storage_and_mappers_list: List[StorageAndMappers],
+    ) -> StorageAndMappers:
+        for sm in storage_and_mappers_list:
+            if sm.storage == self.storage:
+                return sm
+        raise QueryStorageSelectorError(
+            "Unable to select storage. Storage not defined."
         )

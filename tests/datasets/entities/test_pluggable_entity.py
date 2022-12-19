@@ -18,6 +18,7 @@ from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import Query
 from snuba.query.processors.logical.granularity_processor import (
@@ -106,6 +107,9 @@ def pluggable_sets_entity() -> PluggableEntity:
         ),
         validators=[],
         required_time_column="timestamp",
+        storage_selector=DefaultQueryStorageSelector(
+            StorageKey.GENERIC_METRICS_SETS.value
+        ),
     )
 
 

@@ -110,7 +110,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def __init__(
         self,
         storages: List[StorageAndMappers],
-        selector: Optional[QueryStorageSelector] = None,
+        selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
     ) -> None:
@@ -134,17 +134,10 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
     ) -> StorageAndMappers:
-        if not self.__selector:
-            if len(self.__storages) > 1:
-                raise QueryStorageSelectorError(
-                    "Multiple storages specified without a storage selector."
-                )
-            return self.__storages[0]
-        else:
-            with sentry_sdk.start_span(
-                op="build_plan.storage_query_plan_builder", description="select_storage"
-            ):
-                return self.__selector.select_storage(query, settings)
+        with sentry_sdk.start_span(
+            op="build_plan.storage_query_plan_builder", description="select_storage"
+        ):
+            return self.__selector.select_storage(query, settings, self.__storages)
 
     def get_cluster(
         self, storage: ReadableStorage, query: LogicalQuery, settings: QuerySettings

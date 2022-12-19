@@ -561,6 +561,7 @@ V1_ENTITY_SCHEMA = {
         "schema",
         "name",
         "readable_storage",
+        "storage_selector",
         "query_processors",
         "validators",
         "required_time_column",

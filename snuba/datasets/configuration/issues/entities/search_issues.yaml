@@ -64,6 +64,11 @@ schema:
 
 readable_storage: search_issues
 writable_storage: search_issues
+storage_selector:
+  selector: DefaultQueryStorageSelector
+  args:
+    storage: search_issues
+
 query_processors:
   - processor: OrganizationRateLimiterProcessor
     args:

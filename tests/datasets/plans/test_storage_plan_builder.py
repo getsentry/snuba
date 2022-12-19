@@ -6,16 +6,18 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.events import (
-    ErrorsQueryStorageSelector,
-    errors_translators,
-)
+from snuba.datasets.entities.events import errors_translators
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.selectors.errors import ErrorsQueryStorageSelector
+from snuba.datasets.storages.selectors.selector import (
+    DefaultQueryStorageSelector,
+    QueryStorageSelector,
+)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -38,7 +40,7 @@ TEST_CASES = [
                 get_storage(StorageKey.TRANSACTIONS), transaction_translator
             ),
         ],
-        None,
+        DefaultQueryStorageSelector(StorageKey.TRANSACTIONS.value),
         None,
         StorageSetKey.TRANSACTIONS,
         id="Single storage",
@@ -59,7 +61,7 @@ TEST_CASES = [
                 get_writable_storage(StorageKey.ERRORS), errors_translators
             ),
         ],
-        ErrorsQueryStorageSelector(errors_translators),
+        ErrorsQueryStorageSelector(),
         None,
         StorageSetKey.EVENTS,
         id="Multiple storages and selector",

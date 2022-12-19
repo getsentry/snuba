@@ -13,6 +13,7 @@ from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
@@ -434,7 +435,8 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
     ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
 
     query_plan = StorageQueryPlanBuilder(
-        storages=[StorageAndMappers(storage, transaction_translator)]
+        storages=[StorageAndMappers(storage, transaction_translator)],
+        selector=DefaultQueryStorageSelector(storage.get_storage_key().value),
     ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query

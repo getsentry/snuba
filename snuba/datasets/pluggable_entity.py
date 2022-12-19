@@ -48,7 +48,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
     required_time_column: str
-    storage_selector: Optional[QueryStorageSelector] = None
+    storage_selector: QueryStorageSelector
     writeable_storage: Optional[WritableTableStorage] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
@@ -78,6 +78,7 @@ class PluggableEntity(Entity):
         storages: List[StorageAndMappers] = [
             StorageAndMappers(self.readable_storage, self.translation_mappers)
         ]
+
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
             storages=storages,
             selector=self.storage_selector,

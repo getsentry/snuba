@@ -5,6 +5,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -31,6 +32,7 @@ class FunctionsEntity(Entity):
                     storages=[
                         StorageAndMappers(readable_storage, TranslationMappers())
                     ],
+                    selector=DefaultQueryStorageSelector(StorageKey.FUNCTIONS.value),
                 )
             ),
             abstract_column_set=schema.get_columns(),

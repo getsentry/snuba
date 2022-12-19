@@ -129,6 +129,14 @@ schema:
 
 readable_storage: transactions
 writable_storage: transactions
+storage_selector:
+  {
+    selector: DefaultQueryStorageSelector,
+    args:
+      {
+        storage: transactions
+      },
+  }
 
 query_processors:
   [

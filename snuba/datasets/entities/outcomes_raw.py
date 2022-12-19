@@ -6,6 +6,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -29,7 +30,8 @@ class OutcomesRawEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    selector=DefaultQueryStorageSelector(StorageKey.OUTCOMES_RAW.value),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,

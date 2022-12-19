@@ -13,6 +13,7 @@ from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.selectors.sessions import SessionsQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -260,7 +261,8 @@ class OrgSessionsEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    selector=DefaultQueryStorageSelector(StorageKey.ORG_SESSIONS.value),
                 )
             ),
             abstract_column_set=ColumnSet(

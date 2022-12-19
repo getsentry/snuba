@@ -6,6 +6,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
@@ -30,7 +31,10 @@ class GroupedMessageEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    selector=DefaultQueryStorageSelector(
+                        StorageKey.GROUPEDMESSAGES.value
+                    ),
                 ),
             ),
             abstract_column_set=schema.get_columns(),

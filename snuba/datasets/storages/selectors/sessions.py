@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Sequence
+from typing import List
 
 from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_time_range
@@ -26,7 +26,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers_list: Sequence[StorageAndMappers],
+        storage_and_mappers_list: List[StorageAndMappers],
     ) -> StorageAndMappers:
 
         # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
