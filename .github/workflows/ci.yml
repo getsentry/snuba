@@ -383,6 +383,6 @@ jobs:
         uses: getsentry/action-self-hosted-e2e-tests@ethanhs/test-dockerhub-push
         with:
           project_name: snuba
-          docker_repo: ghcr.io/getsentry/snuba
+          docker_repo: getsentry/snuba
           local_image: ${{ steps.image_pull.outputs.snuba-test-image-name }}
           docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
