@@ -276,12 +276,8 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         worker: ReplacerWorker,
-        max_batch_size: int,
-        max_batch_time: int,
     ) -> None:
         self.__worker = worker
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
 
     def create_with_partitions(
         self,
