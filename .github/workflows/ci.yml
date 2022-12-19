@@ -363,16 +363,26 @@ jobs:
     continue-on-error: true
 
     steps:
-      - name: Checkout snuba
-        uses: actions/checkout@v2
-
-      - name: Pull snuba CI images
+      - name: Pull the test image
+        id: image_pull
+        env:
+          SNUBA_TEST_IMAGE: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }} 
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || docker pull ghcr.io/getsentry/snuba-ci:latest
+          echo "We poll for the Snuba Docker image that the GCB build produces until it succeeds or this job times out."
+          if [[ -z "$SNUBA_TEST_IMAGE" ]]; then
+              echo "The SNUBA_TEST_IMAGE needs to be set" 1>&2
+              exit 1
+          fi
+          echo "Polling for $SNUBA_TEST_IMAGE"
+          until docker pull "$SNUBA_TEST_IMAGE" 2>/dev/null; do
+              sleep 10
+          done
+          echo "snuba-test-image-name=$SNUBA_TEST_IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@5bbd3d6725bbe4bf5cc12f8a3291ce87df6a891f
+        uses: getsentry/action-self-hosted-e2e-tests@ethanhs/test-dockerhub-push
         with:
           project_name: snuba
-          local_image: ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           docker_repo: ghcr.io/getsentry/snuba
-          # TODO: add docker tag to build for
+          local_image: ${{ steps.image_pull.outputs.snuba-test-image-name }}
+          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
