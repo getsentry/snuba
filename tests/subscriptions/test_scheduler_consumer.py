@@ -382,6 +382,8 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
 
     consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
 
+    now = datetime.now()
+
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
         assert consumer.tell() == {partition: 0}
@@ -402,3 +404,30 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
         assert consumer.poll() is None
 
     assert followed_consumer_group in caplog.text
+
+    # producing out of order messages to commit log topic does not error
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                5,
+                now,
+            )
+        ),
+    ).result()
+
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                4,
+                now - timedelta(seconds=2),
+            )
+        ),
+    ).result()
+
+    consumer.poll()

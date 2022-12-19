@@ -176,9 +176,21 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         return self.__ignore_write_errors
 
 
+class StorageAndMappersNotFound(Exception):
+    pass
+
+
 class StorageAndMappers(NamedTuple):
     storage: ReadableStorage
     mappers: TranslationMappers
+
+
+class QueryStorageSelectorError(Exception):
+    pass
+
+
+class StorageNotFound(Exception):
+    pass
 
 
 class QueryStorageSelector(ABC):
@@ -189,6 +201,8 @@ class QueryStorageSelector(ABC):
 
     @abstractmethod
     def select_storage(
-        self, query: Query, query_settings: QuerySettings
+        self,
+        query: Query,
+        query_settings: QuerySettings,
     ) -> StorageAndMappers:
         raise NotImplementedError

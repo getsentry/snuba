@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
     "storage_name",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
+        + ["search_issues"]
     ),
     help="The storage to target",
     required=True,

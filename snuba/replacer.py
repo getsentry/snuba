@@ -25,10 +25,10 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
-from snuba.datasets.replacements.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -276,12 +276,8 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         worker: ReplacerWorker,
-        max_batch_size: int,
-        max_batch_time: int,
     ) -> None:
         self.__worker = worker
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
 
     def create_with_partitions(
         self,

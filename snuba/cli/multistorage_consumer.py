@@ -11,7 +11,10 @@ from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
-from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
+from snuba.consumers.consumer import (
+    CommitLogConfig,
+    MultistorageConsumerProcessingStrategyFactory,
+)
 from snuba.datasets.storages.factory import (
     get_writable_storage,
     get_writable_storage_keys,
@@ -23,9 +26,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
-)
-from snuba.utils.streams.kafka_consumer_with_commit_log import (
-    KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -253,8 +253,11 @@ def multistorage_consumer(
                 "stats_cb": stats_callback,
             }
         )
+
+    consumer = KafkaConsumer(consumer_configuration)
+
     if commit_log is None:
-        consumer = KafkaConsumer(consumer_configuration)
+        commit_log_config = None
     else:
         # XXX: This relies on the assumptions that a.) all storages are
         # located on the same Kafka cluster (validated above.)
@@ -270,11 +273,8 @@ def multistorage_consumer(
         producer = ConfluentKafkaProducer(
             build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
-        consumer = KafkaConsumerWithCommitLog(
-            consumer_configuration,
-            producer=producer,
-            commit_log_topic=commit_log,
-        )
+
+        commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
     dead_letter_policies = {
         storage.get_table_writer()
@@ -303,6 +303,7 @@ def multistorage_consumer(
             output_block_size=output_block_size,
             metrics=metrics,
             dead_letter_policy_creator=dead_letter_policy_creator,
+            commit_log_config=commit_log_config,
         ),
         IMMEDIATE,
     )

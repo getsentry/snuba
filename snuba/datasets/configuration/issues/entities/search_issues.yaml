@@ -1,0 +1,109 @@
+version: v1
+kind: entity
+name: search_issues
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: group_id, type: UInt, args: { size: 64 } },
+    { name: search_title, type: String },
+    { name: primary_hash, type: UUID },
+    { name: fingerprint, type: Array, args: { inner_type: { type: String } } },
+    { name: occurrence_id, type: UUID },
+    { name: occurrence_type_id, type: UInt, args: { size: 8 } },
+    { name: detection_timestamp, type: DateTime },
+
+    { name: event_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
+    { name: trace_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
+    { name: platform, type: String, args: { schema_modifiers: [ low_cardinality ] } },
+    { name: environment, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: release, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: dist, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: receive_timestamp, type: DateTime },
+    { name: client_timestamp, type: DateTime },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [ { name: key, type: String }, { name: value, type: String } ],
+        },
+    },
+    { name: user, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_hash, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: user_id, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_name, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user_email, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [ nullable ] } },
+    { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [ nullable ] } },
+    { name: sdk_name, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: sdk_version, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    {
+      name: contexts,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [ { name: key, type: String }, { name: value, type: String } ],
+        },
+    },
+    { name: http_method, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    {
+      name: http_referer,
+      type: String,
+      args: { schema_modifiers: [ nullable ] },
+    },
+
+    { name: message_timestamp, type: DateTime },
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+  ]
+
+readable_storage: search_issues
+writable_storage: search_issues
+query_processors:
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: organization_id
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+  - processor: TagsExpanderProcessor
+
+translation_mappers:
+  columns:
+    - mapper: ColumnToColumn
+      args:
+        from_table_name:
+        from_col_name: "timestamp"
+        to_table_name:
+        to_col_name: "client_timestamp"
+  subscriptables:
+    - mapper: SubscriptableMapper
+      args:
+        from_column_table:
+        from_column_name: tags
+        to_nested_col_table:
+        to_nested_col_name: tags
+    - mapper: SubscriptableMapper
+      args:
+        from_column_table:
+        from_column_name: contexts
+        to_nested_col_table:
+        to_nested_col_name: contexts
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["project_id"]
+
+required_time_column: timestamp

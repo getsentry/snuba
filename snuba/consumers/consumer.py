@@ -25,6 +25,8 @@ from typing import (
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.kafka.commit import CommitCodec
+from arroyo.commit import Commit as CommitLogCommit
 from arroyo.processing.strategies import FilterStep
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
@@ -37,7 +39,10 @@ from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
 from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
+from confluent_kafka import KafkaError
+from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
+from confluent_kafka import Producer as ConfluentProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.strategy_factory import ConsumerStrategyFactory
@@ -59,6 +64,14 @@ from snuba.utils.streams.configuration_builder import build_kafka_producer_confi
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
+
+commit_codec = CommitCodec()
+
+
+class CommitLogConfig(NamedTuple):
+    producer: ConfluentProducer
+    topic: Topic
+    group_id: str
 
 
 class BytesInsertBatch(NamedTuple):
@@ -226,9 +239,14 @@ class ProcessedMessageBatchWriter(
         self,
         insert_batch_writer: InsertBatchWriter,
         replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
+        # If commit log config is passed, we will produce to the commit log topic
+        # upon closing each batch.
+        commit_log_config: Optional[CommitLogConfig] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
+        self.__commit_log_config = commit_log_config
+        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
 
@@ -258,6 +276,18 @@ class ProcessedMessageBatchWriter(
         else:
             raise TypeError("unexpected payload type")
 
+        assert isinstance(message.value, BrokerValue)
+        self.__offsets_to_produce[message.value.partition] = (
+            message.value.offset,
+            message.value.timestamp,
+        )
+
+    def __commit_message_delivery_callback(
+        self, error: Optional[KafkaError], message: ConfluentMessage
+    ) -> None:
+        if error is not None:
+            raise Exception(error.str())
+
     def close(self) -> None:
         self.__closed = True
 
@@ -265,6 +295,23 @@ class ProcessedMessageBatchWriter(
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
+
+        if self.__commit_log_config is not None:
+            for partition, (offset, timestamp) in self.__offsets_to_produce.items():
+                payload = commit_codec.encode(
+                    CommitLogCommit(
+                        self.__commit_log_config.group_id, partition, offset, timestamp
+                    )
+                )
+                self.__commit_log_config.producer.produce(
+                    self.__commit_log_config.topic.name,
+                    key=payload.key,
+                    value=payload.value,
+                    headers=payload.headers,
+                    on_delivery=self.__commit_message_delivery_callback,
+                )
+                self.__commit_log_config.producer.poll(0.0)
+        self.__offsets_to_produce.clear()
 
     def terminate(self) -> None:
         self.__closed = True
@@ -283,6 +330,12 @@ class ProcessedMessageBatchWriter(
                 timeout = max(timeout - (time.time() - start), 0)
 
             self.__replacement_batch_writer.join(timeout)
+
+        # XXX: This adds a blocking call when each batch is joined. Ideally we would only
+        # call proudcer.flush() when the consumer / strategy is actually being shut down but
+        # the CollectStep that this is called from does not allow us to hook into that easily.
+        if self.__commit_log_config:
+            self.__commit_log_config.producer.flush()
 
 
 json_row_encoder = JSONRowEncoder()
@@ -307,6 +360,7 @@ def build_batch_writer(
     metrics: MetricsBackend,
     replacements_producer: Optional[ConfluentKafkaProducer] = None,
     replacements_topic: Optional[Topic] = None,
+    commit_log_config: Optional[CommitLogConfig] = None,
     slice_id: Optional[int] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
 
@@ -335,7 +389,7 @@ def build_batch_writer(
             replacement_batch_writer = None
 
         return ProcessedMessageBatchWriter(
-            insert_batch_writer, replacement_batch_writer
+            insert_batch_writer, replacement_batch_writer, commit_log_config
         )
 
     return build_writer
@@ -352,10 +406,13 @@ class MultistorageCollector(
             StorageKey,
             ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        # If passed, produces to the commit log after each batch is closed
+        commit_log_config: Optional[CommitLogConfig],
         ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
         self.__closed = False
+        self.__commit_log_config = commit_log_config
         self.__ignore_errors = ignore_errors
         self.__messages: MutableMapping[
             StorageKey,
@@ -365,6 +422,7 @@ class MultistorageCollector(
                 ]
             ],
         ] = defaultdict(list)
+        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -389,6 +447,11 @@ class MultistorageCollector(
             other_message = message.replace((storage_key, payload))
 
             self.__messages[storage_key].append(other_message)
+            assert isinstance(message.value, BrokerValue)
+            self.__offsets_to_produce[message.value.partition] = (
+                message.value.offset,
+                message.value.timestamp,
+            )
 
     def close(self) -> None:
         self.__closed = True
@@ -415,7 +478,32 @@ class MultistorageCollector(
 
             step.join(timeout_remaining)
 
+        if self.__commit_log_config is not None:
+            for partition, (offset, timestamp) in self.__offsets_to_produce.items():
+                payload = commit_codec.encode(
+                    CommitLogCommit(
+                        self.__commit_log_config.group_id, partition, offset, timestamp
+                    )
+                )
+                self.__commit_log_config.producer.produce(
+                    self.__commit_log_config.topic.name,
+                    key=payload.key,
+                    value=payload.value,
+                    headers=payload.headers,
+                    on_delivery=self.__commit_message_delivery_callback,
+                )
+                self.__commit_log_config.producer.poll(0.0)
+
+            self.__commit_log_config.producer.flush()
+
         self.__messages = {}
+        self.__offsets_to_produce.clear()
+
+    def __commit_message_delivery_callback(
+        self, error: Optional[KafkaError], message: ConfluentMessage
+    ) -> None:
+        if error is not None:
+            raise Exception(error.str())
 
 
 class MultistorageKafkaPayload(NamedTuple):
@@ -652,12 +740,14 @@ def build_multistorage_batch_writer(
 def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
+    commit_log_config: Optional[CommitLogConfig],
 ) -> ProcessingStep[MultistorageProcessedMessage]:
     return MultistorageCollector(
         {
             storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
             for storage in storages
         },
+        commit_log_config,
         ignore_errors={
             storage.get_storage_key()
             for storage in storages
@@ -680,6 +770,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         output_block_size: Optional[int],
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
+        commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ) -> None:
         if processes is not None:
@@ -708,9 +799,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             prefilter=None,
             process_message=self.__process_message_fn,
             collector=partial(
-                build_collector,
-                self.__metrics,
-                self.__storages,
+                build_collector, self.__metrics, self.__storages, commit_log_config
             ),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time,

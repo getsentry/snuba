@@ -678,6 +678,7 @@ class TestSnQLApi(BaseApiTest):
                     "team": "sns",
                     "feature": "test",
                     "app_id": "default",
+                    "parent_api": "some/endpoint",
                 }
             ),
         )
@@ -698,6 +699,7 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     """,
                     "app_id": "default",
+                    "parent_api": "some/endpoint",
                 }
             ),
         )
@@ -708,6 +710,7 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].value > 0
         assert metric_calls[0].tags["app_id"] == "default"
         assert metric_calls[0].tags["referrer"] == "test"
+        assert metric_calls[0].tags["parent_api"] == "some/endpoint"
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["entity"] == "events"
         assert metric_calls[0].tags["table"].startswith("errors")
@@ -736,6 +739,7 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     """,
                     "app_id": "something-good",
+                    "parent_api": "some/endpoint",
                 }
             ),
         )
@@ -745,6 +749,7 @@ class TestSnQLApi(BaseApiTest):
         assert len(metric_calls) == 1
         assert metric_calls[0].tags["status"] == "success"
         assert metric_calls[0].tags["referrer"] == "test"
+        assert metric_calls[0].tags["parent_api"] == "some/endpoint"
         assert metric_calls[0].tags["final"] == "False"
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["app_id"] == "something-good"
