@@ -13,6 +13,8 @@ from snuba.datasets.storage import WritableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, initialize_storage_factory
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions
+from snuba.query.expressions import Column, Literal
 
 initialize_storage_factory()
 
@@ -77,6 +79,15 @@ def _convert_schema(schema: Schema) -> dict[str, Any]:
     }
     if part_format := schema.get_partition_format():
         res["partition_format"] = [segment.value for segment in part_format]
+    if mandatory_conditions := schema.get_data_source().get_mandatory_conditions():
+        # assumed only 1 condition and it's the binary "not deleted" condition
+        [condition] = mandatory_conditions
+        assert condition.function_name == ConditionFunctions.EQ
+        column, literal = condition.parameters
+        assert isinstance(column, Column)
+        assert isinstance(literal, Literal) and literal.value == 0
+        res["not_deleted_mandatory_condition"] = column.column_name
+
     return res
 
 
