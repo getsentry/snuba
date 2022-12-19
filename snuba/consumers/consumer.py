@@ -27,13 +27,22 @@ import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
-from arroyo.processing.strategies import FilterStep
+from arroyo.processing.strategies import (
+    CollectStep,
+    CommitOffsets,
+    FilterStep,
+    ParallelCollectStep,
+    ParallelTransformStep,
+)
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory, TransformStep
 from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
+)
+from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
+    DeadLetterQueue,
 )
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
@@ -45,7 +54,6 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.strategy_factory import ConsumerStrategyFactory
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -772,6 +780,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        parallel_collect_timeout: float = 10.0,
     ) -> None:
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -784,6 +793,16 @@ class MultistorageConsumerProcessingStrategyFactory(
                 output_block_size is None
             ), "output block size cannot be used without processes"
 
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
+        self.__initialize_parallel_transform = initialize_parallel_transform
+
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__parallel_collect = parallel_collect
+        self.__parallel_collect_timeout = parallel_collect_timeout
+        self.__processes = processes
+
         self.__storages = storages
         self.__metrics = metrics
         self.__dead_letter_policy_creator = dead_letter_policy_creator
@@ -795,20 +814,8 @@ class MultistorageConsumerProcessingStrategyFactory(
         ):
             self.__process_message_fn = process_message_multistorage_identical_storages
 
-        self.__inner_factory = ConsumerStrategyFactory(
-            prefilter=None,
-            process_message=self.__process_message_fn,
-            collector=partial(
-                build_collector, self.__metrics, self.__storages, commit_log_config
-            ),
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            initialize_parallel_transform=initialize_parallel_transform,
-            parallel_collect=parallel_collect,
-            dead_letter_queue_policy_creator=self.__dead_letter_policy_creator,
+        self.__collector = partial(
+            build_collector, self.__metrics, self.__storages, commit_log_config
         )
 
     def create_with_partitions(
@@ -816,10 +823,53 @@ class MultistorageConsumerProcessingStrategyFactory(
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        collect = (
+            ParallelCollectStep(
+                self.__collector,
+                CommitOffsets(commit),
+                self.__max_batch_size,
+                self.__max_batch_time,
+                self.__parallel_collect_timeout,
+            )
+            if self.__parallel_collect
+            else CollectStep(
+                self.__collector,
+                CommitOffsets(commit),
+                self.__max_batch_size,
+                self.__max_batch_time,
+            )
+        )
+
+        transform_function = self.__process_message_fn
+
+        inner_strategy: ProcessingStep[MultistorageKafkaPayload]
+
+        if self.__processes is None:
+            inner_strategy = TransformStep(transform_function, collect)
+        else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
+            inner_strategy = ParallelTransformStep(
+                transform_function,
+                collect,
+                self.__processes,
+                max_batch_size=self.__max_batch_size,
+                max_batch_time=self.__max_batch_time,
+                input_block_size=self.__input_block_size,
+                output_block_size=self.__output_block_size,
+                initializer=self.__initialize_parallel_transform,
+            )
+
+        if self.__dead_letter_policy_creator is not None:
+            inner_strategy = DeadLetterQueue(
+                inner_strategy, self.__dead_letter_policy_creator()
+            )
+
         return TransformStep(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,
-                self.__inner_factory.create_with_partitions(commit, partitions),
+                inner_strategy,
             ),
         )
