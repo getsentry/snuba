@@ -392,7 +392,7 @@ jobs:
             echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           fi
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@ethanhs/test-dockerhub-push
+        uses: getsentry/action-self-hosted-e2e-tests@c2ceda76ac951188056325d6670178592ecfa1e7
         with:
           project_name: snuba
           docker_repo: getsentry/snuba
