@@ -115,7 +115,7 @@ def __build_cdc_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
     schema_class = (
-        WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
+        TableSchema if config[KIND] == READABLE_STORAGE else WritableTableSchema
     )
     partition_formats = None
     if "partition_format" in config[SCHEMA]:

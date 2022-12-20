@@ -651,6 +651,7 @@ with sentry_sdk.start_span(op="compile", description="Storage Validators"):
     STORAGE_VALIDATORS = {
         "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
         "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+        "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
     }
 
 with sentry_sdk.start_span(op="compile", description="Entity Validators"):
