@@ -34,7 +34,7 @@ for group in MigrationGroup:
     group_loader = get_group_loader(group)
     for migration_id in group_loader.get_migrations():
         snuba_migration = group_loader.load_migration(migration_id)
-        if isinstance(snuba_migration, migration.ClickhouseNodeMigrationLegacy):
+        if isinstance(snuba_migration, migration.ClickhouseNodeMigration):
             all_migrations.append((migration_id, snuba_migration))
 
 
@@ -46,7 +46,7 @@ for group in MigrationGroup:
     ],
 )
 def test_validate_all_migrations(
-    snuba_migration: migration.ClickhouseNodeMigrationLegacy,
+    snuba_migration: migration.ClickhouseNodeMigration,
 ) -> None:
     """
     Runs the migration validator on all existing migrations.

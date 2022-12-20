@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Generic, Mapping, NamedTuple, Optional, TypeVar
+from typing import Any, Generic, Mapping, NamedTuple, Optional, TypeVar, cast
 
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import ReplacementType
+from snuba.utils.registered_class import RegisteredClass
 
 
 class ReplacerState(Enum):
@@ -53,7 +54,7 @@ class Replacement(ABC):
 R = TypeVar("R", bound=Replacement)
 
 
-class ReplacerProcessor(ABC, Generic[R]):
+class ReplacerProcessor(ABC, Generic[R], metaclass=RegisteredClass):
     """
     Processes one message from the replacer topic into a data structure that contains
     the query to apply the replacement.
@@ -61,8 +62,17 @@ class ReplacerProcessor(ABC, Generic[R]):
     instance of this class that will be used by the ReplacementWorker.
     """
 
-    def __init__(self, schema: WritableTableSchema) -> None:
-        self.__schema = schema
+    @classmethod
+    def from_kwargs(cls, **kwargs: str) -> "ReplacerProcessor[R]":
+        return cls(**kwargs)
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    @classmethod
+    def get_from_name(cls, name: str) -> "ReplacerProcessor[R]":
+        return cast("ReplacerProcessor[R]", cls.class_from_name(name))
 
     @abstractmethod
     def process_message(self, message: ReplacementMessage) -> Optional[R]:
@@ -71,8 +81,9 @@ class ReplacerProcessor(ABC, Generic[R]):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_schema(self) -> WritableTableSchema:
-        return self.__schema
+        raise NotImplementedError
 
     @abstractmethod
     def get_state(self) -> ReplacerState:

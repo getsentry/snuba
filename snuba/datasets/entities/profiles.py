@@ -4,9 +4,11 @@ from typing import Sequence
 from snuba.clickhouse.columns import UUID, Column, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -57,7 +59,9 @@ class ProfilesEntity(Entity, ABC):
         super().__init__(
             storages=[writable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(writable_storage)
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[StorageAndMappers(writable_storage, TranslationMappers())]
+                )
             ),
             abstract_column_set=profile_columns,
             join_relationships={},

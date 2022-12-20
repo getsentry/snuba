@@ -19,9 +19,9 @@ services:
       - '--cov'
       - '.'
       - '--cov-report'
-      - 'xml:/.artifacts/coverage.xml'
+      - 'xml:/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/coverage.xml'
       - '--junit-xml'
-      - '/.artifacts/pytest.junit.xml'
+      - '/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml'
     environment:
       SNUBA_SETTINGS: '$SNUBA_SETTINGS'
       CLICKHOUSE_HOST: clickhouse

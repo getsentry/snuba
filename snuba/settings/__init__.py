@@ -41,6 +41,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "profiles": "NonBlockingMigrationsPolicy",
     "functions": "NonBlockingMigrationsPolicy",
     "replays": "NonBlockingMigrationsPolicy",
+    "test_migration": "AllMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -75,6 +76,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "search_issues",
         },
         "single_node": True,
     },
@@ -165,7 +167,6 @@ SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 
 SNAPSHOT_LOAD_PRODUCT = "snuba"
 
-SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
@@ -231,7 +232,17 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {
+    "querylog",
+    "profiles",
+    "functions",
+    "test_migration",
+    "search_issues",
+}
+
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
+    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
+
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -257,8 +268,6 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
-TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
-
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
@@ -269,6 +278,12 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
+
+# Enable issue occurrence ingestion
+ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
+    "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
+)
+
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 

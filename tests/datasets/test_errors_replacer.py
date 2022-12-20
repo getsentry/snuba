@@ -13,11 +13,11 @@ from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.optimize.optimize import run_optimize
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets import errors_replacer
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend

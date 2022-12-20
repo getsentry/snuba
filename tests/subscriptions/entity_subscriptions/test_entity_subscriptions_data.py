@@ -52,7 +52,7 @@ def test_entity_subscriptions_data() -> None:
         RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(i))
         for i in range(topic_spec.partitions_number)
     ]
-    print(stores[0].all())
+
     assert len(stores) == 1
     assert len([s for s in stores[0].all()]) == 1
 

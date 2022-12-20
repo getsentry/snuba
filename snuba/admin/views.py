@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
@@ -165,11 +166,10 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if not dry_run:
             audit_log.record(
                 user or "",
-                AuditLogAction.RAN_MIGRATION
+                AuditLogAction.RAN_MIGRATION_STARTED
                 if action == "run"
-                else AuditLogAction.REVERSED_MIGRATION,
+                else AuditLogAction.REVERSED_MIGRATION_STARTED,
                 {"migration": str(migration_key), "force": force, "fake": fake},
-                notify=True,
             )
 
         if action == "run":
@@ -179,10 +179,28 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 migration_key, force=force, fake=fake, dry_run=dry_run
             )
 
+        if not dry_run:
+            audit_log.record(
+                user or "",
+                AuditLogAction.RAN_MIGRATION_COMPLETED
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+                {"migration": str(migration_key), "force": force, "fake": fake},
+                notify=True,
+            )
+
     try:
         # temporarily redirect stdout to a buffer so we can return it
         with io.StringIO() as output:
-            with redirect_stdout(output):
+            # write output to both the buffer and stdout
+            class OutputRedirector(io.StringIO):
+                stdout = sys.stdout
+
+                def write(self, s: str) -> int:
+                    self.stdout.write(s)
+                    return output.write(s)
+
+            with redirect_stdout(OutputRedirector()):
                 do_action()
             return make_response(jsonify({"stdout": output.getvalue()}), 200)
 

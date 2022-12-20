@@ -11,3 +11,4 @@ snuba.egg-info/
 .idea/
 node_modules
 .vscode/*.log
+snuba/admin/dist/bundle.js*
