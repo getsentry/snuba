@@ -363,10 +363,12 @@ jobs:
     continue-on-error: true
 
     steps:
+      - name: Checkout Snuba
+        uses: actions/checkout@v3
       - name: Pull the test image
         id: image_pull
         env:
-          SNUBA_TEST_IMAGE: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }} 
+          SNUBA_TEST_IMAGE: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           echo "We poll for the Snuba Docker image that the GCB build produces until it succeeds or this job times out."
           if [[ -z "$SNUBA_TEST_IMAGE" ]]; then
