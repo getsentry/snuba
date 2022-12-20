@@ -38,6 +38,8 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as gen_metrics_sets_bucket,
 )
 from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
+from snuba.datasets.storages.groupassignees import storage as groupassignees
+from snuba.datasets.storages.groupedmessages import storage as groupedmessages
 from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
@@ -147,6 +149,8 @@ class TestStorageConfiguration(ConfigurationTest):
         discover,
         functions,
         functions_raw,
+        groupassignees,
+        groupedmessages,
         sessions_raw,
         sessions_org,
         sessions_hourly,
