@@ -218,6 +218,7 @@ schema:
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
+  not_deleted_mandatory_condition: deleted
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
@@ -242,9 +243,9 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: !!set
-        trace_id: null
         primary_hash: null
         event_id: null
+        trace_id: null
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
