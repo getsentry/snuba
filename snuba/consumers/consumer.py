@@ -57,7 +57,6 @@ from snuba.processor import (
     MessageProcessor,
     ReplacementBatch,
 )
-from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -527,15 +526,6 @@ def __message_to_dict(
     }
 
 
-def skip_kafka_message(value: BrokerValue[KafkaPayload]) -> bool:
-    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
-    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
-    return (
-        f"{value.partition.topic.name}:{value.partition.index}:{value.offset}"
-        in messages_to_skip
-    )
-
-
 def __invalid_kafka_message(
     value: BrokerValue[KafkaPayload], consumer_group: str, err: Exception
 ) -> InvalidKafkaMessage:
@@ -556,14 +546,6 @@ def process_message(
     processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
-
-    if skip_kafka_message(message.value):
-        logger.warning(
-            f"A consumer for {message.value.partition.topic.name} skipped a message!",
-            extra=__message_to_dict(message.value),
-        )
-        return None
-
     try:
         result = processor.process_message(
             rapidjson.loads(message.payload.value),
