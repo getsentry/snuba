@@ -110,6 +110,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
+@click.option("--validate-schema", is_flag=True, default=False)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
@@ -140,6 +141,7 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    validate_schema: bool,
     profile_path: Optional[str] = None,
     cooperative_rebalancing: bool = False,
 ) -> None:
@@ -187,6 +189,7 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
+        validate_schema=validate_schema,
         parallel_collect=parallel_collect,
         slice_id=slice_id,
         cooperative_rebalancing=cooperative_rebalancing,
