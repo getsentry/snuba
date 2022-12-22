@@ -81,7 +81,6 @@ def build_executor_consumer(
     strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
     stale_threshold_seconds: Optional[int],
-    cooperative_rebalancing: bool = False,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -154,9 +153,6 @@ def build_executor_consumer(
                 "stats_cb": stats_callback,
             }
         )
-
-    if cooperative_rebalancing is True:
-        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
     return StreamProcessor(
         KafkaConsumer(consumer_configuration),

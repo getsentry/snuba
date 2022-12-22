@@ -76,13 +76,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
 )
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
-)
 def subscriptions_executor(
     *,
     dataset_name: str,
@@ -94,7 +87,6 @@ def subscriptions_executor(
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    cooperative_rebalancing: bool,
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -152,7 +144,6 @@ def subscriptions_executor(
         not no_strict_offset_reset,
         metrics,
         stale_threshold_seconds,
-        cooperative_rebalancing,
     )
 
     def handler(signum: int, frame: Any) -> None:

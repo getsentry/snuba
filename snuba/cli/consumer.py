@@ -114,13 +114,6 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
-)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -143,7 +136,6 @@ def consumer(
     log_level: Optional[str] = None,
     validate_schema: bool,
     profile_path: Optional[str] = None,
-    cooperative_rebalancing: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -192,7 +184,6 @@ def consumer(
         validate_schema=validate_schema,
         parallel_collect=parallel_collect,
         slice_id=slice_id,
-        cooperative_rebalancing=cooperative_rebalancing,
     )
 
     consumer = consumer_builder.build_base_consumer(slice_id)
