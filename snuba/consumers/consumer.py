@@ -824,7 +824,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             CommitOffsets(commit),
             self.__max_batch_size,
             self.__max_batch_time,
-            10.0,
+            wait_timeout=10.0,
         )
 
         transform_function = self.__process_message_fn
