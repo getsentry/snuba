@@ -163,7 +163,6 @@ def test_multistorage_strategy(
         storages,
         10,
         10,
-        False,
         processes,
         input_block_size,
         output_block_size,
@@ -239,7 +238,7 @@ def test_metrics_writing_e2e() -> None:
     storages = [polymorphic_bucket]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages, 10, 10, False, None, None, None, TestingMetricsBackend(), None, None
+        storages, 10, 10, None, None, None, TestingMetricsBackend(), None, None
     ).create_with_partitions(commit, partitions)
 
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
