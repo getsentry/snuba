@@ -366,7 +366,7 @@ jobs:
       - name: Checkout Snuba
         uses: actions/checkout@v3
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@697a3ca95a72f93e3a1ebdb8f967be38d1f029f6
+        uses: getsentry/action-self-hosted-e2e-tests@4ff2dbfdd5c986a4670efaa16d82e460598359eb
         with:
           project_name: snuba
           docker_repo: getsentry/snuba
