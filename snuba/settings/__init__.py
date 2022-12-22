@@ -180,7 +180,7 @@ BROKER_CONFIG: Mapping[str, Any] = {
     "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
     "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
     "ssl.key.location": os.environ.get("KAFKA_SSL_KEY_PATH", ""),
-    "sasl.mechanism": os.environ.get("KAFKA_SASL_MECHANISM", ""),
+    "sasl.mechanism": os.environ.get("KAFKA_SASL_MECHANISM", "GSSAPI"),
     "sasl.username": os.environ.get("KAFKA_SASL_USERNAME", ""),
     "sasl.password": os.environ.get("KAFKA_SASL_PASSWORD", ""),
 }
