@@ -39,18 +39,20 @@ class IssueOccurrenceData(TypedDict, total=False):
 class IssueEventData(TypedDict, total=False):
     # general data from event.data map
     trace_id: Optional[str]
-    platform: str
-    environment: Optional[str]
-    release: Optional[str]
-    dist: Optional[str]
     received: float
     client_timestamp: float
     tags: Mapping[str, Any]
-    user: Mapping[str, Any]  # user, user_hash, user_id, user_name, user_email
-    ip_address: str  # user.ip_address
+    user: Mapping[
+        str, Any
+    ]  # user, user_hash, user_id, user_name, user_email, ip_address
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
     contexts: Mapping[str, Any]
     request: Mapping[str, Any]  # http_method, http_referer
+
+    # tag aliases
+    # tags[sentry:environment] -> environment
+    # tags[sentry:release] -> release
+    # tags[sentry:dist] -> dist
 
 
 class SearchIssueEvent(TypedDict, total=False):
@@ -61,10 +63,10 @@ class SearchIssueEvent(TypedDict, total=False):
     organization_id: int
     project_id: int
     event_id: str
-    group_id: int  # backwards compatibility
-    group_ids: Sequence[int]
+    group_id: int
+    platform: str
     primary_hash: str
-    datetime: str  #
+    datetime: str
 
     data: IssueEventData
     occurrence_data: IssueOccurrenceData
@@ -148,6 +150,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "client_timestamp": client_timestamp,
             # TODO: fix the below field assignments to actually extract from event data
             "platform": "platform",
+            "environment": "environment",
+            "release": "release",
+            "dist": "dist",
             "contexts.key": [],
             "contexts.value": [],
             "tags.key": [],
