@@ -38,7 +38,6 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.processing.strategies.decoder import JsonCodec
 from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
@@ -544,17 +543,12 @@ def __invalid_kafka_message(
 
 
 def process_message(
-    processor: MessageProcessor,
-    consumer_group: str,
-    codec: JsonCodec,
-    validate: bool,
-    message: Message[KafkaPayload],
+    processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
     try:
-        decoded = codec.decode(message.payload.value, validate=validate)
         result = processor.process_message(
-            decoded,
+            rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 message.value.offset,
                 message.value.partition.index,

@@ -9,7 +9,6 @@ from unittest.mock import Mock, call
 
 import pytest
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.decoder import JsonCodec
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -69,9 +68,7 @@ def test_streaming_consumer_strategy() -> None:
 
     factory = KafkaConsumerStrategyFactory(
         None,
-        functools.partial(
-            process_message, processor, "consumer_group", JsonCodec(), False
-        ),
+        functools.partial(process_message, processor, "consumer_group"),
         write_step,
         max_batch_size=10,
         max_batch_time=60,

@@ -667,10 +667,7 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from arroyo.processing.strategies.decoder import JsonCodec
-
             from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.consumers.schemas import get_schema
             from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 
             table_writer = storage.get_table_writer()
@@ -679,19 +676,10 @@ if application.debug or application.testing:
             def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
                 pass
 
-            json_codec = JsonCodec(
-                get_schema(stream_loader.get_default_topic_spec().topic)
-            )
-            validate_schema = True
-
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
                 functools.partial(
-                    process_message,
-                    stream_loader.get_processor(),
-                    "consumer_grouup",
-                    json_codec,
-                    validate_schema,
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
                 ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
