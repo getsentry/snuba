@@ -42,17 +42,16 @@ class IssueEventData(TypedDict, total=False):
     received: float
     client_timestamp: float
     tags: Mapping[str, Any]
-    user: Mapping[
-        str, Any
-    ]  # user, user_hash, user_id, user_name, user_email, ip_address
+    user: Mapping[str, Any]  # user_hash, user_id, user_name, user_email, ip_address
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
     contexts: Mapping[str, Any]
     request: Mapping[str, Any]  # http_method, http_referer
 
     # tag aliases
-    # tags[sentry:environment] -> environment
+    # tags[environment] -> environment
     # tags[sentry:release] -> release
     # tags[sentry:dist] -> dist
+    # tags[sentry:user] -> user
 
 
 class SearchIssueEvent(TypedDict, total=False):
