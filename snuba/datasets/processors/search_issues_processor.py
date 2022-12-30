@@ -38,7 +38,6 @@ class IssueOccurrenceData(TypedDict, total=False):
 
 class IssueEventData(TypedDict, total=False):
     # general data from event.data map
-    trace_id: Optional[str]
     received: float
     client_timestamp: float
     tags: Mapping[str, Any]
@@ -48,10 +47,13 @@ class IssueEventData(TypedDict, total=False):
     request: Mapping[str, Any]  # http_method, http_referer
 
     # tag aliases
-    # tags[environment] -> environment
-    # tags[sentry:release] -> release
-    # tags[sentry:dist] -> dist
-    # tags[sentry:user] -> user
+    environment: Optional[str]  # tags[environment] -> environment
+    release: Optional[str]  # tags[sentry:release] -> release
+    dist: Optional[str]  # tags[sentry:dist] -> dist
+    # (tags[sentry:user] or user[id]) -> user
+
+    # contexts aliases
+    # contexts.trace.trace_id -> trace_id
 
 
 class SearchIssueEvent(TypedDict, total=False):
