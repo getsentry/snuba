@@ -169,28 +169,15 @@ jobs:
       # support the image on Docker Hub
       # NOTE: This image has only been tested for local development
       SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
-      NODE_VERSION: 19.x
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
-      - uses: actions/setup-node@v3
-        with:
-          node-version: ${{env.NODE_VERSION}}
+
       - name: Get branch name
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
-      # for Arm64, we build the bundle.js outside of docker because inside it is extremely
-      # slow due to emulation.
-      - name: build admin UI
-        run: |
-          # allow copying the bundle to docker image
-          sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
-          # build bundle
-          cd snuba/admin
-          yarn install
-          yarn run build
 
       - name: enable arm64 building
         run: docker run --rm --privileged tonistiigi/binfmt --install arm64
@@ -214,8 +201,7 @@ jobs:
             -t ${SNUBA_IMAGE}:latest \
             -t ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:${{ github.sha }} \
-            --load . \
-            --target application
+            --load .
 
       - name: Publish
         # Forks cannot push to the getsentry org
