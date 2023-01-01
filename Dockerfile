@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.8.13
-FROM python:${PYTHON_VERSION}-slim-bullseye AS base
+FROM python:${PYTHON_VERSION}-slim-bullseye AS application
 
 WORKDIR /usr/src/snuba
 
@@ -36,7 +36,6 @@ RUN set -ex; \
     rm -rf /var/lib/apt/lists/*;
 
 # Install nodejs and yarn and build the admin UI
-FROM base AS build_admin_ui
 ENV NODE_VERSION=19
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
@@ -57,7 +56,6 @@ RUN set -ex; \
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
-FROM base AS application
 COPY . ./
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
