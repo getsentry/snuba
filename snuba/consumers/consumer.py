@@ -56,7 +56,7 @@ from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey, are_writes_identical
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.processor import (
     AggregateInsertBatch,
@@ -64,7 +64,6 @@ from snuba.processor import (
     MessageProcessor,
     ReplacementBatch,
 )
-from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -534,15 +533,6 @@ def __message_to_dict(
     }
 
 
-def skip_kafka_message(value: BrokerValue[KafkaPayload]) -> bool:
-    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
-    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
-    return (
-        f"{value.partition.topic.name}:{value.partition.index}:{value.offset}"
-        in messages_to_skip
-    )
-
-
 def __invalid_kafka_message(
     value: BrokerValue[KafkaPayload], consumer_group: str, err: Exception
 ) -> InvalidKafkaMessage:
@@ -563,14 +553,6 @@ def process_message(
     processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
-
-    if skip_kafka_message(message.value):
-        logger.warning(
-            f"A consumer for {message.value.partition.topic.name} skipped a message!",
-            extra=__message_to_dict(message.value),
-        )
-        return None
-
     try:
         result = processor.process_message(
             rapidjson.loads(message.payload.value),
@@ -641,52 +623,6 @@ def process_message_multistorage(
         results.append((storage_key, result))
 
     return results
-
-
-def process_message_multistorage_identical_storages(
-    message: Message[MultistorageKafkaPayload],
-) -> MultistorageProcessedMessage:
-    """
-    This method is similar to process_message_multistorage except for a minor difference.
-    It performs an optimization where it avoids processing a message multiple times if the
-    it finds that the storages on which data needs to be written are identical. This is a
-    performance optimization since we remove the message processing time completely for all
-    identical storages.
-
-    It is possible that the storage keys in the message could be a mix of identical and
-    non-identical storages. This method takes into account that scenario as well.
-
-    The reason why this method has been created rather than modifying the existing
-    process_message_multistorage is to avoid doing a check for every message in cases
-    where there are no identical storages like metrics.
-    """
-    assert isinstance(message.value, BrokerValue)
-    value = rapidjson.loads(message.payload.payload.value)
-    metadata = KafkaMessageMetadata(
-        message.value.offset, message.value.partition.index, message.value.timestamp
-    )
-
-    intermediate_results: MutableMapping[
-        StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]
-    ] = {}
-
-    for index, storage_key in enumerate(message.payload.storage_keys):
-        result = None
-        for other_storage_key, insert_batch in intermediate_results.items():
-            if are_writes_identical(storage_key, other_storage_key):
-                result = insert_batch
-                break
-
-        if result is None:
-            result = _process_message_multistorage_work(
-                metadata=metadata,
-                storage_key=storage_key,
-                storage_message=value,
-            )
-
-        intermediate_results[storage_key] = result
-
-    return list(intermediate_results.items())
 
 
 def has_destination_storages(message: Message[MultistorageKafkaPayload]) -> bool:
@@ -778,6 +714,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        parallel_collect_timeout: float = 10.0,
     ) -> None:
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -803,11 +740,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__dead_letter_policy_creator = dead_letter_policy_creator
 
         self.__process_message_fn = process_message_multistorage
-        if any(
-            are_writes_identical(storage1.get_storage_key(), storage2.get_storage_key())
-            for storage1, storage2 in itertools.combinations(self.__storages, 2)
-        ):
-            self.__process_message_fn = process_message_multistorage_identical_storages
 
         self.__collector = partial(
             build_collector, self.__metrics, self.__storages, commit_log_config
