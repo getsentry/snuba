@@ -8,7 +8,6 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.decoder import JsonCodec
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
@@ -18,7 +17,6 @@ from snuba.consumers.consumer import (
     build_batch_writer,
     process_message,
 )
-from snuba.consumers.schemas import get_schema
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
@@ -226,7 +224,7 @@ class ConsumerBuilder:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
-        json_codec = JsonCodec(get_schema(stream_loader.get_default_topic_spec().topic))
+        logical_topic = stream_loader.get_default_topic_spec().topic
 
         processor = stream_loader.get_processor()
 
@@ -245,7 +243,7 @@ class ConsumerBuilder:
                 process_message,
                 processor,
                 self.consumer_group,
-                json_codec,
+                logical_topic,
                 self.__validate_schema,
             ),
             collector=build_batch_writer(
