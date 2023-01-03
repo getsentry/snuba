@@ -3,14 +3,14 @@ from typing import List
 import pytest
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+    QueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storage import Storage, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.selectors.selector import (
-    DefaultQueryStorageSelector,
-    QueryStorageSelector,
-)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

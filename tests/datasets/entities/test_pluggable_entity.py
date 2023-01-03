@@ -15,10 +15,12 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import Query
 from snuba.query.processors.logical.granularity_processor import (

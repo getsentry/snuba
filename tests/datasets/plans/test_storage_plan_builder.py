@@ -7,17 +7,17 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.events import errors_translators
+from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+    QueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.datasets.storages.selectors.errors import ErrorsQueryStorageSelector
-from snuba.datasets.storages.selectors.selector import (
-    DefaultQueryStorageSelector,
-    QueryStorageSelector,
-)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

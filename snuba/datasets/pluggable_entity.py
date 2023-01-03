@@ -5,6 +5,7 @@ from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
@@ -19,7 +20,6 @@ from snuba.datasets.storage import (
     StorageAndMappers,
     WritableTableStorage,
 )
-from snuba.datasets.storages.selectors.selector import QueryStorageSelector
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor

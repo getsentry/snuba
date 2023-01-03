@@ -3,9 +3,9 @@ from typing import List
 
 from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.selectors.selector import QueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.processors.logical.timeseries_processor import (

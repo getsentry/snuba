@@ -6,11 +6,13 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.pipeline_delegator import (
     PipelineDelegator,

@@ -1,9 +1,9 @@
 from typing import List
 
 from snuba import state
+from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.datasets.storages.selectors.selector import QueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings

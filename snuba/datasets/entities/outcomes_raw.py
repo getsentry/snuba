@@ -2,11 +2,13 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors.logical import LogicalQueryProcessor

@@ -9,11 +9,13 @@ from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
-from snuba.datasets.storages.selectors.selector import DefaultQueryStorageSelector
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (

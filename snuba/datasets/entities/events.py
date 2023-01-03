@@ -9,12 +9,12 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.datasets.storages.selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
