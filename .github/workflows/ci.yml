@@ -347,6 +347,7 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
+            -e ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES=1 \
             --name sentry_snuba \
             --network sentry \
             snuba-test
@@ -363,16 +364,12 @@ jobs:
     continue-on-error: true
 
     steps:
-      - name: Checkout snuba
-        uses: actions/checkout@v2
-
-      - name: Pull snuba CI images
-        run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || docker pull ghcr.io/getsentry/snuba-ci:latest
+      - name: Checkout Snuba
+        uses: actions/checkout@v3
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@5bbd3d6725bbe4bf5cc12f8a3291ce87df6a891f
+        uses: getsentry/action-self-hosted-e2e-tests@4ff2dbfdd5c986a4670efaa16d82e460598359eb
         with:
           project_name: snuba
-          local_image: ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          docker_repo: ghcr.io/getsentry/snuba
-          # TODO: add docker tag to build for
+          docker_repo: getsentry/snuba
+          image_url: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
+          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any, Iterator
 
 HARDCODED_STORAGE_KEYS = {
@@ -64,15 +63,3 @@ class StorageKey(metaclass=_StorageKey):
 def register_storage_key(key: str) -> StorageKey:
     REGISTERED_STORAGE_KEYS[key.upper()] = key.lower()
     return StorageKey(key)
-
-
-IDENTICAL_STORAGES: frozenset[frozenset[StorageKey]] = frozenset()
-
-
-@lru_cache(20)
-def are_writes_identical(this: StorageKey, other: StorageKey) -> bool:
-    for group in IDENTICAL_STORAGES:
-        if {this, other}.issubset(group):
-            return True
-
-    return False

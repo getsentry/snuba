@@ -6,7 +6,6 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.replacements.projects_query_flags import ProjectsQueryFlags
 from snuba.processor import ReplacementType
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
@@ -16,6 +15,7 @@ from snuba.query.processors.physical.replaced_groups import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
 
 
