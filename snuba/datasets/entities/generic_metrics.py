@@ -114,9 +114,7 @@ class GenericMetricsEntity(Entity, ABC):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storage_and_mappers,
-                    selector=DefaultQueryStorageSelector(
-                        readable_storage.get_storage_key().value
-                    ),
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),

@@ -32,7 +32,7 @@ class ReplaysEntity(Entity):
                     storages=[
                         StorageAndMappers(writable_storage, TranslationMappers())
                     ],
-                    selector=DefaultQueryStorageSelector(StorageKey.REPLAYS.value),
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=schema.get_columns(),

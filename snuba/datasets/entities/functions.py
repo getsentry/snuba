@@ -32,7 +32,7 @@ class FunctionsEntity(Entity):
                     storages=[
                         StorageAndMappers(readable_storage, TranslationMappers())
                     ],
-                    selector=DefaultQueryStorageSelector(StorageKey.FUNCTIONS.value),
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=schema.get_columns(),

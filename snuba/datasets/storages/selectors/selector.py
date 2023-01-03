@@ -2,11 +2,10 @@ from abc import ABC, abstractmethod
 from typing import List, Sequence, Type, cast
 
 from snuba.datasets.storage import (
-    ReadableStorage,
+    ReadableTableStorage,
     StorageAndMappers,
     StorageAndMappersNotFound,
 )
-from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -36,20 +35,21 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers_list: List[StorageAndMappers],
+        storage_and_mappers: List[StorageAndMappers],
     ) -> StorageAndMappers:
         raise NotImplementedError
 
     def get_storage_mapping_pair(
         self,
-        storage: ReadableStorage,
-        storage_and_mappers_list: Sequence[StorageAndMappers],
+        storage_key: StorageKey,
+        storage_and_mappers: Sequence[StorageAndMappers],
     ) -> StorageAndMappers:
-        for sm_tuple in storage_and_mappers_list:
-            if storage == sm_tuple.storage:
+        for sm_tuple in storage_and_mappers:
+            assert isinstance(sm_tuple.storage, ReadableTableStorage)
+            if storage_key == sm_tuple.storage.get_storage_key():
                 return sm_tuple
         raise StorageAndMappersNotFound(
-            f"Unable to find storage and translation mappers pair for {storage.__class__}"
+            f"Unable to find storage and translation mappers pair for {storage_key}"
         )
 
 
@@ -60,18 +60,11 @@ class DefaultQueryStorageSelector(QueryStorageSelector):
     custom ones.
     """
 
-    def __init__(self, storage: str) -> None:
-        self.storage = get_storage(StorageKey(storage))
-
     def select_storage(
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers_list: List[StorageAndMappers],
+        storage_and_mappers: List[StorageAndMappers],
     ) -> StorageAndMappers:
-        for sm in storage_and_mappers_list:
-            if sm.storage == self.storage:
-                return sm
-        raise QueryStorageSelectorError(
-            "Unable to select storage. Storage not defined."
-        )
+        assert len(storage_and_mappers) == 1
+        return storage_and_mappers[0]

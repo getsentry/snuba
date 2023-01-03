@@ -436,7 +436,7 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
 
     query_plan = StorageQueryPlanBuilder(
         storages=[StorageAndMappers(storage, transaction_translator)],
-        selector=DefaultQueryStorageSelector(storage.get_storage_key().value),
+        selector=DefaultQueryStorageSelector(),
     ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query

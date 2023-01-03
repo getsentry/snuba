@@ -107,9 +107,7 @@ def pluggable_sets_entity() -> PluggableEntity:
         ),
         validators=[],
         required_time_column="timestamp",
-        storage_selector=DefaultQueryStorageSelector(
-            StorageKey.GENERIC_METRICS_SETS.value
-        ),
+        storage_selector=DefaultQueryStorageSelector(),
     )
 
 

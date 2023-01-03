@@ -32,7 +32,7 @@ TEST_CASES = [
                 get_storage(StorageKey.TRANSACTIONS), transaction_translator
             ),
         ],
-        DefaultQueryStorageSelector(StorageKey.TRANSACTIONS.value),
+        DefaultQueryStorageSelector(),
         get_storage(StorageKey.TRANSACTIONS),
         id="Default storage selector",
     ),

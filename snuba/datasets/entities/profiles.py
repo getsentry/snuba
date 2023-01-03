@@ -64,7 +64,7 @@ class ProfilesEntity(Entity, ABC):
                     storages=[
                         StorageAndMappers(writable_storage, TranslationMappers())
                     ],
-                    selector=DefaultQueryStorageSelector(StorageKey.PROFILES.value),
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=profile_columns,

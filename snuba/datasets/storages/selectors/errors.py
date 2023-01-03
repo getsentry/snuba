@@ -27,8 +27,8 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
 
         if use_readonly_storage:
             return self.get_storage_mapping_pair(
-                self.__errors_ro_table, storage_and_mappers_list
+                self.__errors_ro_table.get_storage_key(), storage_and_mappers_list
             )
         return self.get_storage_mapping_pair(
-            self.__errors_table, storage_and_mappers_list
+            self.__errors_table.get_storage_key(), storage_and_mappers_list
         )

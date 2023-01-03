@@ -35,9 +35,7 @@ class GroupAssigneeEntity(Entity):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=[StorageAndMappers(storage, TranslationMappers())],
-                    selector=DefaultQueryStorageSelector(
-                        StorageKey.GROUPASSIGNEES.value
-                    ),
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=schema.get_columns(),

@@ -57,6 +57,8 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         )
         if use_materialized_storage:
             return self.get_storage_mapping_pair(
-                self.materialized_storage, storage_and_mappers_list
+                self.materialized_storage.get_storage_key(), storage_and_mappers_list
             )
-        return self.get_storage_mapping_pair(self.raw_storage, storage_and_mappers_list)
+        return self.get_storage_mapping_pair(
+            self.raw_storage.get_storage_key(), storage_and_mappers_list
+        )

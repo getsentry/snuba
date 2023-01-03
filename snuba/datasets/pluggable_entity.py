@@ -78,10 +78,6 @@ class PluggableEntity(Entity):
         storages: List[StorageAndMappers] = [
             StorageAndMappers(self.readable_storage, self.translation_mappers)
         ]
-        if self.writeable_storage:
-            storages.append(
-                StorageAndMappers(self.writeable_storage, self.translation_mappers)
-            )
 
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
             storages=storages,

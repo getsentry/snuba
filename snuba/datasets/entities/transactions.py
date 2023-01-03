@@ -106,7 +106,7 @@ class BaseTransactionsEntity(Entity, ABC):
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
                 storages=[StorageAndMappers(storage, mappers)],
-                selector=DefaultQueryStorageSelector(StorageKey.TRANSACTIONS.value),
+                selector=DefaultQueryStorageSelector(),
             )
         )
 

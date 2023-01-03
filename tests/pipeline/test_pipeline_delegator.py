@@ -71,7 +71,7 @@ def test() -> None:
             storages=[
                 StorageAndMappers(get_storage(StorageKey.ERRORS), TranslationMappers())
             ],
-            selector=DefaultQueryStorageSelector(StorageKey.ERRORS.value),
+            selector=DefaultQueryStorageSelector(),
         )
     )
 
@@ -82,7 +82,7 @@ def test() -> None:
                     get_storage(StorageKey.ERRORS_RO), TranslationMappers()
                 )
             ],
-            selector=DefaultQueryStorageSelector(StorageKey.ERRORS_RO.value),
+            selector=DefaultQueryStorageSelector(),
         ),
     )
 

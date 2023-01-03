@@ -262,7 +262,7 @@ class OrgSessionsEntity(Entity):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=[StorageAndMappers(storage, TranslationMappers())],
-                    selector=DefaultQueryStorageSelector(StorageKey.ORG_SESSIONS.value),
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=ColumnSet(

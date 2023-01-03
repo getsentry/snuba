@@ -63,9 +63,7 @@ class OutcomesEntity(Entity):
                     storages=[
                         StorageAndMappers(materialized_storage, TranslationMappers()),
                     ],
-                    selector=DefaultQueryStorageSelector(
-                        StorageKey.OUTCOMES_HOURLY.value
-                    ),
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=outcomes_data_model,

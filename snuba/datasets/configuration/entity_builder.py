@@ -94,9 +94,7 @@ def _build_entity_translation_mappers(
 def _build_storage_selector(
     config_storage_selector: dict[str, Any]
 ) -> QueryStorageSelector:
-    return QueryStorageSelector.get_from_name(config_storage_selector["selector"])(
-        **config_storage_selector["args"]
-    )
+    return QueryStorageSelector.get_from_name(config_storage_selector["selector"])()
 
 
 def _build_subscription_processors(
