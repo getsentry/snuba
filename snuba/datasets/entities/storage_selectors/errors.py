@@ -3,7 +3,6 @@ from typing import List
 from snuba import state
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.storage import StorageAndMappers
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -11,8 +10,8 @@ from snuba.query.query_settings import QuerySettings
 
 class ErrorsQueryStorageSelector(QueryStorageSelector):
     def __init__(self) -> None:
-        self.__errors_table = get_writable_storage(StorageKey.ERRORS)
-        self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
+        self.__errors_table = StorageKey.ERRORS
+        self.__errors_ro_table = StorageKey.ERRORS_RO
 
     def select_storage(
         self,
@@ -27,8 +26,8 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
 
         if use_readonly_storage:
             return self.get_storage_mapping_pair(
-                self.__errors_ro_table.get_storage_key(), storage_and_mappers_list
+                self.__errors_ro_table, storage_and_mappers_list
             )
         return self.get_storage_mapping_pair(
-            self.__errors_table.get_storage_key(), storage_and_mappers_list
+            self.__errors_table, storage_and_mappers_list
         )
