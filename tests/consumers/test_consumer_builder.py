@@ -133,9 +133,6 @@ def test_consumer_builder_optional_attributes() -> None:
     consumer_builder.replacements_topic
     consumer_builder.commit_log_topic
 
-    consumer_builder.stats_callback
-    consumer_builder_with_opt.stats_callback
-
     consumer_builder.strict_offset_reset
     consumer_builder_with_opt.strict_offset_reset
 
