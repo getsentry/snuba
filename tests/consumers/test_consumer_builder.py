@@ -1,3 +1,4 @@
+import pytest
 from arroyo import Topic
 from confluent_kafka import Producer
 
@@ -78,48 +79,37 @@ consumer_builder_with_opt = ConsumerBuilder(
 )
 
 
-def test_consumer_builder_non_optional_attributes() -> None:
+@pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
+def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: ignore
     # Ensures that the ConsumerBuilders are assigning a
     # not-None value to the required attributes
 
     # Depending on the attribute, we can verify this
     # to different degrees
 
-    assert consumer_builder.storage == get_writable_storage(test_storage_key)
-    assert consumer_builder_with_opt.storage == get_writable_storage(test_storage_key)
+    assert con_build.storage == get_writable_storage(test_storage_key)
 
-    assert consumer_builder.consumer_group == consumer_group_name
-    assert consumer_builder_with_opt.consumer_group == consumer_group_name
+    assert con_build.consumer_group == consumer_group_name
 
-    assert isinstance(consumer_builder.raw_topic, Topic)
-    assert isinstance(consumer_builder_with_opt.raw_topic, Topic)
+    assert isinstance(con_build.raw_topic, Topic)
 
-    assert consumer_builder.broker_config is not None
-    assert consumer_builder_with_opt.broker_config is not None
+    assert con_build.broker_config is not None
 
-    assert consumer_builder.producer_broker_config is not None
-    assert consumer_builder_with_opt.producer_broker_config is not None
+    assert con_build.producer_broker_config is not None
 
-    assert isinstance(consumer_builder.producer, Producer)
-    assert isinstance(consumer_builder_with_opt.producer, Producer)
+    assert isinstance(con_build.producer, Producer)
 
-    assert isinstance(consumer_builder.metrics, MetricsBackend)
-    assert isinstance(consumer_builder_with_opt.metrics, MetricsBackend)
+    assert isinstance(con_build.metrics, MetricsBackend)
 
-    assert consumer_builder.max_batch_size == 3
-    assert consumer_builder.max_batch_time_ms == 4
-    assert consumer_builder.auto_offset_reset == "earliest"
-    assert consumer_builder.queued_max_messages_kbytes == 1
-    assert consumer_builder.queued_min_messages == 2
-
-    assert consumer_builder_with_opt.max_batch_size == 3
-    assert consumer_builder_with_opt.max_batch_time_ms == 4
-    assert consumer_builder_with_opt.auto_offset_reset == "earliest"
-    assert consumer_builder_with_opt.queued_max_messages_kbytes == 1
-    assert consumer_builder_with_opt.queued_min_messages == 2
+    assert con_build.max_batch_size == 3
+    assert con_build.max_batch_time_ms == 4
+    assert con_build.auto_offset_reset == "earliest"
+    assert con_build.queued_max_messages_kbytes == 1
+    assert con_build.queued_min_messages == 2
 
 
-def test_consumer_builder_optional_attributes() -> None:
+@pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
+def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignore
     # Ensures that the ConsumerBuilders are assigning
     # some value, None or not, to the optional attributes
 
@@ -127,23 +117,14 @@ def test_consumer_builder_optional_attributes() -> None:
     # are passed in, stronger checks are performed
     # in a separate test below
 
-    consumer_builder.bootstrap_servers
-    consumer_builder_with_opt.bootstrap_servers
-
     consumer_builder.replacements_topic
     consumer_builder.commit_log_topic
 
-    consumer_builder.strict_offset_reset
-    consumer_builder_with_opt.strict_offset_reset
-
-    consumer_builder.processes
-    consumer_builder_with_opt.processes
-
-    consumer_builder.input_block_size
-    consumer_builder_with_opt.input_block_size
-
-    consumer_builder.output_block_size
-    consumer_builder_with_opt.output_block_size
+    con_build.bootstrap_servers
+    con_build.strict_offset_reset
+    con_build.processes
+    con_build.input_block_size
+    con_build.output_block_size
 
 
 def test_optional_kafka_overrides() -> None:
