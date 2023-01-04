@@ -8,17 +8,17 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba.consumers.consumer import (
+    CommitLogConfig,
     build_batch_writer,
-    build_mock_batch_writer,
     process_message,
 )
-from snuba.datasets.partitioning import validate_passed_slice
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
+from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
@@ -28,9 +28,6 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
-)
-from snuba.utils.streams.kafka_consumer_with_commit_log import (
-    KafkaConsumerWithCommitLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,12 +53,6 @@ class ProcessingParameters:
     output_block_size: Optional[int]
 
 
-@dataclass(frozen=True)
-class MockParameters:
-    avg_write_latency: int
-    std_deviation: int
-
-
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -77,13 +68,11 @@ class ConsumerBuilder:
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
-        parallel_collect: bool,
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
+        validate_schema: bool = False,
         profile_path: Optional[str] = None,
-        mock_parameters: Optional[MockParameters] = None,
-        cooperative_rebalancing: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -95,7 +84,8 @@ class ConsumerBuilder:
             .topic
         )
 
-        validate_passed_slice(storage_key, slice_id)
+        # Ensure that the slice, storage set combination is valid
+        validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
@@ -163,9 +153,6 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__mock_parameters = mock_parameters
-        self.__parallel_collect = parallel_collect
-        self.__cooperative_rebalancing = cooperative_rebalancing
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -181,6 +168,7 @@ class ConsumerBuilder:
             )
 
         self.__commit_retry_policy = commit_retry_policy
+        self.__validate_schema = validate_schema
 
     def __build_consumer(
         self,
@@ -207,9 +195,6 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        if self.__cooperative_rebalancing is True:
-            configuration["partition.assignment.strategy"] = "cooperative-sticky"
-
         stats_collection_frequency_ms = get_config(
             f"stats_collection_freq_ms_{self.group_id}",
             get_config("stats_collection_freq_ms", 0),
@@ -223,18 +208,10 @@ class ConsumerBuilder:
                 }
             )
 
-        if self.commit_log_topic is None:
-            consumer = KafkaConsumer(
-                configuration,
-                commit_retry_policy=self.__commit_retry_policy,
-            )
-        else:
-            consumer = KafkaConsumerWithCommitLog(
-                configuration,
-                producer=self.producer,
-                commit_log_topic=self.commit_log_topic,
-                commit_retry_policy=self.__commit_retry_policy,
-            )
+        consumer = KafkaConsumer(
+            configuration,
+            commit_retry_policy=self.__commit_retry_policy,
+        )
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
@@ -245,14 +222,27 @@ class ConsumerBuilder:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
+        logical_topic = stream_loader.get_default_topic_spec().topic
+
         processor = stream_loader.get_processor()
+
+        if self.commit_log_topic:
+            commit_log_config = CommitLogConfig(
+                self.producer, self.commit_log_topic, self.group_id
+            )
+        else:
+            commit_log_config = None
 
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
             process_message=functools.partial(
-                process_message, processor, self.consumer_group
+                process_message,
+                processor,
+                self.consumer_group,
+                logical_topic,
+                self.__validate_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -262,14 +252,7 @@ class ConsumerBuilder:
                 ),
                 replacements_topic=self.replacements_topic,
                 slice_id=slice_id,
-            )
-            if self.__mock_parameters is None
-            else build_mock_batch_writer(
-                self.storage,
-                bool(self.replacements_topic),
-                self.metrics,
-                self.__mock_parameters.avg_write_latency,
-                self.__mock_parameters.std_deviation,
+                commit_log_config=commit_log_config,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
@@ -278,7 +261,6 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
             dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
-            parallel_collect=self.__parallel_collect,
         )
 
         if self.__profile_path is not None:

@@ -1,13 +1,13 @@
 from typing import Any, Mapping, MutableMapping
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
+from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
 
 class InvalidTopicError(ValueError):
     pass
 
 
-slice_count_validation_msg = """physical slice for storage {0}'s logical partition {1} is {2},
+slice_count_validation_msg = """physical slice for storage set {0}'s logical partition {1} is {2},
             but only {3} physical slices are assigned to {0}"""
 
 
@@ -58,6 +58,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-attribution",
         "profiles-call-tree",
         "ingest-replay-events",
+        "generic-events",
         "snuba-replay-events",
         "snuba-dead-letter-replays",
         "snuba-generic-metrics",
@@ -66,6 +67,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-generic-metrics",
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
+        "snuba-dead-letter-generic-events",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
@@ -92,25 +94,25 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
 
 def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
-    for storage in locals["SLICED_STORAGES"]:
+    for storage_set in locals["SLICED_STORAGE_SETS"]:
         assert (
-            storage in locals["LOGICAL_PARTITION_MAPPING"]
-        ), "sliced mapping must be defined for sliced storage {storage}"
+            storage_set in locals["LOGICAL_PARTITION_MAPPING"]
+        ), "sliced mapping must be defined for sliced storage set {storage_set}"
 
-        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
-        defined_slice_count = locals["SLICED_STORAGES"][storage]
+        storage_set_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage_set]
+        defined_slice_count = locals["SLICED_STORAGE_SETS"][storage_set]
 
         for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
-            slice_id = storage_mapping.get(logical_part)
+            slice_id = storage_set_mapping.get(logical_part)
 
             assert (
                 slice_id is not None
-            ), f"missing physical slice for storage {storage}'s logical partition {logical_part}"
+            ), f"missing physical slice for storage set {storage_set}'s logical partition {logical_part}"
 
             assert (
                 slice_id >= 0 and slice_id < defined_slice_count
             ), slice_count_validation_msg.format(
-                storage, logical_part, slice_id, defined_slice_count
+                storage_set, logical_part, slice_id, defined_slice_count
             )
 
     for topic_tuple in locals["SLICED_KAFKA_TOPIC_MAP"]:

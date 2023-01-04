@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     The transaction_name column should not be nullable; it is not in either errors or transacions
     """

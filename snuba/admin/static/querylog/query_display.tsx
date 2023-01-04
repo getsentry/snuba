@@ -1,19 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Client from "../api_client";
+import { QueryResult } from "../clickhouse_queries/types";
 import { Collapse } from "../collapse";
 
-import { QuerylogRequest, QuerylogResult } from "./types";
+import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<QuerylogRequest>;
 
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QuerylogResult) => JSX.Element;
+  predefinedQuery: PredefinedQuery | null;
 }) {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<
     QuerylogResult[]
   >([]);
+
+  useEffect(() => {
+    if (props.predefinedQuery) {
+      setQuery({ sql: props.predefinedQuery.sql });
+    }
+  }, [props.predefinedQuery]);
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -50,14 +58,27 @@ function QueryDisplay(props: {
       });
   }
 
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
+  function convertResultsToCSV(queryResult: QuerylogResult) {
+    let output = queryResult.column_names.join(",");
+    for (const row of queryResult.rows) {
+      const escaped = row.map((v) =>
+        typeof v == "string" && v.includes(",") ? '"' + v + '"' : v
+      );
+      output = output + "\n" + escaped.join(",");
+    }
+    return output;
+  }
+
+  function copyText(queryResult: QuerylogResult, format: string) {
+    const formatter = format == "csv" ? convertResultsToCSV : JSON.stringify;
+    window.navigator.clipboard.writeText(formatter(queryResult));
   }
 
   return (
     <div>
       <form>
         <h2>Construct a Querylog Query</h2>
+        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
         </div>
@@ -95,9 +116,17 @@ function QueryDisplay(props: {
                 <p>
                   <button
                     style={executeButtonStyle}
-                    onClick={() => copyText(JSON.stringify(queryResult))}
+                    onClick={() => copyText(queryResult, "json")}
                   >
-                    Copy to clipboard
+                    Copy to clipboard (JSON)
+                  </button>
+                </p>
+                <p>
+                  <button
+                    style={executeButtonStyle}
+                    onClick={() => copyText(queryResult, "csv")}
+                  >
+                    Copy to clipboard (CSV)
                   </button>
                 </p>
                 {props.resultDataPopulator(queryResult)}
@@ -109,9 +138,15 @@ function QueryDisplay(props: {
             <Collapse key={idx} text={queryResult.input_query}>
               <button
                 style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
+                onClick={() => copyText(queryResult, "json")}
               >
-                Copy to clipboard
+                Copy to clipboard (JSON)
+              </button>
+              <button
+                style={executeButtonStyle}
+                onClick={() => copyText(queryResult, "csv")}
+              >
+                Copy to clipboard (CSV)
               </button>
               {props.resultDataPopulator(queryResult)}
             </Collapse>

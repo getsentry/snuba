@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -5,12 +7,16 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, TypeVar
 
 import simplejson as json
-from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.batching import AbstractBatchWorker
+from arroyo.processing.strategies import CommitOffsets, RunTask
+from arroyo.processing.strategies.abstract import (
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+)
+from arroyo.types import BrokerValue, Commit, Message, Partition
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -19,10 +25,10 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
-from snuba.datasets.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -262,7 +268,33 @@ class ShardedExecutor(InsertExecutor):
             return count
 
 
-class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
+TPayload = TypeVar("TPayload")
+TResult = TypeVar("TResult")
+
+
+class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+    def __init__(
+        self,
+        worker: ReplacerWorker,
+    ) -> None:
+        self.__worker = worker
+
+    def create_with_partitions(
+        self,
+        commit: Commit,
+        partitions: Mapping[Partition, int],
+    ) -> ProcessingStrategy[KafkaPayload]:
+        def processing_func(message: Message[KafkaPayload]) -> None:
+            processed = self.__worker.process_message(message)
+            batch = [] if processed is None else [processed]
+            return self.__worker.flush_batch(batch)
+
+        commit_offsets: ProcessingStrategy[None] = CommitOffsets(commit)
+
+        return RunTask(processing_func, commit_offsets)
+
+
+class ReplacerWorker:
     def __init__(
         self,
         storage: WritableTableStorage,
@@ -355,9 +387,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        assert isinstance(message.value, BrokerValue)
         metadata = ReplacementMessageMetadata(
-            partition_index=message.partition.index,
-            offset=message.offset,
+            partition_index=message.value.partition.index,
+            offset=message.value.offset,
             consumer_group=self.__consumer_group,
         )
 

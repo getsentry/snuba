@@ -1,9 +1,10 @@
+import warnings
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Sequence
 
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.context import Context
-from snuba.migrations.operations import RunPython, SqlOperation
+from snuba.migrations.operations import OperationTarget, RunPython, SqlOperation
 from snuba.migrations.status import Status
 
 
@@ -113,6 +114,80 @@ class ClickhouseNodeMigration(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
+    @abstractmethod
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError()
+
+    def forwards(self, context: Context, dry_run: bool = False) -> None:
+        ops = self.forwards_ops()
+
+        if dry_run:
+            self.__dry_run(ops)
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Running migration: {migration_id}")
+
+        # The table does not exist before the first migration is run
+        # so do not update status yet
+        if not self.is_first_migration():
+            update_status(Status.IN_PROGRESS)
+
+        for op in ops:
+            op.execute()
+
+        logger.info(f"Finished: {migration_id}")
+        update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        ops = self.backwards_ops()
+        if dry_run:
+            self.__dry_run(ops)
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+
+        for op in ops:
+            op.execute()
+        logger.info(f"Finished reversing: {migration_id}")
+
+        # The migrations table will be destroyed if the first
+        # migration is reversed; do not attempt to update status
+        if not self.is_first_migration():
+            update_status(Status.NOT_STARTED)
+
+    def __dry_run(
+        self,
+        ops: Sequence[SqlOperation],
+    ) -> None:
+        def print_dist_op(op: SqlOperation) -> None:
+            cluster = get_cluster(op._storage_set)
+            is_single_node = cluster.is_single_node()
+            if not is_single_node:
+                print(f"Distributed op: {op.format_sql()}")
+            else:
+                print("Skipped dist operation - single node cluster")
+
+        for op in ops:
+            if op.target == OperationTarget.LOCAL:
+                print(f"Local op: {op.format_sql()}")
+            elif op.target == OperationTarget.DISTRIBUTED:
+                print_dist_op(op)
+            else:
+                print("Skipped operation - no target specified")
+
+
+class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
+    """
+    This is now deprecated. Use ClickhouseNodeMigration instead.
+    """
+
     forwards_local_first: bool = True
     backwards_local_first: bool = False
 
@@ -132,102 +207,37 @@ class ClickhouseNodeMigration(Migration, ABC):
     def backwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    def forwards(self, context: Context, dry_run: bool = False) -> None:
-        if dry_run:
-            self.__dry_run(
-                self.forwards_local(),
-                self.forwards_dist(),
-                self.forwards_local_first,
-            )
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
-
-        # The table does not exist before the first migration is run
-        # so do not update status yet
-        if not self.is_first_migration():
-            update_status(Status.IN_PROGRESS)
-
-        local_ops = list(self.forwards_local())
-        dist_ops = list(self.forwards_dist())
-        ops = (
-            local_ops + dist_ops if self.forwards_local_first else dist_ops + local_ops
-        )
-
-        for op in ops:
-            if op in local_ops:
-                op.execute(local=True)
-            if op in dist_ops:
-                op.execute(local=False)
-
-        logger.info(f"Finished: {migration_id}")
-        update_status(Status.COMPLETED)
-
-    def backwards(self, context: Context, dry_run: bool) -> None:
-        if dry_run:
-            self.__dry_run(
-                self.backwards_local(),
-                self.backwards_dist(),
-                self.backwards_local_first,
-            )
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Reversing migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
-
-        local_ops = list(self.backwards_local())
-        dist_ops = list(self.backwards_dist())
-        ops = (
-            local_ops + dist_ops if self.backwards_local_first else dist_ops + local_ops
-        )
-
-        for op in ops:
-            if op in local_ops:
-                op.execute(local=True)
-            if op in dist_ops:
-                op.execute(local=False)
-        logger.info(f"Finished reversing: {migration_id}")
-
-        # The migrations table will be destroyed if the first
-        # migration is reversed; do not attempt to update status
-        if not self.is_first_migration():
-            update_status(Status.NOT_STARTED)
-
-    def __dry_run(
-        self,
-        local_operations: Sequence[SqlOperation],
-        dist_operations: Sequence[SqlOperation],
-        local_first: bool,
+    def _set_targets(
+        self, ops: Sequence[SqlOperation], target: OperationTarget
     ) -> None:
-        def print_local() -> None:
-            print("Local operations:")
-            if len(local_operations) == 0:
-                print("n/a")
+        """For old migrations using the old methods, set the target appropriately."""
+        for op in ops:
+            op.target = target
 
-            for op in local_operations:
-                print(op.format_sql())
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        warnings.warn(
+            "backwards_local and backwards_dist are deprecated. Use backwards_ops instead.",
+            DeprecationWarning,
+        )
+        local_ops, dist_ops = self.backwards_local(), self.backwards_dist()
+        self._set_targets(local_ops, OperationTarget.LOCAL)
+        self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
 
-        def print_dist() -> None:
-            print("Dist operations:")
-
-            if len(dist_operations) == 0:
-                print("n/a")
-
-            for op in dist_operations:
-                cluster = get_cluster(op._storage_set)
-
-                if not cluster.is_single_node():
-                    print(op.format_sql())
-                else:
-                    print("Skipped dist operation - single node cluster")
-
-        if local_first:
-            print_local()
-            print("\n")
-            print_dist()
+        if self.backwards_local_first:
+            return (*local_ops, *dist_ops)
         else:
-            print_dist()
-            print("\n")
-            print_local()
+            return (*dist_ops, *local_ops)
+
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        warnings.warn(
+            "forwards_local and forwards_dist are deprecated. Use forwards_ops instead.",
+            DeprecationWarning,
+        )
+        local_ops, dist_ops = self.forwards_local(), self.forwards_dist()
+        self._set_targets(local_ops, OperationTarget.LOCAL)
+        self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+
+        if self.forwards_local_first:
+            return (*local_ops, *dist_ops)
+        else:
+            return (*dist_ops, *local_ops)

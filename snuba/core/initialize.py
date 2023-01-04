@@ -30,7 +30,7 @@ def _load_entities() -> None:
 
 
 def initialize_snuba() -> None:
-    logger.info("Initializing Snuba")
+    logger.info("Initializing Snuba...")
 
     # The order of the functions matters The reference direction is
     #

@@ -3,8 +3,8 @@ from __future__ import annotations
 from concurrent.futures import Future
 from typing import Union
 
-from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
+from arroyo.types import BrokerValue, Partition, Topic
 
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
@@ -18,24 +18,24 @@ class ProducerEncodingWrapper(Producer[TDecoded]):
 
     def produce(
         self, destination: Union[Topic, Partition], payload: TDecoded
-    ) -> Future[Message[TDecoded]]:
-        decoded_future: Future[Message[TDecoded]] = Future()
+    ) -> Future[BrokerValue[TDecoded]]:
+        decoded_future: Future[BrokerValue[TDecoded]] = Future()
         decoded_future.set_running_or_notify_cancel()
 
         def set_decoded_future_result(
-            encoded_future: Future[Message[TEncoded]],
+            encoded_future: Future[BrokerValue[TEncoded]],
         ) -> None:
             try:
-                message = encoded_future.result()
+                value = encoded_future.result()
             except Exception as e:
                 decoded_future.set_exception(e)
             else:
                 decoded_future.set_result(
-                    Message(
-                        message.partition,
-                        message.offset,
+                    BrokerValue(
                         payload,
-                        message.timestamp,
+                        value.partition,
+                        value.offset,
+                        value.timestamp,
                     )
                 )
 

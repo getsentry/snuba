@@ -10,3 +10,5 @@ snuba.egg-info/
 .DS_Store
 .idea/
 node_modules
+.vscode/*.log
+snuba/admin/dist/bundle.js*

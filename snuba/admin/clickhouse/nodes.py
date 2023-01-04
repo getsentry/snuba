@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, TypedDict
+from typing import Optional, Sequence, TypedDict
 
 from snuba import settings
 from snuba.clusters.cluster import UndefinedClickhouseCluster
@@ -13,7 +13,13 @@ Node = TypedDict("Node", {"host": str, "port": int})
 
 Storage = TypedDict(
     "Storage",
-    {"storage_name": str, "local_table_name": str, "local_nodes": Sequence[Node]},
+    {
+        "storage_name": str,
+        "local_table_name": str,
+        "local_nodes": Sequence[Node],
+        "dist_nodes": Sequence[Node],
+        "query_node": Optional[Node],
+    },
 )
 
 
@@ -26,16 +32,37 @@ def _get_local_table_name(storage_key: StorageKey) -> str:
         return "badcluster"
 
 
-def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
+def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
     try:
         storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
         return [
             {"host": node.host_name, "port": node.port}
-            for node in storage.get_cluster().get_local_nodes()
+            for node in (
+                cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
+            )
         ]
     except (AssertionError, KeyError, UndefinedClickhouseCluster):
         # If cluster_name is not defined just return an empty list
         return []
+
+
+def _get_query_node(storage_key: StorageKey) -> Optional[Node]:
+    try:
+        cluster = get_storage(storage_key).get_cluster()
+        query_node = cluster.get_query_node()
+        return {"host": query_node.host_name, "port": query_node.port}
+
+    except (AssertionError, KeyError, UndefinedClickhouseCluster):
+        return None
+
+
+def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
+    return _get_nodes(storage_key, local=True)
+
+
+def _get_dist_nodes(storage_key: StorageKey) -> Sequence[Node]:
+    return _get_nodes(storage_key, local=False)
 
 
 def get_storage_info() -> Sequence[Storage]:
@@ -44,6 +71,8 @@ def get_storage_info() -> Sequence[Storage]:
             "storage_name": storage_key.value,
             "local_table_name": _get_local_table_name(storage_key),
             "local_nodes": _get_local_nodes(storage_key),
+            "dist_nodes": _get_dist_nodes(storage_key),
+            "query_node": _get_query_node(storage_key),
         }
         for storage_key in sorted(
             get_all_storage_keys(), key=lambda storage_key: storage_key.value

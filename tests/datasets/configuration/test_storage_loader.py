@@ -24,15 +24,34 @@ from snuba.utils.schemas import AggregateFunction
 # this has to be done before the storage import because there's a cyclical dependency error
 CONFIG_BUILT_STORAGES = get_config_built_storages()
 
-
+from snuba.datasets.storages.discover import storage as discover
+from snuba.datasets.storages.functions import agg_storage as functions
+from snuba.datasets.storages.functions import raw_storage as functions_raw
 from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    distributions_storage,
-    sets_bucket_storage,
-    sets_storage,
+    distributions_bucket_storage as gen_metrics_distributions_bucket,
 )
+from snuba.datasets.storages.generic_metrics import (
+    distributions_storage as gen_metrics_distributions,
+)
+from snuba.datasets.storages.generic_metrics import (
+    sets_bucket_storage as gen_metrics_sets_bucket,
+)
+from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
+from snuba.datasets.storages.metrics import counters_storage
+from snuba.datasets.storages.metrics import (
+    distributions_storage as metrics_distributions_storage,
+)
+from snuba.datasets.storages.metrics import org_counters_storage
+from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
+from snuba.datasets.storages.metrics import sets_storage as metrics_sets
+from snuba.datasets.storages.outcomes import materialized_storage as outcomes_hourly
+from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
+from snuba.datasets.storages.replays import storage as replays
+from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
+from snuba.datasets.storages.sessions import org_materialized_storage as sessions_org
+from snuba.datasets.storages.sessions import raw_storage as sessions_raw
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -71,12 +90,23 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
 
     if isinstance(schema_old, TableSchema) and isinstance(schema_new, TableSchema):
         assert schema_old.get_table_name() == schema_new.get_table_name()
+        assert (
+            schema_old.get_data_source().get_mandatory_conditions()
+            == schema_new.get_data_source().get_mandatory_conditions()
+        )
 
     if isinstance(old, WritableTableStorage) and isinstance(new, WritableTableStorage):
         assert (
             old.get_table_writer().get_schema().get_columns()
             == new.get_table_writer().get_schema().get_columns()
         )
+        old_rp = old.get_table_writer().get_replacer_processor()
+        new_rp = new.get_table_writer().get_replacer_processor()
+        if old_rp or new_rp:
+            assert old_rp is not None and new_rp is not None
+            assert old_rp.get_schema() == new_rp.get_schema()
+            assert old_rp.config_key() == new_rp.config_key()
+            assert old_rp.get_state() == new_rp.get_state()
         _compare_stream_loaders(
             old.get_table_writer().get_stream_loader(),
             new.get_table_writer().get_stream_loader(),
@@ -104,12 +134,26 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
-        distributions_bucket_storage,
-        distributions_storage,
-        sets_bucket_storage,
-        sets_storage,
+        discover,
+        functions,
+        functions_raw,
+        sessions_raw,
+        sessions_org,
+        sessions_hourly,
+        gen_metrics_distributions_bucket,
+        gen_metrics_distributions,
+        gen_metrics_sets_bucket,
+        gen_metrics_sets,
+        metrics_sets,
+        counters_storage,
+        metrics_distributions_storage,
+        metrics_raw,
+        org_counters_storage,
+        outcomes_hourly,
+        outcomes_raw,
         transactions,
         profiles,
+        replays,
         querylog,
     ]
 
@@ -118,7 +162,6 @@ class TestStorageConfiguration(ConfigurationTest):
             storage.get_storage_key() in CONFIG_BUILT_STORAGES
             for storage in self.python_storages
         )
-        assert len(CONFIG_BUILT_STORAGES) == len(self.python_storages)
 
     def test_compare_storages(self) -> None:
         for storage in self.python_storages:
@@ -184,7 +227,7 @@ query_processors:
                 "type": "AggregateFunction",
                 "args": {
                     "func": "uniqCombined64",
-                    "arg_types": [{"type": "UInt", "arg": 64}],
+                    "arg_types": [{"type": "UInt", "args": {"size": 64}}],
                 },
             },
             {

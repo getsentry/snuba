@@ -39,11 +39,6 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
         raise NotImplementedError
 
 
-class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
-    def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        return False
-
-
 @dataclass
 class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     """
@@ -79,9 +74,9 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
         self.__postgres_table = postgres_table
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        assert (
-            message.partition.index == KAFKA_ONLY_PARTITION
-        ), "CDC can only work with single partition topics for consistency"
+        assert [p.index for p in message.committable.keys()] == [
+            KAFKA_ONLY_PARTITION
+        ], "CDC can only work with single partition topics for consistency"
 
         table_name = next(
             (value for key, value in message.payload.headers if key == "table"), None

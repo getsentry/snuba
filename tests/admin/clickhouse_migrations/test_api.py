@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import asdict
+from typing import Any, Mapping, Sequence
 from unittest.mock import patch
 
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -20,6 +22,7 @@ def admin_api() -> FlaskClient:
 
 
 def test_migration_groups(admin_api: FlaskClient) -> None:
+    runner = Runner()
     with patch("snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", dict()):
         response = admin_api.get("/migrations/groups")
 
@@ -32,19 +35,23 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     ):
         response = admin_api.get("/migrations/groups")
 
-    assert response.status_code == 200
-    assert json.loads(response.data) == [
-        {
-            "group": "system",
-            "migration_ids": get_group_loader(MigrationGroup.SYSTEM).get_migrations(),
-        },
-        {
-            "group": "generic_metrics",
-            "migration_ids": get_group_loader(
-                MigrationGroup.GENERIC_METRICS
-            ).get_migrations(),
-        },
-    ]
+        def get_migration_ids(
+            group: MigrationGroup,
+        ) -> Sequence[Mapping[str, str | bool]]:
+            _, migrations = run_migration_checks_for_groups([group], runner)[0]
+            return [asdict(m) for m in migrations]
+
+        assert response.status_code == 200
+        assert json.loads(response.data) == [
+            {
+                "group": "system",
+                "migration_ids": get_migration_ids(MigrationGroup.SYSTEM),
+            },
+            {
+                "group": "generic_metrics",
+                "migration_ids": get_migration_ids(MigrationGroup.GENERIC_METRICS),
+            },
+        ]
 
 
 def test_list_migration_status(admin_api: FlaskClient) -> None:

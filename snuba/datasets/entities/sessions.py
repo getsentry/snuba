@@ -10,10 +10,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
+from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -270,8 +269,14 @@ class SessionsEntity(Entity):
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=SessionsQueryStorageSelector()
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[
+                        StorageAndMappers(
+                            materialized_storage, sessions_hourly_translators
+                        ),
+                        StorageAndMappers(writable_storage, sessions_raw_translators),
+                    ],
+                    selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
@@ -280,6 +285,10 @@ class SessionsEntity(Entity):
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
+            subscription_processors=[AddColumnCondition("organization", "org_id")],
+            subscription_validators=[
+                AggregationValidator(2, ["groupby", "having", "orderby"], "started")
+            ],
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -300,7 +309,9 @@ class OrgSessionsEntity(Entity):
         super().__init__(
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage)
+                query_plan_builder=StorageQueryPlanBuilder(
+                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                )
             ),
             abstract_column_set=ColumnSet(
                 [
@@ -314,6 +325,8 @@ class OrgSessionsEntity(Entity):
             writable_storage=None,
             validators=None,
             required_time_column="started",
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

@@ -34,18 +34,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     required=True,
 )
 @click.option(
-    "--max-batch-size",
-    default=settings.DEFAULT_MAX_BATCH_SIZE,
-    type=int,
-    help="Max number of messages to batch in memory before writing to Kafka.",
-)
-@click.option(
-    "--max-batch-time-ms",
-    default=settings.DEFAULT_MAX_BATCH_TIME_MS,
-    type=int,
-    help="Max length of time to buffer messages in memory before writing to Kafka.",
-)
-@click.option(
     "--auto-offset-reset",
     default="error",
     type=click.Choice(["error", "earliest", "latest"]),
@@ -75,8 +63,6 @@ def replacer(
     consumer_group: str,
     bootstrap_server: Sequence[str],
     storage_name: str,
-    max_batch_size: int,
-    max_batch_time_ms: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
@@ -86,11 +72,10 @@ def replacer(
 
     from arroyo import Topic, configure_metrics
     from arroyo.backends.kafka import KafkaConsumer
-    from arroyo.commit import IMMEDIATE
+    from arroyo.commit import ONCE_PER_SECOND
     from arroyo.processing import StreamProcessor
-    from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
 
-    from snuba.replacer import ReplacerWorker
+    from snuba.replacer import ReplacerStrategyFactory, ReplacerWorker
     from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,
     )
@@ -126,12 +111,10 @@ def replacer(
             ),
         ),
         Topic(replacements_topic),
-        BatchProcessingStrategyFactory(
+        ReplacerStrategyFactory(
             worker=ReplacerWorker(storage, consumer_group, metrics=metrics),
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time_ms,
         ),
-        IMMEDIATE,
+        ONCE_PER_SECOND,
     )
 
     def handler(signum: int, frame: Any) -> None:

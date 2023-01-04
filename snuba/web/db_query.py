@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
@@ -57,10 +58,7 @@ from snuba.web import QueryException, QueryResult, constants
 MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
-redis_cache_clients = [
-    get_redis_client(RedisClientKey.CACHE),
-    get_redis_client(RedisClientKey.CACHE_V2),
-]
+redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -86,7 +84,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        redis_cache_clients,
+        redis_cache_client,
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
@@ -322,9 +320,7 @@ def _apply_thread_quota_to_clickhouse_query_settings(
     query_settings: QuerySettings,
     clickhouse_query_settings: MutableMapping[str, Any],
     project_rate_limit_stats: Optional[RateLimitStats],
-) -> MutableMapping[str, Any]:
-    res: MutableMapping[str, Any] = {}
-    res.update(clickhouse_query_settings)
+) -> None:
     thread_quota = query_settings.get_resource_quota()
     if (
         "max_threads" in clickhouse_query_settings or thread_quota is not None
@@ -334,8 +330,9 @@ def _apply_thread_quota_to_clickhouse_query_settings(
             if thread_quota is None
             else thread_quota.max_threads
         )
-        res["max_threads"] = max(1, maxt - project_rate_limit_stats.concurrent + 1)
-    return res
+        clickhouse_query_settings["max_threads"] = max(
+            1, maxt - project_rate_limit_stats.concurrent + 1
+        )
 
 
 @with_span(op="db")
@@ -360,7 +357,7 @@ def execute_query_with_rate_limits(
         project_rate_limit_stats = rate_limit_stats_container.get_stats(
             PROJECT_RATE_LIMIT_NAME
         )
-        clickhouse_query_settings = _apply_thread_quota_to_clickhouse_query_settings(
+        _apply_thread_quota_to_clickhouse_query_settings(
             query_settings, clickhouse_query_settings, project_rate_limit_stats
         )
 
@@ -440,7 +437,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
                 cache_partitions[partition_id] = RedisCache(
-                    redis_cache_clients,
+                    redis_cache_client,
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
@@ -520,7 +517,7 @@ def execute_query_with_caching(
 
 
 @with_span(op="db")
-def execute_query_with_readthrough_caching(
+def execute_query_with_query_id(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
@@ -532,6 +529,61 @@ def execute_query_with_readthrough_caching(
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
+
+    try:
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            formatted_query_sorted,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+    except ClickhouseError as e:
+        if (
+            e.code != errors.ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+            or not state.get_config("retry_duplicate_query_id", False)
+        ):
+            raise
+
+        logger.error(
+            "Query cache for query ID %s lost, retrying query with random ID", query_id
+        )
+        metrics.increment("query_cache_lost")
+
+        query_id = f"randomized-{uuid.uuid4().hex}"
+
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            formatted_query_sorted,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+
+
+@with_span(op="db")
+def execute_query_with_readthrough_caching(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    formatted_query: FormattedQuery,
+    formatted_query_sorted: Optional[FormattedQuery],
+    reader: Reader,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
+    robust: bool,
+    query_id: str,
+) -> Result:
     sorted_key_cache_experiment = {"is_selected": False, "sorted_key_exists": False}
     try:
         check_sorted_sql_key_in_cache(
@@ -677,7 +729,7 @@ def raw_query(
     )
 
     execute_query_strategy = (
-        execute_query_with_readthrough_caching
+        execute_query_with_query_id
         if state.get_config("use_readthrough_query_cache", 1)
         else execute_query_with_caching
     )
@@ -699,6 +751,7 @@ def raw_query(
             stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
             error_code = None
+            status = QueryStatus.ERROR
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
@@ -714,8 +767,10 @@ def raw_query(
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code == errors.ErrorCodes.TIMEOUT_EXCEEDED:
                             sentry_sdk.set_tag("timeout", "query_timeout")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code in (
                             errors.ErrorCodes.SOCKET_TIMEOUT,
                             errors.ErrorCodes.NETWORK_ERROR,
@@ -727,9 +782,10 @@ def raw_query(
                 ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
+                        status = QueryStatus.TIMEOUT
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status(QueryStatus.ERROR, error_code=error_code)
+            stats = update_with_status(status, error_code=error_code)
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly

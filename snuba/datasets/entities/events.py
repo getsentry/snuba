@@ -11,7 +11,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -97,17 +98,18 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, query_settings: QuerySettings
+        self,
+        query: Query,
+        query_settings: QuerySettings,
     ) -> StorageAndMappers:
         use_readonly_storage = (
             state.get_config("enable_events_readonly_table", False)
             and not query_settings.get_consistent()
         )
 
-        storage = (
-            self.__errors_ro_table if use_readonly_storage else self.__errors_table
-        )
-        return StorageAndMappers(storage, self.__mappers)
+        if use_readonly_storage:
+            return StorageAndMappers(self.__errors_ro_table, self.__mappers)
+        return StorageAndMappers(self.__errors_table, self.__mappers)
 
 
 class BaseEventsEntity(Entity, ABC):
@@ -118,20 +120,27 @@ class BaseEventsEntity(Entity, ABC):
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         events_storage = get_writable_storage(StorageKey.ERRORS)
+        events_read_storage = get_storage(StorageKey.ERRORS_RO)
+        mappers = (
+            errors_translators
+            if custom_mappers is None
+            else errors_translators.concat(custom_mappers)
+        )
+
         pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=ErrorsQueryStorageSelector(
-                    mappers=errors_translators
-                    if custom_mappers is None
-                    else errors_translators.concat(custom_mappers)
-                )
+            query_plan_builder=StorageQueryPlanBuilder(
+                storages=[
+                    StorageAndMappers(events_read_storage, mappers),
+                    StorageAndMappers(events_storage, mappers),
+                ],
+                selector=ErrorsQueryStorageSelector(mappers),
             ),
         )
         schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
         super().__init__(
-            storages=[events_storage],
+            storages=[events_storage, events_read_storage],
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=columns,
             join_relationships={
@@ -151,6 +160,10 @@ class BaseEventsEntity(Entity, ABC):
             writable_storage=events_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
+            subscription_processors=None,
+            subscription_validators=[
+                AggregationValidator(1, ["groupby", "having", "orderby"], "timestamp")
+            ],
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

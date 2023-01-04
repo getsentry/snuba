@@ -5,14 +5,25 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, SimpleQueue
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union, cast
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 from urllib.parse import urlencode
 
 import rapidjson
+import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -134,19 +145,28 @@ class HTTPWriteBatch:
     case.
     If the buffer size is higher and the buffer is full, the `append`
     command will block while the value is sent to the server.
+
+    The "debug buffer" is being used to hold a prefix of the data
+    stream in memory. If the error returned by clickhouse happens to point to a
+    row contained in the first `debug_buffer_size_bytes` bytes of the data
+    stream, the corresponding Sentry error will contain that row's data. The
+    debug buffer is separate from the buffer that is being used to stream the
+    HTTP.
     """
 
     def __init__(
         self,
         executor: ThreadPoolExecutor,
         pool: HTTPConnectionPool,
+        metrics: MetricsBackend,
         user: str,
         password: str,
         statement: InsertStatement,
         encoding: Optional[str],
-        buffer_size: int,  # 0 means unbounded
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
         chunk_size: Optional[int] = None,
+        buffer_size: int = 0,  # 0 means unbounded
+        debug_buffer_size_bytes: Optional[int] = None,  # None means disabled
     ) -> None:
         if chunk_size is None:
             chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
@@ -179,12 +199,18 @@ class HTTPWriteBatch:
             body=body,
         )
 
-        self.__rows = 0
+        self.__debug_buffer: List[bytes] = []
         self.__size = 0
+        self.__debug_buffer_size_bytes = debug_buffer_size_bytes
         self.__closed = False
 
+        self.__metrics = metrics
+        self.__statement = statement
+
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
+        return (
+            f"<{type(self).__name__}: {self.__debug_buffer} rows ({self.__size} bytes)>"
+        )
 
     def __read_until_eof(self) -> Iterator[bytes]:
         while True:
@@ -199,8 +225,10 @@ class HTTPWriteBatch:
         assert not self.__closed
 
         self.__queue.put(value)
-        self.__rows += 1
         self.__size += len(value)
+
+        if self.__size < (self.__debug_buffer_size_bytes or 0):
+            self.__debug_buffer.append(value)
 
     def close(self) -> None:
         self.__queue.put(None)
@@ -209,6 +237,12 @@ class HTTPWriteBatch:
     def join(self, timeout: Optional[float] = None) -> None:
         response = self.__result.result(timeout)
         logger.debug("Received response for %r.", self)
+
+        self.__metrics.timing(
+            "http_batch.size",
+            self.__size,
+            tags={"table": str(self.__statement.get_qualified_table())},
+        )
 
         if response.status != 200:
             # XXX: This should be switched to just parse the JSON body after
@@ -219,6 +253,16 @@ class HTTPWriteBatch:
                 code = int(details["code"])
                 message = details["message"]
                 row = int(details["row"]) if details["row"] is not None else None
+                try:
+                    if row is not None:
+                        sentry_sdk.set_context(
+                            "snuba_errored_row", {"data": self.__debug_buffer[row]}
+                        )
+                    sentry_sdk.set_tag("snuba_has_errored_row", "true")
+                except IndexError:
+                    sentry_sdk.set_context("snuba_errored_row", {"index_error": True})
+                    sentry_sdk.set_tag("snuba_has_errored_row", "false")
+
                 raise ClickhouseWriterError(message, code=code, row=row)
             else:
                 raise HTTPError(
@@ -233,7 +277,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         port: int,
         user: str,
         password: str,
-        metrics: MetricsBackend,  # deprecated
+        metrics: MetricsBackend,
         statement: InsertStatement,
         encoding: Optional[str],
         options: Optional[Mapping[str, Any]] = None,
@@ -242,6 +286,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
     ):
         self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
+        self.__metrics = metrics
 
         self.__options = options if options is not None else {}
         self.__user = user
@@ -250,6 +295,13 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
+        self.__debug_buffer_size_bytes = state.get_config(
+            "debug_buffer_size_bytes", None
+        )
+        assert (
+            isinstance(self.__debug_buffer_size_bytes, int)
+            or self.__debug_buffer_size_bytes is None
+        )
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
@@ -258,13 +310,15 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
+            self.__metrics,
             self.__user,
             self.__password,
             self.__statement,
             self.__encoding,
-            self.__buffer_size,
             self.__options,
             self.__chunk_size,
+            self.__buffer_size,
+            self.__debug_buffer_size_bytes,
         )
 
         for value in values:

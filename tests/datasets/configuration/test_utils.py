@@ -7,12 +7,13 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
+from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
-from snuba.datasets.configuration.storage_builder import build_stream_loader
+from snuba.datasets.configuration.storage_builder import (
+    STORAGE_VALIDATORS,
+    build_stream_loader,
+)
 from snuba.datasets.configuration.utils import generate_policy_creator
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors import DatasetMessageProcessor
@@ -130,9 +131,9 @@ def test_invalid_storage() -> None:
         "schema": {"columns": []},
         "query_processors": [],
     }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "1 is not of type 'string'"
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert e.value.message == "data.storage.key must be string"
 
 
 def test_invalid_query_processor() -> None:
@@ -144,9 +145,9 @@ def test_invalid_query_processor() -> None:
         "schema": {"columns": []},
         "query_processors": [5],
     }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "5 is not of type 'object'"
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert e.value.message == "data.query_processors[0] must be object"
 
 
 def test_unexpected_key() -> None:
@@ -159,12 +160,9 @@ def test_unexpected_key() -> None:
         "query_processors": [],
         "extra": "",
     }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert (
-        e.value.message
-        == "Additional properties are not allowed ('extra' was unexpected)"
-    )
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert e.value.message == "data must not contain {'extra'} properties"
 
 
 def test_missing_required_key() -> None:
@@ -175,6 +173,9 @@ def test_missing_required_key() -> None:
         "schema": {"columns": []},
         "query_processors": [],
     }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "'kind' is a required property"
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert (
+        e.value.message
+        == "data must contain ['version', 'kind', 'name', 'storage', 'schema'] properties"
+    )

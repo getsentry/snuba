@@ -12,7 +12,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     InvalidMessage,
     InvalidMessages,
 )
-from arroyo.types import Message, Partition, Topic
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.stateful_count import StatefulCountInvalidMessagePolicy
@@ -28,13 +28,14 @@ BAD_PAYLOAD = "Bad payload"
 def kafka_message_to_invalid_kafka_message(
     message: Message[KafkaPayload], reason: str
 ) -> InvalidKafkaMessage:
+    assert isinstance(message.value, BrokerValue)
     return InvalidKafkaMessage(
-        payload=message.payload.value,
-        timestamp=message.timestamp,
-        topic=message.partition.topic.name,
+        payload=message.value.payload.value,
+        timestamp=message.value.timestamp,
+        topic=message.value.partition.topic.name,
         consumer_group=CONSUMER_GROUP_NAME,
-        partition=message.partition.index,
-        offset=message.offset,
+        partition=message.value.partition.index,
+        offset=message.value.offset,
         headers=message.payload.headers,
         reason=reason,
     )
@@ -137,13 +138,18 @@ def processing_step() -> ProcessingStrategy[KafkaPayload]:
 @pytest.fixture
 def valid_message() -> Message[KafkaPayload]:
     valid_payload = KafkaPayload(b"", b"", [])
-    return Message(Partition(Topic(""), 0), 0, valid_payload, datetime.now())
+    return Message(
+        BrokerValue(valid_payload, Partition(Topic(""), 0), 0, datetime.now())
+    )
 
 
 @pytest.fixture
 def invalid_message() -> Message[KafkaPayload]:
     invalid_payload = KafkaPayload(None, b"", [])
-    return Message(Partition(Topic(""), 0), 0, invalid_payload, datetime.now())
+
+    return Message(
+        BrokerValue(invalid_payload, Partition(Topic(""), 0), 0, datetime.now())
+    )
 
 
 def test_count(

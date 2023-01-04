@@ -47,7 +47,6 @@ from snuba.query.processors.physical.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
 from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
-from snuba.replacers.replacer_processor import ReplacerState
 
 required_columns = [
     "event_id",
@@ -168,8 +167,7 @@ query_processors = [
     UniqInSelectAndHavingProcessor(),
     TupleUnaliaser(),
     PostReplacementConsistencyEnforcer(
-        project_column="project_id",
-        replacer_state_name=ReplacerState.ERRORS,
+        project_column="project_id", replacer_state_name="errors"
     ),
     MappingColumnPromoter(
         mapping_specs={
