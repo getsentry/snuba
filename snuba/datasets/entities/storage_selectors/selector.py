@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import List, Sequence, Type, cast
+from typing import List, Optional, Sequence, Type, cast
 
 from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageAndMappers,
-    StorageAndMappersNotFound,
+    WritableTableStorage,
 )
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.registered_class import RegisteredClass
@@ -39,17 +38,28 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
     ) -> StorageAndMappers:
         raise NotImplementedError
 
-    def get_storage_mapping_pair(
-        self,
-        storage_key: StorageKey,
-        storage_and_mappers: Sequence[StorageAndMappers],
-    ) -> StorageAndMappers:
-        for sm_tuple in storage_and_mappers:
-            assert isinstance(sm_tuple.storage, ReadableTableStorage)
-            if storage_key == sm_tuple.storage.get_storage_key():
-                return sm_tuple
-        raise StorageAndMappersNotFound(
-            f"Unable to find storage and translation mappers pair for {storage_key}"
+    def get_readable_storage_mapping(
+        self, storage_and_mappers: Sequence[StorageAndMappers]
+    ) -> Optional[StorageAndMappers]:
+        return next(
+            (
+                storage
+                for storage in storage_and_mappers
+                if type(storage.storage) is ReadableTableStorage
+            ),
+            None,
+        )
+
+    def get_writable_storage_mapping(
+        self, storage_and_mappers: Sequence[StorageAndMappers]
+    ) -> Optional[StorageAndMappers]:
+        return next(
+            (
+                storage
+                for storage in storage_and_mappers
+                if isinstance(storage.storage, WritableTableStorage)
+            ),
+            None,
         )
 
 
