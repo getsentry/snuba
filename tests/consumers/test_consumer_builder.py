@@ -41,7 +41,6 @@ consumer_builder = ConsumerBuilder(
         "test_consumer",
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
-    parallel_collect=False,
     slice_id=None,
 )
 
@@ -75,7 +74,6 @@ consumer_builder_with_opt = ConsumerBuilder(
         "test_consumer",
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
-    parallel_collect=False,
     slice_id=None,
 )
 
