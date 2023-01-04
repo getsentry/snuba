@@ -1,4 +1,4 @@
-from typing import Any, Dict, Mapping, MutableMapping, Set, Tuple
+from typing import Any, Mapping, MutableMapping, Set, Tuple
 
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
@@ -124,7 +124,12 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
         for storage_set in cluster["storage_sets"]
     }
 
-    _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[str, int], Mapping[str, Any]] = {}
+    StorageSet_SliceID_Tuple = Tuple[str, int]
+    Cluster_Mapping = Mapping[str, Any]
+
+    _SLICED_STORAGE_SET_CLUSTER_MAP: MutableMapping[
+        StorageSet_SliceID_Tuple, Cluster_Mapping
+    ] = {}
 
     for sliced_cluster in locals["SLICED_CLUSTERS"]:
         for storage_set_tuple in sliced_cluster["storage_set_slices"]:
