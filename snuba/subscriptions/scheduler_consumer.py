@@ -10,7 +10,7 @@ from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import BrokerValue, Partition, Position, Topic
+from arroyo.types import BrokerValue, Commit, Partition, Topic
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -148,9 +148,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 time_interval = Interval(
                     previous_message.orig_message_ts, commit.orig_message_ts
                 )
+                offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
                 logger.warning(
-                    "Could not construct valid time interval between %r and %r!",
+                    "Could not construct valid interval between %r and %r!",
                     previous_message,
                     MessageDetails(commit.offset, commit.orig_message_ts),
                     exc_info=True,
@@ -160,7 +161,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 result = BrokerValue(
                     Tick(
                         commit.partition.index,
-                        Interval(previous_message.offset, commit.offset),
+                        offset_interval,
                         time_interval,
                     ).time_shift(self.__time_shift),
                     value.partition,
@@ -194,11 +195,11 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         self.__consumer.seek(offsets)
 
-    def stage_positions(self, positions: Mapping[Partition, Position]) -> None:
-        return self.__consumer.stage_positions(positions)
+    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        return self.__consumer.stage_offsets(offsets)
 
-    def commit_positions(self) -> Mapping[Partition, Position]:
-        return self.__consumer.commit_positions()
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        return self.__consumer.commit_offsets()
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
@@ -356,7 +357,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         schedule_step = ProduceScheduledSubscriptionMessage(

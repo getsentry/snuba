@@ -21,6 +21,7 @@ class MigrationGroup(Enum):
     REPLAYS = "replays"
     GENERIC_METRICS = "generic_metrics"
     TEST_MIGRATION = "test_migration"
+    SEARCH_ISSUES = "search_issues"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -34,6 +35,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.REPLAYS,
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
+    MigrationGroup.SEARCH_ISSUES,
 }
 
 
@@ -300,6 +302,17 @@ class GenericMetricsLoader(DirectoryLoader):
         ]
 
 
+class SearchIssuesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.search_issues")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_search_issues",
+            "0002_search_issues_add_tags_hash_map",
+        ]
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
@@ -314,6 +327,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.REPLAYS: ReplaysLoader(),
     MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
     MigrationGroup.TEST_MIGRATION: TestMigrationLoader(),
+    MigrationGroup.SEARCH_ISSUES: SearchIssuesLoader(),
 }
 
 

@@ -119,14 +119,12 @@ class SubscriptionQuerySettings(QuerySettings):
     def __init__(
         self,
         consistent: bool = True,
-        parent_api: str = "subscription",
         team: str = "workflow",
         feature: str = "subscription",
         app_id: str = "default",
         referrer: str = "subscription",
     ) -> None:
         self.__consistent = consistent
-        self.__parent_api = parent_api
         self.__team = team
         self.__feature = feature
         self.__app_id = app_id
@@ -140,9 +138,6 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def get_debug(self) -> bool:
         return False
-
-    def get_parent_api(self) -> str:
-        return self.__parent_api
 
     def get_dry_run(self) -> bool:
         return False

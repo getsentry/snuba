@@ -90,6 +90,7 @@ schema:
     ]
   local_table_name: discover_local
   dist_table_name: discover_dist
+  not_deleted_mandatory_condition: deleted
 query_processors:
   - processor: MappingColumnPromoter
     args:

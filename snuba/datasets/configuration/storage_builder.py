@@ -24,6 +24,9 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.processor import MessageProcessor
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.util import PartSegment
 from snuba.utils.registered_class import InvalidConfigKeyError
@@ -43,6 +46,7 @@ MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
+REPLACER_PROCESSOR = "replacer_processor"
 
 
 def build_storage_from_config(
@@ -56,6 +60,14 @@ def build_storage_from_config(
     storage_kwargs[WRITER_OPTIONS] = (
         config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
     )
+    storage_kwargs[REPLACER_PROCESSOR] = (
+        ReplacerProcessor.get_from_name(
+            config[REPLACER_PROCESSOR]["processor"]
+        ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
+        if REPLACER_PROCESSOR in config
+        else {}
+    )
+    # TODO: Rest of writable storage optional args
     return WritableTableStorage(**storage_kwargs)
 
 
@@ -71,11 +83,23 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
                 if pformat == partition_format.value:
                     partition_formats.append(partition_format)
 
+    mandatory_conditions = None
+    if "not_deleted_mandatory_condition" in config[SCHEMA]:
+        deletion_flag_column = config[SCHEMA]["not_deleted_mandatory_condition"]
+        mandatory_conditions = [
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, deletion_flag_column),
+                Literal(None, 0),
+            )
+        ]
+
     return schema_class(
         columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
         local_table_name=config[SCHEMA]["local_table_name"],
         dist_table_name=config[SCHEMA]["dist_table_name"],
         storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
+        mandatory_conditions=mandatory_conditions,
         partition_format=partition_formats,
     )
 
