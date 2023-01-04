@@ -127,105 +127,28 @@ def test_consumer_builder_optional_attributes() -> None:
 
     # In the case that optional Kafka topic overrides
     # are passed in, stronger checks are performed
-    # in a separate test
+    # in a separate test below
 
-    try:
-        consumer_builder.bootstrap_servers
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's bootstrap_servers must either be defined as some value or None"
+    consumer_builder.bootstrap_servers
+    consumer_builder_with_opt.bootstrap_servers
 
-    try:
-        consumer_builder_with_opt.bootstrap_servers
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's bootstrap_servers must either be defined as some value or None"
+    consumer_builder.replacements_topic
+    consumer_builder.commit_log_topic
 
-    try:
-        consumer_builder.replacements_topic
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's replacements_topic must either be defined to some value or None"
+    consumer_builder.stats_callback
+    consumer_builder_with_opt.stats_callback
 
-    try:
-        consumer_builder.commit_log_topic
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's commit_log_topic must either be defined to some value or None"
+    consumer_builder.strict_offset_reset
+    consumer_builder_with_opt.strict_offset_reset
 
-    try:
-        consumer_builder.stats_callback
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's stats_callback must either be defined to some value or None"
+    consumer_builder.processes
+    consumer_builder_with_opt.processes
 
-    try:
-        consumer_builder_with_opt.stats_callback
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's stats_callback must either be defined to some value or None"
+    consumer_builder.input_block_size
+    consumer_builder_with_opt.input_block_size
 
-    try:
-        consumer_builder.strict_offset_reset
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's strict_offset_reset must either be defined to some value or None"
-
-    try:
-        consumer_builder_with_opt.strict_offset_reset
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's strict_offset_reset must either be defined to some value or None"
-
-    try:
-        consumer_builder.processes
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's processes must either be defined to some value or None"
-
-    try:
-        consumer_builder_with_opt.processes
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's processes must either be defined to some value or None"
-
-    try:
-        consumer_builder.input_block_size
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's input_block_size must either be defined to some value or None"
-
-    try:
-        consumer_builder_with_opt.input_block_size
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's input_block_size must either be defined to some value or None"
-
-    try:
-        consumer_builder.output_block_size
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's output_block_size must either be defined to some value or None"
-
-    try:
-        consumer_builder_with_opt.output_block_size
-    except NameError:
-        assert (
-            False
-        ), "ConsumerBuilder's output_block_size must either be defined to some value or None"
+    consumer_builder.output_block_size
+    consumer_builder_with_opt.output_block_size
 
 
 def test_optional_kafka_overrides() -> None:
