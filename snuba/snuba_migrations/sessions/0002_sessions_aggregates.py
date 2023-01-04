@@ -51,7 +51,7 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     This migration adds new columns to both the raw and aggregated sessions.
     The new `X_preaggr` columns in the aggregated dataset will be used later on

@@ -4,6 +4,7 @@ from typing import Callable, Collection, Optional, Tuple
 
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
@@ -18,7 +19,6 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
-from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -37,7 +37,8 @@ class TestSubscriptionScheduler:
                 query="MATCH (events) SELECT count() AS count",
                 time_window_sec=60,
                 resolution_sec=int(resolution.total_seconds()),
-                entity_subscription=create_entity_subscription(),
+                entity=get_entity(EntityKey.EVENTS),
+                metadata={},
             ),
         )
 

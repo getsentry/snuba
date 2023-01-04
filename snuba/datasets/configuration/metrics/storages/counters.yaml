@@ -1,0 +1,57 @@
+version: v1
+kind: writable_storage
+name: metrics_counters
+storage:
+  key: metrics_counters
+  set_key: metrics
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: granularity, type: UInt, args: { size: 32 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: value, type: UInt, args: { size: 64 } },
+              ],
+          },
+      },
+      {
+        name: _tags_hash,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
+      {
+        name: value,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+    ]
+  local_table_name: metrics_counters_v2_local
+  dist_table_name: metrics_counters_v2_dist
+query_processors:
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+  - processor: TableRateLimit
+stream_loader:
+  processor:
+    name: CounterAggregateProcessor
+  default_topic: snuba-metrics
+  dlq_policy:
+    type: produce
+    args:
+      - snuba-dead-letter-metrics

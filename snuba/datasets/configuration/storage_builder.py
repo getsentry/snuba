@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import sentry_sdk
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.configuration.json_schema import (
-    V1_READABLE_STORAGE_SCHEMA,
-    V1_WRITABLE_STORAGE_SCHEMA,
-)
+from snuba.datasets.cdc.cdcprocessors import CdcProcessor
+from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     generate_policy_creator,
@@ -27,8 +23,13 @@ from snuba.datasets.table_storage import (
     KafkaStreamLoader,
     build_kafka_stream_loader_from_settings,
 )
+from snuba.processor import MessageProcessor
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.util import PartSegment
+from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.utils.streams.topics import Topic
 
 KIND = "kind"
@@ -45,27 +46,29 @@ MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
-
-
-STORAGE_VALIDATION_SCHEMAS = {
-    "readable_storage": V1_READABLE_STORAGE_SCHEMA,
-    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
-}
+REPLACER_PROCESSOR = "replacer_processor"
 
 
 def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
-    config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
-    with sentry_sdk.start_span(op="build", description=f"Storage: {config['name']}"):
-        storage_kwargs = __build_readable_storage_kwargs(config)
-        if config[KIND] == "readable_storage":
-            return ReadableTableStorage(**storage_kwargs)
-        storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
-        storage_kwargs[WRITER_OPTIONS] = (
-            config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
-        )
-        return WritableTableStorage(**storage_kwargs)
+    config = load_configuration_data(config_file_path, STORAGE_VALIDATORS)
+    storage_kwargs = __build_readable_storage_kwargs(config)
+    if config[KIND] == "readable_storage":
+        return ReadableTableStorage(**storage_kwargs)
+    storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
+    storage_kwargs[WRITER_OPTIONS] = (
+        config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
+    )
+    storage_kwargs[REPLACER_PROCESSOR] = (
+        ReplacerProcessor.get_from_name(
+            config[REPLACER_PROCESSOR]["processor"]
+        ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
+        if REPLACER_PROCESSOR in config
+        else {}
+    )
+    # TODO: Rest of writable storage optional args
+    return WritableTableStorage(**storage_kwargs)
 
 
 def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
@@ -80,11 +83,23 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
                 if pformat == partition_format.value:
                     partition_formats.append(partition_format)
 
+    mandatory_conditions = None
+    if "not_deleted_mandatory_condition" in config[SCHEMA]:
+        deletion_flag_column = config[SCHEMA]["not_deleted_mandatory_condition"]
+        mandatory_conditions = [
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, deletion_flag_column),
+                Literal(None, 0),
+            )
+        ]
+
     return schema_class(
         columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
         local_table_name=config[SCHEMA]["local_table_name"],
         dist_table_name=config[SCHEMA]["dist_table_name"],
         storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
+        mandatory_conditions=mandatory_conditions,
         partition_format=partition_formats,
     )
 
@@ -111,9 +126,16 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     processor_config = loader_config["processor"]
-    processor = DatasetMessageProcessor.get_from_name(
-        processor_config["name"]
-    ).from_kwargs(**processor_config.get("args", {}))
+    processor: MessageProcessor | None = None
+    try:
+        processor = DatasetMessageProcessor.get_from_name(
+            processor_config["name"]
+        ).from_kwargs(**processor_config.get("args", {}))
+    except InvalidConfigKeyError:
+        processor = CdcProcessor.get_from_name(processor_config["name"]).from_kwargs(
+            **processor_config.get("args", {})
+        )
+    assert processor is not None
     default_topic = Topic(loader_config["default_topic"])
     # optionals
     pre_filter = None

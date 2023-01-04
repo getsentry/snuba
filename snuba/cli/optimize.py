@@ -96,8 +96,12 @@ def optimize(
     last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
+
+    # add 1 hour to make the redis TTL past the optimize job cuttoff time
     cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-    logger.info("Cutoff time: %s", str(cutoff_time))
+    redis_expire_time = cutoff_time + timedelta(hours=1)
+    logger.info(f"Cutoff time: {str(cutoff_time)}")
+    logger.info(f"redis_expire_time time: {str(redis_expire_time)}")
 
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
@@ -108,7 +112,7 @@ def optimize(
         port=clickhouse_port,
         database=database,
         table=table,
-        expire_time=cutoff_time,
+        expire_time=redis_expire_time,
     )
 
     num_dropped = run_optimize_cron_job(

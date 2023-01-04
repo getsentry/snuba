@@ -6,19 +6,17 @@ from typing import Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.processing.strategies import MessageRejected
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -107,6 +105,7 @@ def test_executor_consumer() -> None:
         dataset_name,
         [entity_name],
         consumer_group,
+        None,
         result_producer,
         2,
         auto_offset_reset,
@@ -120,12 +119,14 @@ def test_executor_consumer() -> None:
         executor._run_once()
 
     # Produce a scheduled task to the scheduled subscriptions topic
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity=entity,
+        metadata={},
     )
 
     task = ScheduledSubscriptionTask(
@@ -180,11 +181,11 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
-    data_dict = {}
+    metadata = {}
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
-        data_dict = {"organization": 1}
+        metadata.update({"organization": 1})
 
-    entity_subscription = get_entity_subscription(entity_key)(data_dict=data_dict)
+    entity = get_entity(entity_key)
 
     while True:
         payload = codec.encode(
@@ -199,7 +200,8 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
-                            entity_subscription=entity_subscription,
+                            entity=entity,
+                            metadata=metadata,
                         ),
                     ),
                     i + 1,
@@ -207,7 +209,7 @@ def generate_message(
             )
         )
 
-        yield Message(Partition(Topic("test"), 0), i, payload, epoch)
+        yield Message(BrokerValue(payload, Partition(Topic("test"), 0), i, epoch))
         i += 1
 
 
@@ -233,8 +235,8 @@ def test_execute_query_strategy() -> None:
         time.sleep(0.1)
         strategy.poll()
 
-    assert next_step.submit.call_args[0][0].timestamp == message.timestamp
-    assert next_step.submit.call_args[0][0].offset == message.offset
+    assert isinstance(message.value, BrokerValue)
+    assert next_step.submit.call_args[0][0].committable == message.committable
 
     result = next_step.submit.call_args[0][0].payload.result
     assert result[1]["data"] == [{"count()": 0}]
@@ -311,12 +313,14 @@ def test_produce_result() -> None:
 
     strategy = ProduceResult(producer, result_topic.name, commit)
 
+    entity = get_entity(EntityKey.EVENTS)
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity=entity,
+        metadata={},
     )
 
     subscription = Subscription(
@@ -332,16 +336,18 @@ def test_produce_result() -> None:
     }
 
     message = Message(
-        Partition(scheduled_topic, 0),
-        1,
-        SubscriptionTaskResult(
-            ScheduledSubscriptionTask(
-                epoch,
-                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+        BrokerValue(
+            SubscriptionTaskResult(
+                ScheduledSubscriptionTask(
+                    epoch,
+                    SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+                ),
+                (request, result),
             ),
-            (request, result),
-        ),
-        epoch,
+            Partition(scheduled_topic, 0),
+            1,
+            epoch,
+        )
     )
 
     strategy.submit(message)

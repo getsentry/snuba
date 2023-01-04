@@ -50,6 +50,10 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
 @click.option(
+    "--slice-id",
+    help="The slice to load scheduled queries from",
+)
+@click.option(
     "--total-concurrent-queries",
     default=64,
     type=int,
@@ -72,24 +76,17 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
 )
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
-)
 def subscriptions_executor(
     *,
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    slice_id: Optional[int],
     total_concurrent_queries: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    cooperative_rebalancing: bool,
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -99,10 +96,15 @@ def subscriptions_executor(
     setup_logging(log_level)
     setup_sentry()
 
+    metrics_tags = {
+        "dataset": dataset_name,
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
-        environment.metrics,
-        "subscriptions.executor",
-        tags={"dataset": dataset_name},
+        environment.metrics, "subscriptions.executor", tags=metrics_tags
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -135,13 +137,13 @@ def subscriptions_executor(
         dataset_name,
         entity_names,
         consumer_group,
+        slice_id,
         producer,
         total_concurrent_queries,
         auto_offset_reset,
         not no_strict_offset_reset,
         metrics,
         stale_threshold_seconds,
-        cooperative_rebalancing,
     )
 
     def handler(signum: int, frame: Any) -> None:

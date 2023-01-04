@@ -28,8 +28,8 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
@@ -48,9 +48,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    InvalidSubscriptionError,
-)
+from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -655,10 +653,12 @@ if application.debug or application.testing:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, http_request.data, []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, http_request.data, []),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
         type_ = record[1]
@@ -667,18 +667,25 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from arroyo.processing.strategies.factory import (
-                KafkaConsumerStrategyFactory,
-            )
-
             from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
+
+            def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
+                pass
+
+            validate_schema = True
+
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
                 functools.partial(
-                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                    process_message,
+                    stream_loader.get_processor(),
+                    "consumer_grouup",
+                    stream_loader.get_default_topic_spec().topic,
+                    validate_schema,
                 ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
@@ -686,7 +693,7 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-            ).create_with_partitions(lambda offsets: None, {})
+            ).create_with_partitions(commit, {})
             strategy.submit(message)
             strategy.close()
             strategy.join()

@@ -39,7 +39,7 @@ drop_indexes: List[operations.SqlOperation] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:

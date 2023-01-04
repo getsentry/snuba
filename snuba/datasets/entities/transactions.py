@@ -10,8 +10,10 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -94,13 +96,15 @@ class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
+        mappers = (
+            transaction_translator
+            if custom_mappers is None
+            else transaction_translator.concat(custom_mappers)
+        )
 
         pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=get_storage(StorageKey.TRANSACTIONS),
-                mappers=transaction_translator
-                if custom_mappers is None
-                else transaction_translator.concat(custom_mappers),
+            query_plan_builder=StorageQueryPlanBuilder(
+                storages=[StorageAndMappers(storage, mappers)],
             )
         )
 
@@ -112,6 +116,10 @@ class BaseTransactionsEntity(Entity, ABC):
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
+            subscription_processors=None,
+            subscription_validators=[
+                AggregationValidator(1, ["groupby", "having", "orderby"], "finish_ts")
+            ],
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

@@ -12,6 +12,7 @@ class QueryStatus(Enum):
     ERROR = "error"  # A system error
     RATE_LIMITED = "rate-limited"
     INVALID_REQUEST = "invalid-request"
+    TIMEOUT = "timeout"
 
 
 Columnset = Set[str]

@@ -7,13 +7,13 @@ from typing import Any, Mapping, Optional
 from unittest import mock
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload, KafkaProducer
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.commit import Commit
 from arroyo.errors import ConsumerError
+from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
@@ -54,9 +54,6 @@ def test_scheduler_consumer() -> None:
 
     mock_scheduler_producer = mock.Mock()
 
-    from snuba.datasets.entity_subscriptions.entity_subscription import (
-        EventsSubscription,
-    )
     from snuba.redis import RedisClientKey, get_redis_client
     from snuba.subscriptions.data import PartitionId, SubscriptionData
     from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -69,6 +66,7 @@ def test_scheduler_consumer() -> None:
         entity_key,
         PartitionId(partition_index),
     )
+    entity = get_entity(EntityKey.EVENTS)
     store.create(
         uuid.uuid4(),
         SubscriptionData(
@@ -76,7 +74,8 @@ def test_scheduler_consumer() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity=entity,
+            metadata={},
         ),
     )
 
@@ -204,12 +203,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 1
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        1,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        1,
         epoch,
     )
 
@@ -218,12 +217,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 2
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        2,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        2,
         epoch,
     )
 
@@ -259,12 +258,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 2
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        2,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        2,
         epoch,
     )
 
@@ -322,14 +321,14 @@ def test_tick_consumer_non_monotonic() -> None:
     assert consumer.tell() == {partition: 1}
 
     with assert_changes(consumer.tell, {partition: 1}, {partition: 2}):
-        assert consumer.poll() == Message(
-            partition,
-            1,
+        assert consumer.poll() == BrokerValue(
             Tick(
                 0,
                 offsets=Interval(0, 1),
                 timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
             ),
+            partition,
+            1,
             epoch + timedelta(seconds=1),
         )
 
@@ -353,9 +352,7 @@ def test_tick_consumer_non_monotonic() -> None:
     ).result()
 
     with assert_changes(consumer.tell, {partition: 3}, {partition: 4}):
-        assert consumer.poll() == Message(
-            partition,
-            3,
+        assert consumer.poll() == BrokerValue(
             Tick(
                 0,
                 offsets=Interval(1, 3),
@@ -363,6 +360,8 @@ def test_tick_consumer_non_monotonic() -> None:
                     epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
                 ),
             ),
+            partition,
+            3,
             epoch + timedelta(seconds=2),
         )
 
@@ -382,6 +381,8 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
     inner_consumer = broker.get_consumer("group")
 
     consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+
+    now = datetime.now()
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
@@ -403,3 +404,30 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
         assert consumer.poll() is None
 
     assert followed_consumer_group in caplog.text
+
+    # producing out of order messages to commit log topic does not error
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                5,
+                now,
+            )
+        ),
+    ).result()
+
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                4,
+                now - timedelta(seconds=2),
+            )
+        ),
+    ).result()
+
+    consumer.poll()

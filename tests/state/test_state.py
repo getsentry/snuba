@@ -1,15 +1,11 @@
 import random
 import time
 from collections import ChainMap
-from datetime import datetime
 from functools import partial
 
 import pytest
-from arroyo import Message, Partition, Topic
-from arroyo.backends.kafka import KafkaPayload
 
 from snuba import state
-from snuba.consumers.consumer import skip_kafka_message
 from snuba.state import MismatchedTypeException, safe_dumps
 
 
@@ -103,35 +99,6 @@ class TestState:
         assert rand1 == rand()
         time.sleep(0.1)
         assert rand1 != rand()
-
-    def test_skip_kafka_message(self) -> None:
-        state.set_config(
-            "kafka_messages_to_skip", "[snuba-test-lol:1:2,snuba-test-yeet:0:1]"
-        )
-        assert skip_kafka_message(
-            Message(
-                Partition(Topic("snuba-test-lol"), 1),
-                2,
-                KafkaPayload(None, b"", []),
-                datetime.now(),
-            )
-        )
-        assert skip_kafka_message(
-            Message(
-                Partition(Topic("snuba-test-yeet"), 0),
-                1,
-                KafkaPayload(None, b"", []),
-                datetime.now(),
-            )
-        )
-        assert not skip_kafka_message(
-            Message(
-                Partition(Topic("snuba-test-lol"), 2),
-                1,
-                KafkaPayload(None, b"", []),
-                datetime.now(),
-            )
-        )
 
 
 def test_safe_dumps():
