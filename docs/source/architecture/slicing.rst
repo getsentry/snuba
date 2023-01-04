@@ -23,9 +23,9 @@ Configuring a slice
 
 Mapping logical partitions : physical slices
 ----------------------------------------------
-To add a slice to a storage's logical:physical mapping, or repartition,
-increment the slice count in ``settings.SLICED_STORAGES`` for the relevant
-storage. Change the mapping of the relevant storage's
+To add a slice to a storage set's logical:physical mapping, or repartition,
+increment the slice count in ``settings.SLICED_STORAGE_SETS`` for the relevant
+storage set. Change the mapping of the relevant storage set's
 logical partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
 Every logical partition **must** be assigned to a slice and the
 valid values of slices are in the range of ``[0,settings.SLICED_STORAGE_SETS[storage_set])``.
@@ -56,7 +56,7 @@ To add a sliced cluster with an associated (storage set key, slice) pair, add cl
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
 sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id is in
-the range ``[0,settings.SLICED_STORAGES[storage])`` for storages relevant to the ``StorageSetKey``.
+the range ``[0,settings.SLICED_STORAGE_SETS[storage_set])`` for the relevant ``StorageSetKey``.
 
 
 Preparing the storage for sharding
@@ -96,7 +96,7 @@ Working in a Sliced Environment
 Starting a sliced consumer
 -----------------------------
 
-First, ensure that your slicing configuration is set up properly: ``SLICED_STORAGES``,
+First, ensure that your slicing configuration is set up properly: ``SLICED_STORAGE_SETS``,
 ``SLICED_CLUSTERS``, ``SLICED_KAFKA_TOPIC_MAP``, and ``SLICED_KAFKA_BROKER_CONFIG``.
 See above for details.
 
