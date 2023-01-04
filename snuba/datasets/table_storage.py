@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import Any, Callable, Mapping, Optional, Sequence
 
 from arroyo.backends.kafka import KafkaPayload
@@ -13,6 +14,7 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -25,7 +27,7 @@ from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.schemas import ReadOnly
-from snuba.utils.streams.topics import Topic, get_topic_creation_config
+from snuba.utils.streams.topics import Topic
 from snuba.writer import BatchWriter
 
 
@@ -57,20 +59,9 @@ class KafkaTopicSpec:
 
         return physical_topic
 
-    @property
+    @cached_property
     def partitions_number(self) -> int:
-        # TODO: This references the actual topic name for backward compatibility.
-        # It should be changed to the logical name for consistency with KAFKA_TOPIC_MAP
-        # and KAFKA_BROKER_CONFIG
-        return settings.TOPIC_PARTITION_COUNTS.get(self.topic_name, 1)
-
-    @property
-    def replication_factor(self) -> int:
-        return 1
-
-    @property
-    def topic_creation_config(self) -> Mapping[str, str]:
-        return get_topic_creation_config(self.__topic)
+        return get_partition_count(self.__topic)
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, KafkaTopicSpec) and self.topic == other.topic

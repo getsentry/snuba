@@ -1,11 +1,13 @@
 import pytest
+from confluent_kafka.admin import AdminClient
 
-from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
+from snuba.utils.manage_topics import recreate_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -43,7 +45,8 @@ TESTS = [
 class TestBuildRequest(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS)
     def test(self, subscription: SubscriptionData) -> None:
-        settings.TOPIC_PARTITION_COUNTS = {"events": 64}
+        admin_client = AdminClient(get_default_kafka_configuration())
+        recreate_topics(admin_client, [Topic.EVENTS], num_partitions=64)
         partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
-
         assert partitioner.build_partition_id(subscription) == 18
+        recreate_topics(admin_client, [Topic.EVENTS])

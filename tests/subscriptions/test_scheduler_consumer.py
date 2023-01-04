@@ -17,13 +17,12 @@ from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
-from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
 from snuba.subscriptions.utils import Tick
-from snuba.utils.manage_topics import create_topics
+from snuba.utils.manage_topics import create_topics, recreate_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
@@ -37,10 +36,10 @@ commit_codec = CommitCodec()
 
 
 def test_scheduler_consumer() -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
+    recreate_topics(admin_client, [SnubaTopic.EVENTS], num_partitions=2)
     create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
@@ -133,7 +132,8 @@ def test_scheduler_consumer() -> None:
 
     assert mock_scheduler_producer.produce.call_count == 2
 
-    settings.TOPIC_PARTITION_COUNTS = {}
+    # Restore partition count to 1
+    recreate_topics(admin_client, [SnubaTopic.EVENTS])
 
 
 def test_tick_time_shift() -> None:
