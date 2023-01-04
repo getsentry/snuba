@@ -68,7 +68,6 @@ class ConsumerBuilder:
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
-        parallel_collect: bool,
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
@@ -154,7 +153,6 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__parallel_collect = parallel_collect
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -263,7 +261,6 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
             dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
-            parallel_collect=self.__parallel_collect,
         )
 
         if self.__profile_path is not None:

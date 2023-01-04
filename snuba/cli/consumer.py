@@ -92,11 +92,6 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option(
-    "--parallel-collect",
-    is_flag=True,
-    default=True,
-)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
@@ -129,7 +124,6 @@ def consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
@@ -182,7 +176,6 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         validate_schema=validate_schema,
-        parallel_collect=parallel_collect,
         slice_id=slice_id,
     )
 

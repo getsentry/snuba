@@ -3,7 +3,7 @@ from typing import Callable, Mapping, Optional, Protocol, TypeVar
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy, ProcessingStrategyFactory
-from arroyo.processing.strategies.collect import CollectStep, ParallelCollectStep
+from arroyo.processing.strategies.collect import ParallelCollectStep
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
     DeadLetterQueue,
@@ -69,8 +69,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         dead_letter_queue_policy_creator: Optional[
             Callable[[], DeadLetterQueuePolicy]
         ] = None,
-        parallel_collect: bool = False,
-        parallel_collect_timeout: float = 10.0,
     ) -> None:
         self.__prefilter = prefilter
         self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
@@ -95,8 +93,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__initialize_parallel_transform = initialize_parallel_transform
-        self.__parallel_collect = parallel_collect
-        self.__parallel_collect_timeout = parallel_collect_timeout
 
     def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
@@ -107,21 +103,12 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-        collect = (
-            ParallelCollectStep(
-                self.__collector,
-                CommitOffsets(commit),
-                self.__max_batch_size,
-                self.__max_batch_time,
-                self.__parallel_collect_timeout,
-            )
-            if self.__parallel_collect
-            else CollectStep(
-                self.__collector,
-                CommitOffsets(commit),
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
+        collect = ParallelCollectStep(
+            self.__collector,
+            CommitOffsets(commit),
+            self.__max_batch_size,
+            self.__max_batch_time,
+            wait_timeout=10.0,
         )
 
         transform_function = self.__process_message
