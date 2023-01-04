@@ -53,6 +53,7 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
+from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -67,6 +68,7 @@ from snuba.processor import (
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -550,12 +552,18 @@ def __invalid_kafka_message(
 
 
 def process_message(
-    processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
+    processor: MessageProcessor,
+    consumer_group: str,
+    snuba_logical_topic: SnubaTopic,
+    validate: bool,
+    message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
     try:
+        codec = get_json_codec(snuba_logical_topic)
+        decoded = codec.decode(message.payload.value, validate=validate)
         result = processor.process_message(
-            rapidjson.loads(message.payload.value),
+            decoded,
             KafkaMessageMetadata(
                 message.value.offset,
                 message.value.partition.index,

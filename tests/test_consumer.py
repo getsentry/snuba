@@ -25,6 +25,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -68,7 +69,9 @@ def test_streaming_consumer_strategy() -> None:
 
     factory = KafkaConsumerStrategyFactory(
         None,
-        functools.partial(process_message, processor, "consumer_group"),
+        functools.partial(
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS, False
+        ),
         write_step,
         max_batch_size=10,
         max_batch_time=60,

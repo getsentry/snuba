@@ -676,10 +676,16 @@ if application.debug or application.testing:
             def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
                 pass
 
+            validate_schema = True
+
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
                 functools.partial(
-                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                    process_message,
+                    stream_loader.get_processor(),
+                    "consumer_grouup",
+                    stream_loader.get_default_topic_spec().topic,
+                    validate_schema,
                 ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
