@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Sequence
 
 from confluent_kafka import KafkaError, KafkaException
@@ -57,3 +58,18 @@ def recreate_topics(
 ) -> None:
     delete_topics(client, topics)
     create_topics(client, topics, num_partitions, replication_factor)
+    wait_for_topics(client, topics)
+
+
+def wait_for_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
+    topic_names = {KafkaTopicSpec(topic).topic_name for topic in topics}
+
+    retries = 3
+
+    while retries > 0:
+        retries -= 1
+        topic_list = set(client.list_topics().topics.keys())
+        if topic_names.issubset(topic_list):
+            return
+        else:
+            time.sleep(0.1)
