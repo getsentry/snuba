@@ -60,28 +60,34 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
+        entity_map_pre_execute = {
+            EntityKey.DISCOVER: DiscoverEntity,
+            EntityKey.EVENTS: EventsEntity,
+            EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
+            EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
+            EntityKey.OUTCOMES: OutcomesEntity,
+            EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
+            EntityKey.SESSIONS: SessionsEntity,
+            EntityKey.ORG_SESSIONS: OrgSessionsEntity,
+            EntityKey.TRANSACTIONS: TransactionsEntity,
+            EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
+            EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
+            EntityKey.METRICS_SETS: MetricsSetsEntity,
+            EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
+            EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
+            EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
+            EntityKey.PROFILES: ProfilesEntity,
+            EntityKey.FUNCTIONS: FunctionsEntity,
+            EntityKey.REPLAYS: ReplaysEntity,
+            EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
+            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
+        }
+
         self._entity_map.update(
             {
-                EntityKey.DISCOVER: DiscoverEntity(),
-                EntityKey.EVENTS: EventsEntity(),
-                EntityKey.GROUPASSIGNEE: GroupAssigneeEntity(),
-                EntityKey.GROUPEDMESSAGE: GroupedMessageEntity(),
-                EntityKey.OUTCOMES: OutcomesEntity(),
-                EntityKey.OUTCOMES_RAW: OutcomesRawEntity(),
-                EntityKey.SESSIONS: SessionsEntity(),
-                EntityKey.ORG_SESSIONS: OrgSessionsEntity(),
-                EntityKey.TRANSACTIONS: TransactionsEntity(),
-                EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity(),
-                EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity(),
-                EntityKey.METRICS_SETS: MetricsSetsEntity(),
-                EntityKey.METRICS_COUNTERS: MetricsCountersEntity(),
-                EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity(),
-                EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity(),
-                EntityKey.PROFILES: ProfilesEntity(),
-                EntityKey.FUNCTIONS: FunctionsEntity(),
-                EntityKey.REPLAYS: ReplaysEntity(),
-                EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity(),
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity(),
+                k: v()
+                for (k, v) in entity_map_pre_execute.items()
+                if k.value not in settings.DISABLED_ENTITIES
             }
         )
 
