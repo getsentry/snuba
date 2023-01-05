@@ -37,8 +37,9 @@ This promotion is preferable on a couple dimensions:
 
 .. [#dupe] During migration from non-promoted to promoted, putting the data in both map and
            top-level column may be necessary so that queries of old rows can still access the
-           attributes. After the table goes through a full TTL period, however, message
-           processors should be changed to stop writing the data in duplicate places.
+           attributes. After the table goes through a full TTL period and the API/storage definition
+           is changed to serve the values from the top-level field, message processors should be changed
+           to stop writing the data in duplicate places.
 
 ..
    # (TODO: add some information to the above section about how we have
