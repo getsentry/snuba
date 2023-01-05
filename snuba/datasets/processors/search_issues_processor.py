@@ -1,18 +1,36 @@
 import uuid
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, TypedDict
+from typing import (
+    Any,
+    Dict,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    cast,
+)
 
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.events_format import EventTooOld, enforce_retention, extract_user
+from snuba.datasets.events_format import (
+    EventTooOld,
+    enforce_retention,
+    extract_extra_tags,
+    extract_http,
+    extract_user,
+)
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     InsertBatch,
     InvalidMessageType,
     InvalidMessageVersion,
     ProcessedMessage,
+    _as_dict_safe,
     _ensure_valid_date,
     _ensure_valid_ip,
+    _unicodify,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
@@ -80,6 +98,13 @@ def ensure_uuid(value: str) -> str:
 class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     FINGERPRINTS_HARD_LIMIT_SIZE = 100
 
+    PROMOTED_TAGS = {
+        "environment",
+        "sentry:release",
+        "sentry:user",
+        "sentry:dist",
+    }
+
     def _process_user(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
@@ -101,6 +126,43 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
         return
+
+    def _process_tags(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        tags_maybe = event_data.get("tags", None)
+        if not tags_maybe:
+            processed["tags.key"], processed["tags.value"] = [], []
+        tags: Mapping[str, Any] = _as_dict_safe(cast(Dict[str, Any], tags_maybe))
+        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
+        processed["release"] = promoted_tags.get(
+            "sentry:release",
+            event_data.get("release"),
+        )
+        processed["environment"] = promoted_tags.get(
+            "environment", event_data.get("environment")
+        )
+        processed["user"] = promoted_tags.get("sentry:user")
+        processed["dist"] = _unicodify(
+            promoted_tags.get("sentry:dist", event_data.get("dist")),
+        )
+
+    def _process_request_data(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        request = event_data.get("request") or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
+
+    def _process_sdk_data(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        sdk = event_data.get("sdk", None) or {}
+        processed["sdk_name"] = _unicodify(sdk.get("name"))
+        processed["sdk_version"] = _unicodify(sdk.get("version"))
 
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
@@ -149,19 +211,21 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "detection_timestamp": detection_timestamp,
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
+            "platform": event["platform"],
             # TODO: fix the below field assignments to actually extract from event data
-            "platform": "platform",
-            "environment": "environment",
-            "release": "release",
-            "dist": "dist",
             "contexts.key": [],
             "contexts.value": [],
-            "tags.key": [],
-            "tags.value": [],
         }
 
         # optional fields
-        self._process_user(event_data, fields)
+        self._process_tags(
+            event_data, fields
+        )  # environment, release, dist, user, tags.key, tags.value
+        self._process_user(
+            event_data, fields
+        )  # user_name, user_id, user_email, ip_address_v4/ip_address_v6
+        self._process_request_data(event_data, fields)  # http_method, http_referer
+        self._process_sdk_data(event_data, fields)  # sdk_name, sdk_version
 
         return [
             {
