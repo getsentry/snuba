@@ -47,6 +47,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
+DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
