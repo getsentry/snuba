@@ -1,9 +1,11 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import DateTime, String, UInt
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -48,15 +50,18 @@ class OutcomesEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
+        storages = [writable_storage, materialized_storage]
 
         super().__init__(
-            storages=[writable_storage, materialized_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(
+                query_plan_builder=StorageQueryPlanBuilder(
                     # TODO: Once we are ready to expose the raw data model and select whether to use
                     # materialized storage or the raw one here, replace this with a custom storage
                     # selector that decides when to use the materialized data.
-                    storage=materialized_storage,
+                    storages=[
+                        StorageAndMappers(materialized_storage, TranslationMappers()),
+                    ]
                 ),
             ),
             abstract_column_set=outcomes_data_model,

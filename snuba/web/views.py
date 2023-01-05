@@ -29,7 +29,7 @@ import jsonschema
 import sentry_sdk
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.types import BrokerValue, Message, Partition, Position, Topic
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
@@ -673,15 +673,19 @@ if application.debug or application.testing:
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
 
-            def commit(
-                positions: Mapping[Partition, Position], force: bool = False
-            ) -> None:
+            def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
                 pass
+
+            validate_schema = True
 
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
                 functools.partial(
-                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                    process_message,
+                    stream_loader.get_processor(),
+                    "consumer_grouup",
+                    stream_loader.get_default_topic_spec().topic,
+                    validate_schema,
                 ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,

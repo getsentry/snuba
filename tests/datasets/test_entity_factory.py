@@ -19,6 +19,7 @@ ENTITY_KEYS = [
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SESSIONS,
+    EntityKey.SEARCH_ISSUES,
     EntityKey.ORG_SESSIONS,
     EntityKey.TRANSACTIONS,
     EntityKey.DISCOVER_TRANSACTIONS,

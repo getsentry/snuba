@@ -33,6 +33,7 @@ class QueryAttributionData:
 class AttributionData:
     app_id: AppID
     referrer: str
+    parent_api: str
     request_id: str
     timestamp: int
     duration_ms: int
@@ -46,6 +47,7 @@ def log_attribution_to_metrics(attr_data: AttributionData) -> None:
         tags = {
             "app_id": attr_data.app_id.key,
             "referrer": attr_data.referrer,
+            "parent_api": attr_data.parent_api,
             "dataset": attr_data.dataset,
             "entity": attr_data.entity,
             "table": q.table,

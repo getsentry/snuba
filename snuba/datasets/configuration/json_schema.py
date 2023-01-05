@@ -15,6 +15,10 @@ TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 
+def string_with_description(description: str) -> dict[str, str]:
+    return {**TYPE_STRING, "description": description}
+
+
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -245,6 +249,12 @@ SCHEMA_SCHEMA = {
             "type": "string",
             "description": "The distributed table name in distributed ClickHouse",
         },
+        "not_deleted_mandatory_condition": string_with_description(
+            "The name of the column flagging a deletion, eg `deleted` column in Errors. "
+            "Defining this column here will ensure any query served by this storage "
+            "explicitly filters out any 'deleted' rows. Should only be used for storages "
+            "supporting deletion replacement."
+        ),
         "partition_format": {
             "type": "array",
             "items": {"type": "string"},
@@ -283,7 +293,7 @@ def registered_class_schema(
     :param class_name: The name of the class being represented.
     :param description: The description added to the documentation.
     """
-    single_class = {
+    return {
         "type": "object",
         "properties": {
             property_name: {
@@ -298,25 +308,37 @@ def registered_class_schema(
         "required": [property_name],
         "additionalProperties": False,
     }
-    return {"type": "array", "items": single_class}
 
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_schema(
+def registered_class_array_schema(
+    property_name: str, class_name: str, description: str
+) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "items": registered_class_schema(property_name, class_name, description),
+    }
+
+
+STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_array_schema(
     "processor",
     "QueryProcessor",
     "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
 )
-STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_schema(
+STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_array_schema(
     "splitter",
     "QuerySplitStrategy",
     "Name of QuerySplitStrategy class config key. Responsible for splitting a query into two at runtime and combining the results.",
 )
-STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_schema(
+STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "condition",
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
-
+STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
+    "processor",
+    "ReplacerProcessor",
+    "Name of ReplacerProcessor class config key. Responsible for optimizing queries on a storage which can have replacements, eg deletions/updates.",
+)
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -435,6 +457,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
             "description": "Extra Clickhouse fields that are used for consumer writes",

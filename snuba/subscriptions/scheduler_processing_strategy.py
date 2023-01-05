@@ -5,22 +5,13 @@ import time
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
-from typing import (
-    Callable,
-    Deque,
-    Mapping,
-    MutableMapping,
-    NamedTuple,
-    Optional,
-    Tuple,
-    cast,
-)
+from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, Tuple, cast
 
-from arroyo import Message, Partition, Topic
+from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
-from arroyo.types import BrokerValue, Position
+from arroyo.types import BrokerValue, Commit
 
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -390,7 +381,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         schedulers: Mapping[int, SubscriptionScheduler],
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
@@ -429,10 +420,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
             if tick_subscription.offset_to_commit:
                 offset = {
-                    tick_subscription.tick_message.partition: Position(
-                        tick_subscription.offset_to_commit,
-                        tick_subscription.tick_message.timestamp,
-                    )
+                    tick_subscription.tick_message.partition: tick_subscription.offset_to_commit
                 }
                 logger.info("Committing offset: %r", offset)
                 self.__commit(offset)
@@ -465,11 +453,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # If there are no subscriptions for a tick, immediately commit if an offset
         # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
-            offset = {
-                message.value.partition: Position(
-                    message.value.payload.offset_to_commit, message.value.timestamp
-                )
-            }
+            offset = {message.value.partition: message.value.payload.offset_to_commit}
             logger.info("Committing offset: %r", offset)
             self.__commit(offset)
             return
@@ -513,10 +497,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
             if tick_subscription.offset_to_commit is not None:
                 offset = {
-                    tick_subscription.tick_message.partition: Position(
-                        tick_subscription.offset_to_commit,
-                        tick_subscription.tick_message.timestamp,
-                    )
+                    tick_subscription.tick_message.partition: tick_subscription.offset_to_commit
                 }
                 logger.info("Committing offset: %r", offset)
                 self.__commit(offset)
