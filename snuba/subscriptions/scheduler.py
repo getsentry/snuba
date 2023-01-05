@@ -344,13 +344,16 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                     sub_metadata = sub_data.metadata
                     org_id = sub_metadata["organization"]
 
-                    # map the org_id to the slice ID
-                    logical_part = map_org_id_to_logical_partition(org_id)
-                    part_slice_id = map_logical_partition_to_slice(
-                        storage.get_storage_set_key(), logical_part
-                    )
-                    if part_slice_id == self.__slice_id:
-                        filtered_subscriptions.append(subscription)
+                    if org_id is not None:
+                        # map the org_id to the slice ID
+                        logical_part = map_org_id_to_logical_partition(org_id)
+                        part_slice_id = map_logical_partition_to_slice(
+                            storage.get_storage_set_key(), logical_part
+                        )
+                        if part_slice_id == self.__slice_id:
+                            filtered_subscriptions.append(subscription)
+                    else:
+                        self.__metrics.increment("queries_with_orgID=None")
 
                 return filtered_subscriptions
 
