@@ -16,10 +16,10 @@ of the dictionary and the second array contains the values. This works well when
 your dataset design gives you the ability to filter based on other attributes to a small
 number of rows and the flexibility of completely arbitrary keys and values are a real requirement.
 Often, however, a ClickHouse user is interested in rows that contain a specific tag key or a
-specific ``key=value`` pair and in this case one is often best-served by creating a top-level
-column and duplicating (we often call it "promoting" in code) the data.
+specific ``key=value`` pair. In this case one is often best-served by creating a top-level
+column and "promoting" the data to it [#dupe]_.
 
-This duplication is more performance-efficient on two dimensions:
+This promotion is preferable on a couple dimensions:
 
 1. A dictionary style-column can be arbitrarily sized and, especially if you know you will often only
    need a single value from the dictionary, it may be that just returning
@@ -29,6 +29,11 @@ This duplication is more performance-efficient on two dimensions:
    in order to do filtering. Adding a new index on top of a top-level column is a more
    straightforward operation that guarantees more consistent performance outcomes vs. iterating
    over an array
+
+.. [#dupe] During migration from non-promoted to promoted, putting the data in both map and
+           top-level column may be necessary so that queries of old rows can still access the
+           attributes. After the table goes through a full TTL period, however, users should
+           stop writing the data in duplicate places.
 
 ..
    # (TODO: add some information to the above section about how we have
