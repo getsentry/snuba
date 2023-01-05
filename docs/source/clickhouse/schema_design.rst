@@ -10,7 +10,7 @@ and those part of the ``WHERE`` clause). The ability to store different columns 
 and not load them for every row for every query is part of the performance advantage that
 ClickHouse provides over a traditional RDBMBS (like PostgreSQL).
 
-Commonly, a data schema contains a flexible key:value pair mapping (for example: tags) and stores that
+Commonly, a data schema contains a flexible key:value pair mapping (canonically: ``tags``) and stores that
 data in a column that contains two ``Nested`` arrays where the first array contains the keys
 of the dictionary and the second array contains the values. This works well when
 your dataset design gives you the ability to filter based on other attributes to a small
@@ -25,6 +25,11 @@ This duplication is more performance-efficient on two dimensions:
    need a single value from the dictionary, it may be that just returning
    this column in your results blows up the amount of data that has to be processed, aggregated
    and serialized in-memory. It also can exhaust the cache and in that manner slow down other unrelated queries.
-2. Queries that filter based on an array column have to load the entire column into memory
-   in order to do filtering. This makes it more difficult and expensive for the query planner to build
-   indexing on the presence of a key.
+2. Queries that filter based on an array column may have to load the entire column into memory
+   in order to do filtering. Adding a new index on top of a top-level column is a more
+   straightforward operation that guarantees more consistent performance outcomes vs. iterating
+   over an array
+
+..
+   # (TODO: add some information to the above section about how we have
+   done indexes on arrays, and when that might be appropriate)
