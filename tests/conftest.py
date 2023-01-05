@@ -2,6 +2,7 @@ import json
 from typing import Any, Callable, Iterator, Tuple, Union
 
 import pytest
+from confluent_kafka.admin import AdminClient
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
@@ -10,6 +11,9 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic
 
 
 def pytest_configure() -> None:
@@ -81,6 +85,13 @@ def run_migrations() -> Iterator[None]:
 
         for redis_client in all_redis_clients():
             redis_client.flushdb()
+
+
+@pytest.fixture(autouse=True)
+def bootstrap_topics() -> Iterator[None]:
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [t for t in Topic])
+    yield
 
 
 @pytest.fixture(autouse=True)
