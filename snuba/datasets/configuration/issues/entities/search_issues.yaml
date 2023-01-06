@@ -65,6 +65,14 @@ schema:
 readable_storage: search_issues
 writable_storage: search_issues
 query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: client_timestamp
+      time_parse_columns:
+        - detection_timestamp
+        - client_timestamp
+        - receive_timestamp
   - processor: OrganizationRateLimiterProcessor
     args:
       org_column: organization_id
