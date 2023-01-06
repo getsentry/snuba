@@ -70,6 +70,7 @@ class IssueEventData(TypedDict, total=False):
     dist: Optional[str]  # tags[sentry:dist] -> dist
     # (tags[sentry:user] or user[id]) -> user
 
+    # TODO: when we process contexts, make sure to also conditionally extract out trace_id
     # contexts aliases
     # contexts.trace.trace_id -> trace_id
 
@@ -151,7 +152,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     def _process_request_data(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
-        request = event_data.get("request") or {}
+        request = event_data.get("request", {})
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)
         processed["http_method"] = http_data["http_method"]
