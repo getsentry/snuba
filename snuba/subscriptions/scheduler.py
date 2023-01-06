@@ -284,12 +284,12 @@ class DelegateTaskBuilder(TaskBuilder):
 
 
 def filter_subscriptions(
-    subscriptions: Sequence[Subscription],
+    subscriptions: List[Subscription],
     entity_key: EntityKey,
     metrics: MetricsBackend,
     slice_id: Optional[int] = None,
-) -> Sequence[Subscription]:
-    filtered_subscriptions: Sequence[Subscription] = []
+) -> List[Subscription]:
+    filtered_subscriptions: List[Subscription] = []
 
     # only for storage sets that are currently sliced
     entity = get_entity(entity_key)
