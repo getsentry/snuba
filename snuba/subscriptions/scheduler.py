@@ -289,7 +289,7 @@ def filter_subscriptions(
     metrics: MetricsBackend,
     slice_id: Optional[int] = None,
 ) -> Sequence[Subscription]:
-    filtered_subscriptions: List[Subscription] = []
+    filtered_subscriptions: Sequence[Subscription] = []
 
     # only for storage sets that are currently sliced
     entity = get_entity(entity_key)
