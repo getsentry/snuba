@@ -8,7 +8,7 @@ ClickHouse is a columnar datastore, and at run-time it loads columns on-demand
 based on the columns referenced in the query (both the columns ``SELECT`` ed
 and those part of the ``WHERE`` clause). The ability to store different columns independently
 and not load them for every row for every query is part of the performance advantage that
-ClickHouse provides over a traditional RDBMBS (like PostgreSQL).
+ClickHouse provides over a traditional RDBMS (like PostgreSQL).
 
 Commonly, a data schema contains a flexible key:value pair mapping
 (canonically: ``tags`` or ``contexts``) and stores that
