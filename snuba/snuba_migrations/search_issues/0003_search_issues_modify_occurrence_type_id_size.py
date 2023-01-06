@@ -7,11 +7,6 @@ from snuba.migrations.operations import OperationTarget
 
 
 class Migration(migration.ClickhouseNodeMigration):
-    """
-    Heavily influenced by 0004_transactions_add_tags_hash_map.py
-
-    """
-
     blocking = True
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
