@@ -38,7 +38,7 @@ subs = expected_subs + extra_subs
 
 @patch("snuba.settings.SLICED_STORAGE_SETS", {"events": 3})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", {"events": {0: 0, 1: 1, 2: 2}})
-def test_filter_subscriptions():
+def test_filter_subscriptions() -> None:
     importlib.reload(scheduler)
 
     filtered_subs = filter_subscriptions(
