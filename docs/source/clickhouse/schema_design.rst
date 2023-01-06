@@ -26,10 +26,10 @@ In this case one is often best-served by creating a top-level column and "promot
 the data to it [#dupe]_.
 
 It is very efficient for queries to filter by a specific matching value that exists in
-a high number of rows for a given tag key being non-empty or key:value pair on a new
-indexed column. If we know the tag key is low-selectivity, we can get a significant performance
-improvement with a relatively straightforward schema modification. Note that this does
-require creating an index on the new promoted column.
+a high number of rows for a given tag key being non-empty or key:value pair on a column
+that contains **just** the values of that specific key. If we know the tag key is low-selectivity,
+we can get a significant performance improvement with a relatively straightforward schema
+modification. Note that this does require creating an index on the new promoted column.
 
 .. _bloom:
 
