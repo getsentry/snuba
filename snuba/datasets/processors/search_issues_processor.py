@@ -131,11 +131,13 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     def _process_tags(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
-        tags_maybe = event_data.get("tags", None)
-        if not tags_maybe:
+        existing_tags = event_data.get("tags", None)
+        tags: Mapping[str, Any] = _as_dict_safe(cast(Dict[str, Any], existing_tags))
+        if not existing_tags:
             processed["tags.key"], processed["tags.value"] = [], []
-        tags: Mapping[str, Any] = _as_dict_safe(cast(Dict[str, Any], tags_maybe))
-        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        else:
+            processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
             "sentry:release",
