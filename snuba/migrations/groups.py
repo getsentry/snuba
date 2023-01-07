@@ -310,6 +310,7 @@ class SearchIssuesLoader(DirectoryLoader):
         return [
             "0001_search_issues",
             "0002_search_issues_add_tags_hash_map",
+            "0003_search_issues_modify_occurrence_type_id_size",
         ]
 
 
