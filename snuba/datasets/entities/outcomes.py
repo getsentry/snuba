@@ -3,6 +3,9 @@ from typing import Sequence
 from snuba.clickhouse.columns import DateTime, String, UInt
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
@@ -61,7 +64,8 @@ class OutcomesEntity(Entity):
                     # selector that decides when to use the materialized data.
                     storages=[
                         StorageAndMappers(materialized_storage, TranslationMappers()),
-                    ]
+                    ],
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=outcomes_data_model,

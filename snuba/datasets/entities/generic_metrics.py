@@ -18,6 +18,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
@@ -113,6 +116,7 @@ class GenericMetricsEntity(Entity, ABC):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storage_and_mappers,
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),
