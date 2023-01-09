@@ -9,6 +9,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
@@ -105,6 +108,7 @@ class BaseTransactionsEntity(Entity, ABC):
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
                 storages=[StorageAndMappers(storage, mappers)],
+                selector=DefaultQueryStorageSelector(),
             )
         )
 

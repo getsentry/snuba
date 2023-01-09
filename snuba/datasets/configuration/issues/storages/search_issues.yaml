@@ -51,6 +51,7 @@ schema:
     ]
   local_table_name: search_issues_local
   dist_table_name: search_issues_dist
+
 query_processors:
   - processor: TableRateLimit
   - processor: MappingOptimizer
@@ -65,8 +66,20 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: [occurrence_id, event_id, trace_id]
+  - processor: MappingColumnPromoter
+    args:
+      mapping_specs:
+        tags:
+          environment: environment
+          sentry:release: release
+          sentry:dist: dist
+          sentry:user: user
+        contexts:
+          trace.trace_id: trace_id
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
+
 stream_loader:
   processor:
     name: SearchIssuesMessageProcessor

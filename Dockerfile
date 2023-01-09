@@ -1,4 +1,5 @@
 ARG PYTHON_VERSION=3.8.13
+ARG BUILD_BASE=build_admin_ui
 FROM python:${PYTHON_VERSION}-slim-bullseye AS base
 
 WORKDIR /usr/src/snuba
@@ -57,7 +58,7 @@ RUN set -ex; \
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
-FROM base AS application
+FROM $BUILD_BASE AS application
 COPY . ./
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \

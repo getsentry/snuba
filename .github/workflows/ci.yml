@@ -209,13 +209,13 @@ jobs:
           docker buildx create --name arm64-builder --use
           docker buildx build --platform linux/arm64 \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg BUILD_BASE=base \
             --cache-from ${SNUBA_IMAGE}:latest \
             --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:latest \
             -t ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:${{ github.sha }} \
-            --load . \
-            --target application
+            --load .
 
       - name: Publish
         # Forks cannot push to the getsentry org
