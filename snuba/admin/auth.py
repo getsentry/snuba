@@ -5,7 +5,7 @@ from typing import Callable
 from flask import request
 
 from snuba import settings
-from snuba.admin.auth_scopes import ADMIN_SCOPES
+from snuba.admin.auth_roles import DEFAULT_ROLES
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
@@ -30,13 +30,13 @@ def authorize_request() -> AdminUser:
     if provider is None:
         raise ValueError("Invalid authorization provider")
 
-    return _set_scopes(provider())
+    return _set_roles(provider())
 
 
-def _set_scopes(user: AdminUser) -> AdminUser:
+def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
-    # to subset of ADMIN_SCOPES based on IAM roles
-    user.scopes = ADMIN_SCOPES
+    # to subset of DEFAULT_ROLES based on IAM roles
+    user.roles = DEFAULT_ROLES
     return user
 
 

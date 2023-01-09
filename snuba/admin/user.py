@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Set
 
-from snuba.admin.auth_scopes import AuthScope
+from snuba.admin.auth_roles import Role
 
 
 @dataclass
@@ -13,4 +13,4 @@ class AdminUser:
 
     email: str
     id: str
-    scopes: Set[AuthScope] = field(default_factory=set)
+    roles: Set[Role] = field(default_factory=set)
