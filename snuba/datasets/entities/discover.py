@@ -273,7 +273,7 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=None,

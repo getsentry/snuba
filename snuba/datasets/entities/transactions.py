@@ -118,7 +118,7 @@ class BaseTransactionsEntity(Entity, ABC):
             abstract_column_set=schema.get_columns(),
             join_relationships={},
             writable_storage=storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="finish_ts",
             subscription_processors=None,
             subscription_validators=[

@@ -73,7 +73,7 @@ class ProfilesEntity(Entity, ABC):
             join_relationships={},
             writable_storage=writable_storage,
             validators=[
-                EntityRequiredColumnValidator({"organization_id", "project_id"}),
+                EntityRequiredColumnValidator(["organization_id", "project_id"]),
             ],
             required_time_column="received",
             subscription_processors=None,

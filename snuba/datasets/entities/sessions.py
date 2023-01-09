@@ -237,7 +237,7 @@ class SessionsEntity(Entity):
             abstract_column_set=read_columns + time_columns,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
             subscription_processors=[AddColumnCondition("organization", "org_id")],
