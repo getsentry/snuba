@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional, Set, Type, TypeVar, Union, cast
 
-from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
 from snuba.query.dsl import identity
@@ -148,7 +149,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
     the discover dataset file.
     """
 
-    columns: ColumnSet
+    columns: set[str]
 
     def attempt_map(
         self,
