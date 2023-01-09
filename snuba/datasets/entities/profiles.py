@@ -6,6 +6,9 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
@@ -60,7 +63,10 @@ class ProfilesEntity(Entity, ABC):
             storages=[writable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(writable_storage, TranslationMappers())]
+                    storages=[
+                        StorageAndMappers(writable_storage, TranslationMappers())
+                    ],
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=profile_columns,

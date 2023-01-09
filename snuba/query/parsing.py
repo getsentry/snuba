@@ -8,9 +8,8 @@ class ParsingContext:
     alias cache).
     """
 
-    def __init__(self, sort_fields: bool = False) -> None:
+    def __init__(self) -> None:
         self.__alias_cache: List[str] = []
-        self.sort_fields = sort_fields
 
     def add_alias(self, alias: str) -> None:
         self.__alias_cache.append(alias)

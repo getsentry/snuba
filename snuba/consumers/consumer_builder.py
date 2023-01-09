@@ -68,12 +68,11 @@ class ConsumerBuilder:
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
-        parallel_collect: bool,
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
+        validate_schema: bool = False,
         profile_path: Optional[str] = None,
-        cooperative_rebalancing: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -154,8 +153,6 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__parallel_collect = parallel_collect
-        self.__cooperative_rebalancing = cooperative_rebalancing
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -171,6 +168,7 @@ class ConsumerBuilder:
             )
 
         self.__commit_retry_policy = commit_retry_policy
+        self.__validate_schema = validate_schema
 
     def __build_consumer(
         self,
@@ -196,9 +194,6 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
-
-        if self.__cooperative_rebalancing is True:
-            configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
         stats_collection_frequency_ms = get_config(
             f"stats_collection_freq_ms_{self.group_id}",
@@ -227,6 +222,8 @@ class ConsumerBuilder:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
+        logical_topic = stream_loader.get_default_topic_spec().topic
+
         processor = stream_loader.get_processor()
 
         if self.commit_log_topic:
@@ -241,7 +238,11 @@ class ConsumerBuilder:
         ] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
             process_message=functools.partial(
-                process_message, processor, self.consumer_group
+                process_message,
+                processor,
+                self.consumer_group,
+                logical_topic,
+                self.__validate_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -260,7 +261,6 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
             dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
-            parallel_collect=self.__parallel_collect,
         )
 
         if self.__profile_path is not None:

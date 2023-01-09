@@ -2,6 +2,9 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
@@ -29,7 +32,8 @@ class OutcomesRawEntity(Entity):
             storages=[storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,

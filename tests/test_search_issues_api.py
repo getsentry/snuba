@@ -63,6 +63,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             group_id=3,
             primary_hash=str(uuid.uuid4().hex),
             datetime=datetime.utcnow().isoformat() + "Z",
+            platform="other",
             data={"received": now.timestamp()},
             occurrence_data=dict(
                 id=str(uuid.uuid4().hex),
@@ -115,6 +116,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                 "retention_days": 90,
                 "primary_hash": str(uuid.uuid4()),
                 "datetime": datetime.utcnow().isoformat() + "Z",
+                "platform": "other",
                 "data": {
                     "received": now.timestamp(),
                 },

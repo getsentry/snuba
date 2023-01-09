@@ -11,10 +11,25 @@ jobs:
     env:
       IMG_CACHE: ghcr.io/getsentry/snuba:${{ matrix.arch }}-latest
       IMG_VERSIONED: ghcr.io/getsentry/snuba:${{ matrix.arch }}-${{ github.sha }}
+      BUILD_BASE: ${{ matrix.arch == 'arm64' && 'base' || 'build_admin_ui' }}
+      NODE_VERSION: 19.x
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/setup-node@v3
+      with:
+        node-version: ${{env.NODE_VERSION}}
+      if: matrix.arch == 'arm64'
     - run: docker run --rm --privileged tonistiigi/binfmt --install arm64
       if: matrix.arch == 'arm64'
+    - name: build admin UI
+      if: matrix.arch == 'arm64'
+      run: |
+        # allow copying the bundle to docker image
+        sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
+        # build bundle
+        cd snuba/admin
+        yarn install
+        yarn run build
     - name: build
       run: |
         set -euxo pipefail
@@ -25,6 +40,7 @@ jobs:
         docker buildx build \
             "${args[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg BUILD_BASE="$BUILD_BASE" \
             --platform linux/${{ matrix.arch }} \
             --tag "$IMG_VERSIONED" \
             --target application \
