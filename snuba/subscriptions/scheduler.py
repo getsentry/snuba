@@ -7,6 +7,7 @@ from typing import (
     List,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Sequence,
     Tuple,
@@ -284,12 +285,12 @@ class DelegateTaskBuilder(TaskBuilder):
 
 
 def filter_subscriptions(
-    subscriptions: List[Subscription],
+    subscriptions: MutableSequence[Subscription],
     entity_key: EntityKey,
     metrics: MetricsBackend,
     slice_id: Optional[int] = None,
-) -> List[Subscription]:
-    filtered_subscriptions: List[Subscription] = []
+) -> MutableSequence[Subscription]:
+    filtered_subscriptions: MutableSequence[Subscription] = []
 
     # only for storage sets that are currently sliced
     entity = get_entity(entity_key)
@@ -365,7 +366,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             # We are transitioning between jittered and immediate mode. We must use the delegate builder.
             self.__builder = self.__delegate_builder
 
-    def __get_subscriptions(self) -> List[Subscription]:
+    def __get_subscriptions(self) -> MutableSequence[Subscription]:
         current_time = datetime.now()
 
         if (
