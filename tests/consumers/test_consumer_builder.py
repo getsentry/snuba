@@ -151,3 +151,8 @@ def test_optional_kafka_overrides() -> None:
             consumer_builder_with_opt.commit_log_topic.name
             == optional_kafka_params.commit_log_topic
         ), "Commit log topic name should match commit log Kafka topic override"
+
+
+# next tests should
+# 1) create a Builder object
+# 2) __build_streaming_strategy_factory should return a valid ProcessingStrategyFactory object
