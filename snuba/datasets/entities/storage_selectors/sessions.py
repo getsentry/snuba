@@ -22,12 +22,12 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         query_settings: QuerySettings,
         storage_and_mappers: List[StorageAndMappers],
     ) -> StorageAndMappers:
-
         # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
         # then it is a crash rate alert subscription, and hence we decide on whether to use the
         # materialized storage or the raw storage by examining the time_window.
         # If the `time_window` <=1h, then select the raw storage otherwise select materialized
         # storage
+        # NOTE: This storage selector does not support multiple readable storages.
         # NOTE: If we were to support other types of subscriptions over the sessions dataset that
         # do not follow this method used to identify which storage to use, we would need to
         # find a different way to distinguish them.

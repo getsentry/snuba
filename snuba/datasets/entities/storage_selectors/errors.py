@@ -8,6 +8,7 @@ from snuba.query.query_settings import QuerySettings
 
 
 class ErrorsQueryStorageSelector(QueryStorageSelector):
+    # NOTE: This storage selector does not support multiple readable storages.
     def select_storage(
         self,
         query: Query,
