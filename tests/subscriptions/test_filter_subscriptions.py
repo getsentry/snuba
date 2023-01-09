@@ -1,7 +1,11 @@
 import importlib
 import uuid
 from datetime import timedelta
+from random import randint
+from typing import MutableSequence
 from unittest.mock import patch
+
+import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -30,18 +34,29 @@ def build_subscription(resolution: timedelta, org_id: int) -> Subscription:
     )
 
 
-# create a list of subscriptions
-expected_subs = [build_subscription(timedelta(minutes=1), 2) for count in range(20)]
-extra_subs = [build_subscription(timedelta(minutes=3), 1) for count in range(10)]
-subs = expected_subs + extra_subs
+@pytest.fixture
+def expected_subs() -> MutableSequence[Subscription]:
+    return [
+        build_subscription(timedelta(minutes=1), 2) for count in range(randint(1, 50))
+    ]
+
+
+@pytest.fixture
+def extra_subs() -> MutableSequence[Subscription]:
+    return [
+        build_subscription(timedelta(minutes=3), 1) for count in range(randint(1, 50))
+    ]
 
 
 @patch("snuba.settings.SLICED_STORAGE_SETS", {"events": 3})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", {"events": {0: 0, 1: 1, 2: 2}})
-def test_filter_subscriptions() -> None:
+def test_filter_subscriptions(expected_subs, extra_subs) -> None:  # type: ignore
     importlib.reload(scheduler)
 
     filtered_subs = filter_subscriptions(
-        subs, EntityKey.EVENTS, DummyMetricsBackend(strict=True), 2
+        subscriptions=expected_subs + extra_subs,
+        entity_key=EntityKey.EVENTS,
+        metrics=DummyMetricsBackend(strict=True),
+        slice_id=2,
     )
     assert filtered_subs == expected_subs

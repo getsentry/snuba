@@ -314,7 +314,7 @@ def filter_subscriptions(
                     if part_slice_id == slice_id:
                         filtered_subscriptions.append(subscription)
                 else:
-                    metrics.increment("queries_with_orgID=None")
+                    metrics.increment("subscription_with_empty_org_id")
 
             return filtered_subscriptions
 
