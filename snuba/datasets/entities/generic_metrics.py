@@ -109,7 +109,7 @@ class GenericMetricsEntity(Entity, ABC):
             storages.append(writable_storage)
 
         if validators is None:
-            validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]
+            validators = [EntityRequiredColumnValidator(["org_id", "project_id"])]
 
         super().__init__(
             storages=storages,
@@ -162,7 +162,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
                 ]
             ),
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             mappers=TranslationMappers(
                 functions=[
                     FunctionNameMapper("uniq", "uniqCombined64Merge"),
@@ -185,7 +185,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
             ],
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             value_schema=ColumnSet(
                 [
                     Column(

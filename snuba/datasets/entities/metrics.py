@@ -93,10 +93,9 @@ class MetricsEntity(Entity, ABC):
                     *value_schema,
                 ]
             )
-
         if validators is None:
             validators = [
-                EntityRequiredColumnValidator({"org_id", "project_id"}),
+                EntityRequiredColumnValidator(["org_id", "project_id"]),
                 GranularityValidator(minimum=10),
             ]
 
