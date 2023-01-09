@@ -13,6 +13,8 @@ schema:
 
 readable_storage: generic_metrics_sets
 writable_storage: generic_metrics_sets_raw
+storage_selector:
+  selector: DefaultQueryStorageSelector
 query_processors: []
 translation_mappers:
   columns: []
