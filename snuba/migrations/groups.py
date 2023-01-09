@@ -273,6 +273,7 @@ class ProfilesLoader(DirectoryLoader):
             "0002_disable_vertical_merge_algorithm",
             "0003_add_device_architecture",
             "0004_drop_profile_column",
+            "0005_add_bloom_filter_indexes",
         ]
 
 
