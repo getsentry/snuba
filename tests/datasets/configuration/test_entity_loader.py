@@ -61,7 +61,6 @@ class TestEntityConfiguration(ConfigurationTest):
         self, config_path: str, entity: Type[Entity], entity_key: EntityKey
     ) -> None:
         config_entity = build_entity_from_config(config_path)
-        print(config_entity.get_validators())
         py_entity = entity()  # type: ignore
 
         assert isinstance(config_entity, PluggableEntity)

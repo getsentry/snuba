@@ -68,7 +68,6 @@ class PluggableEntity(Entity):
                 EntityColumnSet(self.columns), ColumnValidationMode.DO_NOTHING
             )
         ]
-        return []
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
