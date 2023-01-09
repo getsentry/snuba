@@ -24,7 +24,7 @@ class Role:
     actions: Set[Action]
 
 
-DEFAULT_ROLES = {
+DEFAULT_ROLES = [
     Role(
         name="MigrationsReader",
         resources=MIGRATIONS_RESOURCES,
@@ -40,4 +40,4 @@ DEFAULT_ROLES = {
         resources={"migrations.test_migration"},
         actions={Action.EXECUTE},
     ),
-}
+]
