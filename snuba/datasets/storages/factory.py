@@ -22,7 +22,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
         with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
             self._config_built_storages: dict[StorageKey, Storage] = {}
-            self._cdc_storages: dict[StorageKey, Storage] = {}
             self._all_storages: dict[StorageKey, Storage] = {}
             self.__initialize()
 
