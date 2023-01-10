@@ -1,5 +1,10 @@
+import json
+from datetime import datetime
+from unittest.mock import Mock
+
 import pytest
-from arroyo import Topic
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from confluent_kafka import Producer
 
 from snuba import environment
@@ -12,6 +17,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from tests.fixtures import get_raw_event
 
 test_storage_key = StorageKey("errors")
 consumer_group_name = "my_consumer_group"
@@ -153,6 +159,23 @@ def test_optional_kafka_overrides() -> None:
         ), "Commit log topic name should match commit log Kafka topic override"
 
 
-# next tests should
-# 1) create a Builder object
-# 2) __build_streaming_strategy_factory should return a valid ProcessingStrategyFactory object
+def test_run_processing_strategy() -> None:
+    strategy_factory = consumer_builder.__build_streaming_strategy_factory()
+
+    commit_function = Mock()
+    partitions = Mock()
+    strategy = strategy_factory.create_with_partitions(commit_function, partitions)
+
+    raw_message = get_raw_event()
+    json_string = json.dumps(raw_message)
+
+    message = Message(
+        BrokerValue(
+            KafkaPayload(None, json_string.encode("utf-8"), []),
+            Partition(Topic("events"), 0),
+            0,
+            datetime.now(),
+        )
+    )
+
+    strategy.submit(message)
