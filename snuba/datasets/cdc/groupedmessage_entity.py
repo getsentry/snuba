@@ -28,12 +28,13 @@ class GroupedMessageEntity(Entity):
     def __init__(self) -> None:
         storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
         schema = storage.get_table_writer().get_schema()
+        storages = [StorageAndMappers(storage, TranslationMappers())]
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 ),
             ),
@@ -46,7 +47,6 @@ class GroupedMessageEntity(Entity):
                     equivalences=[],
                 )
             },
-            writable_storage=storage,
             validators=None,
             required_time_column=None,
             subscription_processors=None,

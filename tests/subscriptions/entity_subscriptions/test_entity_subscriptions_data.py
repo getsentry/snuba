@@ -4,6 +4,9 @@ from uuid import UUID
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -13,8 +16,9 @@ from snuba.utils.metrics.timer import Timer
 dataset = get_dataset("generic_metrics")
 entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 entity_key = get_entity_name(entity)
-storage = entity.get_writable_storage()
+storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
 assert storage is not None
+assert isinstance(storage, WritableTableStorage)
 stream_loader = storage.get_table_writer().get_stream_loader()
 topic_spec = stream_loader.get_default_topic_spec()
 org_id = 1

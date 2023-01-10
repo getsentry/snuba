@@ -118,7 +118,6 @@ class BaseTransactionsEntity(Entity, ABC):
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=storage,
             validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="finish_ts",
             subscription_processors=None,

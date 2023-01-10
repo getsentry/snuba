@@ -5,7 +5,7 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
+from snuba.datasets.storage import StorageAndMappers
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -32,7 +32,6 @@ class Entity(Describable, ABC):
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
-        writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
@@ -41,7 +40,6 @@ class Entity(Describable, ABC):
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
-        self.__writable_storage = writable_storage
 
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
@@ -122,14 +120,6 @@ class Entity(Describable, ABC):
         :rtype: Sequence[QueryValidator]
         """
         return self.__validators
-
-    def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        """
-        Temporarily support getting the writable storage from an entity.
-        Once consumers/replacers no longer reference entity, this can be removed
-        and entity can have more than one writable storage.
-        """
-        return self.__writable_storage
 
     def get_subscription_processors(
         self,

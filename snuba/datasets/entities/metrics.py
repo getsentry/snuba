@@ -108,7 +108,6 @@ class MetricsEntity(Entity, ABC):
             ),
             abstract_column_set=abstract_column_set,
             join_relationships={},
-            writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
             subscription_processors=subscription_processors,

@@ -134,7 +134,6 @@ class BaseEventsEntity(Entity, ABC):
                     equivalences=[],
                 ),
             },
-            writable_storage=events_storage,
             validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,

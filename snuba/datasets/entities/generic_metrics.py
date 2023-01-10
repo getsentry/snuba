@@ -122,7 +122,6 @@ class GenericMetricsEntity(Entity, ABC):
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),
             join_relationships={},
-            writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
             subscription_processors=subscription_processors,

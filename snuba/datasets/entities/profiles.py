@@ -70,7 +70,6 @@ class ProfilesEntity(Entity, ABC):
             ),
             abstract_column_set=profile_columns,
             join_relationships={},
-            writable_storage=writable_storage,
             validators=[
                 EntityRequiredColumnValidator(["organization_id", "project_id"]),
             ],

@@ -273,7 +273,6 @@ class DiscoverEntity(Entity):
                 + self.__transactions_columns
             ),
             join_relationships={},
-            writable_storage=None,
             validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,

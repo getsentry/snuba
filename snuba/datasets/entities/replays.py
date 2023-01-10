@@ -38,7 +38,6 @@ class ReplaysEntity(Entity):
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             validate_data_model=ColumnValidationMode.WARN,

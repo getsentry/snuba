@@ -39,7 +39,6 @@ class OutcomesRawEntity(Entity):
             ),
             abstract_column_set=read_columns + time_columns,
             join_relationships={},
-            writable_storage=None,
             validators=[EntityRequiredColumnValidator(["org_id"])],
             required_time_column="timestamp",
             subscription_processors=None,

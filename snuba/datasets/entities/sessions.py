@@ -278,7 +278,6 @@ class OrgSessionsEntity(Entity):
                 ]
             ),
             join_relationships={},
-            writable_storage=None,
             validators=None,
             required_time_column="started",
             subscription_processors=None,
