@@ -140,23 +140,24 @@ class ArgumentMapper(SnubaClickhouseMapper[Argument, Argument]):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefaultNoneColumnMapper(ColumnMapper):
     """
-    This maps a list of column names to None (NULL in SQL) as it is done
-    in the discover column_expr method today. It should not be used for
-    any other reason or use case, thus it should not be moved out of
-    the discover dataset file.
+    This takes a list of flattened column names and maps them to None (NULL in SQL) as it is done in the discover column_expr method today.
+    It should not be used for any other reason or use case, thus it should not be moved out of the discover dataset file.
     """
 
-    columns: set[str]
+    column_names: list[str]
+
+    def __post_init__(self) -> None:
+        self.columns = set(self.column_names)
 
     def attempt_map(
         self,
         expression: Column,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-        if expression.column_name in self.columns:
+        if expression.column_name in self.column_names:
             return identity(
                 Literal(None, None),
                 expression.alias
