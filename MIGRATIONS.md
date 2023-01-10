@@ -105,9 +105,19 @@ The new migration should contain a class called `Migration` which inherits from 
 
 ### Adding an SQL migration (ClickhouseNodeMigration)
 
-A ClickhouseNodeMigration is the most common type of migration and determines the SQL to be run on each ClickHouse node. You should define all four methods - `forwards_local`, `backwards_local`, `forwards_dist` and `backwards_dist` in order to provide the DDL for all ClickHouse layouts that a user may have. The operations provided in the `_local` methods will run on each local ClickHouse node and the `_dist` methods will run on each distributed ClickHouse nodes (if any).
+A ClickhouseNodeMigration is the most common type of migration and determines the SQL to be run on each ClickHouse node. You must define two methods - `forwards_ops` and `backwards_ops` in order to provide the DDL for all ClickHouse layouts that a user may have. These functions return a sequence of sql ops for the forwards and backwards (reverse) migrations.
 
-The `forwards_local_first` and `backwards_local_first` attributes allow you to specify the order of operations. By default `forwards_local_first = True` and `backwards_local_first = False`. This means in the forwards step `_local` is run before `_dist`, and in the backwards step it's the opposite. For some SQL operations, such as `AddColumn` and `CreateTable`, it's important to apply them on local nodes before distributed. For others, such as `DropColumn`, it's important to apply them on the distributed first.
+Each operation in the sequence takes in a `target` parameter in its `__init__` to define if the operation is to be applied on a local or distributed table. `OperationTarget.LOCAL` for local tables, `OperationTarget.DISTRIBUTED` for distributed. By default, `target=OperationTarget.UNSET`. Your migration will not be applied if it is left unset and the runner will throw an error.
+
+For some SQL operations, such as `AddColumn` and `CreateTable`, it's important to apply them on local nodes before distributed. For others, such as `DropColumn`, it's important to apply them on the distributed first. For example, if your migration involves adding a column `col1` to a local and distributed table, your `forward_ops` should return a sequence:
+```
+[
+    AddColumn(target=OperationTarget.LOCAL ...., Column('col1') ),
+    AddColumn(target=OperationTarget.DISTRIBUTED ...., Column('col1') )
+]
+```
+
+Doing operations in the wrong order would risk the distributed table momentarily referencing a non-existent column. To assist in preventing these ordering issues, there is a function `validate_migration_order` in the `snuba.migrations.validator` that checks for ordering conflicts. By default, this function is called for all migrations in `tests/migrations/test_validator.py`
 
 For each forwards method, you should provide the sequence of operations to be run on that node. In case the forwards methods fail halfway, the corresponding backwards methods should also restore the original state so the migration can be retried.
 For example if a temporary table is created during the forwards migration, the backwards migration should drop it.
