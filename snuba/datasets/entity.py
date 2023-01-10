@@ -5,7 +5,7 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
+from snuba.datasets.storage import Storage, StorageAndMappers, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -95,7 +95,15 @@ class Entity(Describable, ABC):
         """
         return self.__query_pipeline_builder
 
-    def get_all_storages(self) -> Sequence[StorageAndMappers]:
+    def get_all_storages(self) -> Sequence[Storage]:
+        """
+        Returns all storage and mappers for this entity.
+        This method should be used for schema bootstrap and migrations.
+        It is not supposed to be used during query processing.
+        """
+        return [storage_and_mapper.storage for storage_and_mapper in self.__storages]
+
+    def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
         """
         Returns all storage and mappers for this entity.
         This method should be used for schema bootstrap and migrations.

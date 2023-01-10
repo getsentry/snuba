@@ -92,7 +92,6 @@ class ReadableQueryStorageSelector(QueryStorageSelector):
         query_settings: QuerySettings,
         storage_and_mappers: List[StorageAndMappers],
     ) -> StorageAndMappers:
-        assert len(storage_and_mappers) == 2
         storage = self.get_readable_storage_mapping(storage_and_mappers)
         if not storage:
             raise QueryStorageSelectorError(

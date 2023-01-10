@@ -13,7 +13,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import Storage, StorageAndMappers, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -86,8 +86,21 @@ class PluggableEntity(Entity):
 
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
-    def get_all_storages(self) -> Sequence[StorageAndMappers]:
+    def get_all_storages(self) -> Sequence[Storage]:
+        return [storage_and_mapper.storage for storage_and_mapper in self.storages]
+
+    def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
         return self.storages
+
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+        return next(
+            (
+                storage_and_mapper.storage
+                for storage_and_mapper in self.storages
+                if isinstance(storage_and_mapper.storage, WritableTableStorage)
+            ),
+            None,
+        )
 
     def get_storage_selector(self) -> Optional[QueryStorageSelector]:
         return self.storage_selector

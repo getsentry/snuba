@@ -85,8 +85,9 @@ class TestEntityConfiguration(ConfigurationTest):
             ), "validator mismatch between configuration-loaded sets and python-defined"
             assert config_v.__dict__ == py_v.__dict__
 
-        assert config_entity.get_all_storages() == py_entity.get_all_storages()
-        assert config_entity.get_writable_storage() == py_entity.get_writable_storage()
+        assert (
+            config_entity.get_all_storages() == py_entity.get_all_storages_and_mappers()
+        )
         assert config_entity.required_time_column == py_entity.required_time_column
 
         assert config_entity.get_data_model() == py_entity.get_data_model()
@@ -95,7 +96,9 @@ class TestEntityConfiguration(ConfigurationTest):
         pluggable_entity = build_entity_from_config(
             "tests/datasets/configuration/entity_with_column_mappers.yaml"
         )
-        column_mappers = pluggable_entity.translation_mappers.columns
+        column_mappers = pluggable_entity.get_all_storages_and_mappers()[
+            0
+        ].mappers.columns
 
         # Check that ColumnToIpAdress mapper was successfully loaded from config
         column_to_ip_address = get_object_in_list_by_class(

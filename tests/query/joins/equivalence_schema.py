@@ -76,7 +76,6 @@ class Events(FakeEntity):
                     equivalences=[],
                 ),
             },
-            writable_storage=None,
             validators=None,
             required_time_column=None,
             subscription_processors=None,
