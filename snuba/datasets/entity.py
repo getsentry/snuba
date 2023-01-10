@@ -5,7 +5,7 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -102,6 +102,19 @@ class Entity(Describable, ABC):
         It is not supposed to be used during query processing.
         """
         return self.__storages
+
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+        """
+        Returns the writable storage if present.
+        """
+        return next(
+            (
+                storage_and_mapper.storage
+                for storage_and_mapper in self.__storages
+                if isinstance(storage_and_mapper.storage, WritableTableStorage)
+            ),
+            None,
+        )
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """
