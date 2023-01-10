@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    DefaultQueryStorageSelector,
+    ReadableQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
@@ -24,17 +24,18 @@ class FunctionsEntity(Entity):
     def __init__(self) -> None:
         readable_storage = get_storage(StorageKey.FUNCTIONS)
         writable_storage = get_writable_storage(StorageKey.FUNCTIONS_RAW)
-        storages = [readable_storage, writable_storage]
+        storages = [
+            StorageAndMappers(readable_storage, TranslationMappers()),
+            StorageAndMappers(writable_storage, TranslationMappers()),
+        ]
         schema = readable_storage.get_schema()
 
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(readable_storage, TranslationMappers())
-                    ],
-                    selector=DefaultQueryStorageSelector(),
+                    storages=storages,
+                    selector=ReadableQueryStorageSelector(),
                 )
             ),
             abstract_column_set=schema.get_columns(),

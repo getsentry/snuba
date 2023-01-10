@@ -21,7 +21,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    DefaultQueryStorageSelector,
+    ReadableQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
@@ -76,10 +76,9 @@ class MetricsEntity(Entity, ABC):
                 SubscriptableMapper(None, "tags", None, "tags"),
             ],
         ).concat(mappers)
-        storages = [readable_storage]
-        storage_and_mappers = [StorageAndMappers(readable_storage, all_mappers)]
+        storages = [StorageAndMappers(readable_storage, all_mappers)]
         if writable_storage:
-            storages.append(writable_storage)
+            storages.append(StorageAndMappers(writable_storage, all_mappers))
 
         if abstract_column_set is None:
             abstract_column_set = ColumnSet(
@@ -103,8 +102,8 @@ class MetricsEntity(Entity, ABC):
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=storage_and_mappers,
-                    selector=DefaultQueryStorageSelector(),
+                    storages=storages,
+                    selector=ReadableQueryStorageSelector(),
                 )
             ),
             abstract_column_set=abstract_column_set,

@@ -19,7 +19,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    DefaultQueryStorageSelector,
+    ReadableQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
@@ -101,12 +101,13 @@ class GenericMetricsEntity(Entity, ABC):
                 ),
             ],
         ).concat(mappers)
-        storages = [readable_storage]
-        storage_and_mappers = [
+        storages = [
             StorageAndMappers(readable_storage, generic_metrics_mappers),
         ]
         if writable_storage:
-            storages.append(writable_storage)
+            storages.append(
+                StorageAndMappers(writable_storage, generic_metrics_mappers)
+            )
 
         if validators is None:
             validators = [EntityRequiredColumnValidator(["org_id", "project_id"])]
@@ -115,8 +116,8 @@ class GenericMetricsEntity(Entity, ABC):
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=storage_and_mappers,
-                    selector=DefaultQueryStorageSelector(),
+                    storages=storages,
+                    selector=ReadableQueryStorageSelector(),
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),

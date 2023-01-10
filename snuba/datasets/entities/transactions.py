@@ -104,16 +104,17 @@ class BaseTransactionsEntity(Entity, ABC):
             if custom_mappers is None
             else transaction_translator.concat(custom_mappers)
         )
+        storages = [StorageAndMappers(storage, mappers)]
 
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
-                storages=[StorageAndMappers(storage, mappers)],
+                storages=storages,
                 selector=DefaultQueryStorageSelector(),
             )
         )
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},

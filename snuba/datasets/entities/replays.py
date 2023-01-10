@@ -26,14 +26,13 @@ class ReplaysEntity(Entity):
     def __init__(self) -> None:
         writable_storage = get_writable_storage(StorageKey.REPLAYS)
         schema = writable_storage.get_table_writer().get_schema()
+        storages = [StorageAndMappers(writable_storage, TranslationMappers())]
 
         super().__init__(
-            storages=[writable_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(writable_storage, TranslationMappers())
-                    ],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 ),
             ),

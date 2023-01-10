@@ -66,10 +66,216 @@ schema:
     },
   ]
 
-readable_storage: generic_metrics_distributions
-writable_storage: generic_metrics_distributions_raw
+storages:
+  - storage: generic_metrics_distributions
+    translation_mappers:
+      functions:
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: min
+            to_name: minMerge
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: minIf
+            to_name: minMergeIf
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: max
+            to_name: maxMerge
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: maxIf
+            to_name: maxMergeIf
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avg
+            to_name: avgMerge
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avgIf
+            to_name: avgMergeIf
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sum
+            to_name: sumMerge
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sumIf
+            to_name: sumMergeIf
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: count
+            to_name: countMerge
+            aggr_col_name: count
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: countIf
+            to_name: countMergeIf
+            aggr_col_name: count
+      curried_functions:
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantiles
+            to_name: quantilesMerge
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantilesIf
+            to_name: quantilesMergeIf
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogram
+            to_name: histogramMerge
+            aggr_col_name: histogram_buckets
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogramIf
+            to_name: histogramMergeIf
+            aggr_col_name: histogram_buckets
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags_raw
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: raw_value
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: indexed_value
+  - storage: generic_metrics_distributions_raw
+    translation_mappers:
+      functions:
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: min
+            to_name: minMerge
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: minIf
+            to_name: minMergeIf
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: max
+            to_name: maxMerge
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: maxIf
+            to_name: maxMergeIf
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avg
+            to_name: avgMerge
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avgIf
+            to_name: avgMergeIf
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sum
+            to_name: sumMerge
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sumIf
+            to_name: sumMergeIf
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: count
+            to_name: countMerge
+            aggr_col_name: count
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: countIf
+            to_name: countMergeIf
+            aggr_col_name: count
+      curried_functions:
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantiles
+            to_name: quantilesMerge
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantilesIf
+            to_name: quantilesMergeIf
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogram
+            to_name: histogramMerge
+            aggr_col_name: histogram_buckets
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogramIf
+            to_name: histogramMergeIf
+            aggr_col_name: histogram_buckets
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags_raw
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: raw_value
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: indexed_value
+
 storage_selector:
-  selector: DefaultQueryStorageSelector
+  selector: ReadableQueryStorageSelector
 
 query_processors:
   - processor: TagsTypeTransformer
@@ -98,108 +304,7 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
-translation_mappers:
-  functions:
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: min
-        to_name: minMerge
-        aggr_col_name: min
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: minIf
-        to_name: minMergeIf
-        aggr_col_name: min
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: max
-        to_name: maxMerge
-        aggr_col_name: max
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: maxIf
-        to_name: maxMergeIf
-        aggr_col_name: max
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: avg
-        to_name: avgMerge
-        aggr_col_name: avg
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: avgIf
-        to_name: avgMergeIf
-        aggr_col_name: avg
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: sum
-        to_name: sumMerge
-        aggr_col_name: sum
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: sumIf
-        to_name: sumMergeIf
-        aggr_col_name: sum
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: count
-        to_name: countMerge
-        aggr_col_name: count
-    - mapper: AggregateFunctionMapper
-      args:
-        column_to_map: value
-        from_name: countIf
-        to_name: countMergeIf
-        aggr_col_name: count
-  curried_functions:
-    - mapper: AggregateCurriedFunctionMapper
-      args:
-        column_to_map: value
-        from_name: quantiles
-        to_name: quantilesMerge
-        aggr_col_name: percentiles
-    - mapper: AggregateCurriedFunctionMapper
-      args:
-        column_to_map: value
-        from_name: quantilesIf
-        to_name: quantilesMergeIf
-        aggr_col_name: percentiles
-    - mapper: AggregateCurriedFunctionMapper
-      args:
-        column_to_map: value
-        from_name: histogram
-        to_name: histogramMerge
-        aggr_col_name: histogram_buckets
-    - mapper: AggregateCurriedFunctionMapper
-      args:
-        column_to_map: value
-        from_name: histogramIf
-        to_name: histogramMergeIf
-        aggr_col_name: histogram_buckets
-  subscriptables:
-    - mapper: SubscriptableMapper
-      args:
-        from_column_table:
-        from_column_name: tags_raw
-        to_nested_col_table:
-        to_nested_col_name: tags
-        value_subcolumn_name: raw_value
-    - mapper: SubscriptableMapper
-      args:
-        from_column_table:
-        from_column_name: tags
-        to_nested_col_table:
-        to_nested_col_name: tags
-        value_subcolumn_name: indexed_value
+
 validators:
   - validator: EntityRequiredColumnValidator
     args:

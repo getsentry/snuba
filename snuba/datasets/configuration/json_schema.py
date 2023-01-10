@@ -442,6 +442,21 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
     },
 }
 
+STORAGE_AND_MAPPER = {
+    "type": "object",
+    "properties": {
+        "storage": {
+            **TYPE_STRING,
+            **{
+                "description": "Name of a readable or writable storage class which provides an abstraction to read from a table or a view in ClickHouse"
+            },
+        },
+        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
+    },
+    "required": ["storage"],
+    "additionalProperties": False,
+}
+
 # Full schemas:
 
 V1_WRITABLE_STORAGE_SCHEMA = {
@@ -506,15 +521,10 @@ V1_ENTITY_SCHEMA = {
         "kind": {"const": "entity", "description": "Component kind"},
         "schema": SCHEMA_COLUMNS,
         "name": {**TYPE_STRING, **{"description": "Name of the entity"}},
-        "readable_storage": {
-            **TYPE_STRING,
-            **{
-                "description": "Name of a ReadableStorage class which provides an abstraction to read from a table or a view in ClickHouse"
-            },
-        },
-        "writable_storage": {
-            "type": ["string", "null"],
-            "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
+        "storages": {
+            "type": "array",
+            "items": STORAGE_AND_MAPPER,
+            "description": "An array of storages and their associated translation mappers",
         },
         "storage_selector": {
             "type": "object",
@@ -536,7 +546,6 @@ V1_ENTITY_SCHEMA = {
             "items": ENTITY_QUERY_PROCESSOR,
             "description": "Represents a transformation applied to the ClickHouse query",
         },
-        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
         "validators": {
             "type": "array",
             "items": ENTITY_VALIDATOR,
@@ -560,7 +569,7 @@ V1_ENTITY_SCHEMA = {
         "kind",
         "schema",
         "name",
-        "readable_storage",
+        "storages",
         "storage_selector",
         "query_processors",
         "validators",

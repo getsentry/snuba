@@ -218,19 +218,18 @@ class SessionsEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
+        storages = [
+            StorageAndMappers(materialized_storage, sessions_hourly_translators),
+            StorageAndMappers(writable_storage, sessions_raw_translators),
+        ]
 
         read_columns = read_schema.get_columns()
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
-            storages=[writable_storage, materialized_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(
-                            materialized_storage, sessions_hourly_translators
-                        ),
-                        StorageAndMappers(writable_storage, sessions_raw_translators),
-                    ],
+                    storages=storages,
                     selector=SessionsQueryStorageSelector(),
                 ),
             ),
@@ -260,12 +259,13 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
+        storages = [StorageAndMappers(storage, TranslationMappers())]
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 )
             ),

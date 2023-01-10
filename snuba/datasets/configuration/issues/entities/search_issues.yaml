@@ -62,8 +62,30 @@ schema:
     { name: retention_days, type: UInt, args: { size: 16 } },
   ]
 
-readable_storage: search_issues
-writable_storage: search_issues
+storages:
+  - storage: search_issues
+    translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name:
+            from_col_name: "timestamp"
+            to_table_name:
+            to_col_name: "client_timestamp"
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags
+            to_nested_col_table:
+            to_nested_col_name: tags
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: contexts
+            to_nested_col_table:
+            to_nested_col_name: contexts
+
 storage_selector:
   selector: DefaultQueryStorageSelector
 
@@ -83,27 +105,6 @@ query_processors:
       project_field: project_id
   - processor: TagsExpanderProcessor
 
-translation_mappers:
-  columns:
-    - mapper: ColumnToColumn
-      args:
-        from_table_name:
-        from_col_name: "timestamp"
-        to_table_name:
-        to_col_name: "client_timestamp"
-  subscriptables:
-    - mapper: SubscriptableMapper
-      args:
-        from_column_table:
-        from_column_name: tags
-        to_nested_col_table:
-        to_nested_col_name: tags
-    - mapper: SubscriptableMapper
-      args:
-        from_column_table:
-        from_column_name: contexts
-        to_nested_col_table:
-        to_nested_col_name: contexts
 validators:
   - validator: EntityRequiredColumnValidator
     args:

@@ -103,13 +103,13 @@ class BaseEventsEntity(Entity, ABC):
             if custom_mappers is None
             else errors_translators.concat(custom_mappers)
         )
-
+        storages = [
+            StorageAndMappers(events_read_storage, mappers),
+            StorageAndMappers(events_storage, mappers),
+        ]
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
-                storages=[
-                    StorageAndMappers(events_read_storage, mappers),
-                    StorageAndMappers(events_storage, mappers),
-                ],
+                storages=storages,
                 selector=ErrorsQueryStorageSelector(),
             ),
         )
@@ -117,7 +117,7 @@ class BaseEventsEntity(Entity, ABC):
         columns = schema.get_columns()
 
         super().__init__(
-            storages=[events_storage, events_read_storage],
+            storages=storages,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=columns,
             join_relationships={

@@ -255,8 +255,9 @@ class DiscoverEntity(Entity):
                 ),
             )
         )
+        storages = [StorageAndMappers(discover_storage, mappers)]
         discover_storage_plan_builder = StorageQueryPlanBuilder(
-            storages=[StorageAndMappers(discover_storage, mappers)],
+            storages=storages,
             selector=DefaultQueryStorageSelector(),
         )
         discover_pipeline_builder = SimplePipelineBuilder(
@@ -264,7 +265,7 @@ class DiscoverEntity(Entity):
         )
 
         super().__init__(
-            storages=[discover_storage],
+            storages=storages,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns

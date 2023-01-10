@@ -28,11 +28,12 @@ class OutcomesRawEntity(Entity):
         storage = get_storage(StorageKey.OUTCOMES_RAW)
         read_columns = storage.get_schema().get_columns()
         time_columns = ColumnSet([("time", DateTime())])
+        storages = [StorageAndMappers(storage, TranslationMappers())]
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 ),
             ),
