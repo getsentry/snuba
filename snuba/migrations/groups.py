@@ -226,6 +226,7 @@ class MetricsLoader(DirectoryLoader):
             "0032_redo_0030_and_0031_without_timestamps",
             "0033_metrics_cleanup_old_views",
             "0034_metrics_cleanup_old_tables",
+            "0035_metrics_add_prod_filter",
         ]
 
 
