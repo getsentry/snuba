@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -18,7 +18,8 @@ from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelec
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
@@ -125,22 +126,32 @@ def _build_subscription_validators(
     return None
 
 
+def _build_storage_and_mappers(
+    config_storages: list[dict[str, Any]]
+) -> List[StorageAndMappers]:
+    return [
+        StorageAndMappers(
+            get_storage(StorageKey(storage_and_mapper["storage"])),
+            _build_entity_translation_mappers(
+                storage_and_mapper["translation_mappers"]
+                if "translation_mappers" in storage_and_mapper
+                else TranslationMappers()
+            ),
+        )
+        for storage_and_mapper in config_storages
+    ]
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
+        storages=_build_storage_and_mappers(config["storages"]),
         storage_selector=_build_storage_selector(config["storage_selector"]),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),
-        readable_storage=get_storage(StorageKey(config["readable_storage"])),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
-        translation_mappers=_build_entity_translation_mappers(
-            config["translation_mappers"]
-        ),
-        writeable_storage=get_writable_storage(StorageKey(config["writable_storage"]))
-        if "writable_storage" in config
-        else None,
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),
