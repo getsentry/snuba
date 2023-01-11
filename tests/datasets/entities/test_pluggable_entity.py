@@ -15,6 +15,9 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage
@@ -106,6 +109,7 @@ def pluggable_sets_entity() -> PluggableEntity:
         ),
         validators=[],
         required_time_column="timestamp",
+        storage_selector=DefaultQueryStorageSelector(),
     )
 
 

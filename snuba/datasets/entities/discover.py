@@ -26,6 +26,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
@@ -254,6 +257,7 @@ class DiscoverEntity(Entity):
         )
         discover_storage_plan_builder = StorageQueryPlanBuilder(
             storages=[StorageAndMappers(discover_storage, mappers)],
+            selector=DefaultQueryStorageSelector(),
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder
@@ -269,7 +273,7 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=None,

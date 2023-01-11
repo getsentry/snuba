@@ -18,6 +18,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
@@ -106,13 +109,14 @@ class GenericMetricsEntity(Entity, ABC):
             storages.append(writable_storage)
 
         if validators is None:
-            validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]
+            validators = [EntityRequiredColumnValidator(["org_id", "project_id"])]
 
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storage_and_mappers,
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),
@@ -158,7 +162,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
                 ]
             ),
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             mappers=TranslationMappers(
                 functions=[
                     FunctionNameMapper("uniq", "uniqCombined64Merge"),
@@ -181,7 +185,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
             ],
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             value_schema=ColumnSet(
                 [
                     Column(

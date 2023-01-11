@@ -68,6 +68,9 @@ schema:
 
 readable_storage: generic_metrics_distributions
 writable_storage: generic_metrics_distributions_raw
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
 query_processors:
   - processor: TagsTypeTransformer
   - processor: MappedGranularityProcessor
