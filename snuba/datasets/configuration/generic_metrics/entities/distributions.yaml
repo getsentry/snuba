@@ -275,7 +275,9 @@ storages:
             value_subcolumn_name: indexed_value
 
 storage_selector:
-  selector: ReadableQueryStorageSelector
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: generic_metrics_distributions
 
 query_processors:
   - processor: TagsTypeTransformer

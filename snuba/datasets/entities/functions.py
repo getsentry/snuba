@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    ReadableQueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
@@ -35,7 +35,7 @@ class FunctionsEntity(Entity):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,
-                    selector=ReadableQueryStorageSelector(),
+                    selector=SimpleQueryStorageSelector(StorageKey.FUNCTIONS.value),
                 )
             ),
             abstract_column_set=schema.get_columns(),

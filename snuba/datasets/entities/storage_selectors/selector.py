@@ -81,26 +81,6 @@ class DefaultQueryStorageSelector(QueryStorageSelector):
         return storage_and_mappers[0]
 
 
-class ReadableQueryStorageSelector(QueryStorageSelector):
-    """
-    A query storage selector which always chooses the readable storage between
-    a readable storage and a writable storage.
-    """
-
-    def select_storage(
-        self,
-        query: Query,
-        query_settings: QuerySettings,
-        storage_and_mappers: List[StorageAndMappers],
-    ) -> StorageAndMappers:
-        storage = self.get_readable_storage_mapping(storage_and_mappers)
-        if not storage:
-            raise QueryStorageSelectorError(
-                "Unable to select query storage. There is no ReadableTableStorage to select."
-            )
-        return storage
-
-
 class SimpleQueryStorageSelector(QueryStorageSelector):
     """
     A simple query storage selector which selects the storage passed an input.

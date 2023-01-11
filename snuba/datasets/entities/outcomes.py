@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import DateTime, String, UInt
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.storage_selectors.selector import (
-    ReadableQueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
@@ -66,7 +66,9 @@ class OutcomesEntity(Entity):
                     # materialized storage or the raw one here, replace this with a custom storage
                     # selector that decides when to use the materialized data.
                     storages=storages,
-                    selector=ReadableQueryStorageSelector(),
+                    selector=SimpleQueryStorageSelector(
+                        StorageKey.OUTCOMES_HOURLY.value
+                    ),
                 ),
             ),
             abstract_column_set=outcomes_data_model,
