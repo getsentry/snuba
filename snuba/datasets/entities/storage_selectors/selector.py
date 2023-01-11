@@ -6,6 +6,7 @@ from snuba.datasets.storage import (
     StorageAndMappers,
     WritableTableStorage,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.registered_class import RegisteredClass
@@ -98,3 +99,26 @@ class ReadableQueryStorageSelector(QueryStorageSelector):
                 "Unable to select query storage. There is no ReadableTableStorage to select."
             )
         return storage
+
+
+class SimpleQueryStorageSelector(QueryStorageSelector):
+    """
+    A simple query storage selector which selects the storage passed an input.
+    """
+
+    def __init__(self, storage: str):
+        self.storage_key = StorageKey(storage)
+
+    def select_storage(
+        self,
+        query: Query,
+        query_settings: QuerySettings,
+        storage_and_mappers: List[StorageAndMappers],
+    ) -> StorageAndMappers:
+        for sm in storage_and_mappers:
+            assert isinstance(sm.storage, ReadableTableStorage)
+            if sm.storage.get_storage_key() == self.storage_key:
+                return sm
+        raise QueryStorageSelectorError(
+            "The specified storage in selector does not exist in storage list."
+        )

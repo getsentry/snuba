@@ -21,7 +21,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    ReadableQueryStorageSelector,
+    DefaultQueryStorageSelector,
+    QueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
@@ -62,6 +64,7 @@ class MetricsEntity(Entity, ABC):
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
+        selector: QueryStorageSelector,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None,
@@ -103,7 +106,7 @@ class MetricsEntity(Entity, ABC):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,
-                    selector=ReadableQueryStorageSelector(),
+                    selector=selector,
                 )
             ),
             abstract_column_set=abstract_column_set,
@@ -141,6 +144,7 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_SETS.value),
             subscription_processors=[AddColumnCondition("organization", "org_id")],
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
@@ -160,6 +164,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_COUNTERS.value),
             subscription_processors=[AddColumnCondition("organization", "org_id")],
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
@@ -174,6 +179,7 @@ class OrgMetricsCountersEntity(MetricsEntity):
             readable_storage_key=StorageKey.ORG_METRICS_COUNTERS,
             value_schema=[],
             mappers=TranslationMappers(),
+            selector=DefaultQueryStorageSelector(),
             abstract_column_set=ColumnSet(
                 [
                     Column("org_id", UInt(64)),
@@ -241,6 +247,7 @@ class MetricsDistributionsEntity(MetricsEntity):
                     ),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_DISTRIBUTIONS.value),
             subscription_processors=None,
             subscription_validators=None,
         )

@@ -95,7 +95,9 @@ def _build_entity_translation_mappers(
 def _build_storage_selector(
     config_storage_selector: dict[str, Any]
 ) -> QueryStorageSelector:
-    return QueryStorageSelector.get_from_name(config_storage_selector["selector"])()
+    return QueryStorageSelector.get_from_name(config_storage_selector["selector"])(
+        **config_storage_selector["args"] if config_storage_selector.get("args") else {}
+    )
 
 
 def _build_subscription_processors(
@@ -132,11 +134,9 @@ def _build_storage_and_mappers(
     return [
         StorageAndMappers(
             get_storage(StorageKey(storage_and_mapper["storage"])),
-            _build_entity_translation_mappers(
-                storage_and_mapper["translation_mappers"]
-                if "translation_mappers" in storage_and_mapper
-                else TranslationMappers()
-            ),
+            _build_entity_translation_mappers(storage_and_mapper["translation_mappers"])
+            if "translation_mappers" in storage_and_mapper
+            else TranslationMappers(),
         )
         for storage_and_mapper in config_storages
     ]

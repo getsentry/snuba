@@ -11,16 +11,12 @@ schema:
     { name: bucketed_time, type: DateTime },
   ]
 
-readable_storage: generic_metrics_sets
-writable_storage: generic_metrics_sets_raw
+storages:
+  - storage: generic_metrics_sets
+  - storage: generic_metrics_sets_raw
 storage_selector:
-  selector: DefaultQueryStorageSelector
+  selector: ReadableQueryStorageSelector
 query_processors: []
-translation_mappers:
-  columns: []
-  subscriptables: []
-  functions: []
-  curried_functions: []
 validators: []
 required_time_column: timestamp
 partition_key_column_name: org_id
