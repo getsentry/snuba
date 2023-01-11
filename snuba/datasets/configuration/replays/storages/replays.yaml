@@ -13,6 +13,16 @@ schema:
         type: String,
         args: { schema_modifiers: [low_cardinality, nullable] },
       },
+      {
+        name: session_sample_rate,
+        type: Float,
+        args: { size: 64, schema_modifiers: [nullable] },
+      },
+      {
+        name: error_sample_rate,
+        type: Float,
+        args: { size: 64, schema_modifiers: [nullable] },
+      },
       { name: event_hash, type: UUID },
       {
         name: segment_id,
