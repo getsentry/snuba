@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime
 from unittest.mock import Mock
 
@@ -160,14 +161,14 @@ def test_optional_kafka_overrides() -> None:
 
 
 def test_run_processing_strategy() -> None:
-    strategy_factory = consumer_builder.__build_streaming_strategy_factory()
+    strategy_factory = consumer_builder.build_streaming_strategy_factory()
 
     commit_function = Mock()
     partitions = Mock()
     strategy = strategy_factory.create_with_partitions(commit_function, partitions)
 
     raw_message = get_raw_event()
-    json_string = json.dumps(raw_message)
+    json_string = json.dumps([2, "insert", raw_message, []])
 
     message = Message(
         BrokerValue(
@@ -179,3 +180,8 @@ def test_run_processing_strategy() -> None:
     )
 
     strategy.submit(message)
+    strategy.poll()
+    time.sleep(1)
+    strategy.poll()
+
+    assert commit_function.call_count == 1

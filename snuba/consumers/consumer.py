@@ -112,11 +112,13 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
     def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
 
+        print("submitted in insertbatchwriter")
         self.__messages.append(message)
 
     def close(self) -> None:
         self.__closed = True
 
+        print("closed in insertbatchwriter")
         if not self.__messages:
             return
 
@@ -230,6 +232,7 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
             args.append(timeout)
 
         start = time.time()
+        print("in replacement join")
         self.__producer.flush(*args)
 
         logger.debug(
@@ -400,6 +403,7 @@ def build_batch_writer(
             insert_batch_writer, replacement_batch_writer, commit_log_config
         )
 
+    print("inside build function")
     return build_writer
 
 
@@ -558,6 +562,7 @@ def process_message(
     validate: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    print("inside process_message")
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
