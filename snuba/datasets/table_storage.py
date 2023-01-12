@@ -59,10 +59,7 @@ class KafkaTopicSpec:
 
     @property
     def partitions_number(self) -> int:
-        # TODO: This references the actual topic name for backward compatibility.
-        # It should be changed to the logical name for consistency with KAFKA_TOPIC_MAP
-        # and KAFKA_BROKER_CONFIG
-        return settings.TOPIC_PARTITION_COUNTS.get(self.topic_name, 1)
+        return settings.TOPIC_PARTITION_COUNTS.get(self.__topic.value, 1)
 
     @property
     def replication_factor(self) -> int:
