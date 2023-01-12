@@ -4,8 +4,9 @@ from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.clickhouse import get_ddl_node_connection
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 
@@ -50,11 +51,9 @@ class SqlOperation(ABC):
         else:
             raise ValueError(f"Target not set for {self}")
 
+        database = cluster.get_database()
         for node in nodes:
-            connection = cluster.get_node_connection(
-                ClickhouseClientSettings.MIGRATE, node
-            )
-
+            connection = get_ddl_node_connection(node, database)
             connection.execute(self.format_sql(), settings=self._settings)
 
     @abstractmethod
