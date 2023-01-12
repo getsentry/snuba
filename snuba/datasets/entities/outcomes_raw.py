@@ -31,6 +31,7 @@ class OutcomesRawEntity(Entity):
         storages = [StorageAndMappers(storage, TranslationMappers())]
         super().__init__(
             storages=storages,
+            writable_storage=None,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

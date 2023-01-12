@@ -35,6 +35,7 @@ class GroupAssigneeEntity(Entity):
 
         super().__init__(
             storages=storages,
+            writable_storage=storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

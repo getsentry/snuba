@@ -90,6 +90,7 @@ def pluggable_sets_entity() -> PluggableEntity:
                 ),
             )
         ],
+        writable_storage=None,
         query_processors=[
             TagsTypeTransformer(),
             MappedGranularityProcessor(

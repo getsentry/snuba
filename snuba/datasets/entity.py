@@ -29,6 +29,7 @@ class Entity(Describable, ABC):
         self,
         *,
         storages: Sequence[StorageAndMappers],
+        writable_storage: Optional[WritableTableStorage],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
@@ -39,6 +40,7 @@ class Entity(Describable, ABC):
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
         self.__storages = storages
+        self.__writable_storage = writable_storage
         self.__query_pipeline_builder = query_pipeline_builder
 
         # Eventually, the EntityColumnSet should be passed in
@@ -106,23 +108,16 @@ class Entity(Describable, ABC):
     def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
         """
         Returns all storage and mappers for this entity.
-        This method should be used for schema bootstrap and migrations.
-        It is not supposed to be used during query processing.
         """
         return self.__storages
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
-        Returns the writable storage if present.
+        Temporarily support getting the writable storage from an entity.
+        Once consumers/replacers no longer reference entity, this can be removed
+        and entity can have more than one writable storage.
         """
-        return next(
-            (
-                storage_and_mapper.storage
-                for storage_and_mapper in self.__storages
-                if isinstance(storage_and_mapper.storage, WritableTableStorage)
-            ),
-            None,
-        )
+        return self.__writable_storage
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """

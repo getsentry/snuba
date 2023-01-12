@@ -115,6 +115,7 @@ class BaseTransactionsEntity(Entity, ABC):
 
         super().__init__(
             storages=storages,
+            writable_storage=storage,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},

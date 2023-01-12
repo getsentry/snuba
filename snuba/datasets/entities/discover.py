@@ -266,6 +266,7 @@ class DiscoverEntity(Entity):
 
         super().__init__(
             storages=storages,
+            writable_storage=None,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns

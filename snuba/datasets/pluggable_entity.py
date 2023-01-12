@@ -41,6 +41,7 @@ class PluggableEntity(Entity):
 
     entity_key: EntityKey
     storages: List[StorageAndMappers]
+    writable_storage: Optional[WritableTableStorage]
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     validators: Sequence[QueryValidator]
@@ -93,14 +94,7 @@ class PluggableEntity(Entity):
         return self.storages
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        return next(
-            (
-                storage_and_mapper.storage
-                for storage_and_mapper in self.storages
-                if isinstance(storage_and_mapper.storage, WritableTableStorage)
-            ),
-            None,
-        )
+        return self.writable_storage
 
     def get_storage_selector(self) -> Optional[QueryStorageSelector]:
         return self.storage_selector

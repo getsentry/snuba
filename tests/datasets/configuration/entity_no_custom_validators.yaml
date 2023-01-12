@@ -14,6 +14,7 @@ schema:
 storages:
   - storage: generic_metrics_sets
   - storage: generic_metrics_sets_raw
+    is_writable: true
 storage_selector:
   selector: SimpleQueryStorageSelector
   args:

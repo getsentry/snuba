@@ -131,6 +131,7 @@ storages:
   [
     {
       storage: transactions,
+      is_writable: true,
       translation_mappers:
         {
           columns:

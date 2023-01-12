@@ -227,6 +227,7 @@ class SessionsEntity(Entity):
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
             storages=storages,
+            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,
@@ -262,6 +263,7 @@ class OrgSessionsEntity(Entity):
 
         super().__init__(
             storages=storages,
+            writable_storage=None,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

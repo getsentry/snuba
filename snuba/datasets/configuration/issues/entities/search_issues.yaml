@@ -64,6 +64,7 @@ schema:
 
 storages:
   - storage: search_issues
+    is_writable: true
     translation_mappers:
       columns:
         - mapper: ColumnToColumn

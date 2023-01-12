@@ -118,6 +118,7 @@ class BaseEventsEntity(Entity, ABC):
 
         super().__init__(
             storages=storages,
+            writable_storage=events_storage,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=columns,
             join_relationships={

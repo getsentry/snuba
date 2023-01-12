@@ -451,6 +451,10 @@ STORAGE_AND_MAPPER = {
                 "description": "Name of a readable or writable storage class which provides an abstraction to read from a table or a view in ClickHouse"
             },
         },
+        "is_writable": {
+            "type": "boolean",
+            "description": "Marks the storage is a writable one.",
+        },
         "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
     },
     "required": ["storage"],

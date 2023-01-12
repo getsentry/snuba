@@ -60,6 +60,7 @@ class OutcomesEntity(Entity):
 
         super().__init__(
             storages=storages,
+            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     # TODO: Once we are ready to expose the raw data model and select whether to use
