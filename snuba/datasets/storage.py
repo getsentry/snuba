@@ -13,10 +13,8 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.logical import Query
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
 
 
@@ -185,24 +183,5 @@ class StorageAndMappers(NamedTuple):
     mappers: TranslationMappers
 
 
-class QueryStorageSelectorError(Exception):
-    pass
-
-
 class StorageNotFound(Exception):
     pass
-
-
-class QueryStorageSelector(ABC):
-    """
-    The component provided by a dataset and used at the beginning of the
-    execution of a query to pick the storage query should be executed onto.
-    """
-
-    @abstractmethod
-    def select_storage(
-        self,
-        query: Query,
-        query_settings: QuerySettings,
-    ) -> StorageAndMappers:
-        raise NotImplementedError

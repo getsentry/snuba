@@ -1,6 +1,9 @@
 from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
@@ -28,13 +31,16 @@ class ReplaysEntity(Entity):
             storages=[writable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(writable_storage, TranslationMappers())]
+                    storages=[
+                        StorageAndMappers(writable_storage, TranslationMappers())
+                    ],
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             validate_data_model=ColumnValidationMode.WARN,
             subscription_processors=None,
