@@ -2,10 +2,16 @@ from typing import List
 
 import pytest
 
+from snuba.clickhouse.translators.snuba.mappers import (
+    FunctionNameMapper,
+    SubscriptableMapper,
+)
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
     QueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
@@ -36,6 +42,74 @@ TEST_CASES = [
         get_storage(StorageKey.TRANSACTIONS),
         id="Default storage selector",
     ),
+    pytest.param(
+        """
+        MATCH (generic_metrics_sets)
+        SELECT uniq(value) AS unique_values BY project_id, org_id
+        WHERE org_id = 1
+        AND project_id = 1
+        AND metric_id = 1
+        AND timestamp >= toDateTime('2022-01-01')
+        AND timestamp < toDateTime('2022-01-02')
+        GRANULARITY 60
+        """,
+        get_dataset("generic_metrics"),
+        [
+            StorageAndMappers(
+                get_storage(StorageKey.GENERIC_METRICS_SETS),
+                TranslationMappers(
+                    functions=[
+                        FunctionNameMapper("uniq", "uniqCombined64Merge"),
+                        FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
+                    ],
+                    subscriptables=[
+                        SubscriptableMapper(
+                            from_column_table=None,
+                            from_column_name="tags_raw",
+                            to_nested_col_table=None,
+                            to_nested_col_name="tags",
+                            value_subcolumn_name="raw_value",
+                        ),
+                        SubscriptableMapper(
+                            from_column_table=None,
+                            from_column_name="tags",
+                            to_nested_col_table=None,
+                            to_nested_col_name="tags",
+                            value_subcolumn_name="indexed_value",
+                        ),
+                    ],
+                ),
+            ),
+            StorageAndMappers(
+                get_storage(StorageKey.GENERIC_METRICS_SETS_RAW),
+                TranslationMappers(
+                    functions=[
+                        FunctionNameMapper("uniq", "uniqCombined64Merge"),
+                        FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
+                    ],
+                    subscriptables=[
+                        SubscriptableMapper(
+                            from_column_table=None,
+                            from_column_name="tags_raw",
+                            to_nested_col_table=None,
+                            to_nested_col_name="tags",
+                            value_subcolumn_name="raw_value",
+                        ),
+                        SubscriptableMapper(
+                            from_column_table=None,
+                            from_column_name="tags",
+                            to_nested_col_table=None,
+                            to_nested_col_name="tags",
+                            value_subcolumn_name="indexed_value",
+                        ),
+                    ],
+                ),
+            ),
+        ],
+        SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_SETS.value),
+        get_storage(StorageKey.GENERIC_METRICS_SETS),
+        id="Simple storage selector",
+    ),
 ]
 
 
@@ -43,7 +117,7 @@ TEST_CASES = [
     "snql_query, dataset, storage_and_mappers, selector, expected_storage",
     TEST_CASES,
 )
-def test_query_storage_selector(
+def test_default_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
     storage_and_mappers: List[StorageAndMappers],
