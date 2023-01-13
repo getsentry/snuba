@@ -280,7 +280,6 @@ def handle_invalid_query(exception: InvalidQueryException) -> Response:
 @application.errorhandler(InternalServerError)
 def handle_internal_server_error(exception: InternalServerError) -> Response:
     original = getattr(exception, "original_exception", None)
-    print("internal server error", exception)
 
     if original is None:
         return Response(
