@@ -1,15 +1,32 @@
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
+from snuba.datasets.functions import FunctionsDataset
 from snuba.datasets.generic_metrics import GenericMetricsDataset
+from snuba.datasets.metrics import MetricsDataset
+from snuba.datasets.outcomes import OutcomesDataset
+from snuba.datasets.outcomes_raw import OutcomesRawDataset
+from snuba.datasets.profiles import ProfilesDataset
+from snuba.datasets.replays import ReplaysDataset
+from snuba.datasets.sessions import SessionsDataset
 from snuba.datasets.transactions import TransactionsDataset
 from tests.datasets.configuration.utils import ConfigurationTest
 
 
 class TestDatasetConfiguration(ConfigurationTest):
     def test_build_entity_from_config_matches_python_definition(self) -> None:
+        config_built_datasets = get_config_built_datasets()
         test_data = [
-            (GenericMetricsDataset(), get_config_built_datasets()["generic_metrics"]),
-            (TransactionsDataset(), get_config_built_datasets()["transactions"]),
+            (GenericMetricsDataset(), config_built_datasets["generic_metrics"]),
+            (TransactionsDataset(), config_built_datasets["transactions"]),
+            (MetricsDataset(), config_built_datasets["metrics"]),
+            (OutcomesRawDataset(), config_built_datasets["outcomes_raw"]),
+            (OutcomesDataset(), config_built_datasets["outcomes"]),
+            (SessionsDataset(), config_built_datasets["sessions"]),
+            (ReplaysDataset(), config_built_datasets["replays"]),
+            (FunctionsDataset(), config_built_datasets["functions"]),
+            (ProfilesDataset(), config_built_datasets["profiles"]),
+            (EventsDataset(), config_built_datasets["events"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
