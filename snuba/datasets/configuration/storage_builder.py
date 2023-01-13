@@ -85,8 +85,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             config[MANDATORY_CONDITION_CHECKERS]
             if MANDATORY_CONDITION_CHECKERS in config
             else []
-        )
-        # TODO: Rest of readable storage optional args
+        ),
     }
 
 
