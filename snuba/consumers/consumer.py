@@ -234,6 +234,7 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         start = time.time()
         print("in replacement join")
         self.__producer.flush(*args)
+        print("finished")
 
         logger.debug(
             "Waited %0.4f seconds for %r replacements to be flushed to %r.",

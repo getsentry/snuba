@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from datetime import datetime
 from unittest.mock import Mock
@@ -29,7 +30,7 @@ consumer_builder = ConsumerBuilder(
     kafka_params=KafkaParameters(
         raw_topic=None,
         replacements_topic=None,
-        bootstrap_servers=None,
+        bootstrap_servers=os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
         group_id=consumer_group_name,
         commit_log_topic=None,
         auto_offset_reset="earliest",
