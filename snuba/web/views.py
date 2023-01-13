@@ -280,6 +280,7 @@ def handle_invalid_query(exception: InvalidQueryException) -> Response:
 @application.errorhandler(InternalServerError)
 def handle_internal_server_error(exception: InternalServerError) -> Response:
     original = getattr(exception, "original_exception", None)
+    print("internal server error", exception)
 
     if original is None:
         return Response(
@@ -667,36 +668,43 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
+            try:
+                from snuba.consumers.consumer import build_batch_writer, process_message
+                from snuba.consumers.strategy_factory import (
+                    KafkaConsumerStrategyFactory,
+                )
 
-            table_writer = storage.get_table_writer()
-            stream_loader = table_writer.get_stream_loader()
+                table_writer = storage.get_table_writer()
+                stream_loader = table_writer.get_stream_loader()
 
-            def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
-                pass
+                def commit(
+                    offsets: Mapping[Partition, int], force: bool = False
+                ) -> None:
+                    pass
 
-            validate_schema = True
+                validate_schema = True
 
-            strategy = KafkaConsumerStrategyFactory(
-                stream_loader.get_pre_filter(),
-                functools.partial(
-                    process_message,
-                    stream_loader.get_processor(),
-                    "consumer_grouup",
-                    stream_loader.get_default_topic_spec().topic,
-                    validate_schema,
-                ),
-                build_batch_writer(table_writer, metrics=metrics),
-                max_batch_size=1,
-                max_batch_time=1.0,
-                processes=None,
-                input_block_size=None,
-                output_block_size=None,
-            ).create_with_partitions(commit, {})
-            strategy.submit(message)
-            strategy.close()
-            strategy.join()
+                strategy = KafkaConsumerStrategyFactory(
+                    stream_loader.get_pre_filter(),
+                    functools.partial(
+                        process_message,
+                        stream_loader.get_processor(),
+                        "consumer_grouup",
+                        stream_loader.get_default_topic_spec().topic,
+                        validate_schema,
+                    ),
+                    build_batch_writer(table_writer, metrics=metrics),
+                    max_batch_size=1,
+                    max_batch_time=1.0,
+                    processes=None,
+                    input_block_size=None,
+                    output_block_size=None,
+                ).create_with_partitions(commit, {})
+                strategy.submit(message)
+                strategy.close()
+                strategy.join()
+            except Exception as e:
+                raise InternalServerError(e)
         else:
             from snuba.replacer import ReplacerWorker
 
