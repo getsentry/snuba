@@ -8,7 +8,7 @@ from snuba.datasets.entities.events import errors_translators
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import Storage, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection, Storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
@@ -26,9 +26,11 @@ TEST_CASES = [
         """,
         get_dataset("events"),
         [
-            StorageAndMappers(get_storage(StorageKey.ERRORS_RO), errors_translators),
-            StorageAndMappers(
-                get_writable_storage(StorageKey.ERRORS), errors_translators
+            EntityStorageConnection(
+                get_storage(StorageKey.ERRORS_RO), errors_translators
+            ),
+            EntityStorageConnection(
+                get_writable_storage(StorageKey.ERRORS), errors_translators, True
             ),
         ],
         ErrorsQueryStorageSelector(),
@@ -46,9 +48,11 @@ TEST_CASES = [
         """,
         get_dataset("events"),
         [
-            StorageAndMappers(get_storage(StorageKey.ERRORS_RO), errors_translators),
-            StorageAndMappers(
-                get_writable_storage(StorageKey.ERRORS), errors_translators
+            EntityStorageConnection(
+                get_storage(StorageKey.ERRORS_RO), errors_translators
+            ),
+            EntityStorageConnection(
+                get_writable_storage(StorageKey.ERRORS), errors_translators, True
             ),
         ],
         ErrorsQueryStorageSelector(),
@@ -60,13 +64,13 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_and_mappers, selector, use_readable, expected_storage",
+    "snql_query, dataset, storage_connections, selector, use_readable, expected_storage",
     TEST_CASES,
 )
 def test_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
-    storage_and_mappers: List[StorageAndMappers],
+    storage_connections: List[EntityStorageConnection],
     selector: QueryStorageSelector,
     use_readable: bool,
     expected_storage: Storage,
@@ -77,6 +81,6 @@ def test_query_storage_selector(
     if use_readable:
         state.set_config("enable_events_readonly_table", True)
     selected_storage = selector.select_storage(
-        query, HTTPQuerySettings(referrer="r"), storage_and_mappers
+        query, HTTPQuerySettings(referrer="r"), storage_connections
     )
     assert selected_storage.storage == expected_storage

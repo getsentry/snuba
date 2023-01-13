@@ -5,7 +5,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Entity
@@ -54,9 +54,9 @@ def test_storage_selector() -> None:
 
     storage = get_storage(StorageKey.ERRORS)
     storage_ro = get_storage(StorageKey.ERRORS_RO)
-    storage_and_mappers_list = [
-        StorageAndMappers(storage, TranslationMappers()),
-        StorageAndMappers(storage_ro, TranslationMappers()),
+    storage_connections = [
+        EntityStorageConnection(storage, TranslationMappers(), True),
+        EntityStorageConnection(storage_ro, TranslationMappers()),
     ]
 
     query = Query(Entity(EntityKey.EVENTS, ColumnSet([])), selected_columns=[])
@@ -64,13 +64,13 @@ def test_storage_selector() -> None:
     storage_selector = ErrorsQueryStorageSelector()
     assert (
         storage_selector.select_storage(
-            query, HTTPQuerySettings(consistent=False), storage_and_mappers_list
+            query, HTTPQuerySettings(consistent=False), storage_connections
         ).storage
         == storage_ro
     )
     assert (
         storage_selector.select_storage(
-            query, HTTPQuerySettings(consistent=True), storage_and_mappers_list
+            query, HTTPQuerySettings(consistent=True), storage_connections
         ).storage
         == storage
     )

@@ -12,7 +12,7 @@ from snuba.datasets.entities.storage_selectors.sessions import (
     SessionsQueryStorageSelector,
 )
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import Storage, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection, Storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
@@ -34,11 +34,13 @@ TEST_CASES = [
         """,
         get_dataset("sessions"),
         [
-            StorageAndMappers(
+            EntityStorageConnection(
                 get_storage(StorageKey.SESSIONS_HOURLY), sessions_hourly_translators
             ),
-            StorageAndMappers(
-                get_writable_storage(StorageKey.SESSIONS_RAW), sessions_raw_translators
+            EntityStorageConnection(
+                get_writable_storage(StorageKey.SESSIONS_RAW),
+                sessions_raw_translators,
+                True,
             ),
         ],
         SessionsQueryStorageSelector(),
@@ -57,11 +59,13 @@ TEST_CASES = [
         """,
         get_dataset("sessions"),
         [
-            StorageAndMappers(
+            EntityStorageConnection(
                 get_storage(StorageKey.SESSIONS_HOURLY), sessions_hourly_translators
             ),
-            StorageAndMappers(
-                get_writable_storage(StorageKey.SESSIONS_RAW), sessions_raw_translators
+            EntityStorageConnection(
+                get_writable_storage(StorageKey.SESSIONS_RAW),
+                sessions_raw_translators,
+                True,
             ),
         ],
         SessionsQueryStorageSelector(),
@@ -72,19 +76,19 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_and_mappers, selector, expected_storage",
+    "snql_query, dataset, storage_connections, selector, expected_storage",
     TEST_CASES,
 )
 def test_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
-    storage_and_mappers: List[StorageAndMappers],
+    storage_connections: List[EntityStorageConnection],
     selector: QueryStorageSelector,
     expected_storage: Storage,
 ) -> None:
     query, _ = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
     selected_storage = selector.select_storage(
-        query, SubscriptionQuerySettings(), storage_and_mappers
+        query, SubscriptionQuerySettings(), storage_connections
     )
     assert selected_storage.storage == expected_storage

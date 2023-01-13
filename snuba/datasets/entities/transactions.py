@@ -15,7 +15,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -104,7 +104,7 @@ class BaseTransactionsEntity(Entity, ABC):
             if custom_mappers is None
             else transaction_translator.concat(custom_mappers)
         )
-        storages = [StorageAndMappers(storage, mappers)]
+        storages = [EntityStorageConnection(storage, mappers, True)]
 
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
@@ -115,7 +115,6 @@ class BaseTransactionsEntity(Entity, ABC):
 
         super().__init__(
             storages=storages,
-            writable_storage=storage,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},

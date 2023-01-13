@@ -6,7 +6,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -25,14 +25,13 @@ class FunctionsEntity(Entity):
         readable_storage = get_storage(StorageKey.FUNCTIONS)
         writable_storage = get_writable_storage(StorageKey.FUNCTIONS_RAW)
         storages = [
-            StorageAndMappers(readable_storage, TranslationMappers()),
-            StorageAndMappers(writable_storage, TranslationMappers()),
+            EntityStorageConnection(readable_storage, TranslationMappers(), False),
+            EntityStorageConnection(writable_storage, TranslationMappers(), True),
         ]
         schema = readable_storage.get_schema()
 
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

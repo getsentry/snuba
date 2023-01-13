@@ -11,7 +11,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -58,11 +58,12 @@ class ProfilesEntity(Entity, ABC):
         self,
     ) -> None:
         writable_storage = get_writable_storage(StorageKey.PROFILES)
-        storages = [StorageAndMappers(writable_storage, TranslationMappers())]
+        storages = [
+            EntityStorageConnection(writable_storage, TranslationMappers(), True)
+        ]
 
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

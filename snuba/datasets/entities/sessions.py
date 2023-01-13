@@ -17,7 +17,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -219,15 +219,16 @@ class SessionsEntity(Entity):
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
         storages = [
-            StorageAndMappers(materialized_storage, sessions_hourly_translators),
-            StorageAndMappers(writable_storage, sessions_raw_translators),
+            EntityStorageConnection(
+                materialized_storage, sessions_hourly_translators, False
+            ),
+            EntityStorageConnection(writable_storage, sessions_raw_translators, True),
         ]
 
         read_columns = read_schema.get_columns()
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,
@@ -259,11 +260,10 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
-        storages = [StorageAndMappers(storage, TranslationMappers())]
+        storages = [EntityStorageConnection(storage, TranslationMappers(), False)]
 
         super().__init__(
             storages=storages,
-            writable_storage=None,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

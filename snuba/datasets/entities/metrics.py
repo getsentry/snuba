@@ -35,7 +35,7 @@ from snuba.datasets.entity_subscriptions.validators import (
     EntitySubscriptionValidator,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -79,9 +79,11 @@ class MetricsEntity(Entity, ABC):
                 SubscriptableMapper(None, "tags", None, "tags"),
             ],
         ).concat(mappers)
-        storages = [StorageAndMappers(readable_storage, all_mappers)]
+        storages = [EntityStorageConnection(readable_storage, all_mappers, False)]
         if writable_storage:
-            storages.append(StorageAndMappers(writable_storage, all_mappers))
+            storages.append(
+                EntityStorageConnection(writable_storage, all_mappers, True)
+            )
 
         if abstract_column_set is None:
             abstract_column_set = ColumnSet(
@@ -103,7 +105,6 @@ class MetricsEntity(Entity, ABC):
 
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

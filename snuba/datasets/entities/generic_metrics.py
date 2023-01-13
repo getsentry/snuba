@@ -32,8 +32,8 @@ from snuba.datasets.entity_subscriptions.validators import (
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import (
+    EntityStorageConnection,
     ReadableTableStorage,
-    StorageAndMappers,
     WritableTableStorage,
 )
 from snuba.datasets.storages.factory import get_storage
@@ -102,11 +102,11 @@ class GenericMetricsEntity(Entity, ABC):
             ],
         ).concat(mappers)
         storages = [
-            StorageAndMappers(readable_storage, generic_metrics_mappers),
+            EntityStorageConnection(readable_storage, generic_metrics_mappers, False),
         ]
         if writable_storage:
             storages.append(
-                StorageAndMappers(writable_storage, generic_metrics_mappers)
+                EntityStorageConnection(writable_storage, generic_metrics_mappers, True)
             )
 
         if validators is None:
@@ -114,7 +114,6 @@ class GenericMetricsEntity(Entity, ABC):
 
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

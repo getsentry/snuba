@@ -7,7 +7,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -28,11 +28,10 @@ class GroupedMessageEntity(Entity):
     def __init__(self) -> None:
         storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
         schema = storage.get_table_writer().get_schema()
-        storages = [StorageAndMappers(storage, TranslationMappers())]
+        storages = [EntityStorageConnection(storage, TranslationMappers(), True)]
 
         super().__init__(
             storages=storages,
-            writable_storage=storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

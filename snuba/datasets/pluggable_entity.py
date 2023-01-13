@@ -13,7 +13,11 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import Storage, StorageAndMappers, WritableTableStorage
+from snuba.datasets.storage import (
+    EntityStorageConnection,
+    Storage,
+    WritableTableStorage,
+)
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -40,8 +44,7 @@ class PluggableEntity(Entity):
     """
 
     entity_key: EntityKey
-    storages: List[StorageAndMappers]
-    writable_storage: Optional[WritableTableStorage]
+    storages: List[EntityStorageConnection]
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     validators: Sequence[QueryValidator]
@@ -88,13 +91,18 @@ class PluggableEntity(Entity):
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:
-        return [storage_and_mapper.storage for storage_and_mapper in self.storages]
+        return [storage_connection.storage for storage_connection in self.storages]
 
-    def get_all_storages_and_mappers(self) -> Sequence[StorageAndMappers]:
+    def get_all_storage_connections(self) -> Sequence[EntityStorageConnection]:
         return self.storages
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        return self.writable_storage
+        for storage_connection in self.__storages:
+            if storage_connection.is_writable and isinstance(
+                storage_connection.storage, WritableTableStorage
+            ):
+                return storage_connection.storage
+        return None
 
     def get_storage_selector(self) -> Optional[QueryStorageSelector]:
         return self.storage_selector

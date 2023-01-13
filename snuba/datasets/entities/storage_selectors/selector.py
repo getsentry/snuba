@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Sequence, Type, cast
 
 from snuba.datasets.storage import (
+    EntityStorageConnection,
     ReadableTableStorage,
-    StorageAndMappers,
     WritableTableStorage,
 )
 from snuba.datasets.storages.storage_key import StorageKey
@@ -35,33 +35,30 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers: List[StorageAndMappers],
-    ) -> StorageAndMappers:
+        storage_connections: List[EntityStorageConnection],
+    ) -> EntityStorageConnection:
         raise NotImplementedError
 
-    def get_readable_storage_mapping(
-        self, storage_and_mappers: Sequence[StorageAndMappers]
-    ) -> Optional[StorageAndMappers]:
-        return next(
-            (
-                storage
-                for storage in storage_and_mappers
-                if type(storage.storage) is ReadableTableStorage
-            ),
-            None,
-        )
+    def get_readable_storage_connection(
+        self, storage_connections: Sequence[EntityStorageConnection]
+    ) -> Optional[EntityStorageConnection]:
+        for storage_connection in storage_connections:
+            if (
+                not storage_connection.is_writable
+                and type(storage_connection.storage) is ReadableTableStorage
+            ):
+                return storage_connection
+        return None
 
-    def get_writable_storage_mapping(
-        self, storage_and_mappers: Sequence[StorageAndMappers]
-    ) -> Optional[StorageAndMappers]:
-        return next(
-            (
-                storage
-                for storage in storage_and_mappers
-                if isinstance(storage.storage, WritableTableStorage)
-            ),
-            None,
-        )
+    def get_writable_storage_connection(
+        self, storage_connections: Sequence[EntityStorageConnection]
+    ) -> Optional[EntityStorageConnection]:
+        for storage_connection in storage_connections:
+            if storage_connection.is_writable and isinstance(
+                storage_connection.storage, WritableTableStorage
+            ):
+                return storage_connection
+        return None
 
 
 class DefaultQueryStorageSelector(QueryStorageSelector):
@@ -75,10 +72,10 @@ class DefaultQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers: List[StorageAndMappers],
-    ) -> StorageAndMappers:
-        assert len(storage_and_mappers) == 1
-        return storage_and_mappers[0]
+        storage_connections: List[EntityStorageConnection],
+    ) -> EntityStorageConnection:
+        assert len(storage_connections) == 1
+        return storage_connections[0]
 
 
 class SimpleQueryStorageSelector(QueryStorageSelector):
@@ -93,12 +90,12 @@ class SimpleQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers: List[StorageAndMappers],
-    ) -> StorageAndMappers:
-        for sm in storage_and_mappers:
-            assert isinstance(sm.storage, ReadableTableStorage)
-            if sm.storage.get_storage_key() == self.storage_key:
-                return sm
+        storage_connections: List[EntityStorageConnection],
+    ) -> EntityStorageConnection:
+        for storage_connection in storage_connections:
+            assert isinstance(storage_connection.storage, ReadableTableStorage)
+            if storage_connection.storage.get_storage_key() == self.storage_key:
+                return storage_connection
         raise QueryStorageSelectorError(
             "The specified storage in selector does not exist in storage list."
         )

@@ -15,7 +15,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import Storage, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection, Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
@@ -34,8 +34,8 @@ TEST_CASES = [
         """,
         get_dataset("transactions"),
         [
-            StorageAndMappers(
-                get_storage(StorageKey.TRANSACTIONS), transaction_translator
+            EntityStorageConnection(
+                get_storage(StorageKey.TRANSACTIONS), transaction_translator, True
             ),
         ],
         DefaultQueryStorageSelector(),
@@ -55,7 +55,7 @@ TEST_CASES = [
         """,
         get_dataset("generic_metrics"),
         [
-            StorageAndMappers(
+            EntityStorageConnection(
                 get_storage(StorageKey.GENERIC_METRICS_SETS),
                 TranslationMappers(
                     functions=[
@@ -80,7 +80,7 @@ TEST_CASES = [
                     ],
                 ),
             ),
-            StorageAndMappers(
+            EntityStorageConnection(
                 get_storage(StorageKey.GENERIC_METRICS_SETS_RAW),
                 TranslationMappers(
                     functions=[
@@ -104,6 +104,7 @@ TEST_CASES = [
                         ),
                     ],
                 ),
+                True,
             ),
         ],
         SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_SETS.value),
@@ -114,13 +115,13 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_and_mappers, selector, expected_storage",
+    "snql_query, dataset, storage_connections, selector, expected_storage",
     TEST_CASES,
 )
 def test_default_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
-    storage_and_mappers: List[StorageAndMappers],
+    storage_connections: List[EntityStorageConnection],
     selector: QueryStorageSelector,
     expected_storage: Storage,
 ) -> None:
@@ -128,6 +129,6 @@ def test_default_query_storage_selector(
     assert isinstance(query, Query)
 
     selected_storage = selector.select_storage(
-        query, HTTPQuerySettings(referrer="r"), storage_and_mappers
+        query, HTTPQuerySettings(referrer="r"), storage_connections
     )
     assert selected_storage.storage == expected_storage

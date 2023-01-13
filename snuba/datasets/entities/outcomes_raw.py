@@ -7,7 +7,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -28,10 +28,9 @@ class OutcomesRawEntity(Entity):
         storage = get_storage(StorageKey.OUTCOMES_RAW)
         read_columns = storage.get_schema().get_columns()
         time_columns = ColumnSet([("time", DateTime())])
-        storages = [StorageAndMappers(storage, TranslationMappers())]
+        storages = [EntityStorageConnection(storage, TranslationMappers())]
         super().__init__(
             storages=storages,
-            writable_storage=None,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     storages=storages,

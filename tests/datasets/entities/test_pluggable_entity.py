@@ -20,7 +20,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import Query
@@ -64,7 +64,7 @@ def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
         entity_key=EntityKey.GENERIC_METRICS_SETS,
         storages=[
-            StorageAndMappers(
+            EntityStorageConnection(
                 get_storage(StorageKey.GENERIC_METRICS_SETS),
                 TranslationMappers(
                     subscriptables=[
@@ -90,7 +90,6 @@ def pluggable_sets_entity() -> PluggableEntity:
                 ),
             )
         ],
-        writable_storage=None,
         query_processors=[
             TagsTypeTransformer(),
             MappedGranularityProcessor(

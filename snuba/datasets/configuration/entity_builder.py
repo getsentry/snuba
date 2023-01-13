@@ -18,7 +18,7 @@ from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelec
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storage import StorageAndMappers, WritableTableStorage
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -128,37 +128,30 @@ def _build_subscription_validators(
     return None
 
 
-def _build_storage_and_mappers(
+def _build_storage_connections(
     config_storages: list[dict[str, Any]]
-) -> List[StorageAndMappers]:
+) -> List[EntityStorageConnection]:
     return [
-        StorageAndMappers(
-            get_storage(StorageKey(storage_and_mapper["storage"])),
-            _build_entity_translation_mappers(storage_and_mapper["translation_mappers"])
-            if "translation_mappers" in storage_and_mapper
+        EntityStorageConnection(
+            storage=get_storage(StorageKey(storage_connection["storage"])),
+            translation_mappers=_build_entity_translation_mappers(
+                storage_connection["translation_mappers"]
+            )
+            if "translation_mappers" in storage_connection
             else TranslationMappers(),
+            is_writable=storage_connection["is_writable"]
+            if "is_writable" in storage_connection
+            else False,
         )
-        for storage_and_mapper in config_storages
+        for storage_connection in config_storages
     ]
-
-
-def _build_writable_storage(
-    config_storages: list[dict[str, Any]]
-) -> Optional[WritableTableStorage]:
-    for storage_and_mapper in config_storages:
-        if "is_writable" in storage_and_mapper and storage_and_mapper["is_writable"]:
-            storage = get_storage(StorageKey(storage_and_mapper["storage"]))
-            if isinstance(storage, WritableTableStorage):
-                return storage
-    return None
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
-        storages=_build_storage_and_mappers(config["storages"]),
-        writable_storage=_build_writable_storage(config["storages"]),
+        storages=_build_storage_connections(config["storages"]),
         storage_selector=_build_storage_selector(config["storage_selector"]),
         query_processors=_build_entity_query_processors(config["query_processors"]),
         columns=parse_columns(config["schema"]),

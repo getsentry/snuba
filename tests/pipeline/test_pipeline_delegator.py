@@ -11,7 +11,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.pipeline_delegator import (
@@ -71,7 +71,9 @@ def test() -> None:
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
-                StorageAndMappers(get_storage(StorageKey.ERRORS), TranslationMappers())
+                EntityStorageConnection(
+                    get_storage(StorageKey.ERRORS), TranslationMappers(), True
+                )
             ],
             selector=DefaultQueryStorageSelector(),
         )
@@ -80,7 +82,7 @@ def test() -> None:
     errors_ro_pipeline = SimplePipelineBuilder(
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
-                StorageAndMappers(
+                EntityStorageConnection(
                     get_storage(StorageKey.ERRORS_RO), TranslationMappers()
                 )
             ],

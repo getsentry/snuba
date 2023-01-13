@@ -8,7 +8,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -54,13 +54,12 @@ class OutcomesEntity(Entity):
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
         storages = [
-            StorageAndMappers(materialized_storage, TranslationMappers()),
-            StorageAndMappers(writable_storage, TranslationMappers()),
+            EntityStorageConnection(materialized_storage, TranslationMappers(), False),
+            EntityStorageConnection(writable_storage, TranslationMappers(), True),
         ]
 
         super().__init__(
             storages=storages,
-            writable_storage=writable_storage,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
                     # TODO: Once we are ready to expose the raw data model and select whether to use

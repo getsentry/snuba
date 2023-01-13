@@ -32,7 +32,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -255,7 +255,7 @@ class DiscoverEntity(Entity):
                 ),
             )
         )
-        storages = [StorageAndMappers(discover_storage, mappers)]
+        storages = [EntityStorageConnection(discover_storage, mappers, False)]
         discover_storage_plan_builder = StorageQueryPlanBuilder(
             storages=storages,
             selector=DefaultQueryStorageSelector(),
@@ -266,7 +266,6 @@ class DiscoverEntity(Entity):
 
         super().__init__(
             storages=storages,
-            writable_storage=None,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns
