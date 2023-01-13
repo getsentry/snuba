@@ -120,7 +120,9 @@ class Entity(Describable, ABC):
         and entity can have more than one writable storage.
         """
         for storage_connection in self.__storages:
-            if isinstance(storage_connection.storage, WritableTableStorage):
+            if storage_connection.is_writable and isinstance(
+                storage_connection.storage, WritableTableStorage
+            ):
                 return storage_connection.storage
         return None
 
