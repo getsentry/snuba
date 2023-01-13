@@ -47,6 +47,17 @@ pipelines:
                       type: manual
                   fetch_materials: true
                   jobs:
+                      create-sentry-release:
+                          environment_variables:
+                              SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
+                          timeout: 300
+                          elastic_profile_id: snuba
+                          tasks:
+                              - script: |
+                                    sentry-cli releases new "${GO_REVISION_SNUBA_REPO}"
+                                    sentry-cli releases set-commits "${GO_REVISION_SNUBA_REPO}" --commit "getsentry/snuba@${GO_REVISION_SNUBA_REPO}"
+                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e release
+                                    sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
                       deploy:
                           timeout: 1800 # 30 mins
                           elastic_profile_id: snuba
