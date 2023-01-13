@@ -46,7 +46,6 @@ class Events(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            writable_storage=None,
             query_pipeline_builder=Mock(),
             abstract_column_set=EVENTS_SCHEMA,
             join_relationships={
@@ -88,7 +87,6 @@ class GroupedMessage(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            writable_storage=None,
             query_pipeline_builder=Mock(),
             abstract_column_set=GROUPS_SCHEMA,
             join_relationships={
@@ -116,7 +114,6 @@ class GroupAssignee(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            writable_storage=None,
             query_pipeline_builder=Mock(),
             abstract_column_set=GROUPS_ASSIGNEE,
             join_relationships={

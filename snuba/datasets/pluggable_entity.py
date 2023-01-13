@@ -97,7 +97,7 @@ class PluggableEntity(Entity):
         return self.storages
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        for storage_connection in self.__storages:
+        for storage_connection in self.storages:
             if storage_connection.is_writable and isinstance(
                 storage_connection.storage, WritableTableStorage
             ):
