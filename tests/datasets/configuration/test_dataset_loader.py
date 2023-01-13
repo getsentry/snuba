@@ -1,4 +1,5 @@
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
 from snuba.datasets.functions import FunctionsDataset
@@ -27,6 +28,7 @@ class TestDatasetConfiguration(ConfigurationTest):
             (FunctionsDataset(), config_built_datasets["functions"]),
             (ProfilesDataset(), config_built_datasets["profiles"]),
             (EventsDataset(), config_built_datasets["events"]),
+            (DiscoverDataset(), config_built_datasets["discover"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
