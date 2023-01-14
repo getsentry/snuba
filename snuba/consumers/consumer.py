@@ -232,9 +232,8 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
             args.append(timeout)
 
         start = time.time()
-        print("in replacement join")
         self.__producer.flush(*args)
-        print("finished")
+        print("finished replacement join")
 
         logger.debug(
             "Waited %0.4f seconds for %r replacements to be flushed to %r.",
@@ -342,6 +341,8 @@ class ProcessedMessageBatchWriter(
                 timeout = max(timeout - (time.time() - start), 0)
 
             self.__replacement_batch_writer.join(timeout)
+
+        print("finished here")
 
         # XXX: This adds a blocking call when each batch is joined. Ideally we would only
         # call proudcer.flush() when the consumer / strategy is actually being shut down but

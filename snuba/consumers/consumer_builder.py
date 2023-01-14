@@ -233,7 +233,6 @@ class ConsumerBuilder:
         else:
             commit_log_config = None
 
-        print(self.replacements_topic)
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(

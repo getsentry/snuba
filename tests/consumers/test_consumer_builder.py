@@ -162,11 +162,10 @@ def test_optional_kafka_overrides() -> None:
 
 
 def test_run_processing_strategy() -> None:
-    strategy_factory = consumer_builder.build_streaming_strategy_factory()
-
-    commit_function = Mock()
+    commit = Mock()
     partitions = Mock()
-    strategy = strategy_factory.create_with_partitions(commit_function, partitions)
+    strategy_factory = consumer_builder.build_streaming_strategy_factory()
+    strategy = strategy_factory.create_with_partitions(commit, partitions)
 
     raw_message = get_raw_event()
     json_string = json.dumps([2, "insert", raw_message, []])
@@ -181,8 +180,14 @@ def test_run_processing_strategy() -> None:
     )
 
     strategy.submit(message)
-    strategy.poll()
-    time.sleep(1)
-    strategy.poll()
 
-    assert commit_function.call_count == 1
+    # Wait for the commit
+    for i in range(10):
+        time.sleep(1)
+        strategy.poll()
+        if commit.call_count == 1:
+            break
+
+    assert commit.call_count == 1
+    strategy.close()
+    strategy.join()
