@@ -90,7 +90,7 @@ class TestEntityConfiguration(ConfigurationTest):
 
         assert config_entity.get_data_model() == py_entity.get_data_model()
 
-    def test_entity_loader_for_enitity_with_column_mappers(self) -> None:
+    def test_entity_loader_for_entity_with_column_mappers(self) -> None:
         pluggable_entity = build_entity_from_config(
             "tests/datasets/configuration/entity_with_column_mappers.yaml"
         )
@@ -150,3 +150,22 @@ class TestEntityConfiguration(ConfigurationTest):
         )
         entity_validators = set(pluggable_entity.get_validators())
         assert len(entity_validators) == len(pluggable_entity._get_builtin_validators())
+
+    def test_entity_loader_join_relationships(self) -> None:
+        pluggable_entity = build_entity_from_config(
+            "tests/datasets/configuration/entity_join_relationships.yaml"
+        )
+        relationships = pluggable_entity.get_all_join_relationships()
+        assert len(relationships) == 1
+        rel = pluggable_entity.get_join_relationship("owns")
+        assert rel is not None
+        assert rel.rhs_entity.value == "events"
+        assert rel.join_type.value == "LEFT"
+        assert len(rel.columns) == 2
+        assert rel.columns[0][0] == "project_id"
+        assert rel.columns[0][1] == "project_id"
+        assert rel.columns[1][0] == "group_id"
+        assert rel.columns[1][1] == "group_id"
+        assert len(rel.equivalences) == 1
+        assert rel.equivalences[0][0] == "offset"
+        assert rel.equivalences[0][1] == "offset"

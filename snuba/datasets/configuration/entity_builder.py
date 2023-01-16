@@ -21,8 +21,13 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
+
+
+class InvalidEntityConfigException(Exception):
+    pass
 
 
 def _build_entity_validators(
@@ -147,6 +152,35 @@ def _build_storage_connections(
     ]
 
 
+def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelationship]:
+    relationships: dict[str, JoinRelationship] = {}
+    if "join_relationships" not in config:
+        return relationships
+
+    for key, obj in config["join_relationships"].items():
+        rhs_key = register_entity_key(obj["rhs_entity"])
+        columns = [(c[0], c[1]) for c in obj["columns"]]
+        equivalences = []
+        for pair in obj.get("equivalences", []):
+            equivalences.append(ColumnEquivalence(pair[0], pair[1]))
+
+        if obj["join_type"] not in ("inner", "left"):
+            raise InvalidEntityConfigException(
+                f"{obj['join_type']} is not a valid join type"
+            )
+
+        join_type = JoinType.LEFT if obj["join_type"] == "left" else JoinType.INNER
+        join = JoinRelationship(
+            rhs_entity=rhs_key,
+            columns=columns,
+            join_type=join_type,
+            equivalences=equivalences,
+        )
+        relationships[key] = join
+
+    return relationships
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
@@ -157,6 +191,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         columns=parse_columns(config["schema"]),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
+        join_relationships=_build_join_relationships(config),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),
