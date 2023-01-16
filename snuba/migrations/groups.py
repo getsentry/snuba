@@ -171,6 +171,8 @@ class OutcomesLoader(DirectoryLoader):
             "0003_outcomes_add_category_and_quantity",
             "0004_outcomes_matview_additions",
             "0005_outcomes_ttl",
+            "0006_outcomes_add_size_col",
+            "0007_outcomes_add_indexes_and_codecs",
         ]
 
 
