@@ -1,11 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence, Type, cast
+from typing import List, Type, cast
 
-from snuba.datasets.storage import (
-    EntityStorageConnection,
-    ReadableTableStorage,
-    WritableTableStorage,
-)
+from snuba.datasets.storage import EntityStorageConnection, ReadableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -38,27 +34,6 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         storage_connections: List[EntityStorageConnection],
     ) -> EntityStorageConnection:
         raise NotImplementedError
-
-    def get_readable_storage_connection(
-        self, storage_connections: Sequence[EntityStorageConnection]
-    ) -> Optional[EntityStorageConnection]:
-        for storage_connection in storage_connections:
-            if (
-                not storage_connection.is_writable
-                and type(storage_connection.storage) is ReadableTableStorage
-            ):
-                return storage_connection
-        return None
-
-    def get_writable_storage_connection(
-        self, storage_connections: Sequence[EntityStorageConnection]
-    ) -> Optional[EntityStorageConnection]:
-        for storage_connection in storage_connections:
-            if storage_connection.is_writable and isinstance(
-                storage_connection.storage, WritableTableStorage
-            ):
-                return storage_connection
-        return None
 
 
 class DefaultQueryStorageSelector(QueryStorageSelector):

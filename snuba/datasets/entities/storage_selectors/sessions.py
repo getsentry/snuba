@@ -7,6 +7,8 @@ from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelec
 from snuba.datasets.storage import (
     EntityStorageConnection,
     EntityStorageConnectionNotFound,
+    ReadableTableStorage,
+    WritableTableStorage,
 )
 from snuba.query.logical import Query
 from snuba.query.processors.logical.timeseries_processor import (
@@ -53,9 +55,16 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
             },
         )
         if use_materialized_storage:
-            storage = self.get_readable_storage_connection(storage_connections)
+            for storage_connection in storage_connections:
+                if (
+                    not storage_connection.is_writable
+                    and type(storage_connection.storage) is ReadableTableStorage
+                ):
+                    return storage_connection
         else:
-            storage = self.get_writable_storage_connection(storage_connections)
-        if storage:
-            return storage
+            for storage_connection in storage_connections:
+                if storage_connection.is_writable and isinstance(
+                    storage_connection.storage, WritableTableStorage
+                ):
+                    return storage_connection
         raise EntityStorageConnectionNotFound("Cannot find storage.")
