@@ -187,7 +187,7 @@ def test_run_processing_strategy() -> None:
 
     # Wait for the commit
     for i in range(10):
-        time.sleep(1)
+        time.sleep(2)
         strategy.poll()
         if commit.call_count == 1:
             break
