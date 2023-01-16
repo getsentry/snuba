@@ -15,11 +15,13 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
+from snuba.datasets.storages import errors
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.fixtures import get_raw_event
+from tests.test_consumer import get_row_count
 
 test_storage_key = StorageKey("errors")
 consumer_group_name = "my_consumer_group"
@@ -162,6 +164,8 @@ def test_optional_kafka_overrides() -> None:
 
 
 def test_run_processing_strategy() -> None:
+    assert get_row_count(errors.storage) == 0
+
     commit = Mock()
     partitions = Mock()
     strategy_factory = consumer_builder.build_streaming_strategy_factory()
@@ -189,5 +193,7 @@ def test_run_processing_strategy() -> None:
             break
 
     assert commit.call_count == 1
+    assert get_row_count(errors.storage) == 1
+
     strategy.close()
     strategy.join()
