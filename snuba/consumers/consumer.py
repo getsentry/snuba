@@ -112,13 +112,11 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
     def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
 
-        print("submitted in insertbatchwriter")
         self.__messages.append(message)
 
     def close(self) -> None:
         self.__closed = True
 
-        print("closed in insertbatchwriter")
         if not self.__messages:
             return
 
@@ -233,7 +231,6 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
 
         start = time.time()
         self.__producer.flush(*args)
-        print("finished replacement join")
 
         logger.debug(
             "Waited %0.4f seconds for %r replacements to be flushed to %r.",
@@ -342,8 +339,6 @@ class ProcessedMessageBatchWriter(
 
             self.__replacement_batch_writer.join(timeout)
 
-        print("finished here")
-
         # XXX: This adds a blocking call when each batch is joined. Ideally we would only
         # call proudcer.flush() when the consumer / strategy is actually being shut down but
         # the CollectStep that this is called from does not allow us to hook into that easily.
@@ -405,7 +400,6 @@ def build_batch_writer(
             insert_batch_writer, replacement_batch_writer, commit_log_config
         )
 
-    print("inside build function")
     return build_writer
 
 
@@ -564,7 +558,6 @@ def process_message(
     validate: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
-    print("inside process_message")
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
