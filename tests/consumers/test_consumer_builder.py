@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime
 from unittest.mock import Mock
 
@@ -183,16 +184,15 @@ def test_run_processing_strategy() -> None:
     )
 
     strategy.submit(message)
-    strategy.poll()
 
     # Wait for the commit
-    # for i in range(10):
-    #     time.sleep(2)
-    #     strategy.poll()
-    #     if commit.call_count == 1:
-    #         break
+    for i in range(10):
+        time.sleep(0.5)
+        strategy.poll()
+        if commit.call_count == 1:
+            break
 
-    # assert commit.call_count == 1
+    assert commit.call_count == 1
     assert get_row_count(errors.storage) == 1
 
     strategy.close()
