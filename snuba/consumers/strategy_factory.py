@@ -1,9 +1,8 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, TypeVar
+from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy, ProcessingStrategyFactory
-from arroyo.processing.strategies.collect import ParallelCollectStep
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
     DeadLetterQueue,
@@ -12,10 +11,15 @@ from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
 from arroyo.processing.strategies.filter import FilterStep
+from arroyo.processing.strategies.reduce import Reduce
+from arroyo.processing.strategies.run_task import RunTaskInThreads
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
-from arroyo.types import Commit, Message, Partition
+from arroyo.types import BaseValue, Commit, Message, Partition
 
-TProcessed = TypeVar("TProcessed")
+from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
+from snuba.processor import ReplacementBatch
+
+ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
 
 
 class StreamMessageFilter(Protocol):
@@ -58,8 +62,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         prefilter: Optional[StreamMessageFilter],
-        process_message: Callable[[Message[KafkaPayload]], TProcessed],
-        collector: Callable[[], ProcessingStrategy[TProcessed]],
+        process_message: Callable[[Message[KafkaPayload]], ProcessedMessage],
+        collector: Callable[[], ProcessedMessageBatchWriter],
         max_batch_size: int,
         max_batch_time: float,
         processes: Optional[int],
@@ -103,12 +107,26 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-        collect = ParallelCollectStep(
-            self.__collector,
-            CommitOffsets(commit),
+        def accumulator(
+            batch_writer: ProcessedMessageBatchWriter,
+            message: BaseValue[ProcessedMessage],
+        ) -> ProcessedMessageBatchWriter:
+            batch_writer.submit(Message(message))
+            return batch_writer
+
+        def flush_batch(
+            message: Message[ProcessedMessageBatchWriter],
+        ) -> Message[ProcessedMessageBatchWriter]:
+            message.payload.close()
+            message.payload.join()
+            return message
+
+        collect = Reduce(
             self.__max_batch_size,
             self.__max_batch_time,
-            wait_timeout=10.0,
+            accumulator,
+            self.__collector,
+            RunTaskInThreads(flush_batch, 1, 1, CommitOffsets(commit)),
         )
 
         transform_function = self.__process_message
