@@ -38,6 +38,14 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
 }
 
+prod = True
+
+
+def _filter_migrations(migrations: Sequence[str]) -> Sequence[str]:
+    if not prod:
+        return [m for m in migrations if "_prod" not in m]
+    return migrations
+
 
 class GroupLoader(ABC):
     """
@@ -55,6 +63,9 @@ class GroupLoader(ABC):
     @abstractmethod
     def load_migration(self, migration_id: str) -> Migration:
         raise NotImplementedError
+
+    def get_filtered_migrations(self) -> Sequence[str]:
+        return _filter_migrations(self.get_migrations())
 
 
 class DirectoryLoader(GroupLoader, ABC):

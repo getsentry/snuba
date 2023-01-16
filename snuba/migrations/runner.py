@@ -131,7 +131,7 @@ class Runner:
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
-            for migration_id in group_loader.get_migrations():
+            for migration_id in group_loader.get_filtered_migrations():
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
@@ -194,7 +194,7 @@ class Runner:
 
         migration_group, migration_id = migration_key
 
-        group_migrations = get_group_loader(migration_group).get_migrations()
+        group_migrations = get_group_loader(migration_group).get_filtered_migrations()
 
         if migration_id not in group_migrations:
             raise MigrationError("Could not find migration in group")
@@ -252,7 +252,7 @@ class Runner:
 
         migration_group, migration_id = migration_key
 
-        group_migrations = get_group_loader(migration_group).get_migrations()
+        group_migrations = get_group_loader(migration_group).get_filtered_migrations()
 
         if migration_id not in group_migrations:
             raise MigrationError("Invalid migration")
@@ -323,7 +323,7 @@ class Runner:
         group_loader = get_group_loader(group)
         group_migrations: List[MigrationKey] = []
 
-        for migration_id in group_loader.get_migrations():
+        for migration_id in group_loader.get_filtered_migrations():
             migration_key = MigrationKey(group, migration_id)
             status = get_status(migration_key)
             if status == Status.IN_PROGRESS:
@@ -434,7 +434,7 @@ class Runner:
         for group in get_active_migration_groups():
             group_loader = get_group_loader(group)
 
-            for migration_id in group_loader.get_migrations():
+            for migration_id in group_loader.get_filtered_migrations():
                 migration = group_loader.load_migration(migration_id)
                 migrations.append(migration)
 
