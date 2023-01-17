@@ -11,8 +11,8 @@ import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
-    LoggedException,
     ReplaysProcessor,
+    ValidationError,
     maybe,
     normalize_tags,
     process_tags_object,
@@ -455,9 +455,9 @@ class TestReplaysProcessor:
         assert to_uint16(1.25) == 1
         assert to_uint16("1") == 1
 
-        with pytest.raises(LoggedException):
+        with pytest.raises(ValidationError):
             to_uint16(65536)
-        with pytest.raises(LoggedException):
+        with pytest.raises(ValidationError):
             to_uint16(-1)
         with pytest.raises(TypeError):
             to_uint16([1])
@@ -468,9 +468,9 @@ class TestReplaysProcessor:
         assert to_datetime(now).timestamp() == now
         assert to_datetime(str(now)).timestamp() == now
 
-        with pytest.raises(LoggedException):
+        with pytest.raises(ValidationError):
             to_datetime(2**32)
-        with pytest.raises(LoggedException):
+        with pytest.raises(ValidationError):
             to_datetime(-1)
         with pytest.raises(ValueError):
             to_datetime("a")

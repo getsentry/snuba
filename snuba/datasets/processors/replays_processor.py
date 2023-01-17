@@ -36,7 +36,7 @@ LIST_ELEMENT_LIMIT = 1000
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
-class LoggedException(Exception):
+class ValidationError(Exception):
     pass
 
 
@@ -200,8 +200,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except LoggedException:
-            logger.error("A replay schema constraint was not observed.", exc_info=True)
+        except ValidationError:
             return None
         except Exception:
             metrics.increment("consumer_error")
@@ -304,7 +303,7 @@ def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
     if callable(value) is None:
         # This exception can only be triggered through abuse.  We choose not to suppress these
         # exceptions in favor of identifying the origin.
-        raise LoggedException(f'Integer "{value}" overflowed.')
+        raise ValidationError(f'Integer "{value}" overflowed.')
     else:
         return value
 
