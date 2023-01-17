@@ -1,0 +1,8 @@
+version: v1
+kind: dataset
+name: groupedmessages
+
+is_experimental: false
+
+entities:
+  - groupedmessage
