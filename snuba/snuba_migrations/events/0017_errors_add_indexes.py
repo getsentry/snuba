@@ -1,8 +1,3 @@
-#   INDEX bf_tags_hash_map _tags_hash_map TYPE bloom_filter GRANULARITY 1,
-#   INDEX minmax_group_id group_id TYPE minmax GRANULARITY 1,
-#   INDEX bf_release release TYPE bloom_filter GRANULARITY 1
-
-
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -10,6 +5,10 @@ from snuba.migrations import migration, operations
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    """
+    Adds indexes and settings to the errors table to match SaaS.
+    """
+
     blocking = True
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
@@ -74,15 +73,17 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_name="bf_release",
                 target=operations.OperationTarget.LOCAL,
             ),
-            operations.ResetTableSettings(
+            # Ideally we would call ResetTableSetting which would do ALTER TABLE .. RESET SETTING,
+            # but that is not supported in Clickhouse 20
+            operations.ModifyTableSettings(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                settings=[
-                    "min_bytes_for_wide_part",
-                    "enable_vertical_merge_algorithm",
-                    "min_rows_for_wide_part",
-                    "ttl_only_drop_parts",
-                ],
+                settings={
+                    "min_bytes_for_wide_part": "DEFAULT",
+                    "enable_vertical_merge_algorithm": "DEFAULT",
+                    "min_rows_for_wide_part": "DEFAULT",
+                    "ttl_only_drop_parts": "DEFAULT",
+                },
                 target=operations.OperationTarget.LOCAL,
             ),
         ]
