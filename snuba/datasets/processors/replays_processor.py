@@ -37,8 +37,7 @@ USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
 class LoggedException(Exception):
-    def __init__(self, nested_exception: Exception) -> None:
-        self.nested_exception = nested_exception
+    pass
 
 
 class ReplaysProcessor(DatasetMessageProcessor):
@@ -305,7 +304,7 @@ def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
     if callable(value) is None:
         # This exception can only be triggered through abuse.  We choose not to suppress these
         # exceptions in favor of identifying the origin.
-        raise LoggedException(ValueError(f'Integer "{value}" overflowed.'))
+        raise LoggedException(f'Integer "{value}" overflowed.')
     else:
         return value
 
