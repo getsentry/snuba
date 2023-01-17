@@ -29,8 +29,8 @@ class TestDatasetConfiguration(ConfigurationTest):
             (FunctionsDataset(), config_built_datasets["functions"]),
             (ProfilesDataset(), config_built_datasets["profiles"]),
             (EventsDataset(), config_built_datasets["events"]),
-            (GroupAssigneeDataset(), config_built_datasets["groupassignees"]),
-            (GroupedMessageDataset(), config_built_datasets["groupedmessages"]),
+            (GroupAssigneeDataset(), config_built_datasets["groupassignee"]),
+            (GroupedMessageDataset(), config_built_datasets["groupedmessage"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
