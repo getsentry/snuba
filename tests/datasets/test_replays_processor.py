@@ -11,6 +11,7 @@ import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
+    LoggedException,
     ReplaysProcessor,
     maybe,
     normalize_tags,
@@ -392,16 +393,14 @@ class TestReplaysProcessor:
             message.segment_id = "a"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
-            message.segment_id = -1
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.segment_id = -1
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
-        with pytest.raises(ValueError):
-            message.segment_id = 2**16
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.segment_id = 2**16
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
         message.segment_id = 2**16 - 1
-        ReplaysProcessor().process_message(message.serialize(), meta)
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is not None
 
     def test_process_message_invalid_timestamp(self) -> None:
         meta = KafkaMessageMetadata(
@@ -414,19 +413,17 @@ class TestReplaysProcessor:
             message.timestamp = "a"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
-            message.timestamp = -1
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.timestamp = -1
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
-        with pytest.raises(ValueError):
-            message.timestamp = 2**32
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.timestamp = 2**32
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
         message.timestamp = 2**32 - 1
-        ReplaysProcessor().process_message(message.serialize(), meta)
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is not None
 
         message.timestamp = f"{2**32 - 1}"
-        ReplaysProcessor().process_message(message.serialize(), meta)
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is not None
 
     def test_process_message_invalid_replay_start_timestamp(self) -> None:
         meta = KafkaMessageMetadata(
@@ -439,19 +436,17 @@ class TestReplaysProcessor:
             message.replay_start_timestamp = "a"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
-            message.replay_start_timestamp = -1
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.replay_start_timestamp = -1
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
-        with pytest.raises(ValueError):
-            message.replay_start_timestamp = 2**32
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.replay_start_timestamp = 2**32
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is None
 
         message.replay_start_timestamp = 2**32 - 1
-        ReplaysProcessor().process_message(message.serialize(), meta)
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is not None
 
         message.replay_start_timestamp = f"{2**32 - 1}"
-        ReplaysProcessor().process_message(message.serialize(), meta)
+        assert ReplaysProcessor().process_message(message.serialize(), meta) is not None
 
     def test_to_uint16(self) -> None:
         """Test "to_uint16" function."""
@@ -460,9 +455,9 @@ class TestReplaysProcessor:
         assert to_uint16(1.25) == 1
         assert to_uint16("1") == 1
 
-        with pytest.raises(ValueError):
+        with pytest.raises(LoggedException):
             to_uint16(65536)
-        with pytest.raises(ValueError):
+        with pytest.raises(LoggedException):
             to_uint16(-1)
         with pytest.raises(TypeError):
             to_uint16([1])
@@ -473,9 +468,9 @@ class TestReplaysProcessor:
         assert to_datetime(now).timestamp() == now
         assert to_datetime(str(now)).timestamp() == now
 
-        with pytest.raises(ValueError):
+        with pytest.raises(LoggedException):
             to_datetime(2**32)
-        with pytest.raises(ValueError):
+        with pytest.raises(LoggedException):
             to_datetime(-1)
         with pytest.raises(ValueError):
             to_datetime("a")
