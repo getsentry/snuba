@@ -200,7 +200,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except ValidationError:
+        except ValidationError as e:
+            logger.warning(e)
             return None
         except Exception:
             metrics.increment("consumer_error")
