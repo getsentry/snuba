@@ -11,7 +11,6 @@ from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import get_config
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
 logger = logging.getLogger(__name__)
@@ -23,12 +22,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
         with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
             self._config_built_storages: dict[StorageKey, Storage] = {}
-            self._writable_storages: dict[StorageKey, Storage] = {}
-            self._dev_writable_storages: dict[StorageKey, Storage] = {}
-            self._cdc_storages: dict[StorageKey, Storage] = {}
-            self._dev_cdc_storages: dict[StorageKey, Storage] = {}
-            self._non_writable_storages: dict[StorageKey, Storage] = {}
-            self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
             self._all_storages: dict[StorageKey, Storage] = {}
             self.__initialize()
 
@@ -101,18 +94,16 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._cdc_storages = {
-            **{
-                storage.get_storage_key(): storage
-                for storage in [groupedmessages_storage, groupassignees_storage]
-            },
-            **(self._dev_cdc_storages if settings.ENABLE_DEV_FEATURES else {}),
+            storage.get_storage_key(): storage
+            for storage in [groupedmessages_storage, groupassignees_storage]
         }
 
-        self._writable_storages = {
+        self._all_storages = {
             **self._cdc_storages,
             **{
                 storage.get_storage_key(): storage
                 for storage in [
+                    # WritableStorages
                     errors_storage,
                     outcomes_raw_storage,
                     querylog_storage,
@@ -127,15 +118,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     metrics_sets_storage,
                     metrics_counters_storage,
                     metrics_polymorphic_storage,
-                ]
-            },
-            **(self._dev_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
-        }
-
-        self._non_writable_storages = {
-            **{
-                storage.get_storage_key(): storage
-                for storage in [
+                    # Readable Storages
                     discover_storage,
                     errors_ro_storage,
                     outcomes_hourly_storage,
@@ -151,27 +134,29 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     gen_metrics_dists_aggregate_storage,
                 ]
             },
-            **(self._dev_non_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
+            **self._config_built_storages,
         }
-        self._all_storages = {**self._writable_storages, **self._non_writable_storages}
 
     def iter_all(self) -> Generator[Storage, None, None]:
         for storage in self._all_storages.values():
             yield storage
 
     def get(self, storage_key: StorageKey) -> Storage:
-        if (
-            get_config(USE_CONFIG_BUILT_STORAGES, 1)
-            and storage_key in self._config_built_storages
-        ):
-            return self._config_built_storages[storage_key]
         return self._all_storages[storage_key]
 
     def get_writable_storage_keys(self) -> list[StorageKey]:
-        return list(self._writable_storages.keys())
+        return [
+            storage_key
+            for storage_key, storage in self._all_storages.items()
+            if isinstance(storage, WritableTableStorage)
+        ]
 
     def get_cdc_storage_keys(self) -> list[StorageKey]:
-        return list(self._cdc_storages.keys())
+        return [
+            storage_key
+            for storage_key, storage in self._all_storages.items()
+            if isinstance(storage, CdcStorage)
+        ]
 
     def get_all_storage_keys(self) -> list[StorageKey]:
         return list(self._all_storages.keys())

@@ -1,0 +1,11 @@
+version: v1
+kind: dataset
+name: metrics
+
+is_experimental: false
+
+entities:
+  - metrics_counters
+  - metrics_distributions
+  - metrics_sets
+  - org_metrics_counters

@@ -1,6 +1,9 @@
 from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import StorageAndMappers
@@ -31,13 +34,14 @@ class FunctionsEntity(Entity):
                     storages=[
                         StorageAndMappers(readable_storage, TranslationMappers())
                     ],
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
             validators=[
-                EntityRequiredColumnValidator({"project_id"}),
+                EntityRequiredColumnValidator(["project_id"]),
             ],
             required_time_column="timestamp",
             subscription_processors=None,
