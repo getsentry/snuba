@@ -11,6 +11,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
     QueryStorageSelector,
+    QueryStorageSelectorError,
     SimpleQueryStorageSelector,
 )
 from snuba.datasets.entities.transactions import transaction_translator
@@ -132,3 +133,21 @@ def test_default_query_storage_selector(
         query, HTTPQuerySettings(referrer="r"), storage_connections
     )
     assert selected_storage.storage == expected_storage
+
+
+def test_assert_raises():
+    query, _ = parse_snql_query(
+        """ MATCH (generic_metrics_sets)
+        SELECT uniq(value) AS unique_values BY project_id, org_id
+        WHERE org_id = 1
+        AND project_id = 1
+        AND metric_id = 1
+        AND timestamp >= toDateTime('2022-01-01')
+        AND timestamp < toDateTime('2022-01-02')
+        GRANULARITY 60
+        """,
+        get_dataset("generic_metrics"),
+    )
+    selector = SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_SETS.value)
+    with pytest.raises(QueryStorageSelectorError):
+        selector.select_storage(query, HTTPQuerySettings(), [])

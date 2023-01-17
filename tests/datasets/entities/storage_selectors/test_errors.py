@@ -8,7 +8,11 @@ from snuba.datasets.entities.events import errors_translators
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import EntityStorageConnection, Storage
+from snuba.datasets.storage import (
+    EntityStorageConnection,
+    EntityStorageConnectionNotFound,
+    Storage,
+)
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
@@ -84,3 +88,18 @@ def test_query_storage_selector(
         query, HTTPQuerySettings(referrer="r"), storage_connections
     )
     assert selected_storage.storage == expected_storage
+
+
+def test_assert_raises():
+    query, _ = parse_snql_query(
+        """
+        MATCH (events)
+        SELECT col1
+        WHERE project_id IN tuple(2 , 3)
+        AND timestamp>=toDateTime('2021-01-01')
+        AND timestamp<toDateTime('2021-01-02')
+        """,
+        dataset=get_dataset("events"),
+    )
+    with pytest.raises(EntityStorageConnectionNotFound):
+        ErrorsQueryStorageSelector().select_storage(query, HTTPQuerySettings(), [])
