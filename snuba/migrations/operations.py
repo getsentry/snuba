@@ -357,7 +357,7 @@ class ModifySortingKey(SqlOperation):
 
     def format_sql(self) -> str:
         sorting_key = ", ".join(self.__sorting_key)
-        return f"ALTER TABLE {self.__table_name} ORDER BY ({sorting_key});"
+        return f"ALTER TABLE {self.__table_name} MODIFY ORDER BY ({sorting_key});"
 
 
 class ModifyTableSettings(SqlOperation):

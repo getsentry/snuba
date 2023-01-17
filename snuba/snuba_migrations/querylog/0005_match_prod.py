@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Array, Column, DateTime, String
+from snuba.clickhouse.columns import UUID, Array, Column, DateTime, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -16,7 +16,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("request_id", String()),
+                Column("request_id", UUID()),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(
@@ -80,7 +80,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("request_id", String(Modifiers(codecs=["NONE"]))),
+                Column("request_id", UUID(Modifiers(codecs=["NONE"]))),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(
@@ -128,17 +128,17 @@ class Migration(migration.ClickhouseNodeMigration):
                 ["dataset", "referrer", "toStartOfDay(timestamp)", "request_id"],
                 target=operations.OperationTarget.LOCAL,
             ),
-            operations.ModifySampleBy(
-                StorageSetKey.QUERYLOG,
-                table_name,
-                "request_id TTL timestamp + toIntervalDay(30)",
-                target=operations.OperationTarget.LOCAL,
-            ),
-            operations.ModifyTableSettings(
-                StorageSetKey.QUERYLOG,
-                table_name,
-                {"min_bytes_for_wide_part": "10000000", "ttl_only_drop_parts": 1},
-            ),
+            # operations.ModifySampleBy(
+            #     StorageSetKey.QUERYLOG,
+            #     table_name,
+            #     "request_id TTL timestamp + toIntervalDay(30)",
+            #     target=operations.OperationTarget.LOCAL,
+            # ),
+            # operations.ModifyTableSettings(
+            #     StorageSetKey.QUERYLOG,
+            #     table_name,
+            #     {"min_bytes_for_wide_part": "10000000", "ttl_only_drop_parts": 1},
+            # ),
         ]
 
 
