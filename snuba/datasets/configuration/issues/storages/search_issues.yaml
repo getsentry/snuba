@@ -16,7 +16,7 @@ schema:
       { name: primary_hash, type: UUID },
       { name: fingerprint, type: Array, args: { inner_type: { type: String } } },
       { name: occurrence_id, type: UUID },
-      { name: occurrence_type_id, type: UInt, args: { size: 8 } },
+      { name: occurrence_type_id, type: UInt, args: { size: 16 } },
       { name: detection_timestamp, type: DateTime },
 
       { name: event_id, type: UUID, args: { schema_modifiers: [ nullable ] } },

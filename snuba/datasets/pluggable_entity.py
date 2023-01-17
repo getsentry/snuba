@@ -24,7 +24,11 @@ from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    QueryValidator,
+)
 from snuba.utils.schemas import SchemaModifiers
 
 
@@ -59,6 +63,13 @@ class PluggableEntity(Entity):
     partition_key_column_name: Optional[str] = None
     subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
     subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
+
+    def _get_builtin_validators(self) -> Sequence[QueryValidator]:
+        return [
+            EntityContainsColumnsValidator(
+                EntityColumnSet(self.columns), ColumnValidationMode.DO_NOTHING
+            )
+        ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -102,7 +113,7 @@ class PluggableEntity(Entity):
         return self.function_call_validators
 
     def get_validators(self) -> Sequence[QueryValidator]:
-        return self.validators
+        return [*self.validators, *self._get_builtin_validators()]
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage

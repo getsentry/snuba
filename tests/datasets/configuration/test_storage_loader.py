@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.schemas.tables import TableSchema
@@ -110,6 +111,15 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
         _compare_stream_loaders(
             old.get_table_writer().get_stream_loader(),
             new.get_table_writer().get_stream_loader(),
+        )
+
+    if isinstance(old, CdcStorage) or isinstance(new, CdcStorage):
+        assert isinstance(old, CdcStorage)
+        assert isinstance(new, CdcStorage)
+        assert old.get_postgres_table() == new.get_postgres_table()
+        assert old.get_default_control_topic() == new.get_default_control_topic()
+        assert (
+            old.get_row_processor().config_key() == new.get_row_processor().config_key()
         )
 
 

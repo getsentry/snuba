@@ -339,6 +339,11 @@ STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
     "ReplacerProcessor",
     "Name of ReplacerProcessor class config key. Responsible for optimizing queries on a storage which can have replacements, eg deletions/updates.",
 )
+CDC_STORAGE_ROW_PROCESSOR_SCHEMA = registered_class_schema(
+    "processor",
+    "CdcRowProcessor",
+    "Name of CDC Row Processor. Should only be used by CDC Storages.",
+)
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -442,7 +447,75 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
     },
 }
 
+ENTITY_JOIN_RELATIONSHIPS = {
+    "type": "object",
+    "patternProperties": {
+        "^.*$": {
+            "type": "object",
+            "description": "The join relationship. The key for this relationship is how the relationship is specified in queries (`MATCH x -[key]-> y`)",
+            "properties": {
+                "rhs_entity": {
+                    "type": "string",
+                    "description": "The entity key of the rhs entity to join with",
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "prefixItems": [
+                            {"type": "string"},
+                            {"type": "string"},
+                        ],
+                    },
+                    "description": "A sequence of tuples of columns to join on, in the form (left, right)",
+                },
+                "join_type": {
+                    "type": "string",
+                    "description": "The type of join that can be performed (either 'left' or 'inner'",
+                },
+                "equivalences": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "prefixItems": [
+                            {"type": "string"},
+                            {"type": "string"},
+                        ],
+                    },
+                    "description": "Tracking columns in the two entities that are not part of the join key but are still equivalent",
+                },
+            },
+            "required": ["rhs_entity", "columns", "join_type"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 # Full schemas:
+
+V1_READABLE_STORAGE_SCHEMA = {
+    "title": "Readable Storage Schema",
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "readable_storage", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the readable storage"},
+        "storage": STORAGE_SCHEMA,
+        "schema": SCHEMA_SCHEMA,
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+    },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "storage",
+        "schema",
+    ],
+    "additionalProperties": False,
+}
+
 
 V1_WRITABLE_STORAGE_SCHEMA = {
     "title": "Writable Storage Schema",
@@ -475,18 +548,28 @@ V1_WRITABLE_STORAGE_SCHEMA = {
 }
 
 
-V1_READABLE_STORAGE_SCHEMA = {
-    "title": "Readable Storage Schema",
+# This is basically writable + 3 args
+V1_CDC_STORAGE_SCHEMA = {
+    "title": "Writable Storage Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1", "description": "Version of schema"},
-        "kind": {"const": "readable_storage", "description": "Component kind"},
-        "name": {"type": "string", "description": "Name of the readable storage"},
+        "kind": {"const": "cdc_storage", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
+        "stream_loader": STREAM_LOADER_SCHEMA,
+        "default_control_topic": TYPE_STRING,
+        "postgres_table": TYPE_STRING,
+        "row_processor": CDC_STORAGE_ROW_PROCESSOR_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
+        "writer_options": {
+            "type": "object",
+            "description": "Extra Clickhouse fields that are used for consumer writes",
+        },
     },
     "required": [
         "version",
@@ -494,9 +577,14 @@ V1_READABLE_STORAGE_SCHEMA = {
         "name",
         "storage",
         "schema",
+        "stream_loader",
+        "default_control_topic",
+        "postgres_table",
+        "row_processor",
     ],
     "additionalProperties": False,
 }
+
 
 V1_ENTITY_SCHEMA = {
     "title": "Entity Schema",
@@ -512,6 +600,7 @@ V1_ENTITY_SCHEMA = {
                 "description": "Name of a ReadableStorage class which provides an abstraction to read from a table or a view in ClickHouse"
             },
         },
+        "join_relationships": ENTITY_JOIN_RELATIONSHIPS,
         "writable_storage": {
             "type": ["string", "null"],
             "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
@@ -569,6 +658,7 @@ V1_ENTITY_SCHEMA = {
     "additionalProperties": False,
 }
 
+
 V1_DATASET_SCHEMA = {
     "title": "Dataset Schema",
     "type": "object",
@@ -622,6 +712,7 @@ with sentry_sdk.start_span(op="compile", description="Storage Validators"):
     STORAGE_VALIDATORS = {
         "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
         "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+        "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
     }
 
 with sentry_sdk.start_span(op="compile", description="Entity Validators"):
@@ -638,6 +729,7 @@ ALL_VALIDATORS = {
     **DATASET_VALIDATORS,
     # TODO: MIGRATION_GROUP_VALIDATORS if migration groups will be config'd
 }
+
 
 V1_ALL_SCHEMAS = {
     "dataset": V1_DATASET_SCHEMA,

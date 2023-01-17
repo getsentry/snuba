@@ -183,6 +183,7 @@ class ReplaysLoader(DirectoryLoader):
             "0005_add_urls_user_agent_replay_start_timestamp",
             "0006_add_is_archived_column",
             "0007_add_replay_type_column",
+            "0008_add_sample_rate",
         ]
 
 
