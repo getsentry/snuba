@@ -20,8 +20,13 @@ from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionVal
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
+
+
+class InvalidEntityConfigException(Exception):
+    pass
 
 
 def _build_entity_validators(
@@ -125,6 +130,35 @@ def _build_subscription_validators(
     return None
 
 
+def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelationship]:
+    relationships: dict[str, JoinRelationship] = {}
+    if "join_relationships" not in config:
+        return relationships
+
+    for key, obj in config["join_relationships"].items():
+        rhs_key = register_entity_key(obj["rhs_entity"])
+        columns = [(c[0], c[1]) for c in obj["columns"]]
+        equivalences = []
+        for pair in obj.get("equivalences", []):
+            equivalences.append(ColumnEquivalence(pair[0], pair[1]))
+
+        if obj["join_type"] not in ("inner", "left"):
+            raise InvalidEntityConfigException(
+                f"{obj['join_type']} is not a valid join type"
+            )
+
+        join_type = JoinType.LEFT if obj["join_type"] == "left" else JoinType.INNER
+        join = JoinRelationship(
+            rhs_entity=rhs_key,
+            columns=columns,
+            join_type=join_type,
+            equivalences=equivalences,
+        )
+        relationships[key] = join
+
+    return relationships
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
@@ -136,8 +170,9 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
         translation_mappers=_build_entity_translation_mappers(
-            config["translation_mappers"]
+            config.get("translation_mappers", {})
         ),
+        join_relationships=_build_join_relationships(config),
         writeable_storage=get_writable_storage(StorageKey(config["writable_storage"]))
         if "writable_storage" in config
         else None,
