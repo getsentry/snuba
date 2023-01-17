@@ -201,11 +201,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except LoggedException as exc:
-            logger.error(
-                "A replay schema constraint was not observed.",
-                exc_info=exc,
-            )
+        except LoggedException:
+            logger.error("A replay schema constraint was not observed.", exc_info=True)
             return None
         except Exception:
             metrics.increment("consumer_error")
