@@ -315,51 +315,6 @@ class ModifyColumn(SqlOperation):
         return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
 
 
-class ModifySampleBy(SqlOperation):
-    """
-    Modify the sampling key of a table.
-
-    This is only supported for MergeTree tables.
-    """
-
-    def __init__(
-        self,
-        storage_set: StorageSetKey,
-        table_name: str,
-        sample_by: str,
-        target: OperationTarget = OperationTarget.UNSET,
-    ):
-        super().__init__(storage_set, target=target)
-        self.__table_name = table_name
-        self.__sample_by = sample_by
-
-    def format_sql(self) -> str:
-        return f"ALTER TABLE {self.__table_name} SAMPLE BY {self.__sample_by};"
-
-
-class ModifySortingKey(SqlOperation):
-    """
-    Modify the sorting key of a table.
-
-    This is only supported for MergeTree tables.
-    """
-
-    def __init__(
-        self,
-        storage_set: StorageSetKey,
-        table_name: str,
-        sorting_key: Sequence[str],
-        target: OperationTarget = OperationTarget.UNSET,
-    ):
-        super().__init__(storage_set, target=target)
-        self.__table_name = table_name
-        self.__sorting_key = sorting_key
-
-    def format_sql(self) -> str:
-        sorting_key = ", ".join(self.__sorting_key)
-        return f"ALTER TABLE {self.__table_name} ORDER BY ({sorting_key});"
-
-
 class ModifyTableSettings(SqlOperation):
     """
     Modify the settings of a table.

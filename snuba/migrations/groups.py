@@ -253,6 +253,8 @@ class QuerylogLoader(DirectoryLoader):
             "0002_status_type_change",
             "0003_add_profile_fields",
             "0004_add_bytes_scanned",
+            "0005_match_prod",
+            "0006_sorting_key_change",
         ]
 
 
