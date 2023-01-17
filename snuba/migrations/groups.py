@@ -119,6 +119,7 @@ class EventsLoader(DirectoryLoader):
             "0014_backfill_errors",
             "0015_truncate_events",
             "0016_drop_legacy_events",
+            "0017_errors_add_indexes",
         ]
 
 
