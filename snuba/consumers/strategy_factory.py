@@ -126,7 +126,14 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             self.__max_batch_time,
             accumulator,
             self.__collector,
-            RunTaskInThreads(flush_batch, 1, 1, CommitOffsets(commit)),
+            RunTaskInThreads(
+                flush_batch,
+                # The threadpool has 1 worker since we want to ensure batches are processed
+                # sequentially and passed to the next step in order.
+                1,
+                1,
+                CommitOffsets(commit),
+            ),
         )
 
         transform_function = self.__process_message
