@@ -50,6 +50,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     "min_rows_for_wide_part": 0,
                     "ttl_only_drop_parts": 1,
                 },
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
 
@@ -82,5 +83,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     "min_rows_for_wide_part",
                     "ttl_only_drop_parts",
                 ],
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
