@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.1.0
+
+### Various fixes & improvements
+
+- feat(DC): Add simple Dataset configs (#3586) by @rahul-kumar-saini
+- bug(DC): Add config built storage keys to all_storages dictionary in factory (#3502) by @enochtangg
+- bump search_issues storage occurrence_type_id int size (#3593) by @enochtangg
+- feat: Change settings.TOPIC_PARTITION_COUNTS to use logical topic name (#3589) by @lynnagara
+- feat: Arroyo 2.4.0 (#3585) by @lynnagara
+- feat(admin): implement basic admin user roles (#3522) by @MeredithAnya
+- fix: Change DefaultNoneColumnMapper to use a normal set (#3580) by @evanh
+- update migrations doc to reflect new style (#3584) by @dbanda
+- fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3579) by @volokluev
+- feat(slices): Make Subscription Scheduler filter by slice ID (#3338) by @ayirr7
+- Revert "fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3540)" (#3578) by @volokluev
+- Pick up self-hosted CI bugfix (#3577) by @chadwhitacre
+- fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3540) by @volokluev
+- feat(oncall): add the request_id to the query breadcrumbs (#3561) by @volokluev
+- feat(DC): Add Storage selector support for Entity configuration (#3545) by @enochtangg
+- feat(issue-platform): increase occurrence_type_id column size from UInt8 to UInt16 (#3575) by @barkbarkimashark
+- feat(issue-platform): process extra fields from event (#3571) by @barkbarkimashark
+- docs(schema): why do we promote tags? (#3574) by @onewland
+- Remove sorting experiment on sql conditions (#3567) by @enochtangg
+- ref: Add docstring about ``topic_name`` vs ``get_physical_topic_name``. (#3568) by @lynnagara
+- feat(ops): allow disabled entities for storage sets that are not in use (#3572) by @onewland
+- test(consumer): Add preliminary unit tests to ConsumerBuilder (#3389) by @ayirr7
+- docs(slicing): Add mega-cluster and basic consumer setup (#3433) by @ayirr7
+- feat(consumer): Remove parallel collect option (#3555) by @lynnagara
+
+_Plus 39 more_
+
 ## 22.12.0
 
 ### Various fixes & improvements
