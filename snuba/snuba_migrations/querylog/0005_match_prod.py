@@ -115,5 +115,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 StorageSetKey.QUERYLOG,
                 table_name,
                 {"min_bytes_for_wide_part": 0, "ttl_only_drop_parts": 0},
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
