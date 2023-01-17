@@ -41,6 +41,16 @@ class Migration(migration.ClickhouseNodeMigration):
                 granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
+            operations.ModifyTableSettings(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_local",
+                settings={
+                    "min_bytes_for_wide_part": 1,
+                    "enable_vertical_merge_algorithm": 1,
+                    "min_rows_for_wide_part": 0,
+                    "ttl_only_drop_parts": 1,
+                },
+            ),
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
@@ -62,5 +72,15 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="errors_local",
                 index_name="bf_release",
                 target=operations.OperationTarget.LOCAL,
+            ),
+            operations.ResetTableSettings(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_local",
+                settings=[
+                    "min_bytes_for_wide_part",
+                    "enable_vertical_merge_algorithm",
+                    "min_rows_for_wide_part",
+                    "ttl_only_drop_parts",
+                ],
             ),
         ]

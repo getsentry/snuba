@@ -42,8 +42,8 @@ prod = True
 
 
 def _filter_migrations(migrations: Sequence[str]) -> Sequence[str]:
-    if not prod:
-        return [m for m in migrations if "_prod" not in m]
+    # if not prod:
+    #     return [m for m in migrations if "_prod" not in m]
     return migrations
 
 
