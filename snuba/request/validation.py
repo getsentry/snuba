@@ -147,6 +147,12 @@ def build_request(
                 )
             },
         )
+        sentry_sdk.add_breadcrumb(
+            category="query_info",
+            level="info",
+            message="snuba_query_raw",
+            data={"request_id": request.id},
+        )
 
         timer.mark("validate_schema")
         return request

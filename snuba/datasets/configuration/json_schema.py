@@ -447,6 +447,50 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
     },
 }
 
+ENTITY_JOIN_RELATIONSHIPS = {
+    "type": "object",
+    "patternProperties": {
+        "^.*$": {
+            "type": "object",
+            "description": "The join relationship. The key for this relationship is how the relationship is specified in queries (`MATCH x -[key]-> y`)",
+            "properties": {
+                "rhs_entity": {
+                    "type": "string",
+                    "description": "The entity key of the rhs entity to join with",
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "prefixItems": [
+                            {"type": "string"},
+                            {"type": "string"},
+                        ],
+                    },
+                    "description": "A sequence of tuples of columns to join on, in the form (left, right)",
+                },
+                "join_type": {
+                    "type": "string",
+                    "description": "The type of join that can be performed (either 'left' or 'inner'",
+                },
+                "equivalences": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "prefixItems": [
+                            {"type": "string"},
+                            {"type": "string"},
+                        ],
+                    },
+                    "description": "Tracking columns in the two entities that are not part of the join key but are still equivalent",
+                },
+            },
+            "required": ["rhs_entity", "columns", "join_type"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 # Full schemas:
 
 V1_READABLE_STORAGE_SCHEMA = {
@@ -556,9 +600,25 @@ V1_ENTITY_SCHEMA = {
                 "description": "Name of a ReadableStorage class which provides an abstraction to read from a table or a view in ClickHouse"
             },
         },
+        "join_relationships": ENTITY_JOIN_RELATIONSHIPS,
         "writable_storage": {
             "type": ["string", "null"],
             "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
+        },
+        "storage_selector": {
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "QueryStorageSelector class name",
+                },
+                "args": {
+                    "type": "object",
+                    "description": "Key/value mappings required to instantiate QueryStorageSelector class",
+                },
+            },
+            "required": ["selector"],
+            "additionalProperties": False,
         },
         "query_processors": {
             "type": "array",
@@ -590,6 +650,7 @@ V1_ENTITY_SCHEMA = {
         "schema",
         "name",
         "readable_storage",
+        "storage_selector",
         "query_processors",
         "validators",
         "required_time_column",

@@ -5,6 +5,7 @@ from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
@@ -23,7 +24,11 @@ from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    QueryValidator,
+)
 from snuba.utils.schemas import SchemaModifiers
 
 
@@ -47,6 +52,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
     required_time_column: str
+    storage_selector: QueryStorageSelector
     writeable_storage: Optional[WritableTableStorage] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
@@ -57,6 +63,13 @@ class PluggableEntity(Entity):
     partition_key_column_name: Optional[str] = None
     subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
     subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
+
+    def _get_builtin_validators(self) -> Sequence[QueryValidator]:
+        return [
+            EntityContainsColumnsValidator(
+                EntityColumnSet(self.columns), ColumnValidationMode.DO_NOTHING
+            )
+        ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -76,9 +89,10 @@ class PluggableEntity(Entity):
         storages: List[StorageAndMappers] = [
             StorageAndMappers(self.readable_storage, self.translation_mappers)
         ]
+
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
             storages=storages,
-            selector=None,
+            selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,
         )
 
@@ -92,11 +106,14 @@ class PluggableEntity(Entity):
             else [self.readable_storage, self.writeable_storage]
         )
 
+    def get_storage_selector(self) -> Optional[QueryStorageSelector]:
+        return self.storage_selector
+
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         return self.function_call_validators
 
     def get_validators(self) -> Sequence[QueryValidator]:
-        return self.validators
+        return [*self.validators, *self._get_builtin_validators()]
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
