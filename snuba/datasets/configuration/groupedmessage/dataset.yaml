@@ -1,8 +1,8 @@
 version: v1
 kind: dataset
-name: groupassignees
+name: groupedmessage
 
 is_experimental: false
 
 entities:
-  - groupassignee
+  - groupedmessage
