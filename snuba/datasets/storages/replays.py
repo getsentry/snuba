@@ -5,7 +5,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     ProduceInvalidMessagePolicy,
 )
 
-from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv6
+from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, Float, IPv4, IPv6
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -27,6 +27,8 @@ columns = ColumnSet(
     [
         ("replay_id", UUID()),
         ("replay_type", String(Modifiers(nullable=True))),
+        ("error_sample_rate", Float(64, Modifiers(nullable=True))),
+        ("session_sample_rate", Float(64, Modifiers(nullable=True))),
         ("event_hash", UUID()),
         ("segment_id", UInt(16, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
