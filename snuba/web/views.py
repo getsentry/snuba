@@ -714,7 +714,7 @@ if application.debug or application.testing:
             # TODO: This is a temporary workaround so that we return a more useful error when
             # attempting to write to a dataset where the migration hasn't been run. This should be
             # no longer necessary once we have more advanced dataset management in place.
-            raise InternalServerError(e)
+            raise InternalServerError(str(e), original_exception=e)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
