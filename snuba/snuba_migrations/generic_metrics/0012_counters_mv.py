@@ -31,6 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
             Nested(
                 [
                     ("key", UInt(64)),
+                    ("indexed_value", UInt(64)),
                     ("raw_value", String()),
                 ]
             ),
@@ -56,6 +57,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     metric_id,
                     arrayJoin(granularities) as granularity,
                     tags.key,
+                    tags.indexed_value,
                     tags.raw_value,
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
                       intDiv(toUnixTimestamp(timestamp),
@@ -71,6 +73,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     project_id,
                     metric_id,
                     tags.key,
+                    tags.indexed_value,
                     tags.raw_value,
                     timestamp,
                     granularity,

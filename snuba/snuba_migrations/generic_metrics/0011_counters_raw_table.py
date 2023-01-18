@@ -32,6 +32,7 @@ class Migration(migration.ClickhouseNodeMigration):
             Nested(
                 [
                     ("key", UInt(64)),
+                    ("indexed_value", UInt(64)),
                     ("raw_value", String()),
                 ]
             ),
