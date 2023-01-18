@@ -2,11 +2,11 @@ from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
-    DefaultQueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -24,22 +24,22 @@ class FunctionsEntity(Entity):
     def __init__(self) -> None:
         readable_storage = get_storage(StorageKey.FUNCTIONS)
         writable_storage = get_writable_storage(StorageKey.FUNCTIONS_RAW)
-        storages = [readable_storage, writable_storage]
+        storages = [
+            EntityStorageConnection(readable_storage, TranslationMappers(), False),
+            EntityStorageConnection(writable_storage, TranslationMappers(), True),
+        ]
         schema = readable_storage.get_schema()
 
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(readable_storage, TranslationMappers())
-                    ],
-                    selector=DefaultQueryStorageSelector(),
+                    storages=storages,
+                    selector=SimpleQueryStorageSelector(StorageKey.FUNCTIONS.value),
                 )
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=writable_storage,
             validators=[
                 EntityRequiredColumnValidator(["project_id"]),
             ],

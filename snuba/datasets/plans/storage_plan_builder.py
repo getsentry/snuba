@@ -22,9 +22,9 @@ from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
+    EntityStorageConnection,
     ReadableStorage,
     ReadableTableStorage,
-    StorageAndMappers,
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -109,7 +109,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: List[StorageAndMappers],
+        storages: List[EntityStorageConnection],
         selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
@@ -133,7 +133,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
-    ) -> StorageAndMappers:
+    ) -> EntityStorageConnection:
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="select_storage"
         ):
@@ -164,7 +164,9 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         if len(self.__storages) < 1:
             raise QueryStorageSelectorError("No storages specified to select from.")
 
-        storage, mappers = self.get_storage(query, settings)
+        storage_connection = self.get_storage(query, settings)
+        storage = storage_connection.storage
+        mappers = storage_connection.translation_mappers
         cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
