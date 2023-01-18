@@ -666,8 +666,8 @@ if application.debug or application.testing:
         storage = entity.get_writable_storage()
         assert storage is not None
 
-        if type_ == "insert":
-            try:
+        try:
+            if type_ == "insert":
                 from snuba.consumers.consumer import build_batch_writer, process_message
                 from snuba.consumers.strategy_factory import (
                     KafkaConsumerStrategyFactory,
@@ -702,16 +702,19 @@ if application.debug or application.testing:
                 strategy.submit(message)
                 strategy.close()
                 strategy.join()
-            except Exception as e:
-                raise InternalServerError(e)
-        else:
-            from snuba.replacer import ReplacerWorker
+            else:
+                from snuba.replacer import ReplacerWorker
 
-            worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
-            processed = worker.process_message(message)
-            if processed is not None:
-                batch = [processed]
-                worker.flush_batch(batch)
+                worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
+                processed = worker.process_message(message)
+                if processed is not None:
+                    batch = [processed]
+                    worker.flush_batch(batch)
+        except Exception as e:
+            # TODO: This is a temporary workaround so that we return a more useful error when
+            # attempting to write to a dataset where the migration hasn't been run. This should be
+            # no longer necessary once we have more advanced dataset management in place.
+            raise InternalServerError(e)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
