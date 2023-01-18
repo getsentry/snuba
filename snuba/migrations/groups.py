@@ -137,6 +137,9 @@ class TransactionsLoader(DirectoryLoader):
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
             "0018_transactions_add_profile_id",
+            "0019_transactions_add_indexes",
+            "0020_transactions_add_codecs",
+            "0021_transaction_dist_fix_hashes",
         ]
 
 
