@@ -342,9 +342,7 @@ class Array(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        print("\ninner_schema0", self.inner_type.for_schema())
         inner_schema = self.inner_type.for_schema().split("CODEC", 1)
-        print("\ninner_schema", inner_schema)
         if len(inner_schema) == 1:
             inner_type = inner_schema[0]
             return f"Array({inner_type})"

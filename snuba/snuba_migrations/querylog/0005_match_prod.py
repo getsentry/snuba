@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Array, Column, DateTime, String
+from snuba.clickhouse.columns import UUID, Array, Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -24,12 +24,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 StorageSetKey.QUERYLOG,
                 table_name,
                 Column("request_body", String(Modifiers(codecs=["LZ4HC(0)"]))),
-                target=operations.OperationTarget.LOCAL,
-            ),
-            operations.ModifyColumn(
-                StorageSetKey.QUERYLOG,
-                table_name,
-                Column("timestamp", DateTime(Modifiers(codecs=["T64", "ZSTD(1)"]))),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(
@@ -79,12 +73,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 StorageSetKey.QUERYLOG,
                 table_name,
                 Column("request_body", String()),
-                target=operations.OperationTarget.LOCAL,
-            ),
-            operations.ModifyColumn(
-                StorageSetKey.QUERYLOG,
-                table_name,
-                Column("timestamp", DateTime()),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(

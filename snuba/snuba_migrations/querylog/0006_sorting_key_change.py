@@ -56,8 +56,15 @@ def forwards(logger: logging.Logger) -> None:
             "SAMPLE BY " + curr_sampling_key, "SAMPLE BY " + new_sampling_key
         )
 
+    # Update the timestamp column
+    # Clickhouse 20 does not support altering a column in the primary so we need to do it here
+    new_timestamp_type = "`timestamp` DateTime CODEC(T64, ZSTD(1))"
+    assert new_create_table_statement.count("`timestamp` DateTime") == 1
+    new_create_table_statement = new_create_table_statement.replace(
+        "`timestamp` DateTime", new_timestamp_type
+    )
+
     # Create the new table
-    print("Creating new table", new_create_table_statement)
     clickhouse.execute(new_create_table_statement)
 
     # Copy the data over
