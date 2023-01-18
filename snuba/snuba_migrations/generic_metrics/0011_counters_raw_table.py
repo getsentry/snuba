@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -58,6 +59,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ttl="timestamp + toIntervalDay(7)",
                 ),
                 columns=self.columns,
+                target=OperationTarget.LOCAL,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
@@ -67,6 +69,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     sharding_key="cityHash64(timeseries_id)",
                 ),
                 columns=self.columns,
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
@@ -75,9 +78,11 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
+                target=OperationTarget.LOCAL,
             ),
         ]

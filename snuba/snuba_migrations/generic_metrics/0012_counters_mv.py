@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget
 from snuba.utils.schemas import Float
 
 
@@ -46,6 +47,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 view_name=self.view_name,
                 columns=self.dest_table_columns,
                 destination_table_name=self.dest_table_name,
+                target=OperationTarget.LOCAL,
                 query="""
                 SELECT
                     use_case_id,
@@ -77,16 +79,11 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.view_name,
+                target=OperationTarget.LOCAL,
             )
         ]
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return []
-
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return []

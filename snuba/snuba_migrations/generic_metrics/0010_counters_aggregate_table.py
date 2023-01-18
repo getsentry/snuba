@@ -15,6 +15,7 @@ from snuba.datasets.storages.tags_hash_map import (
 )
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget
 from snuba.utils.schemas import Float
 
 
@@ -58,6 +59,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
                 columns=self.columns,
+                target=OperationTarget.LOCAL,
             ),
             operations.AddColumn(
                 storage_set=self.storage_set_key,
@@ -73,6 +75,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         ),
                     ),
                 ),
+                target=OperationTarget.LOCAL,
             ),
             operations.AddIndex(
                 storage_set=self.storage_set_key,
@@ -81,6 +84,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_expression="_raw_tags_hash",
                 index_type="bloom_filter()",
                 granularity=1,
+                target=OperationTarget.LOCAL,
             ),
             operations.AddIndex(
                 storage_set=self.storage_set_key,
@@ -89,6 +93,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_expression="tags.key",
                 index_type="bloom_filter()",
                 granularity=1,
+                target=OperationTarget.LOCAL,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
@@ -97,6 +102,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     local_table_name=self.local_table_name, sharding_key=None
                 ),
                 columns=self.columns,
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
@@ -105,9 +111,11 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
+                target=OperationTarget.LOCAL,
             ),
         ]
