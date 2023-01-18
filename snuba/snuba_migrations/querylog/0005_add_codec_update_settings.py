@@ -9,6 +9,10 @@ table_name = "querylog_local"
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    """
+    Adds codecs to columns and updates tables settings to match what exists in SaaS
+    """
+
     blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:

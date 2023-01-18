@@ -148,7 +148,7 @@ class Migration(migration.CodeMigration):
         return [
             operations.RunPython(
                 func=forwards,
-                description="Sync sample and sorting key",
+                description="Sync sample by and sorting key",
             ),
         ]
 
