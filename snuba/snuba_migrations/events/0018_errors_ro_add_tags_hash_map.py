@@ -13,7 +13,7 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
                 column=Column(
                     "_tags_hash_map",
@@ -23,14 +23,14 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
                 column=Column("hierarchical_hashes", Array(UUID())),
                 after="primary_hash",
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.ModifyColumn(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
                 column=Column(
                     "level", String(Modifiers(low_cardinality=True, nullable=True))
@@ -42,19 +42,19 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
-                StorageSetKey.EVENTS,
+                StorageSetKey.EVENTS_RO,
                 "errors_dist_ro",
                 "_tags_hash_map",
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropColumn(
-                StorageSetKey.EVENTS,
+                StorageSetKey.EVENTS_RO,
                 "errors_dist_ro",
                 "hierarchical_hashes",
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.ModifyColumn(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
                 column=Column("level", String(Modifiers(nullable=True))),
                 target=operations.OperationTarget.DISTRIBUTED,
