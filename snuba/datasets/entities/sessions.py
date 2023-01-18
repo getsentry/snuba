@@ -17,7 +17,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -218,25 +218,25 @@ class SessionsEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
+        storages = [
+            EntityStorageConnection(
+                materialized_storage, sessions_hourly_translators, False
+            ),
+            EntityStorageConnection(writable_storage, sessions_raw_translators, True),
+        ]
 
         read_columns = read_schema.get_columns()
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
-            storages=[writable_storage, materialized_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(
-                            materialized_storage, sessions_hourly_translators
-                        ),
-                        StorageAndMappers(writable_storage, sessions_raw_translators),
-                    ],
+                    storages=storages,
                     selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
             join_relationships={},
-            writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
@@ -260,12 +260,13 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
+        storages = [EntityStorageConnection(storage, TranslationMappers(), False)]
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 )
             ),
@@ -278,7 +279,6 @@ class OrgSessionsEntity(Entity):
                 ]
             ),
             join_relationships={},
-            writable_storage=None,
             validators=None,
             required_time_column="started",
             subscription_processors=None,

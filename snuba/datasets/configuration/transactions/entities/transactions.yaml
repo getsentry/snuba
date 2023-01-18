@@ -127,8 +127,203 @@ schema:
     { name: app_start_type, type: String },
   ]
 
-readable_storage: transactions
-writable_storage: transactions
+storages:
+  [
+    {
+      storage: transactions,
+      is_writable: true,
+      translation_mappers:
+        {
+          columns:
+            [
+              {
+                mapper: ColumnToIPAddress,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "ip_address",
+                    to_function_name: "coalesce",
+                  },
+              },
+              {
+                mapper: ColumnToNullIf,
+                args: { from_table_name, from_col_name: "user" },
+              },
+              {
+                mapper: ColumnToLiteral,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "type",
+                    to_literal_value: "transaction",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "timestamp",
+                    to_table_name,
+                    to_col_name: "finish_ts",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "username",
+                    to_table_name,
+                    to_col_name: "user_name",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "email",
+                    to_table_name,
+                    to_col_name: "user_email",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "transaction",
+                    to_table_name,
+                    to_col_name: "transaction_name",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "message",
+                    to_table_name,
+                    to_col_name: "transaction_name",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "title",
+                    to_table_name,
+                    to_col_name: "transaction_name",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "spans.exclusive_time",
+                    to_table_name,
+                    to_col_name: "spans.exclusive_time_32",
+                  },
+              },
+              {
+                mapper: ColumnToColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "timestamp",
+                    to_table_name,
+                    to_col_name: "finish_ts",
+                  },
+              },
+              {
+                mapper: ColumnToMapping,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "geo_country_code",
+                    to_nested_col_table_name,
+                    to_nested_col_name: "contexts",
+                    to_nested_mapping_key: "geo.country_code",
+                    nullable: True,
+                  },
+              },
+              {
+                mapper: ColumnToMapping,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "geo_region",
+                    to_nested_col_table_name,
+                    to_nested_col_name: "contexts",
+                    to_nested_mapping_key: "geo.region",
+                    nullable: True,
+                  },
+              },
+              {
+                mapper: ColumnToMapping,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "geo_city",
+                    to_nested_col_table_name,
+                    to_nested_col_name: "contexts",
+                    to_nested_mapping_key: "geo.city",
+                    nullable: True,
+                  },
+              },
+            ],
+          subscriptables:
+            [
+              {
+                mapper: SubscriptableMapper,
+                args:
+                  {
+                    from_column_table,
+                    from_column_name: tags,
+                    to_nested_col_table,
+                    to_nested_col_name: tags,
+                  },
+              },
+              {
+                mapper: SubscriptableMapper,
+                args:
+                  {
+                    from_column_table,
+                    from_column_name: contexts,
+                    to_nested_col_table,
+                    to_nested_col_name: contexts,
+                  },
+              },
+              {
+                mapper: SubscriptableMapper,
+                args:
+                  {
+                    from_column_table,
+                    from_column_name: measurements,
+                    to_nested_col_table,
+                    to_nested_col_name: measurements,
+                    nullable: True,
+                  },
+              },
+              {
+                mapper: SubscriptableMapper,
+                args:
+                  {
+                    from_column_table,
+                    from_column_name: span_op_breakdowns,
+                    to_nested_col_table,
+                    to_nested_col_name: span_op_breakdowns,
+                    nullable: True,
+                  },
+              },
+            ],
+        }
+    }
+  ]
+
 storage_selector:
   {
     selector: DefaultQueryStorageSelector
@@ -159,196 +354,6 @@ query_processors:
     },
     { processor: ResourceQuotaProcessor, args: { project_field: project_id } },
   ]
-
-translation_mappers:
-  {
-    columns:
-      [
-        {
-          mapper: ColumnToIPAddress,
-          args:
-            {
-              from_table_name,
-              from_col_name: "ip_address",
-              to_function_name: "coalesce",
-            },
-        },
-        {
-          mapper: ColumnToNullIf,
-          args: { from_table_name, from_col_name: "user" },
-        },
-        {
-          mapper: ColumnToLiteral,
-          args:
-            {
-              from_table_name,
-              from_col_name: "type",
-              to_literal_value: "transaction",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "timestamp",
-              to_table_name,
-              to_col_name: "finish_ts",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "username",
-              to_table_name,
-              to_col_name: "user_name",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "email",
-              to_table_name,
-              to_col_name: "user_email",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "transaction",
-              to_table_name,
-              to_col_name: "transaction_name",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "message",
-              to_table_name,
-              to_col_name: "transaction_name",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "title",
-              to_table_name,
-              to_col_name: "transaction_name",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "spans.exclusive_time",
-              to_table_name,
-              to_col_name: "spans.exclusive_time_32",
-            },
-        },
-        {
-          mapper: ColumnToColumn,
-          args:
-            {
-              from_table_name,
-              from_col_name: "timestamp",
-              to_table_name,
-              to_col_name: "finish_ts",
-            },
-        },
-        {
-          mapper: ColumnToMapping,
-          args:
-            {
-              from_table_name,
-              from_col_name: "geo_country_code",
-              to_nested_col_table_name,
-              to_nested_col_name: "contexts",
-              to_nested_mapping_key: "geo.country_code",
-              nullable: True,
-            },
-        },
-        {
-          mapper: ColumnToMapping,
-          args:
-            {
-              from_table_name,
-              from_col_name: "geo_region",
-              to_nested_col_table_name,
-              to_nested_col_name: "contexts",
-              to_nested_mapping_key: "geo.region",
-              nullable: True,
-            },
-        },
-        {
-          mapper: ColumnToMapping,
-          args:
-            {
-              from_table_name,
-              from_col_name: "geo_city",
-              to_nested_col_table_name,
-              to_nested_col_name: "contexts",
-              to_nested_mapping_key: "geo.city",
-              nullable: True,
-            },
-        },
-      ],
-    subscriptables:
-      [
-        {
-          mapper: SubscriptableMapper,
-          args:
-            {
-              from_column_table,
-              from_column_name: tags,
-              to_nested_col_table,
-              to_nested_col_name: tags,
-            },
-        },
-        {
-          mapper: SubscriptableMapper,
-          args:
-            {
-              from_column_table,
-              from_column_name: contexts,
-              to_nested_col_table,
-              to_nested_col_name: contexts,
-            },
-        },
-        {
-          mapper: SubscriptableMapper,
-          args:
-            {
-              from_column_table,
-              from_column_name: measurements,
-              to_nested_col_table,
-              to_nested_col_name: measurements,
-              nullable: True,
-            },
-        },
-        {
-          mapper: SubscriptableMapper,
-          args:
-            {
-              from_column_table,
-              from_column_name: span_op_breakdowns,
-              to_nested_col_table,
-              to_nested_col_name: span_op_breakdowns,
-              nullable: True,
-            },
-        },
-      ],
-  }
 
 validators:
   [

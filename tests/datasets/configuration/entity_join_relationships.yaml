@@ -13,8 +13,10 @@ schema:
     { name: team_id, type: UInt, args: { size: 64, schema_modifiers: [nullable] } },
   ]
 
-readable_storage: groupassignees
-writable_storage: groupassignees
+storages:
+  - storage: groupassignees
+    is_writable: true
+
 storage_selector:
   selector: DefaultQueryStorageSelector
 

@@ -6,7 +6,7 @@ from snuba.datasets.entities.storage_selectors.selector import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -26,20 +26,20 @@ class ReplaysEntity(Entity):
     def __init__(self) -> None:
         writable_storage = get_writable_storage(StorageKey.REPLAYS)
         schema = writable_storage.get_table_writer().get_schema()
+        storages = [
+            EntityStorageConnection(writable_storage, TranslationMappers(), True)
+        ]
 
         super().__init__(
-            storages=[writable_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(writable_storage, TranslationMappers())
-                    ],
+                    storages=storages,
                     selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             validate_data_model=ColumnValidationMode.WARN,

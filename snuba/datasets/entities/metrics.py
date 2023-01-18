@@ -22,6 +22,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
+    QueryStorageSelector,
+    SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
@@ -33,7 +35,7 @@ from snuba.datasets.entity_subscriptions.validators import (
     EntitySubscriptionValidator,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -62,6 +64,7 @@ class MetricsEntity(Entity, ABC):
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
+        selector: QueryStorageSelector,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None,
@@ -76,10 +79,11 @@ class MetricsEntity(Entity, ABC):
                 SubscriptableMapper(None, "tags", None, "tags"),
             ],
         ).concat(mappers)
-        storages = [readable_storage]
-        storage_and_mappers = [StorageAndMappers(readable_storage, all_mappers)]
+        storages = [EntityStorageConnection(readable_storage, all_mappers, False)]
         if writable_storage:
-            storages.append(writable_storage)
+            storages.append(
+                EntityStorageConnection(writable_storage, all_mappers, True)
+            )
 
         if abstract_column_set is None:
             abstract_column_set = ColumnSet(
@@ -103,13 +107,12 @@ class MetricsEntity(Entity, ABC):
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=storage_and_mappers,
-                    selector=DefaultQueryStorageSelector(),
+                    storages=storages,
+                    selector=selector,
                 )
             ),
             abstract_column_set=abstract_column_set,
             join_relationships={},
-            writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
             subscription_processors=subscription_processors,
@@ -143,6 +146,7 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_SETS.value),
             subscription_processors=[AddColumnCondition("organization", "org_id")],
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
@@ -162,6 +166,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_COUNTERS.value),
             subscription_processors=[AddColumnCondition("organization", "org_id")],
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
@@ -176,6 +181,7 @@ class OrgMetricsCountersEntity(MetricsEntity):
             readable_storage_key=StorageKey.ORG_METRICS_COUNTERS,
             value_schema=[],
             mappers=TranslationMappers(),
+            selector=DefaultQueryStorageSelector(),
             abstract_column_set=ColumnSet(
                 [
                     Column("org_id", UInt(64)),
@@ -243,6 +249,7 @@ class MetricsDistributionsEntity(MetricsEntity):
                     ),
                 ],
             ),
+            selector=SimpleQueryStorageSelector(StorageKey.METRICS_DISTRIBUTIONS.value),
             subscription_processors=None,
             subscription_validators=None,
         )

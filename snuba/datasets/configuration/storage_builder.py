@@ -5,6 +5,8 @@ from typing import Any
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.cdcprocessors import CdcProcessor
+from snuba.datasets.cdc.cdcstorage import CdcStorage
+from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
@@ -33,7 +35,9 @@ from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.utils.streams.topics import Topic
 
 KIND = "kind"
+READABLE_STORAGE = "readable_storage"
 WRITABLE_STORAGE = "writable_storage"
+CDC_STORAGE = "cdc_storage"
 STORAGE = "storage"
 STORAGE_KEY = "storage_key"
 SET_KEY = "set_key"
@@ -53,27 +57,64 @@ def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATORS)
+
     storage_kwargs = __build_readable_storage_kwargs(config)
-    if config[KIND] == "readable_storage":
+    if config[KIND] == READABLE_STORAGE:
         return ReadableTableStorage(**storage_kwargs)
-    storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
-    storage_kwargs[WRITER_OPTIONS] = (
-        config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
-    )
-    storage_kwargs[REPLACER_PROCESSOR] = (
-        ReplacerProcessor.get_from_name(
+
+    storage_kwargs = {**storage_kwargs, **__build_writable_storage_kwargs(config)}
+    if config[KIND] == WRITABLE_STORAGE:
+        return WritableTableStorage(**storage_kwargs)
+
+    storage_kwargs = {**storage_kwargs, **__build_cdc_storage_kwargs(config)}
+    return CdcStorage(**storage_kwargs)
+
+
+def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
+        "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
+        SCHEMA: __build_storage_schema(config),
+        QUERY_PROCESSORS: get_query_processors(
+            config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
+        ),
+        QUERY_SPLITTERS: get_query_splitters(
+            config[QUERY_SPLITTERS] if QUERY_SPLITTERS in config else []
+        ),
+        MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
+            config[MANDATORY_CONDITION_CHECKERS]
+            if MANDATORY_CONDITION_CHECKERS in config
+            else []
+        ),
+    }
+
+
+def __build_writable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        STREAM_LOADER: build_stream_loader(config[STREAM_LOADER]),
+        WRITER_OPTIONS: config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {},
+        REPLACER_PROCESSOR: ReplacerProcessor.get_from_name(
             config[REPLACER_PROCESSOR]["processor"]
         ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
         if REPLACER_PROCESSOR in config
-        else {}
-    )
-    # TODO: Rest of writable storage optional args
-    return WritableTableStorage(**storage_kwargs)
+        else {},
+        # TODO: Rest of writable storage optional args
+    }
+
+
+def __build_cdc_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "default_control_topic": config["default_control_topic"],
+        "postgres_table": config["postgres_table"],
+        "row_processor": CdcRowProcessor.get_from_name(
+            config["row_processor"]["processor"]
+        ).from_kwargs(**config["row_processor"].get("args", {})),
+    }
 
 
 def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
     schema_class = (
-        WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
+        TableSchema if config[KIND] == READABLE_STORAGE else WritableTableSchema
     )
     partition_formats = None
     if "partition_format" in config[SCHEMA]:
@@ -102,26 +143,6 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
         mandatory_conditions=mandatory_conditions,
         partition_format=partition_formats,
     )
-
-
-def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
-    return {
-        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
-        "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
-        SCHEMA: __build_storage_schema(config),
-        QUERY_PROCESSORS: get_query_processors(
-            config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
-        ),
-        QUERY_SPLITTERS: get_query_splitters(
-            config[QUERY_SPLITTERS] if QUERY_SPLITTERS in config else []
-        ),
-        MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
-            config[MANDATORY_CONDITION_CHECKERS]
-            if MANDATORY_CONDITION_CHECKERS in config
-            else []
-        )
-        # TODO: Rest of readable storage optional args
-    }
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
