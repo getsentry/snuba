@@ -3,6 +3,7 @@ import math
 import time
 from typing import Sequence
 
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -12,21 +13,7 @@ TABLE_NAME_NEW = "querylog_local_new"
 TABLE_NAME_OLD = "querylog_local_old"
 
 
-def forwards(logger: logging.Logger) -> None:
-    """
-    The sample by clause for the transactions table was added in April 2020. Partition
-    by has been changed twice. If the user has a table without the sample by clause,
-    or the old partition by we need to recreate the table correctly and copy the
-    data over before deleting the old table.
-    """
-    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
-
-    if not cluster.is_single_node():
-        return
-
-    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-    database = cluster.get_database()
-
+def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     ((curr_create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
     ).results
@@ -57,12 +44,13 @@ def forwards(logger: logging.Logger) -> None:
         )
 
     # Update the timestamp column
-    # Clickhouse 20 does not support altering a column in the primary so we need to do it here
+    # Clickhouse 20 does not support altering a column in the primary key so we need to do it here
     new_timestamp_type = "`timestamp` DateTime CODEC(T64, ZSTD(1))"
     assert new_create_table_statement.count("`timestamp` DateTime") == 1
     new_create_table_statement = new_create_table_statement.replace(
         "`timestamp` DateTime", new_timestamp_type
     )
+    assert new_timestamp_type in new_create_table_statement
 
     # Create the new table
     clickhouse.execute(new_create_table_statement)
@@ -97,6 +85,21 @@ def forwards(logger: logging.Logger) -> None:
     )
 
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    return
+
+
+def forwards(logger: logging.Logger) -> None:
+    """
+    This migration is a bit complicated because we need to change the sorting key.
+    We can't do it inplace so we need to create a new table with the modified keys,
+    copy the data over, then drop the old table.
+    """
+    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+
+    for node in cluster.get_local_nodes():
+        connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+        database = cluster.get_database()
+        update_querylog_table(connection, database)
 
 
 def backwards(logger: logging.Logger) -> None:
@@ -111,7 +114,10 @@ def backwards(logger: logging.Logger) -> None:
         return
 
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+    cleanup(clickhouse, logger)
 
+
+def cleanup(clickhouse: ClickhousePool, logger: logging.Logger) -> None:
     def table_exists(table_name: str) -> bool:
         return clickhouse.execute(f"EXISTS TABLE {table_name};").results == [(1,)]
 
