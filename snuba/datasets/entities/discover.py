@@ -19,9 +19,10 @@ from snuba.clickhouse.translators.snuba.allowed import (
 )
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
-    ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToLiteral,
     ColumnToMapping,
+    ColumnToNullIf,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -36,7 +37,6 @@ from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -194,22 +194,9 @@ class DiscoverEntity(Entity):
             .concat(
                 TranslationMappers(
                     columns=[
-                        ColumnToFunction(
+                        ColumnToIPAddress(
                             None,
                             "ip_address",
-                            "coalesce",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "IPv4NumToString",
-                                    (Column(None, None, "ip_address_v4"),),
-                                ),
-                                FunctionCall(
-                                    None,
-                                    "IPv6NumToString",
-                                    (Column(None, None, "ip_address_v6"),),
-                                ),
-                            ),
                         ),
                         ColumnToColumn(None, "transaction", None, "transaction_name"),
                         ColumnToColumn(None, "username", None, "user_name"),
@@ -238,11 +225,9 @@ class DiscoverEntity(Entity):
                             "geo.city",
                             nullable=True,
                         ),
-                        ColumnToFunction(
+                        ColumnToNullIf(
                             None,
                             "user",
-                            "nullIf",
-                            (Column(None, None, "user"), Literal(None, "")),
                         ),
                     ]
                 ).concat(
