@@ -1,0 +1,98 @@
+version: v1
+kind: entity
+name: functions
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: transaction_name, type: String },
+    { name: timestamp, type: DateTime },
+    { name: depth, type: UInt, args: { size: 32 } },
+    { name: parent_fingerprint, type: UInt, args: { size: 64 } },
+    { name: fingerprint, type: UInt, args: { size: 64 } },
+    { name: name, type: String },
+    { name: package, type: String },
+    { name: path, type: String },
+    { name: is_application, type: UInt, args: { size: 8 } },
+    { name: platform, type: String },
+    { name: environment, type: String, args: { schema_modifiers: [nullable] } },
+    { name: release, type: String, args: { schema_modifiers: [nullable] } },
+    { name: os_name, type: String },
+    { name: os_version, type: String },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    {
+      name: count,
+      type: AggregateFunction,
+      args: { func: count, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: percentiles,
+      type: AggregateFunction,
+      args:
+        {
+          func: "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)",
+          arg_types: [{ type: Float, args: { size: 64 } }],
+        },
+    },
+    {
+      name: min,
+      type: AggregateFunction,
+      args: { func: min, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: max,
+      type: AggregateFunction,
+      args: { func: max, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: avg,
+      type: AggregateFunction,
+      args: { func: avg, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: sum,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: worst,
+      type: AggregateFunction,
+      args:
+        {
+          func: argMax,
+          arg_types: [{ type: UUID }, { type: Float, args: { size: 64 } }],
+        },
+    },
+    {
+      name: examples,
+      type: AggregateFunction,
+      args: { func: groupUniqArray(5), arg_types: [{ type: UUID }] },
+    },
+  ]
+required_time_column: timestamp
+
+storages:
+  - storage: functions
+  - storage: functions_raw
+    is_writable: true
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: functions
+
+query_processors:
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - project_id

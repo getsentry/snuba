@@ -39,6 +39,7 @@ class TestEntityConfiguration(ConfigurationTest):
             )
 
     def test_config_matches_python_definition(self) -> None:
+        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
@@ -52,6 +53,11 @@ class TestEntityConfiguration(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
+            ),
+            (
+                "snuba/datasets/configuration/functions/entities/functions.yaml",
+                FunctionsEntity,
+                EntityKey.FUNCTIONS,
             ),
         ]
         for test in test_data:
