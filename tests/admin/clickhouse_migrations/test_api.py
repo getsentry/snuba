@@ -8,10 +8,8 @@ import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.admin.auth_roles import Action, Role
-from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -31,43 +29,27 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert json.loads(response.data) == []
 
-    roles = [
-        Role(
-            name="MigrationsLimitedExecutor",
-            resources={"migrations.generic_metrics"},
-            actions={Action.READ},
-        ),
-        Role(
-            name="TestMigrationsExecutor",
-            resources={"migrations.test_migration"},
-            actions={Action.EXECUTE},
-        ),
-    ]
-    with patch("snuba.admin.auth.DEFAULT_ROLES", roles):
+    with patch(
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {"system": "AllMigrationsPolicy", "generic_metrics": "NoMigrationsPolicy"},
+    ):
         response = admin_api.get("/migrations/groups")
 
         def get_migration_ids(
-            group: MigrationGroup, policy_name: str
+            group: MigrationGroup,
         ) -> Sequence[Mapping[str, str | bool]]:
-
-            _, migrations = run_migration_checks_and_policies(
-                {group.value: MigrationPolicy.class_from_name(policy_name)()}, runner
-            )[0]
+            _, migrations = run_migration_checks_for_groups([group], runner)[0]
             return [asdict(m) for m in migrations]
 
         assert response.status_code == 200
         assert json.loads(response.data) == [
             {
                 "group": "system",
-                "migration_ids": get_migration_ids(
-                    MigrationGroup.SYSTEM, "AllMigrationsPolicy"
-                ),
+                "migration_ids": get_migration_ids(MigrationGroup.SYSTEM),
             },
             {
                 "group": "generic_metrics",
-                "migration_ids": get_migration_ids(
-                    MigrationGroup.GENERIC_METRICS, "NoMigrationsPolicy"
-                ),
+                "migration_ids": get_migration_ids(MigrationGroup.GENERIC_METRICS),
             },
         ]
 
