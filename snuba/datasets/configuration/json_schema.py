@@ -645,10 +645,8 @@ V1_ENTITY_SCHEMA = {
             "description": "The validation logic used on the ClickHouse query",
         },
         "required_time_column": {
-            **TYPE_STRING,
-            **{
-                "description": "The name of the required time column specifed in schema"
-            },
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
         },
         "partition_key_column_name": {
             "type": ["string", "null"],

@@ -48,7 +48,7 @@ class PluggableEntity(Entity):
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     validators: Sequence[QueryValidator]
-    required_time_column: str
+    required_time_column: Optional[str]
     storage_selector: QueryStorageSelector
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
