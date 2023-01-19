@@ -26,15 +26,15 @@ ACTIONS_TO_POLICIES = {
 
 def get_migration_group_policies(user: AdminUser) -> Dict[str, MigrationPolicy]:
     """
-    Creates a mapping of migration groups to policies based on the roles
-    set on a user. If a user has multiple roles, and the actions on those
-    roles correspond to different policies for the same resource (migration
+    Creates a mapping of migration groups to policies based on a user's
+    roles. If a user has multiple roles, and the actions on those roles
+    correspond to different policies for the same resource (migration
     group in this case), the highest policy (the most permissive) will be
     used for that resource.
 
-    e.g. If role A has an action for resource R  that maps to the
-    "AllMigrationsPoliy, and role B has an action with resource R that
-    maps to "NoMigrationsPolicy", the resulting group policy map will be
+    e.g. Take Roles A and B. Role A's action maps to "AllMigrationsPolicy".
+    Role B's action maps to "NoMigrationsPolicy". Both Role A and Role B's
+    actions include the same resource R. The resulting group policy map will be
     as follows: {"R": AllMigrationsPolicy()}
     """
     group_policies: MutableMapping[str, str] = {}
