@@ -7,10 +7,10 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.events import errors_translators
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
-    QueryStorageSelector,
 )
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset

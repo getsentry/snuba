@@ -5,8 +5,8 @@ import pytest
 from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.events import errors_translators
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storage import (
     EntityStorageConnection,

@@ -14,7 +14,7 @@ from snuba.datasets.configuration.json_schema import ENTITY_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity

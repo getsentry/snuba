@@ -4,7 +4,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from snuba.clickhouse.columns import Column
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
