@@ -30,12 +30,16 @@ from arroyo.commit import Commit as CommitLogCommit
 from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
-    ParallelCollectStep,
     ParallelTransformStep,
 )
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
-from arroyo.processing.strategies import ProcessingStrategyFactory, TransformStep
+from arroyo.processing.strategies import (
+    ProcessingStrategyFactory,
+    Reduce,
+    RunTaskInThreads,
+    TransformStep,
+)
 from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
@@ -46,7 +50,7 @@ from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
+from arroyo.types import BaseValue, BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
@@ -240,9 +244,7 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         )
 
 
-class ProcessedMessageBatchWriter(
-    ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
-):
+class ProcessedMessageBatchWriter:
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
@@ -403,17 +405,10 @@ def build_batch_writer(
     return build_writer
 
 
-class MultistorageCollector(
-    ProcessingStep[
-        Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
-    ]
-):
+class MultistorageCollector:
     def __init__(
         self,
-        steps: Mapping[
-            StorageKey,
-            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
-        ],
+        steps: Mapping[StorageKey, ProcessedMessageBatchWriter],
         # If passed, produces to the commit log after each batch is closed
         commit_log_config: Optional[CommitLogConfig],
         ignore_errors: Optional[Set[StorageKey]] = None,
@@ -692,7 +687,7 @@ def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
     commit_log_config: Optional[CommitLogConfig],
-) -> ProcessingStep[MultistorageProcessedMessage]:
+) -> MultistorageCollector:
     return MultistorageCollector(
         {
             storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
@@ -758,13 +753,26 @@ class MultistorageConsumerProcessingStrategyFactory(
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+        def accumulator(
+            batch_writer: MultistorageCollector,
+            message: BaseValue[MultistorageProcessedMessage],
+        ) -> MultistorageCollector:
+            batch_writer.submit(Message(message))
+            return batch_writer
 
-        collect = ParallelCollectStep(
-            self.__collector,
-            CommitOffsets(commit),
+        def flush_batch(
+            message: Message[MultistorageCollector],
+        ) -> Message[MultistorageCollector]:
+            message.payload.close()
+            message.payload.join()
+            return message
+
+        collect = Reduce(
             self.__max_batch_size,
             self.__max_batch_time,
-            wait_timeout=10.0,
+            accumulator,
+            self.__collector,
+            RunTaskInThreads(flush_batch, 1, 1, CommitOffsets(commit)),
         )
 
         transform_function = self.__process_message_fn
