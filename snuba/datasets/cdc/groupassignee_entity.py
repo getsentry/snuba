@@ -2,9 +2,12 @@ from typing import Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -28,12 +31,14 @@ class GroupAssigneeEntity(Entity):
     def __init__(self) -> None:
         storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
         schema = storage.get_table_writer().get_schema()
+        storages = [EntityStorageConnection(storage, TranslationMappers(), True)]
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=storages,
+                    selector=DefaultQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=schema.get_columns(),
@@ -45,7 +50,6 @@ class GroupAssigneeEntity(Entity):
                     equivalences=[],
                 )
             },
-            writable_storage=storage,
             validators=None,
             required_time_column=None,
             subscription_processors=None,

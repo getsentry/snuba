@@ -27,13 +27,21 @@ import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
-from arroyo.processing.strategies import FilterStep
+from arroyo.processing.strategies import (
+    CommitOffsets,
+    FilterStep,
+    ParallelCollectStep,
+    ParallelTransformStep,
+)
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory, TransformStep
 from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
+)
+from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
+    DeadLetterQueue,
 )
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
@@ -45,11 +53,11 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.strategy_factory import ConsumerStrategyFactory
+from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey, are_writes_identical
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.processor import (
     AggregateInsertBatch,
@@ -57,10 +65,10 @@ from snuba.processor import (
     MessageProcessor,
     ReplacementBatch,
 )
-from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -527,15 +535,6 @@ def __message_to_dict(
     }
 
 
-def skip_kafka_message(value: BrokerValue[KafkaPayload]) -> bool:
-    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
-    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
-    return (
-        f"{value.partition.topic.name}:{value.partition.index}:{value.offset}"
-        in messages_to_skip
-    )
-
-
 def __invalid_kafka_message(
     value: BrokerValue[KafkaPayload], consumer_group: str, err: Exception
 ) -> InvalidKafkaMessage:
@@ -553,20 +552,18 @@ def __invalid_kafka_message(
 
 
 def process_message(
-    processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
+    processor: MessageProcessor,
+    consumer_group: str,
+    snuba_logical_topic: SnubaTopic,
+    validate: bool,
+    message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
-
-    if skip_kafka_message(message.value):
-        logger.warning(
-            f"A consumer for {message.value.partition.topic.name} skipped a message!",
-            extra=__message_to_dict(message.value),
-        )
-        return None
-
     try:
+        codec = get_json_codec(snuba_logical_topic)
+        decoded = codec.decode(message.payload.value, validate=validate)
         result = processor.process_message(
-            rapidjson.loads(message.payload.value),
+            decoded,
             KafkaMessageMetadata(
                 message.value.offset,
                 message.value.partition.index,
@@ -634,52 +631,6 @@ def process_message_multistorage(
         results.append((storage_key, result))
 
     return results
-
-
-def process_message_multistorage_identical_storages(
-    message: Message[MultistorageKafkaPayload],
-) -> MultistorageProcessedMessage:
-    """
-    This method is similar to process_message_multistorage except for a minor difference.
-    It performs an optimization where it avoids processing a message multiple times if the
-    it finds that the storages on which data needs to be written are identical. This is a
-    performance optimization since we remove the message processing time completely for all
-    identical storages.
-
-    It is possible that the storage keys in the message could be a mix of identical and
-    non-identical storages. This method takes into account that scenario as well.
-
-    The reason why this method has been created rather than modifying the existing
-    process_message_multistorage is to avoid doing a check for every message in cases
-    where there are no identical storages like metrics.
-    """
-    assert isinstance(message.value, BrokerValue)
-    value = rapidjson.loads(message.payload.payload.value)
-    metadata = KafkaMessageMetadata(
-        message.value.offset, message.value.partition.index, message.value.timestamp
-    )
-
-    intermediate_results: MutableMapping[
-        StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]
-    ] = {}
-
-    for index, storage_key in enumerate(message.payload.storage_keys):
-        result = None
-        for other_storage_key, insert_batch in intermediate_results.items():
-            if are_writes_identical(storage_key, other_storage_key):
-                result = insert_batch
-                break
-
-        if result is None:
-            result = _process_message_multistorage_work(
-                metadata=metadata,
-                storage_key=storage_key,
-                storage_message=value,
-            )
-
-        intermediate_results[storage_key] = result
-
-    return list(intermediate_results.items())
 
 
 def has_destination_storages(message: Message[MultistorageKafkaPayload]) -> bool:
@@ -764,7 +715,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
-        parallel_collect: bool,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
@@ -772,6 +722,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        parallel_collect_timeout: float = 10.0,
     ) -> None:
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -784,31 +735,22 @@ class MultistorageConsumerProcessingStrategyFactory(
                 output_block_size is None
             ), "output block size cannot be used without processes"
 
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
+        self.__initialize_parallel_transform = initialize_parallel_transform
+
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__processes = processes
+
         self.__storages = storages
         self.__metrics = metrics
         self.__dead_letter_policy_creator = dead_letter_policy_creator
 
         self.__process_message_fn = process_message_multistorage
-        if any(
-            are_writes_identical(storage1.get_storage_key(), storage2.get_storage_key())
-            for storage1, storage2 in itertools.combinations(self.__storages, 2)
-        ):
-            self.__process_message_fn = process_message_multistorage_identical_storages
 
-        self.__inner_factory = ConsumerStrategyFactory(
-            prefilter=None,
-            process_message=self.__process_message_fn,
-            collector=partial(
-                build_collector, self.__metrics, self.__storages, commit_log_config
-            ),
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            initialize_parallel_transform=initialize_parallel_transform,
-            parallel_collect=parallel_collect,
-            dead_letter_queue_policy_creator=self.__dead_letter_policy_creator,
+        self.__collector = partial(
+            build_collector, self.__metrics, self.__storages, commit_log_config
         )
 
     def create_with_partitions(
@@ -816,10 +758,44 @@ class MultistorageConsumerProcessingStrategyFactory(
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        collect = ParallelCollectStep(
+            self.__collector,
+            CommitOffsets(commit),
+            self.__max_batch_size,
+            self.__max_batch_time,
+            wait_timeout=10.0,
+        )
+
+        transform_function = self.__process_message_fn
+
+        inner_strategy: ProcessingStep[MultistorageKafkaPayload]
+
+        if self.__processes is None:
+            inner_strategy = TransformStep(transform_function, collect)
+        else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
+            inner_strategy = ParallelTransformStep(
+                transform_function,
+                collect,
+                self.__processes,
+                max_batch_size=self.__max_batch_size,
+                max_batch_time=self.__max_batch_time,
+                input_block_size=self.__input_block_size,
+                output_block_size=self.__output_block_size,
+                initializer=self.__initialize_parallel_transform,
+            )
+
+        if self.__dead_letter_policy_creator is not None:
+            inner_strategy = DeadLetterQueue(
+                inner_strategy, self.__dead_letter_policy_creator()
+            )
+
         return TransformStep(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,
-                self.__inner_factory.create_with_partitions(commit, partitions),
+                inner_strategy,
             ),
         )

@@ -6,15 +6,17 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.events import (
-    ErrorsQueryStorageSelector,
-    errors_translators,
+from snuba.datasets.entities.events import errors_translators
+from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+    QueryStorageSelector,
 )
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
@@ -34,11 +36,11 @@ TEST_CASES = [
         """,
         get_dataset("transactions"),
         [
-            StorageAndMappers(
-                get_storage(StorageKey.TRANSACTIONS), transaction_translator
+            EntityStorageConnection(
+                get_storage(StorageKey.TRANSACTIONS), transaction_translator, True
             ),
         ],
-        None,
+        DefaultQueryStorageSelector(),
         None,
         StorageSetKey.TRANSACTIONS,
         id="Single storage",
@@ -54,12 +56,14 @@ TEST_CASES = [
         """,
         get_dataset("events"),
         [
-            StorageAndMappers(get_storage(StorageKey.ERRORS_RO), errors_translators),
-            StorageAndMappers(
-                get_writable_storage(StorageKey.ERRORS), errors_translators
+            EntityStorageConnection(
+                get_storage(StorageKey.ERRORS_RO), errors_translators
+            ),
+            EntityStorageConnection(
+                get_writable_storage(StorageKey.ERRORS), errors_translators, True
             ),
         ],
-        ErrorsQueryStorageSelector(errors_translators),
+        ErrorsQueryStorageSelector(),
         None,
         StorageSetKey.EVENTS,
         id="Multiple storages and selector",
@@ -68,19 +72,19 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_and_mappers, selector, partition_key_column_name, expected_storage_set_key",
+    "snql_query, dataset, storage_connections, selector, partition_key_column_name, expected_storage_set_key",
     TEST_CASES,
 )
 def test_storage_query_plan_builder(
     snql_query: str,
     dataset: Dataset,
-    storage_and_mappers: List[StorageAndMappers],
-    selector: Optional[QueryStorageSelector],
+    storage_connections: List[EntityStorageConnection],
+    selector: QueryStorageSelector,
     partition_key_column_name: Optional[str],
     expected_storage_set_key: StorageKey,
 ) -> None:
     query_plan_builder = StorageQueryPlanBuilder(
-        storages=storage_and_mappers,
+        storages=storage_connections,
         selector=selector,
         partition_key_column_name=partition_key_column_name,
     )

@@ -26,10 +26,13 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -120,7 +123,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
 
 
 events_translation_mappers = TranslationMappers(
-    columns=[DefaultNoneColumnMapper(TRANSACTIONS_COLUMNS)],
+    columns=[DefaultNoneColumnMapper([c.flattened for c in TRANSACTIONS_COLUMNS])],
     functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
     subscriptables=[DefaultNoneSubscriptMapper({"measurements", "span_op_breakdowns"})],
 )
@@ -128,7 +131,7 @@ events_translation_mappers = TranslationMappers(
 transaction_translation_mappers = TranslationMappers(
     columns=[
         ColumnToLiteral(None, "group_id", 0),
-        DefaultNoneColumnMapper(EVENTS_COLUMNS),
+        DefaultNoneColumnMapper([c.flattened for c in EVENTS_COLUMNS]),
     ],
     functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
 )
@@ -252,15 +255,17 @@ class DiscoverEntity(Entity):
                 ),
             )
         )
+        storages = [EntityStorageConnection(discover_storage, mappers, False)]
         discover_storage_plan_builder = StorageQueryPlanBuilder(
-            storages=[StorageAndMappers(discover_storage, mappers)],
+            storages=storages,
+            selector=DefaultQueryStorageSelector(),
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder
         )
 
         super().__init__(
-            storages=[discover_storage],
+            storages=storages,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns
@@ -268,8 +273,7 @@ class DiscoverEntity(Entity):
                 + self.__transactions_columns
             ),
             join_relationships={},
-            writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=None,

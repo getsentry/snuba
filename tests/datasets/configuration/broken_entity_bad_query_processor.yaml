@@ -34,8 +34,66 @@ schema:
     },
   ]
 
-readable_storage: generic_metrics_sets
-writable_storage: generic_metrics_sets_raw
+storages:
+  - storage: generic_metrics_sets
+    translation_mappers:
+      functions:
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniq
+          to_name: uniqCombined64Merge
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniqIf
+          to_name: uniqCombined64MergeIf
+    subscriptables:
+      - mapper: subscriptable
+        args:
+          from_column_table:
+          from_column_name: tags_raw
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: raw_value
+      - mapper: subscriptable
+        args:
+          from_column_table:
+          from_column_name: tags
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: indexed_value
+  - storage: generic_metrics_sets_raw
+    is_writable: true
+    translation_mappers:
+      functions:
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniq
+          to_name: uniqCombined64Merge
+      - mapper: FunctionNameMapper
+        args:
+          from_name: uniqIf
+          to_name: uniqCombined64MergeIf
+    subscriptables:
+      - mapper: subscriptable
+        args:
+          from_column_table:
+          from_column_name: tags_raw
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: raw_value
+      - mapper: subscriptable
+        args:
+          from_column_table:
+          from_column_name: tags
+          to_nested_col_table:
+          to_nested_col_name: tags
+          value_subcolumn_name: indexed_value
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: generic_metrics_sets
+
 query_processors:
   -
     # this object is invalid without a processor: attribute
@@ -65,31 +123,6 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
-translation_mappers:
-  functions:
-    - mapper: FunctionNameMapper
-      args:
-        from_name: uniq
-        to_name: uniqCombined64Merge
-    - mapper: FunctionNameMapper
-      args:
-        from_name: uniqIf
-        to_name: uniqCombined64MergeIf
-  subscriptables:
-    - mapper: subscriptable
-      args:
-        from_column_table:
-        from_column_name: tags_raw
-        to_nested_col_table:
-        to_nested_col_name: tags
-        value_subcolumn_name: raw_value
-    - mapper: subscriptable
-      args:
-        from_column_table:
-        from_column_name: tags
-        to_nested_col_table:
-        to_nested_col_name: tags
-        value_subcolumn_name: indexed_value
 validators:
   - validator: EntityRequiredColumnValidator
     args:

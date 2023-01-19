@@ -5,6 +5,10 @@ import sentry_sdk
 from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.datasets.entities.storage_selectors.selector import (
+    QueryStorageSelector,
+    QueryStorageSelectorError,
+)
 from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -18,11 +22,9 @@ from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
-    QueryStorageSelector,
-    QueryStorageSelectorError,
+    EntityStorageConnection,
     ReadableStorage,
     ReadableTableStorage,
-    StorageAndMappers,
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -107,8 +109,8 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: List[StorageAndMappers],
-        selector: Optional[QueryStorageSelector] = None,
+        storages: List[EntityStorageConnection],
+        selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
     ) -> None:
@@ -131,18 +133,11 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
-    ) -> StorageAndMappers:
-        if not self.__selector:
-            if len(self.__storages) > 1:
-                raise QueryStorageSelectorError(
-                    "Multiple storages specified without a storage selector."
-                )
-            return self.__storages[0]
-        else:
-            with sentry_sdk.start_span(
-                op="build_plan.storage_query_plan_builder", description="select_storage"
-            ):
-                return self.__selector.select_storage(query, settings)
+    ) -> EntityStorageConnection:
+        with sentry_sdk.start_span(
+            op="build_plan.storage_query_plan_builder", description="select_storage"
+        ):
+            return self.__selector.select_storage(query, settings, self.__storages)
 
     def get_cluster(
         self, storage: ReadableStorage, query: LogicalQuery, settings: QuerySettings
@@ -169,7 +164,9 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         if len(self.__storages) < 1:
             raise QueryStorageSelectorError("No storages specified to select from.")
 
-        storage, mappers = self.get_storage(query, settings)
+        storage_connection = self.get_storage(query, settings)
+        storage = storage_connection.storage
+        mappers = storage_connection.translation_mappers
         cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(

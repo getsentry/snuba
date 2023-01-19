@@ -183,6 +183,7 @@ class ReplaysLoader(DirectoryLoader):
             "0005_add_urls_user_agent_replay_start_timestamp",
             "0006_add_is_archived_column",
             "0007_add_replay_type_column",
+            "0008_add_sample_rate",
         ]
 
 
@@ -310,6 +311,7 @@ class SearchIssuesLoader(DirectoryLoader):
         return [
             "0001_search_issues",
             "0002_search_issues_add_tags_hash_map",
+            "0003_search_issues_modify_occurrence_type_id_size",
         ]
 
 

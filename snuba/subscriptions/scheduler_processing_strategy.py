@@ -384,11 +384,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         commit: Commit,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__producer = producer
-        self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
+        self.__scheduled_topic = Topic(
+            scheduled_topic_spec.get_physical_topic_name(slice_id)
+        )
         self.__commit = commit
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics

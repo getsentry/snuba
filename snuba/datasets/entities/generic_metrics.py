@@ -18,6 +18,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    SimpleQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import (
     AddColumnCondition,
@@ -29,8 +32,8 @@ from snuba.datasets.entity_subscriptions.validators import (
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import (
+    EntityStorageConnection,
     ReadableTableStorage,
-    StorageAndMappers,
     WritableTableStorage,
 )
 from snuba.datasets.storages.factory import get_storage
@@ -98,26 +101,29 @@ class GenericMetricsEntity(Entity, ABC):
                 ),
             ],
         ).concat(mappers)
-        storages = [readable_storage]
-        storage_and_mappers = [
-            StorageAndMappers(readable_storage, generic_metrics_mappers),
+        storages = [
+            EntityStorageConnection(readable_storage, generic_metrics_mappers, False),
         ]
         if writable_storage:
-            storages.append(writable_storage)
+            storages.append(
+                EntityStorageConnection(writable_storage, generic_metrics_mappers, True)
+            )
 
         if validators is None:
-            validators = [EntityRequiredColumnValidator({"org_id", "project_id"})]
+            validators = [EntityRequiredColumnValidator(["org_id", "project_id"])]
 
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=storage_and_mappers,
+                    storages=storages,
+                    selector=SimpleQueryStorageSelector(
+                        readable_storage.get_storage_key().value
+                    ),
                 )
             ),
             abstract_column_set=(self.DEFAULT_COLUMNS + value_schema),
             join_relationships={},
-            writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
             subscription_processors=subscription_processors,
@@ -158,7 +164,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
                 ]
             ),
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             mappers=TranslationMappers(
                 functions=[
                     FunctionNameMapper("uniq", "uniqCombined64Merge"),
@@ -181,7 +187,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
             subscription_validators=[
                 AggregationValidator(3, ["having", "orderby"], "timestamp")
             ],
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             value_schema=ColumnSet(
                 [
                     Column(
