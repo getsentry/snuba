@@ -8,6 +8,7 @@ import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
+from snuba.admin.auth_roles import Action, Role
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
@@ -30,10 +31,19 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert json.loads(response.data) == []
 
-    with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {"system": "AllMigrationsPolicy", "generic_metrics": "NoMigrationsPolicy"},
-    ):
+    roles = [
+        Role(
+            name="MigrationsLimitedExecutor",
+            resources={"migrations.generic_metrics"},
+            actions={Action.READ},
+        ),
+        Role(
+            name="TestMigrationsExecutor",
+            resources={"migrations.test_migration"},
+            actions={Action.EXECUTE},
+        ),
+    ]
+    with patch("snuba.admin.auth.DEFAULT_ROLES", roles):
         response = admin_api.get("/migrations/groups")
 
         def get_migration_ids(

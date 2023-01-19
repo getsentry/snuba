@@ -83,3 +83,24 @@ class AllMigrationsPolicy(MigrationPolicy):
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
         return True
+
+
+MIGRATION_WEIGHTS = {
+    "AllMigrationsPolicy": 3,
+    "NonBlockingMigrationsPolicy": 2,
+    "NoMigrationsPolicy": 1,
+}
+
+import functools
+
+
+def compare_policies(x: str, y: str) -> int:
+    return MIGRATION_WEIGHTS[y] - MIGRATION_WEIGHTS[x]
+
+
+from typing import Sequence
+
+
+def max_policy(policies: Sequence[str]) -> str:
+    sorted_policies = sorted(policies, key=functools.cmp_to_key(compare_policies))
+    return sorted_policies[0]
