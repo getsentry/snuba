@@ -47,6 +47,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
+DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
@@ -180,6 +181,9 @@ BROKER_CONFIG: Mapping[str, Any] = {
     "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
     "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
     "ssl.key.location": os.environ.get("KAFKA_SSL_KEY_PATH", ""),
+    "sasl.mechanism": os.environ.get("KAFKA_SASL_MECHANISM", None),
+    "sasl.username": os.environ.get("KAFKA_SASL_USERNAME", None),
+    "sasl.password": os.environ.get("KAFKA_SASL_PASSWORD", None),
 }
 
 # Mapping of default Kafka topic name to custom names
@@ -224,7 +228,7 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000

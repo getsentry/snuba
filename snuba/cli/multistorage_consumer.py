@@ -91,11 +91,6 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option(
-    "--parallel-collect",
-    is_flag=True,
-    default=True,
-)
 @click.option("--processes", type=int)
 @click.option(
     "--input-block-size",
@@ -106,13 +101,6 @@ logger = logging.getLogger(__name__)
     type=int,
 )
 @click.option("--log-level")
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
-)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
@@ -125,12 +113,10 @@ def multistorage_consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    cooperative_rebalancing: bool = False,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -223,9 +209,6 @@ def multistorage_consumer(
         bootstrap_servers=bootstrap_server,
     )
 
-    if cooperative_rebalancing is True:
-        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
-
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
@@ -297,7 +280,6 @@ def multistorage_consumer(
             [*storages.values()],
             max_batch_size,
             max_batch_time_ms / 1000.0,
-            parallel_collect=parallel_collect,
             processes=processes,
             input_block_size=input_block_size,
             output_block_size=output_block_size,

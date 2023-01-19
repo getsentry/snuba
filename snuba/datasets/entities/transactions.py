@@ -9,10 +9,13 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -101,20 +104,21 @@ class BaseTransactionsEntity(Entity, ABC):
             if custom_mappers is None
             else transaction_translator.concat(custom_mappers)
         )
+        storages = [EntityStorageConnection(storage, mappers, True)]
 
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
-                storages=[StorageAndMappers(storage, mappers)],
+                storages=storages,
+                selector=DefaultQueryStorageSelector(),
             )
         )
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="finish_ts",
             subscription_processors=None,
             subscription_validators=[

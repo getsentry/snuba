@@ -28,7 +28,7 @@ from snuba.query.parsing import ParsingContext
 FormattableQuery = Union[Query, CompositeQuery[Table]]
 
 
-def format_query(query: FormattableQuery, sort_fields: bool = False) -> FormattedQuery:
+def format_query(query: FormattableQuery) -> FormattedQuery:
     """
     Formats a Clickhouse Query from the AST representation into an
     intermediate structure that can either be serialized into a string
@@ -37,17 +37,11 @@ def format_query(query: FormattableQuery, sort_fields: bool = False) -> Formatte
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    return FormattedQuery(
-        _format_query_content(query, ClickhouseExpressionFormatter, sort_fields)
-    )
+    return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
 
 
-def format_query_anonymized(
-    query: FormattableQuery, sort_fields: bool = False
-) -> FormattedQuery:
-    return FormattedQuery(
-        _format_query_content(query, ExpressionFormatterAnonymized, sort_fields)
-    )
+def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
+    return FormattedQuery(_format_query_content(query, ExpressionFormatterAnonymized))
 
 
 class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
@@ -93,7 +87,6 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
 def _format_query_content(
     query: FormattableQuery,
     expression_formatter_type: Type[ExpressionFormatterBase],
-    sort_fields: bool = False,
 ) -> Sequence[FormattedNode]:
     """
     Produces the content of the formatted query.
@@ -102,7 +95,7 @@ def _format_query_content(
     Should we have more differences going on we should break this
     method into smaller ones.
     """
-    parsing_context = ParsingContext(sort_fields=sort_fields)
+    parsing_context = ParsingContext()
     formatter = expression_formatter_type(parsing_context)
 
     return [
@@ -133,13 +126,9 @@ def _format_query_content(
 def _format_select(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> StringNode:
-    selected_columns = query.get_selected_columns()
-    if (
-        isinstance(formatter, ExpressionFormatterBase)
-        and formatter._parsing_context.sort_fields
-    ):
-        selected_columns = sorted(selected_columns)
-    selected_cols = [e.expression.accept(formatter) for e in selected_columns]
+    selected_cols = [
+        e.expression.accept(formatter) for e in query.get_selected_columns()
+    ]
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 

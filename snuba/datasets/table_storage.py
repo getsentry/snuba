@@ -39,14 +39,27 @@ class KafkaTopicSpec:
 
     @property
     def topic_name(self) -> str:
-        return get_topic_name(self.__topic)
+        """
+        Returns the physical topic name for the dataset. Ignores slicing.
+        Use ```get_physical_topic_name``` instead as it is slice aware.
+        """
+        topic = self.__topic.value
+        return settings.KAFKA_TOPIC_MAP.get(topic, topic)
+
+    def get_physical_topic_name(self, slice_id: Optional[int] = None) -> str:
+        """
+        Slice aware version of``topic_name``.
+        """
+        if slice_id is not None:
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(self.topic_name, slice_id)]
+        else:
+            physical_topic = self.topic_name
+
+        return physical_topic
 
     @property
     def partitions_number(self) -> int:
-        # TODO: This references the actual topic name for backward compatibility.
-        # It should be changed to the logical name for consistency with KAFKA_TOPIC_MAP
-        # and KAFKA_BROKER_CONFIG
-        return settings.TOPIC_PARTITION_COUNTS.get(self.topic_name, 1)
+        return settings.TOPIC_PARTITION_COUNTS.get(self.__topic.value, 1)
 
     @property
     def replication_factor(self) -> int:
@@ -58,18 +71,6 @@ class KafkaTopicSpec:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, KafkaTopicSpec) and self.topic == other.topic
-
-    def get_physical_topic_name(self, slice_id: Optional[int] = None) -> str:
-        if slice_id is not None:
-            physical_topic = SLICED_KAFKA_TOPIC_MAP[(self.topic_name, slice_id)]
-        else:
-            physical_topic = self.topic_name
-
-        return physical_topic
-
-
-def get_topic_name(topic: Topic) -> str:
-    return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)
 
 
 class KafkaStreamLoader:

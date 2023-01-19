@@ -49,6 +49,12 @@ logger = logging.getLogger(__name__)
     help="Forces the kafka consumer auto offset reset.",
 )
 @click.option("--schedule-ttl", type=int, default=60 * 5)
+@click.option(
+    "--slice-id",
+    "slice_id",
+    type=int,
+    help="The slice id for the corresponding storage to the given entity",
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
 @click.option(
@@ -64,6 +70,7 @@ def subscriptions_scheduler(
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
+    slice_id: Optional[int],
     log_level: Optional[str],
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
@@ -108,8 +115,13 @@ def subscriptions_scheduler(
     setup_logging(log_level)
     setup_sentry()
 
+    metrics_tags = {"entity": entity_name}
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.scheduler", tags={"entity": entity_name}
+        environment.metrics, "subscriptions.scheduler", tags=metrics_tags
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -135,6 +147,7 @@ def subscriptions_scheduler(
     producer = KafkaProducer(
         build_kafka_producer_configuration(
             scheduled_topic_spec.topic,
+            slice_id,
             override_params={"partitioner": "consistent"},
         )
     )
@@ -150,6 +163,7 @@ def subscriptions_scheduler(
         delay_seconds,
         stale_threshold_seconds,
         metrics,
+        slice_id,
     )
 
     processor = builder.build_consumer()

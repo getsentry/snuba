@@ -6,9 +6,12 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.pipeline_delegator import (
@@ -68,18 +71,22 @@ def test() -> None:
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
-                StorageAndMappers(get_storage(StorageKey.ERRORS), TranslationMappers())
-            ]
+                EntityStorageConnection(
+                    get_storage(StorageKey.ERRORS), TranslationMappers(), True
+                )
+            ],
+            selector=DefaultQueryStorageSelector(),
         )
     )
 
     errors_ro_pipeline = SimplePipelineBuilder(
         query_plan_builder=StorageQueryPlanBuilder(
             storages=[
-                StorageAndMappers(
+                EntityStorageConnection(
                     get_storage(StorageKey.ERRORS_RO), TranslationMappers()
                 )
-            ]
+            ],
+            selector=DefaultQueryStorageSelector(),
         ),
     )
 

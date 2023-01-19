@@ -1,19 +1,23 @@
-from datetime import timedelta
 from typing import Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
-from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
+from snuba.datasets.entities.storage_selectors.sessions import (
+    SessionsQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -25,7 +29,6 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -35,11 +38,7 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.logical.timeseries_processor import (
-    TimeSeriesProcessor,
-    extract_granularity_from_query,
-)
-from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,
@@ -214,75 +213,31 @@ sessions_raw_translators = TranslationMappers(
 )
 
 
-class SessionsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self) -> None:
-        self.materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
-        self.raw_storage = get_storage(StorageKey.SESSIONS_RAW)
-
-    def select_storage(
-        self, query: Query, query_settings: QuerySettings
-    ) -> StorageAndMappers:
-
-        # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
-        # then it is a crash rate alert subscription, and hence we decide on whether to use the
-        # materialized storage or the raw storage by examining the time_window.
-        # If the `time_window` <=1h, then select the raw storage otherwise select materialized
-        # storage
-        # NOTE: If we were to support other types of subscriptions over the sessions dataset that
-        # do not follow this method used to identify which storage to use, we would need to
-        # find a different way to distinguish them.
-        if isinstance(query_settings, SubscriptionQuerySettings):
-            from_date, to_date = get_time_range(query, "started")
-            if from_date and to_date:
-                use_materialized_storage = to_date - from_date > timedelta(hours=1)
-            else:
-                use_materialized_storage = True
-        else:
-            granularity = extract_granularity_from_query(query, "started") or 3600
-            use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
-
-        metrics.increment(
-            "query.selector",
-            tags={
-                "selected_storage": "materialized"
-                if use_materialized_storage
-                else "raw",
-            },
-        )
-
-        if use_materialized_storage:
-            return StorageAndMappers(
-                self.materialized_storage, sessions_hourly_translators
-            )
-        else:
-            return StorageAndMappers(self.raw_storage, sessions_raw_translators)
-
-
 class SessionsEntity(Entity):
     def __init__(self) -> None:
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
+        storages = [
+            EntityStorageConnection(
+                materialized_storage, sessions_hourly_translators, False
+            ),
+            EntityStorageConnection(writable_storage, sessions_raw_translators, True),
+        ]
 
         read_columns = read_schema.get_columns()
         time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
-            storages=[writable_storage, materialized_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[
-                        StorageAndMappers(
-                            materialized_storage, sessions_hourly_translators
-                        ),
-                        StorageAndMappers(writable_storage, sessions_raw_translators),
-                    ],
+                    storages=storages,
                     selector=SessionsQueryStorageSelector(),
                 ),
             ),
             abstract_column_set=read_columns + time_columns,
             join_relationships={},
-            writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[EntityRequiredColumnValidator(["org_id", "project_id"])],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
             subscription_processors=[AddColumnCondition("organization", "org_id")],
@@ -305,12 +260,14 @@ class SessionsEntity(Entity):
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.ORG_SESSIONS)
+        storages = [EntityStorageConnection(storage, TranslationMappers(), False)]
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=StorageQueryPlanBuilder(
-                    storages=[StorageAndMappers(storage, TranslationMappers())]
+                    storages=storages,
+                    selector=DefaultQueryStorageSelector(),
                 )
             ),
             abstract_column_set=ColumnSet(
@@ -322,7 +279,6 @@ class OrgSessionsEntity(Entity):
                 ]
             ),
             join_relationships={},
-            writable_storage=None,
             validators=None,
             required_time_column="started",
             subscription_processors=None,

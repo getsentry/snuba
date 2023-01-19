@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import Optional, Sequence
 
-from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -10,16 +9,16 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
-from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.handled_functions import HandledFunctionsProcessor
@@ -31,7 +30,6 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 event_translator = TranslationMappers(
@@ -91,27 +89,6 @@ errors_translators = TranslationMappers(
 )
 
 
-class ErrorsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, mappers: TranslationMappers) -> None:
-        self.__errors_table = get_writable_storage(StorageKey.ERRORS)
-        self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
-        self.__mappers = mappers
-
-    def select_storage(
-        self,
-        query: Query,
-        query_settings: QuerySettings,
-    ) -> StorageAndMappers:
-        use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", False)
-            and not query_settings.get_consistent()
-        )
-
-        if use_readonly_storage:
-            return StorageAndMappers(self.__errors_ro_table, self.__mappers)
-        return StorageAndMappers(self.__errors_table, self.__mappers)
-
-
 class BaseEventsEntity(Entity, ABC):
     """
     Represents the collection of classic sentry "error" type events
@@ -126,21 +103,21 @@ class BaseEventsEntity(Entity, ABC):
             if custom_mappers is None
             else errors_translators.concat(custom_mappers)
         )
-
+        storages = [
+            EntityStorageConnection(events_read_storage, mappers, False),
+            EntityStorageConnection(events_storage, mappers, True),
+        ]
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
-                storages=[
-                    StorageAndMappers(events_read_storage, mappers),
-                    StorageAndMappers(events_storage, mappers),
-                ],
-                selector=ErrorsQueryStorageSelector(mappers),
+                storages=storages,
+                selector=ErrorsQueryStorageSelector(),
             ),
         )
         schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
         super().__init__(
-            storages=[events_storage, events_read_storage],
+            storages=storages,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=columns,
             join_relationships={
@@ -157,8 +134,7 @@ class BaseEventsEntity(Entity, ABC):
                     equivalences=[],
                 ),
             },
-            writable_storage=events_storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=[
