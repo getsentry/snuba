@@ -89,7 +89,6 @@ storages:
           args:
             from_table_name:
             from_col_name: "ip_address"
-            to_function_name: "coalesce"
         - mapper: ColumnToNullIf
           args:
             from_table_name:

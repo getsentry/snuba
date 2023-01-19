@@ -114,9 +114,7 @@ class ColumnToIPAddress(ColumnToFunction):
     TODO: Can remove when we support dynamic expression parsing in config
     """
 
-    def __init__(
-        self, from_table_name: str, from_col_name: str, to_function_name: str
-    ) -> None:
+    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
         to_function_params: Tuple[FunctionCallExpr, ...] = (
             FunctionCallExpr(
                 None,
@@ -129,9 +127,7 @@ class ColumnToIPAddress(ColumnToFunction):
                 (ColumnExpr(None, None, "ip_address_v6"),),
             ),
         )
-        super().__init__(
-            from_table_name, from_col_name, to_function_name, to_function_params
-        )
+        super().__init__(from_table_name, from_col_name, "coalesce", to_function_params)
 
 
 @dataclass(frozen=True)
