@@ -67,6 +67,8 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
+            # Resetting the codecs to the default values is not supported by Clickhouse 20
+            # so the column modifications are no-ops. This can be changed once we upgrade to 21
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
