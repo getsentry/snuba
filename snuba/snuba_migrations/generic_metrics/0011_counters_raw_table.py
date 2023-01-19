@@ -19,7 +19,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     local_table_name = "generic_metric_counters_raw_local"
     dist_table_name = "generic_metric_counters_raw_dist"
-    storage_set_key = StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS
+    storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
     columns: Sequence[Column[Modifiers]] = [
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
         Column("org_id", UInt(64)),
