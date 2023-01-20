@@ -50,7 +50,6 @@ def build_scheduler_executor_consumer(
     stale_threshold_seconds: Optional[int],
     total_concurrent_queries: int,
     metrics: MetricsBackend,
-    scheduling_mode: Optional[SchedulingWatermarkMode],
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
 
@@ -105,7 +104,6 @@ def build_scheduler_executor_consumer(
         stale_threshold_seconds,
         result_topic.topic_name,
         schedule_ttl,
-        scheduling_mode,
     )
 
     return StreamProcessor(
@@ -138,7 +136,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         stale_threshold_seconds: Optional[int],
         result_topic: str,
         schedule_ttl: int,
-        scheduling_mode: Optional[SchedulingWatermarkMode] = None,
     ) -> None:
         # TODO: self.__partitions might not be the same for each entity
         self.__partitions = partitions
@@ -186,19 +183,15 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             result_topic,
         )
 
-        if scheduling_mode is not None:
-            self.__mode = scheduling_mode
-        else:
-            modes = {
-                self._get_entity_watermark_mode(entity_key)
-                for entity_key in entity_keys
-            }
+        modes = {
+            self._get_entity_watermark_mode(entity_key) for entity_key in entity_keys
+        }
 
-            mode = modes.pop()
+        mode = modes.pop()
 
-            assert len(modes) == 0, "Entities provided do not share the same mode"
+        assert len(modes) == 0, "Entities provided do not share the same mode"
 
-            self.__mode = mode
+        self.__mode = mode
 
     def _get_entity_watermark_mode(
         self, entity_key: EntityKey
