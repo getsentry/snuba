@@ -568,7 +568,7 @@ def process_message(
         )
     except Exception as err:
         sentry_sdk.set_tag("invalid_message", "true")
-        logger.error(err, exc_info=True)
+        logger.warning(err, exc_info=True)
         raise InvalidMessages(
             [__invalid_kafka_message(message.value, consumer_group, err)]
         ) from err
