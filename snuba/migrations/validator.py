@@ -111,7 +111,8 @@ def _validate_order_new(
                 if op.target == OperationTarget.LOCAL:
                     _validate_add_col_or_create_table(op, dist_ops_before)
             elif isinstance(op, DropColumn):
-                _validate_drop(op, local_ops_before)
+                if op.target == OperationTarget.DISTRIBUTED:
+                    _validate_drop(op, local_ops_before)
 
 
 def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
