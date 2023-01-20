@@ -126,13 +126,6 @@ def subscriptions_executor(
         )
     )
 
-    # TODO: Consider removing and always passing via CLI.
-    # If a value provided via config, it overrides the one provided via CLI.
-    # This is so we can quickly change this in an emergency.
-    stale_threshold_seconds = state.get_config(
-        f"subscriptions_stale_threshold_sec_{dataset_name}", stale_threshold_seconds
-    )
-
     processor = build_executor_consumer(
         dataset_name,
         entity_names,
