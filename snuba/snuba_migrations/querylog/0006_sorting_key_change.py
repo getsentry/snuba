@@ -94,7 +94,7 @@ def forwards(logger: logging.Logger) -> None:
     We can't do it inplace so we need to create a new table with the modified keys,
     copy the data over, then drop the old table.
     """
-    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+    cluster = get_cluster(StorageSetKey.QUERYLOG)
 
     for node in cluster.get_local_nodes():
         connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
@@ -108,7 +108,7 @@ def backwards(logger: logging.Logger) -> None:
     returns us to the original state if the forwards method has failed somewhere
     in the middle. Otherwise it's a no-op.
     """
-    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+    cluster = get_cluster(StorageSetKey.QUERYLOG)
 
     if not cluster.is_single_node():
         return
