@@ -137,7 +137,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         result_topic: str,
         schedule_ttl: int,
     ) -> None:
-        # TODO: self.__partitions might not be the same for each entity
         self.__partitions = partitions
         self.__entity_names = entity_names
         self.__metrics = metrics
