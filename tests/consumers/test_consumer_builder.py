@@ -56,10 +56,10 @@ consumer_builder = ConsumerBuilder(
 
 optional_kafka_params = KafkaParameters(
     raw_topic="raw",
-    replacements_topic="replacements",
+    replacements_topic="event-replacements",
     bootstrap_servers=["cli.server:9092", "cli2.server:9092"],
     group_id=consumer_group_name,
-    commit_log_topic="commit_log",
+    commit_log_topic="snuba-commit-log",
     auto_offset_reset="earliest",
     strict_offset_reset=False,
     queued_max_messages_kbytes=1,
@@ -104,9 +104,7 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
 
     assert con_build.broker_config is not None
 
-    assert con_build.producer_broker_config is not None
-
-    assert isinstance(con_build.producer, Producer)
+    # assert con_build.producer_broker_config is not None
 
     assert isinstance(con_build.metrics, MetricsBackend)
 
@@ -128,6 +126,9 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
 
     consumer_builder.replacements_topic
     consumer_builder.commit_log_topic
+
+    con_build.replacements_producer, Producer
+    con_build.commit_log_producer, Producer
 
     con_build.bootstrap_servers
     con_build.strict_offset_reset

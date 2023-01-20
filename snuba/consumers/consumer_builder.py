@@ -29,6 +29,7 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
 )
+from snuba.utils.streams.topics import Topic as SnubaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +92,6 @@ class ConsumerBuilder:
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
-        self.producer_broker_config = build_kafka_producer_configuration(
-            topic,
-            slice_id,
-            bootstrap_servers=kafka_params.bootstrap_servers,
-            override_params={
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            },
-        )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -121,11 +113,23 @@ class ConsumerBuilder:
                 )
             else:
                 self.replacements_topic = None
+                self.replacements_producer = None
+
+        if self.replacements_topic is not None:
+            self.replacements_producer = Producer(
+                build_kafka_producer_configuration(
+                    SnubaTopic(self.replacements_topic.name),
+                    bootstrap_servers=kafka_params.bootstrap_servers,
+                    override_params={
+                        "partitioner": "consistent",
+                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                    },
+                )
+            )
 
         self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
             self.commit_log_topic = Topic(kafka_params.commit_log_topic)
-
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
@@ -134,13 +138,17 @@ class ConsumerBuilder:
                 )
             else:
                 self.commit_log_topic = None
+                self.commit_log_producer = None
+
+        if self.commit_log_topic is not None:
+            self.commit_log_producer = Producer(
+                build_kafka_producer_configuration(
+                    SnubaTopic(self.commit_log_topic.name),
+                    bootstrap_servers=kafka_params.bootstrap_servers,
+                ),
+            )
 
         self.stats_callback = stats_callback
-
-        # XXX: This can result in a producer being built in cases where it's
-        # not actually required.
-        self.producer = Producer(self.producer_broker_config)
-
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
@@ -228,7 +236,7 @@ class ConsumerBuilder:
 
         if self.commit_log_topic:
             commit_log_config = CommitLogConfig(
-                self.producer, self.commit_log_topic, self.group_id
+                self.commit_log_producer, self.commit_log_topic, self.group_id
             )
         else:
             commit_log_config = None
@@ -248,7 +256,9 @@ class ConsumerBuilder:
                 table_writer,
                 metrics=self.metrics,
                 replacements_producer=(
-                    self.producer if self.replacements_topic is not None else None
+                    self.replacements_producer
+                    if self.replacements_topic is not None
+                    else None
                 ),
                 replacements_topic=self.replacements_topic,
                 slice_id=slice_id,
@@ -270,6 +280,10 @@ class ConsumerBuilder:
             )
 
         return strategy_factory
+
+    def flush(self) -> None:
+        if self.replacements_producer:
+            self.replacements_producer.flush()
 
     def build_base_consumer(
         self, slice_id: Optional[int] = None
