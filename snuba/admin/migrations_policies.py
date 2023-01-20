@@ -8,7 +8,7 @@ from flask import Response, jsonify, make_response, request
 from snuba import settings
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
-from snuba.migrations.runner import MigrationKey
+from snuba.migrations.runner import MigrationKey, get_active_migration_groups
 
 
 def get_migration_group_polices() -> Dict[str, MigrationPolicy]:
@@ -17,9 +17,13 @@ def get_migration_group_polices() -> Dict[str, MigrationPolicy]:
     ADMIN_ALLOWED_MIGRATION_GROUPS setting. If a group is not defined
     it means no access at all to that group through admin.
     """
+    allowed_groups = {
+        group.value: settings.ADMIN_ALLOWED_MIGRATION_GROUPS[group.value]
+        for group in get_active_migration_groups()
+    }
     return {
         group_name: MigrationPolicy.class_from_name(policy_name)()
-        for group_name, policy_name in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
+        for group_name, policy_name in allowed_groups.items()
     }
 
 
