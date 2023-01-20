@@ -107,6 +107,7 @@ def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
 def rate_limit(
     rate_limit_params: RateLimitParameters,
 ) -> Iterator[Optional[RateLimitStats]]:
+    print("entered rate limit context manager")
     """
     A context manager for rate limiting that allows for limiting based on:
         * a rolling-window per-second rate

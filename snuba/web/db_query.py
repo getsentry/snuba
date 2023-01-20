@@ -192,6 +192,7 @@ def update_query_metadata_and_stats(
     status: QueryStatus,
     profile_data: Optional[Mapping[str, Any]] = None,
     error_code: Optional[int] = None,
+    triggered_rate_limiter: Optional[str] = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -201,6 +202,8 @@ def update_query_metadata_and_stats(
     stats.update(query_settings)
     if error_code is not None:
         stats["error_code"] = error_code
+    if triggered_rate_limiter is not None:
+        stats["triggered_rate_limiter"] = triggered_rate_limiter
     sql_anonymized = format_query_anonymized(query).get_sql()
     start, end = get_time_range_estimate(query)
 
@@ -674,7 +677,10 @@ def raw_query(
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
-            stats = update_with_status(QueryStatus.RATE_LIMITED)
+            trigger_rate_limiter = cause.extra_data.get("scope", "")
+            stats = update_with_status(
+                QueryStatus.RATE_LIMITED, triggered_rate_limiter=trigger_rate_limiter
+            )
         else:
             error_code = None
             status = QueryStatus.ERROR
