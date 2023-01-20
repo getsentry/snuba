@@ -17,13 +17,13 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 StorageSetKey.OUTCOMES,
                 "outcomes_raw_local",
-                Column("size", UInt(64)),
+                Column("size", UInt(32)),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.AddColumn(
                 StorageSetKey.OUTCOMES,
                 "outcomes_raw_dist",
-                Column("size", UInt(64)),
+                Column("size", UInt(32)),
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.AddColumn(

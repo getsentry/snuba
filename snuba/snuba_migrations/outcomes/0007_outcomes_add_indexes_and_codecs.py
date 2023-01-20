@@ -8,8 +8,8 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Adds indexes and codecs to match schema in SaaS.
-    Clickhouse 20 doesn't support adding codecs to key columns, so we don't add codecs to span_id and event_id.
+    Adds indexes and codecs to match schema in SaaS. Clickhouse 20 doesn't
+    support adding codecs to key columns, so we don't add codecs to timestamp.
     """
 
     blocking = True
@@ -19,8 +19,16 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 StorageSetKey.OUTCOMES,
                 "outcomes_raw_local",
-                Column("event_id", UUID(Modifiers(nullable=True, codecs=["LZ4HC(0)"]))),
-                ttl_month=("timestamp", 1),
+                Column(
+                    "event_id",
+                    UUID(
+                        Modifiers(
+                            nullable=True,
+                            codecs=["LZ4HC(0)"],
+                            ttl="timestamp + toIntervalDay(30)",
+                        )
+                    ),
+                ),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.AddIndex(
