@@ -6,7 +6,7 @@ codecov:
   # until all of these are done, we don't want a faulty
   # codecov report
   notify:
-      after_n_builds: 3
+      after_n_builds: 2
 coverage:
   status:
     project:
