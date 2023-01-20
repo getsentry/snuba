@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime
+from snuba.clickhouse.columns import UUID, Column
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -8,21 +8,14 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Adds indexes and codecs to match schema in SaaS
+    Adds indexes and codecs to match schema in SaaS.
+    Clickhouse 20 doesn't support adding codecs to key columns, so we don't add codecs to span_id and event_id.
     """
 
     blocking = True
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.ModifyColumn(
-                StorageSetKey.OUTCOMES,
-                "outcomes_raw_local",
-                Column(
-                    "timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))
-                ),
-                target=operations.OperationTarget.LOCAL,
-            ),
             operations.ModifyColumn(
                 StorageSetKey.OUTCOMES,
                 "outcomes_raw_local",
@@ -52,12 +45,8 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.ModifyColumn(
-                StorageSetKey.OUTCOMES,
-                "outcomes_raw_local",
-                Column("timestamp", DateTime()),
-                target=operations.OperationTarget.LOCAL,
-            ),
+            # Clickhouse 20 doesn't support resetting the codec to the default.
+            # so the modify is a no-op that can become effective when we upgrade to 21.
             operations.ModifyColumn(
                 StorageSetKey.OUTCOMES,
                 "outcomes_raw_local",
