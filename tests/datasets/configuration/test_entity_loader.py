@@ -26,6 +26,11 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 
 class TestEntityConfiguration(ConfigurationTest):
+    def test_entity_loader_fixed_string(self) -> None:
+        build_entity_from_config(
+            "tests/datasets/configuration/entity_with_fixed_string.yaml"
+        )
+
     def test_bad_configuration_broken_query_processor(self) -> None:
         with pytest.raises(JsonSchemaValueException):
             build_entity_from_config(
