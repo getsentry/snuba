@@ -313,6 +313,16 @@ def _record_rate_limit_metrics(
                 else "default",
             },
         )
+        metrics.timing(
+            name="table_concurrent_",
+            value=table_rate_limit_stats.concurrent,
+            tags={
+                "table": stats.get("clickhouse_table", ""),
+                "cache_partition": reader.cache_partition_id
+                if reader.cache_partition_id
+                else "default",
+            },
+        )
 
 
 def _apply_thread_quota_to_clickhouse_query_settings(
