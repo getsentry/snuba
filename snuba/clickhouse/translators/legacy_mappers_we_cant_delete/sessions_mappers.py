@@ -126,7 +126,7 @@ class DurationAvgRawMapper(ColumnToFunction):
         )
 
 
-class SessionsRawMapper(ColumnToFunction):
+class SessionsRawNumSessionsMapper(ColumnToFunction):
     def __init__(self) -> None:
         return super().__init__(
             None,

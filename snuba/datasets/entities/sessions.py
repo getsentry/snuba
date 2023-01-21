@@ -13,7 +13,7 @@ from snuba.clickhouse.translators.legacy_mappers_we_cant_delete.sessions_mappers
     SessionsRawAbnormalMapper,
     SessionsRawCrashedMapper,
     SessionsRawErroredMapper,
-    SessionsRawMapper,
+    SessionsRawNumSessionsMapper,
     SessionsRawUsersCrashedMapper,
     SessionsRawUsersErroredMapper,
     SessionsRawUsersMapper,
@@ -98,7 +98,7 @@ sessions_raw_translators = TranslationMappers(
     columns=[
         DurationQuantilesRawMapper(),
         DurationAvgRawMapper(),
-        SessionsRawMapper(),
+        SessionsRawNumSessionsMapper(),
         SessionsRawCrashedMapper(),
         SessionsRawAbnormalMapper(),
         SessionsRawErroredMapper(),
