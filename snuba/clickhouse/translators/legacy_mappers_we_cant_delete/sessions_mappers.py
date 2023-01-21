@@ -5,7 +5,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
 )
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -205,20 +204,3 @@ class SessionsRawUsersErroredMapper(ColumnToFunction):
             "uniqIf",
             (distinct_id, _and(has_errors, did_not_nil)),
         )
-
-
-# These here are basically the same statements as the matview query
-sessions_raw_translators = TranslationMappers(
-    columns=[
-        DurationQuantilesRawMapper(),
-        DurationAvgRawMapper(),
-        SessionsRawMapper(),
-        SessionsRawCrashedMapper(),
-        SessionsRawAbnormalMapper(),
-        SessionsRawErroredMapper(),
-        SessionsRawUsersMapper(),
-        SessionsRawUsersCrashedMapper(),
-        SessionsRawAbnormalMapper(),
-        SessionsRawUsersErroredMapper(),
-    ]
-)
