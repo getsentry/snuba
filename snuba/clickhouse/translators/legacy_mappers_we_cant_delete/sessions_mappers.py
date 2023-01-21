@@ -143,7 +143,7 @@ class SessionsRawCrashedMapper(ColumnToFunction):
         )
 
 
-class SessionsRawAbnormalMapper(ColumnToFunction):
+class SessionsRawSessionsAbnormalMapper(ColumnToFunction):
     def __init__(self) -> None:
         return super().__init__(
             None, "sessions_abnormal", "sumIf", (quantity, eq(status, Literal(None, 3)))
