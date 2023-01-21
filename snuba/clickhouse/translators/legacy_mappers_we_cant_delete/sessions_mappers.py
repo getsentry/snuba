@@ -109,29 +109,51 @@ duration_condition = _and(
 # `status IN (2,3,4)`
 terminal_status = in_condition(status, [Literal(None, status) for status in [2, 3, 4]])
 
-# These here are basically the same statements as the matview query
-sessions_raw_translators = TranslationMappers(
-    columns=[
-        ColumnToCurriedFunction(
+
+class DurationQuantilesRawMapper(ColumnToCurriedFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "duration_quantiles",
             FunctionCall(None, "quantilesIf", quantiles),
             (duration, duration_condition),
-        ),
-        ColumnToFunction(None, "duration_avg", "avgIf", (duration, duration_condition)),
-        ColumnToFunction(
+        )
+
+
+class DurationAvgRawMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
+            None, "duration_avg", "avgIf", (duration, duration_condition)
+        )
+
+
+class SessionsRawMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "sessions",
             "sumIf",
             (quantity, eq(seq, Literal(None, 0))),
-        ),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawCrashedMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None, "sessions_crashed", "sumIf", (quantity, eq(status, Literal(None, 2)))
-        ),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawAbnormalMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None, "sessions_abnormal", "sumIf", (quantity, eq(status, Literal(None, 3)))
-        ),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawErroredMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "sessions_errored",
             "plus",
@@ -147,25 +169,56 @@ sessions_raw_translators = TranslationMappers(
                     (quantity, _and(terminal_status, eq(session_id, lit_nil))),
                 ),
             ),
-        ),
-        ColumnToFunction(None, "users", "uniqIf", (distinct_id, did_not_nil)),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawUsersMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(None, "users", "uniqIf", (distinct_id, did_not_nil))
+
+
+class SessionsRawUsersCrashedMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "users_crashed",
             "uniqIf",
             (distinct_id, _and(eq(status, Literal(None, 2)), did_not_nil)),
-        ),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawUsersAbnormalMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "users_abnormal",
             "uniqIf",
             (distinct_id, _and(eq(status, Literal(None, 3)), did_not_nil)),
-        ),
-        ColumnToFunction(
+        )
+
+
+class SessionsRawUsersErroredMapper(ColumnToFunction):
+    def __init__(self) -> None:
+        return super().__init__(
             None,
             "users_errored",
             "uniqIf",
             (distinct_id, _and(has_errors, did_not_nil)),
-        ),
+        )
+
+
+# These here are basically the same statements as the matview query
+sessions_raw_translators = TranslationMappers(
+    columns=[
+        DurationQuantilesRawMapper(),
+        DurationAvgRawMapper(),
+        SessionsRawMapper(),
+        SessionsRawCrashedMapper(),
+        SessionsRawAbnormalMapper(),
+        SessionsRawErroredMapper(),
+        SessionsRawUsersMapper(),
+        SessionsRawUsersCrashedMapper(),
+        SessionsRawAbnormalMapper(),
+        SessionsRawUsersErroredMapper(),
     ]
 )
