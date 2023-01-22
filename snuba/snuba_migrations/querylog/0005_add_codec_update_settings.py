@@ -18,6 +18,13 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
 
         return [
+            operations.ModifyTableTTL(
+                StorageSetKey.QUERYLOG,
+                table_name,
+                reference_column="timestamp",
+                ttl_days=30,
+                target=operations.OperationTarget.LOCAL,
+            ),
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
@@ -67,7 +74,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
-            # Resetting the codecs to the default values is not supported by Clickhouse 20
+            # Resetting the codecs to the default values, Removing a TTL are not supported by Clickhouse 20
             # so the column modifications are no-ops. This can be changed once we upgrade to 21
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,

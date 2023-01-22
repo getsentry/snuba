@@ -19,7 +19,6 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     ).results
 
     new_sorting_key = "dataset, referrer, toStartOfDay(timestamp), request_id"
-    new_sampling_key = "request_id TTL timestamp + toIntervalDay(30)"
 
     ((curr_sampling_key, curr_sorting_key),) = clickhouse.execute(
         f"SELECT sampling_key, sorting_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
@@ -36,16 +35,10 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
             curr_sorting_key, new_sorting_key
         )
 
-    # Switch the sample by
-    if curr_sampling_key != new_sampling_key:
-        assert new_create_table_statement.count("SAMPLE BY " + curr_sampling_key) == 1
-        new_create_table_statement = new_create_table_statement.replace(
-            "SAMPLE BY " + curr_sampling_key, "SAMPLE BY " + new_sampling_key
-        )
-
     # Update the timestamp column
     # Clickhouse 20 does not support altering a column in the primary key so we need to do it here
     new_timestamp_type = "`timestamp` DateTime CODEC(T64, ZSTD(1))"
+    assert new_create_table_statement.count(new_timestamp_type) == 0
     assert new_create_table_statement.count("`timestamp` DateTime") == 1
     new_create_table_statement = new_create_table_statement.replace(
         "`timestamp` DateTime", new_timestamp_type
@@ -60,30 +53,31 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
-    orderby = "toStartOfDay(finish_ts), project_id, event_id"
+    orderby = "toStartOfDay(timestamp), request_id"
 
     for i in range(batch_count):
         skip = batch_size * i
-        clickhouse.execute(
-            f"""
-            INSERT INTO {TABLE_NAME_NEW}
-            SELECT * FROM {TABLE_NAME}
-            ORDER BY {orderby}
-            LIMIT {batch_size}
-            OFFSET {skip};
-            """
+        insert_op = operations.InsertIntoSelect(
+            storage_set=StorageSetKey.QUERYLOG,
+            dest_table_name=TABLE_NAME_NEW,
+            dest_columns=["*"],  # All columns
+            src_table_name=TABLE_NAME,
+            src_columns=["*"],  # All columns
+            order_by=orderby,
+            limit=batch_size,
+            offset=skip,
+            target=operations.OperationTarget.LOCAL,
         )
-
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
-
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+        clickhouse.execute(insert_op.format_sql())
 
     # Ensure each table has the same number of rows before deleting the old one
-    assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME};").results
-        == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD};").results
-    )
+    [(new_row_count,)] = clickhouse.execute(
+        f"SELECT count() FROM {TABLE_NAME_NEW}"
+    ).results
+    assert row_count == new_row_count
 
+    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
     return
 
