@@ -35,3 +35,9 @@ export type RunMigrationResult = {
     stdout: string;
     error?: string;
 };
+
+export type SchemaResult = {
+  table_name: string;
+  storage_name: string;
+  create_table_query: string;
+}

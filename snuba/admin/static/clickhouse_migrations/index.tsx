@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { transform } from "typescript";
 import Client from "../api_client";
 import { Table } from "../table";
 import {
@@ -185,6 +186,27 @@ function ClickhouseMigrations(props: { api: Client }) {
     return null;
   }
 
+  function dowloadSchemas() {
+    props.api.getSchemas().then((schema_info) => {
+      let header_row = "storage,table,saas_schema";
+      let csv_data_rows=schema_info.map(schema =>`"${schema.storage_name}","${schema.table_name}","${schema.create_table_query || ""}"`)
+      let csv_rows = [header_row].concat(csv_data_rows)
+
+      // create a csv blob and download it by simulating a click on a link
+      window.URL = window.webkitURL || window.URL;
+      var csvFile = new Blob([csv_rows.join("\n")], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.download = 'snuba_schemas.csv';
+      a.href = window.URL.createObjectURL(csvFile);
+      a.textContent = 'Download CSV';
+      a.dataset.downloadurl = ['text/csv', a.download, a.href].join(':');
+      a.hidden = true;
+      document.body.appendChild(a);
+      a.click();
+      alert("Downloaded schemas to snuba_schemas.csv. User the scripts/diff_schemas.py script in snuba to compare schemas.")
+    });
+  }
+
   function renderMigrationIds() {
     if (migrationGroup) {
       return (
@@ -336,6 +358,16 @@ function ClickhouseMigrations(props: { api: Client }) {
             columnWidths={[5, 2, 2]}
           />
         )}
+      </div>
+      <div>
+        <input
+          key="schemas"
+          type="button"
+          id="schemas"
+          defaultValue="DOWNLOAD SCHEMAS"
+          onClick={() => dowloadSchemas()}
+          style={buttonStyle}
+        />
       </div>
     </div>
   );

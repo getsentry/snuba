@@ -13,7 +13,7 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "./clickhouse_queries/types";
-import { MigrationGroupResult, RunMigrationRequest, RunMigrationResult } from "./clickhouse_migrations/types";
+import { MigrationGroupResult, RunMigrationRequest, RunMigrationResult, SchemaResult } from "./clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
@@ -47,6 +47,7 @@ interface Client {
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
+  getSchemas: () => Promise<SchemaResult[]>;
 }
 
 function Client() {
@@ -254,8 +255,19 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
 
-  }
+    getSchemas: () => {
+      const url : string = "/migrations/all_schemas"
+      return fetch(url).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }else{
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+
   };
 }
 

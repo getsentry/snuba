@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
+import itertools
 import sys
+import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
@@ -39,6 +41,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
@@ -86,6 +90,56 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/migrations/all_schemas")
+def migration_get_all_schemas() -> Response:
+    # get `show create table` for all tables
+    rows: List[Mapping[str, str | None]] = []
+    for storage_info in get_storage_info():
+
+        storage_name = storage_info["storage_name"]
+        storage = get_storage(StorageKey(storage_name))
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
+        local_table_name = storage_info["local_table_name"]
+        local_nodes = storage_info["local_nodes"]
+        dist_nodes = storage_info["dist_nodes"]
+
+        # try one of every node type starting with the local query node
+        nodes_groups = itertools.zip_longest(
+            [storage_info["query_node"]], local_nodes, dist_nodes, fillvalue=None
+        )
+
+        def find_table_schema() -> Optional[str]:
+            for group in nodes_groups:
+                for node in group:
+                    if node is None:
+                        continue
+                    try:
+                        result = run_system_query_on_host_with_sql(
+                            node["host"],
+                            node["port"],
+                            storage_name,
+                            f"select create_table_query from system.tables where database='{database}' and name='{local_table_name}'",
+                        )
+                        if result.results:
+                            return str(result.results[0][0])
+                    except ClickhouseError:
+                        continue
+                    finally:
+                        time.sleep(0.01)
+            return None
+
+        rows.append(
+            {
+                "storage_name": storage_name,
+                "table_name": local_table_name,
+                "create_table_query": find_table_schema(),
+            }
+        )
+
+    return make_response(jsonify(rows), 200)
 
 
 @application.route("/migrations/groups")
