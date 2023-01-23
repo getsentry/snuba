@@ -20,9 +20,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
-    QueryStorageSelector,
     SimpleQueryStorageSelector,
 )
 from snuba.datasets.entity import Entity

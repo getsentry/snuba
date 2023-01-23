@@ -3,7 +3,7 @@ from typing import List
 
 from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import (
     EntityStorageConnection,
     EntityStorageConnectionNotFound,

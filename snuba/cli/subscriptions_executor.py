@@ -1,4 +1,3 @@
-import logging
 import signal
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
@@ -147,10 +146,6 @@ def subscriptions_executor(
     )
 
     def handler(signum: int, frame: Any) -> None:
-        # TODO: Temporary code for debugging executor shutdown
-        logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
-
         processor.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)

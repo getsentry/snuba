@@ -4,7 +4,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from snuba.clickhouse.columns import Column
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
@@ -50,6 +50,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     required_time_column: Optional[str]
     storage_selector: QueryStorageSelector
+    validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -63,7 +64,7 @@ class PluggableEntity(Entity):
     def _get_builtin_validators(self) -> Sequence[QueryValidator]:
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns), ColumnValidationMode.DO_NOTHING
+                EntityColumnSet(self.columns), self.validate_data_model
             )
         ]
 

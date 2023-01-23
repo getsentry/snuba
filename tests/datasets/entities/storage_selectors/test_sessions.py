@@ -7,7 +7,7 @@ from snuba.datasets.entities.sessions import (
     sessions_hourly_translators,
     sessions_raw_translators,
 )
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.sessions import (
     SessionsQueryStorageSelector,
 )

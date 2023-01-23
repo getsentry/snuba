@@ -40,6 +40,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
+        from snuba.datasets.entities.outcomes import OutcomesEntity
+        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
@@ -63,6 +65,16 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 GroupedMessageEntity,
                 EntityKey.GROUPEDMESSAGE,
             ),
+            (
+                "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
+                OutcomesEntity,
+                EntityKey.OUTCOMES,
+            ),
+            (
+                "snuba/datasets/configuration/outcomes/entities/outcomes_raw.yaml",
+                OutcomesRawEntity,
+                EntityKey.OUTCOMES_RAW,
+            ),
         ]
 
     def _config_matches_python_definition(
@@ -71,32 +83,40 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         config_entity = build_entity_from_config(config_path)
         py_entity = entity()  # type: ignore
 
-        assert isinstance(config_entity, PluggableEntity)
-        assert config_entity.entity_key == entity_key
+        assert isinstance(config_entity, PluggableEntity), entity_key.value
+        assert config_entity.entity_key == entity_key, entity_key.value
 
         assert len(config_entity.get_query_processors()) == len(
             py_entity.get_query_processors()
-        )
+        ), entity_key.value
         for (config_qp, py_qp) in zip(
             config_entity.get_query_processors(), py_entity.get_query_processors()
         ):
             assert (
                 config_qp.__class__ == py_qp.__class__
-            ), "query processor mismatch between configuration-loaded sets and python-defined"
+            ), f"{entity_key.value}: query processor mismatch between configuration-loaded sets and python-defined"
 
-        assert len(config_entity.get_validators()) == len(py_entity.get_validators())
+        assert len(config_entity.get_validators()) == len(
+            py_entity.get_validators()
+        ), entity_key.value
         for (config_v, py_v) in zip(
             config_entity.get_validators(), py_entity.get_validators()
         ):
             assert (
                 config_v.__class__ == py_v.__class__
-            ), "validator mismatch between configuration-loaded sets and python-defined"
-            assert config_v.__dict__ == py_v.__dict__
+            ), f"{entity_key.value}: validator mismatch between configuration-loaded sets and python-defined"
+            assert config_v.__dict__ == py_v.__dict__, entity_key.value
 
-        assert config_entity.get_all_storages() == py_entity.get_all_storages()
-        assert config_entity.required_time_column == py_entity.required_time_column
+        assert (
+            config_entity.get_all_storages() == py_entity.get_all_storages()
+        ), entity_key.value
+        assert (
+            config_entity.required_time_column == py_entity.required_time_column
+        ), entity_key.value
 
-        assert config_entity.get_data_model() == py_entity.get_data_model()
+        assert (
+            config_entity.get_data_model() == py_entity.get_data_model()
+        ), entity_key.value
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:

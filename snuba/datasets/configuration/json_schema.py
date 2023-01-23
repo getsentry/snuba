@@ -644,6 +644,10 @@ V1_ENTITY_SCHEMA = {
             "items": ENTITY_VALIDATOR,
             "description": "The validation logic used on the ClickHouse query",
         },
+        "validate_data_model": {
+            "type": ["string", "null"],
+            "description": "The level at which mismatched functions and columns when querying the entity should be logged",
+        },
         "required_time_column": {
             "type": ["string", "null"],
             "description": "The name of the required time column specifed in schema",
