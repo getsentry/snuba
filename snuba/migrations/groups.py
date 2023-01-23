@@ -136,6 +136,7 @@ class TransactionsLoader(DirectoryLoader):
             "0015_transactions_add_source_column",
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
+            "0018_transactions_add_profile_id",
         ]
 
 
