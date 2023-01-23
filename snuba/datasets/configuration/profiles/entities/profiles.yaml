@@ -1,0 +1,63 @@
+version: v1
+kind: entity
+name: profiles
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: transaction_id, type: UUID },
+    { name: profile_id, type: UUID },
+    { name: received, type: DateTime },
+    { name: android_api_level, type: UInt, args: { schema_modifiers: [nullable], size: 32 } },
+    { name: device_classification, type: String },
+    { name: device_locale, type: String },
+    { name: device_manufacturer, type: String },
+    { name: device_model, type: String },
+    { name: device_os_build_number, type: String, args: { schema_modifiers: [nullable] } },
+    { name: device_os_name, type: String },
+    { name: device_os_version, type: String },
+    { name: architecture, type: String },
+    { name: duration_ns, type: UInt, args: { size: 64 } },
+    { name: environment, type: String, args: { schema_modifiers: [nullable] } },
+    { name: platform, type: String },
+    { name: trace_id, type: UUID },
+    { name: transaction_name, type: String},
+    { name: version_name, type: String },
+    { name: version_code, type: String},
+  ]
+required_time_column: received
+
+storages:
+- storage: profiles
+  is_writable: true
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: organization_id
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: received
+      time_parse_columns:
+      - received
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+      - organization_id
+      - project_id
