@@ -152,6 +152,17 @@ NUMBER_SCHEMA = make_column_schema(
     },
 )
 
+FIXED_STRING_SCHEMA = make_column_schema(
+    column_type={"enum": ["FixedString"]},
+    args={
+        "type": "object",
+        "properties": {
+            "length": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 
 NO_ARG_SCHEMA = make_column_schema(
     column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
@@ -184,6 +195,7 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
 
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
+    FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
 ]

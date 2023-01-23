@@ -22,7 +22,14 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.utils.schemas import UUID, AggregateFunction, ColumnType, IPv4, IPv6
+from snuba.utils.schemas import (
+    UUID,
+    AggregateFunction,
+    ColumnType,
+    FixedString,
+    IPv4,
+    IPv6,
+)
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -149,6 +156,8 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
             [__parse_column_type(c) for c in col["args"]["arg_types"]],
             modifiers,
         )
+    elif col["type"] == "FixedString":
+        column_type = FixedString(col["args"]["length"], modifiers)
     assert column_type is not None
     return column_type
 
