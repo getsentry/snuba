@@ -13,6 +13,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -25,26 +26,25 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
     return None
 
 
-class TestEntityConfiguration(ConfigurationTest):
-    def test_bad_configuration_broken_query_processor(self) -> None:
-        with pytest.raises(JsonSchemaValueException):
-            build_entity_from_config(
-                "tests/datasets/configuration/broken_entity_bad_query_processor.yaml"
-            )
+class TestEntityConfigurationComparison(ConfigurationTest):
+    """
+    This test compare the YAML config files to the Python ones.
+    This test suite is only useful as we translate entities to YAML.
+    Once all the entities are YAML and the Python ones are removed this
+    test suite can also be removed.
+    """
 
-    def test_bad_configuration_broken_validator(self) -> None:
-        with pytest.raises(JsonSchemaValueException):
-            build_entity_from_config(
-                "tests/datasets/configuration/broken_entity_positional_validator_args.yaml"
-            )
+    def setup_class(self) -> None:
+        reset_dataset_factory()
 
-    def test_config_matches_python_definition(self) -> None:
+        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
+        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
-        test_data = [
+        self.test_data = [
             (
                 "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
                 GenericMetricsSetsEntity,
@@ -54,6 +54,16 @@ class TestEntityConfiguration(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
+            ),
+            (
+                "snuba/datasets/configuration/groupassignee/entities/groupassignee.yaml",
+                GroupAssigneeEntity,
+                EntityKey.GROUPASSIGNEE,
+            ),
+            (
+                "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
+                GroupedMessageEntity,
+                EntityKey.GROUPEDMESSAGE,
             ),
             (
                 "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
@@ -66,8 +76,6 @@ class TestEntityConfiguration(ConfigurationTest):
                 EntityKey.OUTCOMES_RAW,
             ),
         ]
-        for test in test_data:
-            self._config_matches_python_definition(*test)  # type: ignore
 
     def _config_matches_python_definition(
         self, config_path: str, entity: Type[Entity], entity_key: EntityKey
@@ -109,6 +117,24 @@ class TestEntityConfiguration(ConfigurationTest):
         assert (
             config_entity.get_data_model() == py_entity.get_data_model()
         ), entity_key.value
+
+    def test_config_matches_python_definition(self) -> None:
+        for test in self.test_data:
+            self._config_matches_python_definition(*test)  # type: ignore
+
+
+class TestEntityConfiguration(ConfigurationTest):
+    def test_bad_configuration_broken_query_processor(self) -> None:
+        with pytest.raises(JsonSchemaValueException):
+            build_entity_from_config(
+                "tests/datasets/configuration/broken_entity_bad_query_processor.yaml"
+            )
+
+    def test_bad_configuration_broken_validator(self) -> None:
+        with pytest.raises(JsonSchemaValueException):
+            build_entity_from_config(
+                "tests/datasets/configuration/broken_entity_positional_validator_args.yaml"
+            )
 
     def test_entity_loader_for_entity_with_column_mappers(self) -> None:
         pluggable_entity = build_entity_from_config(
