@@ -6,6 +6,7 @@ from flask import request
 
 from snuba import settings
 from snuba.admin.auth_roles import DEFAULT_ROLES
+from snuba.admin.gcp_roles import GCP_USER_ROLES
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
@@ -30,18 +31,13 @@ def authorize_request() -> AdminUser:
     if provider is None:
         raise ValueError("Invalid authorization provider")
 
-    return _set_roles(provider())
-
-
-def _set_roles(user: AdminUser) -> AdminUser:
-    # todo: depending on provider convert user email
-    # to subset of DEFAULT_ROLES based on IAM roles
-    user.roles = DEFAULT_ROLES
-    return user
+    return provider()
 
 
 def passthrough_authorize() -> AdminUser:
-    return AdminUser(email="unknown", id="unknown")
+    user = AdminUser(email="unknown", id="unknown")
+    user.roles = DEFAULT_ROLES
+    return user
 
 
 def iap_authorize() -> AdminUser:
@@ -50,7 +46,10 @@ def iap_authorize() -> AdminUser:
     if assertion is None:
         raise UnauthorizedException("no JWT present in request headers")
 
-    return validate_assertion(assertion)
+    user = validate_assertion(assertion)
+    gcp_roles = GCP_USER_ROLES[user.email]
+    user.roles = [role for role in DEFAULT_ROLES if role.name in gcp_roles]
+    return user
 
 
 AUTH_PROVIDERS = {
