@@ -27,6 +27,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.processors.generic_metrics_processor import (
+    GenericCountersMetricsProcessor,
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
@@ -184,5 +185,27 @@ distributions_bucket_storage = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS,
         pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
+    ),
+)
+
+counters_bucket_storage = WritableTableStorage(
+    storage_key=StorageKey.GENERIC_METRICS_COUNTERS_RAW,
+    storage_set_key=StorageSetKey.GENERIC_METRICS_COUNTERS,
+    schema=WritableTableSchema(
+        columns=ColumnSet([*common_columns, *bucket_columns]),
+        local_table_name="generic_metric_counters_raw_local",
+        dist_table_name="generic_metric_counters_raw_dist",
+        storage_set_key=StorageSetKey.GENERIC_METRICS_COUNTERS,
+    ),
+    query_processors=[],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        processor=GenericCountersMetricsProcessor(),
+        default_topic=Topic.GENERIC_METRICS,
+        dead_letter_queue_policy_creator=produce_policy_creator,
+        commit_log_topic=Topic.GENERIC_METRICS_COUNTERS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_COUNTERS,
+        pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.COUNTER.value),
     ),
 )
