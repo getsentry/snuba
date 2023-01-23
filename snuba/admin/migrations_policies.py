@@ -17,13 +17,17 @@ def get_migration_group_polices() -> Dict[str, MigrationPolicy]:
     ADMIN_ALLOWED_MIGRATION_GROUPS setting. If a group is not defined
     it means no access at all to that group through admin.
     """
-    allowed_groups = {
-        group.value: settings.ADMIN_ALLOWED_MIGRATION_GROUPS[group.value]
+    allowed_groups = [
+        group.value
         for group in get_active_migration_groups()
-    }
+        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
+    ]
+
     return {
-        group_name: MigrationPolicy.class_from_name(policy_name)()
-        for group_name, policy_name in allowed_groups.items()
+        group_name: MigrationPolicy.class_from_name(
+            settings.ADMIN_ALLOWED_MIGRATION_GROUPS[group_name]
+        )()
+        for group_name in allowed_groups
     }
 
 

@@ -144,7 +144,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         response = admin_api.post(
             f"/migrations/invalid_but_allowed_group/{action}/0001_migrations"
         )
-        assert response.status_code == 500
+        assert response.status_code == 403
 
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
