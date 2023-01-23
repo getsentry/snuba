@@ -215,7 +215,7 @@ class ConsumerBuilder:
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
-    def __build_streaming_strategy_factory(
+    def build_streaming_strategy_factory(
         self,
         slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
@@ -278,5 +278,5 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.__build_streaming_strategy_factory(slice_id), slice_id
+            self.build_streaming_strategy_factory(slice_id), slice_id
         )

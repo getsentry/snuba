@@ -315,6 +315,48 @@ class ModifyColumn(SqlOperation):
         return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
 
 
+class ModifyTableSettings(SqlOperation):
+    """
+    Modify the settings of a table.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        settings: Mapping[str, Any],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__settings = settings
+
+    def format_sql(self) -> str:
+        settings = ", ".join(f"{k} = {v}" for k, v in self.__settings.items())
+        return f"ALTER TABLE {self.__table_name} MODIFY SETTING {settings};"
+
+
+class ResetTableSettings(SqlOperation):
+    """
+    Reset the settings of a table to the default values.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        settings: Sequence[str],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__settings = settings
+
+    def format_sql(self) -> str:
+        settings = ", ".join(self.__settings)
+        return f"ALTER TABLE {self.__table_name} RESET SETTING {settings};"
+
+
 class AddIndex(SqlOperation):
     """
     Adds an index.

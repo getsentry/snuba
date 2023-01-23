@@ -1,0 +1,21 @@
+codecov:
+  # do not notify until at least 3 builds
+  # have been uploaded from the CI pipeline
+  # we upload artifacts from 'test',
+  # 'test_distributed', 'test_distributed_migrations'
+  # until all of these are done, we don't want a faulty
+  # codecov report
+  notify:
+      after_n_builds: 3
+coverage:
+  status:
+    project:
+      default:
+        # don't block if project coverage goes down
+        informational: true
+        # allow 1% difference in code coverage
+        # this is because we have some non-deteministic tests
+        # which hit different code paths e.g. sometimes
+        # intitialization code doesn't need to be retried
+        # and so that code is not executed during that test run
+        threshold: 1%

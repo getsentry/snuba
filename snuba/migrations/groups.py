@@ -108,6 +108,8 @@ class EventsLoader(DirectoryLoader):
             "0014_backfill_errors",
             "0015_truncate_events",
             "0016_drop_legacy_events",
+            "0017_errors_add_indexes",
+            "0018_errors_ro_add_tags_hash_map",
         ]
 
 
@@ -134,6 +136,7 @@ class TransactionsLoader(DirectoryLoader):
             "0015_transactions_add_source_column",
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
+            "0018_transactions_add_profile_id",
         ]
 
 

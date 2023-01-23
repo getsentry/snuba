@@ -1,7 +1,7 @@
 from typing import List
 
 from snuba import state
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import (
     EntityStorageConnection,
     EntityStorageConnectionNotFound,
