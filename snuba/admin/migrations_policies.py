@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from functools import wraps
-from typing import Any, Callable, Dict, MutableMapping
+from typing import Any, Callable, Dict, List, MutableMapping, Sequence
 
 from flask import Response, g, jsonify, make_response, request
 
@@ -14,8 +15,8 @@ from snuba.admin.auth_roles import (
 )
 from snuba.admin.user import AdminUser
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.policies import MigrationPolicy, max_policy
-from snuba.migrations.runner import MigrationKey
+from snuba.migrations.policies import MigrationPolicy
+from snuba.migrations.runner import MigrationKey, get_active_migration_groups
 
 ACTIONS_TO_POLICIES = {
     ExecuteAllAction: "AllMigrationsPolicy",
@@ -24,7 +25,9 @@ ACTIONS_TO_POLICIES = {
 }
 
 
-def get_migration_group_policies(user: AdminUser) -> Dict[str, MigrationPolicy]:
+def get_migration_group_policies(
+    user: AdminUser,
+) -> Dict[str, Sequence[MigrationPolicy]]:
     """
     Creates a mapping of migration groups to policies based on a user's
     roles. If a user has multiple roles, and the actions on those roles
@@ -37,32 +40,31 @@ def get_migration_group_policies(user: AdminUser) -> Dict[str, MigrationPolicy]:
     actions include the same resource R. The resulting group policy map will be
     as follows: {"R": AllMigrationsPolicy()}
     """
-    group_policies: MutableMapping[str, str] = {}
-    allowed_groups = settings.ADMIN_ALLOWED_MIGRATION_GROUPS.keys()
+    group_policies: MutableMapping[str, List[str]] = defaultdict(list)
+    allowed_groups = [
+        group.value
+        for group in get_active_migration_groups()
+        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
+    ]
 
     for role in user.roles:
         for action in role.actions:
             if not isinstance(action, MigrationAction):
                 continue
 
-            def assign_group_policy(group: str) -> None:
-                if group not in allowed_groups:
-                    return
-
-                policy = ACTIONS_TO_POLICIES[action.__class__]
-
-                curr_policy = group_policies.get(group)
-                if curr_policy:
-                    group_policies[group] = max_policy([curr_policy, policy])
-                else:
-                    group_policies[group] = policy
-
             for resource in action._resources:
-                assign_group_policy(resource.name)
+                group = resource.name
+                print("nammmmee", group)
+                if group in allowed_groups:
+                    group_policies[group].append(ACTIONS_TO_POLICIES[action.__class__])
 
+    print("-----\n\n")
+    print("GROUP POLICES", group_policies)
+    print("ALLWOED GROUPS", allowed_groups)
+    print("-----\n\n")
     return {
-        group: MigrationPolicy.class_from_name(policy)()
-        for group, policy in group_policies.items()
+        group: [MigrationPolicy.class_from_name(policy)() for policy in policies]
+        for group, policies in group_policies.items()
     }
 
 
@@ -84,7 +86,7 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
             action = kwargs["action"]
             migration_id = kwargs["migration_id"]
             migration_key = MigrationKey(MigrationGroup(group), migration_id)
-            policy = group_polices[group]
+            policies = group_polices[group]
 
             def str_to_bool(s: str) -> bool:
                 return s.strip().lower() == "true"
@@ -93,12 +95,14 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
 
             if not dry_run:
                 if action == "run":
-                    if not policy.can_run(migration_key):
+                    if not any(policy.can_run(migration_key) for policy in policies):
                         return make_response(
                             jsonify({"error": "Group not allowed run policy"}), 403
                         )
                 elif action == "reverse":
-                    if not policy.can_reverse(migration_key):
+                    if not any(
+                        policy.can_reverse(migration_key) for policy in policies
+                    ):
                         return make_response(
                             jsonify({"error": "Group not allowed reverse policy"}), 403
                         )
