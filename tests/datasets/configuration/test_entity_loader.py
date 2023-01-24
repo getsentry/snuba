@@ -83,6 +83,14 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             ),
         ]
 
+    def _compare_subscription_validators(self, config_entity, py_entity):
+        config_joins = config_entity.get_subscription_validators()
+        py_joins = py_entity.get_subscription_validators()
+
+        assert len(config_joins) == len(py_joins)
+        for config_join, py_join in zip(config_joins, py_joins):
+            assert config_join == py_join, config_entity.entity_key
+
     def _compare_join_relationships(self, config_entity, py_entity):
         config_joins = config_entity.get_all_join_relationships()
         py_joins = py_entity.get_all_join_relationships()

@@ -403,6 +403,16 @@ validators:
     args:
       required_filter_columns:
         - project_id
+subscription_validators:
+  - validator: AggregationValidator
+    args:
+      max_allowed_aggregations: 1
+      disallowed_aggregations:
+        - groupby
+        - having
+        - orderby
+      required_time_column:
+        - timestampp
 
 
 join_relationships:
