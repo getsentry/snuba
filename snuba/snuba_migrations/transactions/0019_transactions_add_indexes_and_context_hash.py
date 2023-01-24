@@ -24,7 +24,6 @@ indexes = [
     ("bf_measurements_key", "measurements.key", "bloom_filter", 1),
     ("bf_span_op_breakdowns_key", "span_op_breakdowns.key", "bloom_filter", 1),
     ("bf_contexts_hash_map", "_contexts_hash_map", "bloom_filter", 1),
-    ("minmax_timestamp", "timestamp", "minmax", 1),
     ("bf_spans_op", "spans.op", "bloom_filter", 1),
     ("bf_spans_group", "spans.group", "bloom_filter", 1),
 ]
