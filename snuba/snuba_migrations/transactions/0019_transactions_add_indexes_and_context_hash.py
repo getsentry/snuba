@@ -50,6 +50,16 @@ class Migration(migration.ClickhouseNodeMigration):
                 after="contexts.value",
                 target=operations.OperationTarget.LOCAL,
             ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_dist",
+                column=Column(
+                    "_contexts_hash_map",
+                    Array(UInt(64), Modifiers(materialized=CONTEXTS_HASH_MAP_COLUMN)),
+                ),
+                after="contexts.value",
+                target=operations.OperationTarget.DISTRIBUTED,
+            ),
         ]
 
         # apply the indexes after the minmax_timestamp index and have them follow each other
@@ -88,11 +98,19 @@ class Migration(migration.ClickhouseNodeMigration):
 
         ops.append(
             operations.DropColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_dist",
+                column_name="_contexts_hash_map",
+                target=operations.OperationTarget.DISTRIBUTED,
+            )
+        )
+        ops.append(
+            operations.DropColumn(
                 StorageSetKey.TRANSACTIONS,
                 "transactions_local",
                 "_contexts_hash_map",
                 target=operations.OperationTarget.LOCAL,
-            )
+            ),
         )
 
         return ops
