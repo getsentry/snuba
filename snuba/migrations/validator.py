@@ -68,7 +68,9 @@ def _validate_add_col_or_create_table(
             )
 
 
-def _validate_drop(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> None:
+def _validate_drop_col(
+    dist_op: SqlOperation, local_ops: Sequence[SqlOperation]
+) -> None:
     if isinstance(dist_op, (DropColumn)):
         if any(_conflicts_ops(local_op, dist_op) for local_op in local_ops):
             raise InvalidMigrationOrderError(
@@ -87,7 +89,7 @@ def _validate_order_old(
     """
     if local_first:
         for dist_op in dist_ops:
-            _validate_drop(dist_op, local_ops)
+            _validate_drop_col(dist_op, local_ops)
     else:
         for local_op in local_ops:
             _validate_add_col_or_create_table(local_op, dist_ops)
@@ -112,7 +114,7 @@ def _validate_order_new(
                     _validate_add_col_or_create_table(op, dist_ops_before)
             elif isinstance(op, DropColumn):
                 if op.target == OperationTarget.DISTRIBUTED:
-                    _validate_drop(op, local_ops_before)
+                    _validate_drop_col(op, local_ops_before)
 
 
 def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
