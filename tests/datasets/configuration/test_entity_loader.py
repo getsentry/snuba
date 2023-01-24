@@ -83,6 +83,14 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             ),
         ]
 
+    def _compare_join_relationships(self, config_entity, py_entity):
+        config_joins = config_entity.get_all_join_relationships()
+        py_joins = py_entity.get_all_join_relationships()
+
+        assert len(config_joins) == len(py_joins)
+        for config_join, py_join in zip(config_joins, py_joins):
+            assert config_join == py_join, config_entity.entity_key
+
     def _compare_storage_mappers(
         self, config_entity: PluggableEntity, py_entity: Entity
     ):
@@ -136,6 +144,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         ), entity_key.value
 
         self._compare_storage_mappers(config_entity, py_entity)
+        self._compare_join_relationships(config_entity, py_entity)
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:

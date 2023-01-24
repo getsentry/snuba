@@ -403,3 +403,18 @@ validators:
     args:
       required_filter_columns:
         - project_id
+
+
+join_relationships:
+  grouped:
+    rhs_entity: groupedmessage
+    join_type: inner
+    columns:
+      - [project_id, project_id]
+      - [group_id, id]
+  assigned:
+    rhs_entity: groupassignee
+    join_type: inner
+    columns:
+      - [project_id, project_id]
+      - [group_id, group_id]
