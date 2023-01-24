@@ -43,6 +43,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
+        from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
@@ -80,6 +81,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
                 EntityKey.EVENTS,
+            ),
+            (
+                "snuba/datasets/configuration/replays/entities/replays.yaml",
+                ReplaysEntity,
+                EntityKey.REPLAYS,
             ),
         ]
 
