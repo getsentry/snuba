@@ -10,7 +10,7 @@ class Migration(migration.ClickhouseNodeMigration):
     Adds back (again) the size, bytes_received columns to match schema in SaaS
     """
 
-    blocking = True
+    blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [

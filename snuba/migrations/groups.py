@@ -172,7 +172,8 @@ class OutcomesLoader(DirectoryLoader):
             "0004_outcomes_matview_additions",
             "0005_outcomes_ttl",
             "0006_outcomes_add_size_col",
-            "0007_outcomes_add_indexes_and_codecs",
+            "0007_outcomes_add_event_id_ttl_codec",
+            "0008_outcomes_add_indexes",
         ]
 
 
