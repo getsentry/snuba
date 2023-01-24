@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import wraps
-from typing import Any, Callable, Dict, List, MutableMapping, Sequence
+from typing import Any, Callable, Dict, MutableMapping, Set
 
 from flask import Response, g, jsonify, make_response, request
 
@@ -27,20 +27,12 @@ ACTIONS_TO_POLICIES = {
 
 def get_migration_group_policies(
     user: AdminUser,
-) -> Dict[str, Sequence[MigrationPolicy]]:
+) -> Dict[str, Set[MigrationPolicy]]:
     """
     Creates a mapping of migration groups to policies based on a user's
-    roles. If a user has multiple roles, and the actions on those roles
-    correspond to different policies for the same resource (migration
-    group in this case), the highest policy (the most permissive) will be
-    used for that resource.
-
-    e.g. Take Roles A and B. Role A's action maps to "AllMigrationsPolicy".
-    Role B's action maps to "NoMigrationsPolicy". Both Role A and Role B's
-    actions include the same resource R. The resulting group policy map will be
-    as follows: {"R": AllMigrationsPolicy()}
+    roles.
     """
-    group_policies: MutableMapping[str, List[str]] = defaultdict(list)
+    group_policies: MutableMapping[str, Set[str]] = defaultdict(set)
     allowed_groups = [
         group.value
         for group in get_active_migration_groups()
@@ -54,16 +46,11 @@ def get_migration_group_policies(
 
             for resource in action._resources:
                 group = resource.name
-                print("nammmmee", group)
                 if group in allowed_groups:
-                    group_policies[group].append(ACTIONS_TO_POLICIES[action.__class__])
+                    group_policies[group].add(ACTIONS_TO_POLICIES[action.__class__])
 
-    print("-----\n\n")
-    print("GROUP POLICES", group_policies)
-    print("ALLWOED GROUPS", allowed_groups)
-    print("-----\n\n")
     return {
-        group: [MigrationPolicy.class_from_name(policy)() for policy in policies]
+        group: {MigrationPolicy.class_from_name(policy)() for policy in policies}
         for group, policies in group_policies.items()
     }
 
