@@ -36,13 +36,13 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return self.__forward_migrations("metrics_distributions_local")
+        return self.__forward_migrations("metrics_distributions_v2_local")
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return self.__backward_migrations("metrics_distributions_local")
+        return self.__backward_migrations("metrics_distributions_v2_local")
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return self.__forward_migrations("metrics_distributions_dist")
+        return self.__forward_migrations("metrics_distributions_v2_dist")
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return self.__backward_migrations("metrics_distributions_dist")
+        return self.__backward_migrations("metrics_distributions_v2_dist")
