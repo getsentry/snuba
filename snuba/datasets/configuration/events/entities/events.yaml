@@ -411,8 +411,7 @@ subscription_validators:
         - groupby
         - having
         - orderby
-      required_time_column:
-        - timestampp
+      required_time_column: timestamp
 
 
 join_relationships:

@@ -84,18 +84,26 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         ]
 
     def _compare_subscription_validators(self, config_entity, py_entity):
-        config_joins = config_entity.get_subscription_validators()
-        py_joins = py_entity.get_subscription_validators()
+        config_validators = config_entity.get_subscription_validators()
+        py_validators = py_entity.get_subscription_validators()
 
-        assert len(config_joins) == len(py_joins)
-        for config_join, py_join in zip(config_joins, py_joins):
-            assert config_join == py_join, config_entity.entity_key
+        if config_validators is None or py_validators is None:
+            assert config_validators is None and py_validators is None
+            return
+        assert len(config_validators) == len(py_validators)
+
+        for config_join, py_join in zip(config_validators, py_validators):
+            assert config_join.__dict__ == py_join.__dict__, config_entity.entity_key
 
     def _compare_join_relationships(self, config_entity, py_entity):
         config_joins = config_entity.get_all_join_relationships()
         py_joins = py_entity.get_all_join_relationships()
 
+        if config_joins is None and py_joins is None:
+            return
         assert len(config_joins) == len(py_joins)
+        if config_joins is None:
+            return
         for config_join, py_join in zip(config_joins, py_joins):
             assert config_join == py_join, config_entity.entity_key
 
@@ -153,6 +161,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         self._compare_storage_mappers(config_entity, py_entity)
         self._compare_join_relationships(config_entity, py_entity)
+        self._compare_subscription_validators(config_entity, py_entity)
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:
