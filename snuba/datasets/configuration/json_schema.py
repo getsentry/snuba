@@ -152,6 +152,17 @@ NUMBER_SCHEMA = make_column_schema(
     },
 )
 
+FIXED_STRING_SCHEMA = make_column_schema(
+    column_type={"enum": ["FixedString"]},
+    args={
+        "type": "object",
+        "properties": {
+            "length": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 
 NO_ARG_SCHEMA = make_column_schema(
     column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
@@ -184,6 +195,7 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
 
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
+    FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
 ]
@@ -644,11 +656,13 @@ V1_ENTITY_SCHEMA = {
             "items": ENTITY_VALIDATOR,
             "description": "The validation logic used on the ClickHouse query",
         },
+        "validate_data_model": {
+            "type": ["string", "null"],
+            "description": "The level at which mismatched functions and columns when querying the entity should be logged",
+        },
         "required_time_column": {
-            **TYPE_STRING,
-            **{
-                "description": "The name of the required time column specifed in schema"
-            },
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
         },
         "partition_key_column_name": {
             "type": ["string", "null"],

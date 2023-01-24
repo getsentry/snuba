@@ -5,10 +5,8 @@ import sentry_sdk
 from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
-from snuba.datasets.entities.storage_selectors.selector import (
-    QueryStorageSelector,
-    QueryStorageSelectorError,
-)
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
+from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
 from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,

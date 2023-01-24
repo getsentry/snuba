@@ -20,6 +20,11 @@ def _get_client(
     )
 
 
+def get_regex_match(curr_create_table_statement: str) -> str:
+    match = re.search("\/clickhouse([a-z\/\-{}_]*)", curr_create_table_statement)
+    return match.group(0)
+
+
 def verify_zk_replica_path(
     source_client: Client,
     curr_create_table_statement: str,
@@ -43,8 +48,8 @@ def verify_zk_replica_path(
         f"SELECT replica_path FROM system.replicas where table = '{table}'"
     )
 
-    match = re.search("\/clickhouse(.*,)", curr_create_table_statement)
-    create_table_path = match.group(0)[:-2].replace("{shard}", source_shard)
+    match = get_regex_match(curr_create_table_statement)
+    create_table_path = match.replace("{shard}", source_shard)
 
     built_replica_path = f"{create_table_path}/replicas/{source_replica}"
 
