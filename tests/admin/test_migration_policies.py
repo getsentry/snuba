@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Set
 
 import pytest
 
@@ -9,7 +9,7 @@ from snuba.admin.auth_roles import (
     MigrationResource,
     Role,
 )
-from snuba.admin.migrations_policies import get_group_policies
+from snuba.admin.migrations_policies import get_migration_group_policies
 from snuba.admin.user import AdminUser
 from snuba.migrations.policies import (
     AllMigrationsPolicy,
@@ -32,23 +32,29 @@ ALL_ROLE = Role(
 
 
 @pytest.mark.parametrize(
-    "roles, expected_policy",
+    "roles, expected_policies",
     [
-        ([NO_MIGRATIONS_ROLE], NoMigrationsPolicy),
-        ([NO_MIGRATIONS_ROLE, NON_BLOCKING_ROLE], NonBlockingMigrationsPolicy),
-        ([NO_MIGRATIONS_ROLE, NON_BLOCKING_ROLE, ALL_ROLE], AllMigrationsPolicy),
+        (
+            [ALL_ROLE],
+            {AllMigrationsPolicy()},
+        ),
+        (
+            [NO_MIGRATIONS_ROLE, NON_BLOCKING_ROLE],
+            {NoMigrationsPolicy(), NonBlockingMigrationsPolicy()},
+        ),
     ],
 )
 def test_get_group_policies(
-    roles: Sequence[Role], expected_policy: MigrationPolicy
+    roles: Sequence[Role], expected_policies: Set[MigrationPolicy]
 ) -> None:
     user = AdminUser("meredith@sentry.io", "123", roles=roles)
-    results = get_group_policies(user)
-    assert len(results) == 1
-    assert isinstance(results["test_migration"], expected_policy)
+    results = get_migration_group_policies(user)
+    assert set(r.__class__ for r in results["test_migration"]) == set(
+        e.__class__ for e in expected_policies
+    )
 
 
-def test_get_group_policies_sans_roles() -> None:
+def test_get_migration_group_policies_sans_roles() -> None:
     user = AdminUser("meredith@sentry.io", "123", roles=[])
-    results = get_group_policies(user)
+    results = get_migration_group_policies(user)
     assert results == {}

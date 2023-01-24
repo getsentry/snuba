@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.policies import MigrationPolicy
@@ -159,7 +159,7 @@ class StatusChecker(Checker):
 
 def run_migration_checks_and_policies(
     group_policies: Mapping[str, Sequence[MigrationPolicy]], runner: Runner
-) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
+) -> Sequence[Tuple[MigrationGroup, Set[MigrationData]]]:
     """
     Runs the policies for the given groups in addition to status
     checks for all groups.
