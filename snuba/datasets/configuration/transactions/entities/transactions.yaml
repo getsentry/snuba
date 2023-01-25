@@ -142,7 +142,6 @@ storages:
                   {
                     from_table_name,
                     from_col_name: "ip_address",
-                    to_function_name: "coalesce",
                   },
               },
               {
@@ -226,16 +225,6 @@ storages:
                     from_col_name: "spans.exclusive_time",
                     to_table_name,
                     to_col_name: "spans.exclusive_time_32",
-                  },
-              },
-              {
-                mapper: ColumnToColumn,
-                args:
-                  {
-                    from_table_name,
-                    from_col_name: "timestamp",
-                    to_table_name,
-                    to_col_name: "finish_ts",
                   },
               },
               {

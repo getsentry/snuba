@@ -315,6 +315,48 @@ class ModifyColumn(SqlOperation):
         return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
 
 
+class ModifyTableSettings(SqlOperation):
+    """
+    Modify the settings of a table.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        settings: Mapping[str, Any],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__settings = settings
+
+    def format_sql(self) -> str:
+        settings = ", ".join(f"{k} = {v}" for k, v in self.__settings.items())
+        return f"ALTER TABLE {self.__table_name} MODIFY SETTING {settings};"
+
+
+class ResetTableSettings(SqlOperation):
+    """
+    Reset the settings of a table to the default values.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        settings: Sequence[str],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__settings = settings
+
+    def format_sql(self) -> str:
+        settings = ", ".join(self.__settings)
+        return f"ALTER TABLE {self.__table_name} RESET SETTING {settings};"
+
+
 class AddIndex(SqlOperation):
     """
     Adds an index.
@@ -389,6 +431,9 @@ class InsertIntoSelect(SqlOperation):
         src_table_name: str,
         src_columns: Sequence[str],
         prewhere: Optional[str] = None,
+        order_by: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
         where: Optional[str] = None,
         target: OperationTarget = OperationTarget.UNSET,
     ):
@@ -398,6 +443,9 @@ class InsertIntoSelect(SqlOperation):
         self.__src_table_name = src_table_name
         self.__src_columns = src_columns
         self.__prewhere = prewhere
+        self.__order_by = order_by
+        self.__limit = limit
+        self.__offset = offset
         self.__where = where
 
     def format_sql(self) -> str:
@@ -414,7 +462,14 @@ class InsertIntoSelect(SqlOperation):
         else:
             where_clause = ""
 
-        return f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name}{prewhere_clause}{where_clause};"
+        limit_clause = f" LIMIT {self.__limit}" if self.__limit else ""
+        order_by_clause = f" ORDER BY {self.__order_by}" if self.__order_by else ""
+        offset_clause = f" OFFSET {self.__offset}" if self.__offset else ""
+
+        return (
+            f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name}{prewhere_clause}{where_clause}"
+            + f"{order_by_clause}{limit_clause}{offset_clause};"
+        )
 
 
 class RunPython:

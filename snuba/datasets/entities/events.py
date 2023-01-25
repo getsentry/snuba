@@ -3,7 +3,7 @@ from typing import Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
-    ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToMapping,
     SubscriptableMapper,
 )
@@ -18,7 +18,6 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
-from snuba.query.expressions import Column, FunctionCall
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.handled_functions import HandledFunctionsProcessor
@@ -49,23 +48,7 @@ errors_translators = TranslationMappers(
         ColumnToMapping(None, "release", None, "tags", "sentry:release"),
         ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
         ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-        ColumnToFunction(
-            None,
-            "ip_address",
-            "coalesce",
-            (
-                FunctionCall(
-                    None,
-                    "IPv4NumToString",
-                    (Column(None, None, "ip_address_v4"),),
-                ),
-                FunctionCall(
-                    None,
-                    "IPv6NumToString",
-                    (Column(None, None, "ip_address_v6"),),
-                ),
-            ),
-        ),
+        ColumnToIPAddress(None, "ip_address"),
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "username", None, "user_name"),
         ColumnToColumn(None, "email", None, "user_email"),

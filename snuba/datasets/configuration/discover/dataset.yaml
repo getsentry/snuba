@@ -1,0 +1,10 @@
+version: v1
+kind: dataset
+name: discover
+
+is_experimental: false
+
+entities:
+  - discover
+  - discover_events
+  - discover_transactions
