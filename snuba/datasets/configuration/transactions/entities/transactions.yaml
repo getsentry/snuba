@@ -228,16 +228,6 @@ storages:
                   },
               },
               {
-                mapper: ColumnToColumn,
-                args:
-                  {
-                    from_table_name,
-                    from_col_name: "timestamp",
-                    to_table_name,
-                    to_col_name: "finish_ts",
-                  },
-              },
-              {
                 mapper: ColumnToMapping,
                 args:
                   {
