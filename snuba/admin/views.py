@@ -16,7 +16,7 @@ from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
@@ -24,7 +24,10 @@ from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_queryl
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
-from snuba.admin.migrations_policies import check_migration_perms
+from snuba.admin.migrations_policies import (
+    check_migration_perms,
+    get_migration_group_polices,
+)
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -38,7 +41,7 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -87,18 +90,17 @@ def health() -> Response:
 
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
+    group_policies = get_migration_group_polices()
+    allowed_groups = group_policies.keys()
+
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
-    allowed_groups: Sequence[MigrationGroup] = [
-        group
-        for group in get_active_migration_groups()
-        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
-    ]
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-    for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
+    for group, migrations in run_migration_checks_and_policies(group_policies, runner):
         migration_ids = [asdict(m) for m in migrations]
         res.append({"group": group.value, "migration_ids": migration_ids})
+
     return make_response(jsonify(res), 200)
 
 

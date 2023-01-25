@@ -43,7 +43,6 @@ class Topic(Enum):
     )
     GENERIC_EVENTS = "generic-events"
 
-    DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"

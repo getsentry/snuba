@@ -136,6 +136,7 @@ class TransactionsLoader(DirectoryLoader):
             "0015_transactions_add_source_column",
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
+            "0018_transactions_add_profile_id",
         ]
 
 
@@ -169,6 +170,7 @@ class OutcomesLoader(DirectoryLoader):
             "0002_outcomes_remove_size_and_bytes",
             "0003_outcomes_add_category_and_quantity",
             "0004_outcomes_matview_additions",
+            "0005_outcomes_ttl",
         ]
 
 
@@ -255,6 +257,8 @@ class QuerylogLoader(DirectoryLoader):
             "0002_status_type_change",
             "0003_add_profile_fields",
             "0004_add_bytes_scanned",
+            "0005_add_codec_update_settings",
+            "0006_sorting_key_change",
         ]
 
 

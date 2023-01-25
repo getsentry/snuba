@@ -23,7 +23,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors.logical import LogicalQueryProcessor
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import ColumnValidationMode, QueryValidator
 
 
 class InvalidEntityConfigException(Exception):
@@ -181,6 +181,18 @@ def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelations
     return relationships
 
 
+def _build_validation_mode(mode: str | None) -> ColumnValidationMode:
+    if not mode:
+        return ColumnValidationMode.DO_NOTHING
+
+    if mode == "warn":
+        return ColumnValidationMode.WARN
+    elif mode == "error":
+        return ColumnValidationMode.ERROR
+
+    raise InvalidEntityConfigException(f"{mode} is not a valid validation mode")
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     return PluggableEntity(
@@ -191,6 +203,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         columns=parse_columns(config["schema"]),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
+        validate_data_model=_build_validation_mode(config.get("validate_data_model")),
         join_relationships=_build_join_relationships(config),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),

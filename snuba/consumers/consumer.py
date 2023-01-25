@@ -24,6 +24,7 @@ from typing import (
 )
 
 import rapidjson
+import sentry_sdk
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
@@ -566,10 +567,12 @@ def process_message(
             ),
         )
     except Exception as err:
-        logger.error(err, exc_info=True)
-        raise InvalidMessages(
-            [__invalid_kafka_message(message.value, consumer_group, err)]
-        ) from err
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("invalid_message", "true")
+            logger.warning(err, exc_info=True)
+            raise InvalidMessages(
+                [__invalid_kafka_message(message.value, consumer_group, err)]
+            ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
