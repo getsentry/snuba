@@ -79,11 +79,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.OUTCOMES_RAW,
             ),
             (
-                "snuba/datasets/configuration/functions/entities/functions.yaml",
-                FunctionsEntity,
-                EntityKey.FUNCTIONS,
-            ),
-            (
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
                 EntityKey.EVENTS,
@@ -92,6 +87,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/profiles/entities/profiles.yaml",
                 ProfilesEntity,
                 EntityKey.PROFILES,
+            ),
+            (
+                "snuba/datasets/configuration/functions/entities/functions.yaml",
+                FunctionsEntity,
+                EntityKey.FUNCTIONS,
             ),
         ]
 
