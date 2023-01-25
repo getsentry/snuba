@@ -3,9 +3,10 @@ from typing import Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
-    ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToLiteral,
     ColumnToMapping,
+    ColumnToNullIf,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -19,7 +20,6 @@ from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.custom_function import (
@@ -38,26 +38,11 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 transaction_translator = TranslationMappers(
     columns=[
-        ColumnToFunction(
+        ColumnToIPAddress(
             None,
             "ip_address",
-            "coalesce",
-            (
-                FunctionCall(
-                    None,
-                    "IPv4NumToString",
-                    (Column(None, None, "ip_address_v4"),),
-                ),
-                FunctionCall(
-                    None,
-                    "IPv6NumToString",
-                    (Column(None, None, "ip_address_v6"),),
-                ),
-            ),
         ),
-        ColumnToFunction(
-            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
-        ),
+        ColumnToNullIf(None, "user"),
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
         # ``discover`` dataset and the standalone ``transaction`` dataset. In
