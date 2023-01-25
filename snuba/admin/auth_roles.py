@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Optional, Sequence, Set, TypeVar, Union
+from typing import Generic, Optional, Sequence, Set, Type, TypeVar, Union
 
 from snuba import settings
 
@@ -95,7 +95,7 @@ def generate_test_role(
         name = f"{group}-{policy}"
 
     if policy == "all":
-        action = ExecuteAllAction
+        action: Type[MigrationAction] = ExecuteAllAction
     elif policy == "non_blocking":
         action = ExecuteNonBlockingAction
     else:
