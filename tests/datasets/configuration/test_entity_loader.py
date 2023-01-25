@@ -39,10 +39,12 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
+        from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
+        from snuba.datasets.entities.profiles import ProfilesEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
@@ -81,7 +83,56 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 FunctionsEntity,
                 EntityKey.FUNCTIONS,
             ),
+            (
+                "snuba/datasets/configuration/events/entities/events.yaml",
+                EventsEntity,
+                EntityKey.EVENTS,
+            ),
+            (
+                "snuba/datasets/configuration/profiles/entities/profiles.yaml",
+                ProfilesEntity,
+                EntityKey.PROFILES,
+            ),
         ]
+
+    def _compare_subscription_validators(
+        self, config_entity: PluggableEntity, py_entity: Entity
+    ) -> None:
+        config_validators = config_entity.get_subscription_validators()
+        py_validators = py_entity.get_subscription_validators()
+
+        if config_validators is None or py_validators is None:
+            assert config_validators is None and py_validators is None
+            return
+        assert len(config_validators) == len(py_validators)
+
+        for config_join, py_join in zip(config_validators, py_validators):
+            assert config_join.__dict__ == py_join.__dict__, config_entity.entity_key
+
+    def _compare_join_relationships(
+        self, config_entity: PluggableEntity, py_entity: Entity
+    ) -> None:
+        config_joins = config_entity.get_all_join_relationships()
+        py_joins = py_entity.get_all_join_relationships()
+
+        if config_joins is None and py_joins is None:
+            return
+        assert len(config_joins) == len(py_joins)
+        if config_joins is None:
+            return
+        for config_join, py_join in zip(config_joins, py_joins):
+            assert config_join == py_join, config_entity.entity_key
+
+    def _compare_storage_mappers(
+        self, config_entity: PluggableEntity, py_entity: Entity
+    ) -> None:
+        config_connections = config_entity.get_all_storage_connections()
+        py_connections = py_entity.get_all_storage_connections()
+
+        assert len(config_connections) == len(py_connections)
+
+        for config_conn, py_conn in zip(config_connections, py_connections):
+            assert config_conn == py_conn, config_entity.entity_key
 
     def _config_matches_python_definition(
         self, config_path: str, entity: Type[Entity], entity_key: EntityKey
@@ -123,6 +174,10 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         assert (
             config_entity.get_data_model() == py_entity.get_data_model()
         ), entity_key.value
+
+        self._compare_storage_mappers(config_entity, py_entity)
+        self._compare_join_relationships(config_entity, py_entity)
+        self._compare_subscription_validators(config_entity, py_entity)
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:
