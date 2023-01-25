@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Sequence, Set, TypeVar, Union
+from typing import Generic, Optional, Sequence, Set, TypeVar, Union
 
 from snuba import settings
 
@@ -83,6 +83,24 @@ MIGRATIONS_RESOURCES = {
 class Role:
     name: str
     actions: Set[Union[MigrationAction]]
+
+
+def generate_test_role(
+    group: str,
+    policy: str,
+    name: Optional[str] = None,
+) -> Role:
+    if not name:
+        name = f"{group}-{policy}"
+
+    if policy == "all":
+        action = ExecuteAllAction
+    elif policy == "non_blocking":
+        action = ExecuteNonBlockingAction
+    else:
+        action = ExecuteNoneAction
+
+    return Role(name=name, actions={action([MIGRATIONS_RESOURCES[group]])})
 
 
 DEFAULT_ROLES = [

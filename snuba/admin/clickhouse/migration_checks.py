@@ -158,7 +158,7 @@ class StatusChecker(Checker):
 
 
 def run_migration_checks_and_policies(
-    group_policies: Mapping[str, Sequence[MigrationPolicy]], runner: Runner
+    group_policies: Mapping[str, Set[MigrationPolicy]], runner: Runner
 ) -> Sequence[Tuple[MigrationGroup, Set[MigrationData]]]:
     """
     Runs the policies for the given groups in addition to status
