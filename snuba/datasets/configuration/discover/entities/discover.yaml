@@ -390,8 +390,8 @@ storages:
         - mapper: DefaultNoneFunctionMapper
           args:
             function_names:
-              - notHandled
               - isHandled
+              - notHandled
         - mapper: DefaultIfNullFunctionMapper
       curried_functions:
         - mapper: DefaultIfNullCurriedFunctionMapper
