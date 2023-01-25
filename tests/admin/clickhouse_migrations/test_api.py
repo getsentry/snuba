@@ -125,6 +125,14 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.parametrize("action", ["run", "reverse"])
+@patch(
+    "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+    {
+        "system": "AllMigrationsPolicy",
+        "generic_metrics": "NoMigrationsPolicy",
+        "events": "NonBlockingMigrationsPolicy",
+    },
+)
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
     method = "run_migration" if action == "run" else "reverse_migration"
@@ -134,6 +142,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         [
             generate_test_role("system", "all"),
             generate_test_role("generic_metrics", "none"),
+            generate_test_role("events", "non_blocking", True),
         ],
     ):
         # invalid action

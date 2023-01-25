@@ -88,6 +88,7 @@ class Role:
 def generate_test_role(
     group: str,
     policy: str,
+    override_resource: bool = False,
     name: Optional[str] = None,
 ) -> Role:
     if not name:
@@ -100,7 +101,11 @@ def generate_test_role(
     else:
         action = ExecuteNoneAction
 
-    return Role(name=name, actions={action([MIGRATIONS_RESOURCES[group]])})
+    resource = (
+        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
+    )
+
+    return Role(name=name, actions={action([resource])})
 
 
 DEFAULT_ROLES = [
