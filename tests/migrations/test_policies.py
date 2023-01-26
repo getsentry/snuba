@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Mapping
 from unittest.mock import Mock, patch
 
@@ -5,6 +6,7 @@ import pytest
 
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import (
+    MAX_REVERT_TIME_WINDOW_MINS,
     AllMigrationsPolicy,
     MigrationPolicy,
     NoMigrationsPolicy,
@@ -101,5 +103,23 @@ class TestMigrationPolicies:
         assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
 
         # if forward migration was blocking, reverse not allowed even when pending
+        migration_key = code_migration_key()
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == False
+
+    @patch(
+        "snuba.migrations.runner.Runner.get_status",
+        return_value=(
+            Status.COMPLETED,
+            datetime.now() + timedelta(minutes=-(MAX_REVERT_TIME_WINDOW_MINS - 5)),
+        ),
+    )
+    def test_completed_migration_reverse(self, mock_get_status: Mock) -> None:
+        migration_key = MigrationKey(
+            MigrationGroup("events"), "0016_drop_legacy_events"
+        )
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
+
+        # if forward migration was blocking, reverse not allowed even when
+        # within the max time limit to
         migration_key = code_migration_key()
         assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == False
