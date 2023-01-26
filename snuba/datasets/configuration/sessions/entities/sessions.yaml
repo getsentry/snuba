@@ -2,164 +2,166 @@ version: v1
 kind: entity
 name: sessions
 schema:
-- name: org_id
-  type: UInt
-  args:
-    size: 64
-- name: project_id
-  type: UInt
-  args:
-    size: 64
-- name: started
-  type: DateTime
-- name: release
-  type: String
-- name: environment
-  type: String
-- name: user_agent
-  type: String
-- name: os
-  type: String
-- name: duration_quantiles
-  type: AggregateFunction
-  args:
-    func: quantilesIf(0.5, 0.9)
-    arg_types:
-    - type: UInt
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: started, type: DateTime },
+    { name: release, type: String },
+    { name: environment, type: String },
+    { name: user_agent, type: String },
+    { name: os, type: String },
+    {
+      name: duration_quantiles,
+      type: AggregateFunction,
       args:
-        size: 32
-    - type: UInt
+        {
+          func: "quantilesIf(0.5, 0.9)",
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: duration_avg,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: duration_avg
-  type: AggregateFunction
-  args:
-    func: avgIf
-    arg_types:
-    - type: UInt
+        {
+          func: avgIf,
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: sessions,
+      type: AggregateFunction,
       args:
-        size: 32
-    - type: UInt
+        {
+          func: countIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: sessions_preaggr,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions
-  type: AggregateFunction
-  args:
-    func: countIf
-    arg_types:
-    - type: UUID
-    - type: UInt
+        {
+          func: sumIf,
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: sessions_crashed,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_preaggr
-  type: AggregateFunction
-  args:
-    func: sumIf
-    arg_types:
-    - type: UInt
+        {
+          func: countIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: sessions_crashed_preaggr,
+      type: AggregateFunction,
       args:
-        size: 32
-    - type: UInt
+        {
+          func: sumIf,
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: sessions_abnormal,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_crashed
-  type: AggregateFunction
-  args:
-    func: countIf
-    arg_types:
-    - type: UUID
-    - type: UInt
+        {
+          func: countIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: sessions_abnormal_preaggr,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_crashed_preaggr
-  type: AggregateFunction
-  args:
-    func: sumIf
-    arg_types:
-    - type: UInt
+        {
+          func: sumIf,
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: sessions_errored,
+      type: AggregateFunction,
       args:
-        size: 32
-    - type: UInt
+        {
+          func: uniqIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: sessions_errored_preaggr,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_abnormal
-  type: AggregateFunction
-  args:
-    func: countIf
-    arg_types:
-    - type: UUID
-    - type: UInt
+        {
+          func: sumIf,
+          arg_types:
+            [
+              { type: UInt, args: { size: 32 } },
+              { type: UInt, args: { size: 8 } },
+            ],
+        },
+    },
+    {
+      name: users,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_abnormal_preaggr
-  type: AggregateFunction
-  args:
-    func: sumIf
-    arg_types:
-    - type: UInt
+        {
+          func: uniqIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: users_crashed,
+      type: AggregateFunction,
       args:
-        size: 32
-    - type: UInt
+        {
+          func: uniqIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: users_abnormal,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_errored
-  type: AggregateFunction
-  args:
-    func: uniqIf
-    arg_types:
-    - type: UUID
-    - type: UInt
+        {
+          func: uniqIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    {
+      name: users_errored,
+      type: AggregateFunction,
       args:
-        size: 8
-- name: sessions_errored_preaggr
-  type: AggregateFunction
-  args:
-    func: sumIf
-    arg_types:
-    - type: UInt
-      args:
-        size: 32
-    - type: UInt
-      args:
-        size: 8
-- name: users
-  type: AggregateFunction
-  args:
-    func: uniqIf
-    arg_types:
-    - type: UUID
-    - type: UInt
-      args:
-        size: 8
-- name: users_crashed
-  type: AggregateFunction
-  args:
-    func: uniqIf
-    arg_types:
-    - type: UUID
-    - type: UInt
-      args:
-        size: 8
-- name: users_abnormal
-  type: AggregateFunction
-  args:
-    func: uniqIf
-    arg_types:
-    - type: UUID
-    - type: UInt
-      args:
-        size: 8
-- name: users_errored
-  type: AggregateFunction
-  args:
-    func: uniqIf
-    arg_types:
-    - type: UUID
-    - type: UInt
-      args:
-        size: 8
-- name: bucketed_started
-  type: DateTime
+        {
+          func: uniqIf,
+          arg_types: [{ type: UUID }, { type: UInt, args: { size: 8 } }],
+        },
+    },
+    { name: bucketed_started, type: DateTime },
+  ]
 required_time_column: started
 storages:
 - storage: sessions_hourly
