@@ -311,9 +311,6 @@ class GenericMetricsLoader(DirectoryLoader):
             "0007_distributions_aggregate_table",
             "0008_distributions_raw_table",
             "0009_distributions_mv",
-            "0010_counters_aggregate_table",
-            "0011_counters_raw_table",
-            "0012_counters_mv",
         ]
 
 

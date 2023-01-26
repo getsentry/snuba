@@ -16,10 +16,8 @@ from typing import (
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
-    is_counter_message,
     is_distribution_message,
     is_set_message,
-    value_for_counter_message,
     values_for_distribution_message,
     values_for_set_message,
 )
@@ -159,11 +157,3 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_distribution_message(message)
-
-
-class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_counter_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return value_for_counter_message(message)

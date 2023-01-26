@@ -25,7 +25,6 @@ CLUSTERS = [
             "generic_metrics_sets",
             "generic_metrics_distributions",
             "search_issues",
-            "generic_metrics_counters",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
