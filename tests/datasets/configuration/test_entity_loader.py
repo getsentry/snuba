@@ -40,6 +40,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.events import EventsEntity
+        from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
@@ -71,6 +72,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/outcomes/entities/outcomes_raw.yaml",
                 OutcomesRawEntity,
                 EntityKey.OUTCOMES_RAW,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
+                OrgMetricsCountersEntity,
+                EntityKey.ORG_METRICS_COUNTERS,
             ),
             (
                 "snuba/datasets/configuration/events/entities/events.yaml",
