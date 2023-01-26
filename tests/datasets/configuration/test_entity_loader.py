@@ -43,6 +43,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
+        from snuba.datasets.entities.profiles import ProfilesEntity
+        from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
@@ -86,10 +88,20 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/sessions/entities/sessions.yaml",
                 SessionsEntity,
                 EntityKey.SESSIONS,
+                "snuba/datasets/configuration/replays/entities/replays.yaml",
+                ReplaysEntity,
+                EntityKey.REPLAYS,
+            ),
+            (
+                "snuba/datasets/configuration/profiles/entities/profiles.yaml",
+                ProfilesEntity,
+                EntityKey.PROFILES,
             ),
         ]
 
-    def _compare_subscription_validators(self, config_entity, py_entity):
+    def _compare_subscription_validators(
+        self, config_entity: PluggableEntity, py_entity: Entity
+    ) -> None:
         config_validators = config_entity.get_subscription_validators()
         py_validators = py_entity.get_subscription_validators()
 
@@ -101,7 +113,9 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         for config_join, py_join in zip(config_validators, py_validators):
             assert config_join.__dict__ == py_join.__dict__, config_entity.entity_key
 
-    def _compare_join_relationships(self, config_entity, py_entity):
+    def _compare_join_relationships(
+        self, config_entity: PluggableEntity, py_entity: Entity
+    ) -> None:
         config_joins = config_entity.get_all_join_relationships()
         py_joins = py_entity.get_all_join_relationships()
 
@@ -115,7 +129,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
     def _compare_storage_mappers(
         self, config_entity: PluggableEntity, py_entity: Entity
-    ):
+    ) -> None:
         config_connections = config_entity.get_all_storage_connections()
         py_connections = py_entity.get_all_storage_connections()
 
