@@ -82,6 +82,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/sessions/entities/sessions.yaml",
                 SessionsEntity,
                 EntityKey.SESSIONS,
+            ),
+            (
                 "snuba/datasets/configuration/replays/entities/replays.yaml",
                 ReplaysEntity,
                 EntityKey.REPLAYS,
