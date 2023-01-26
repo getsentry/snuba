@@ -54,11 +54,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.DISCOVER,
             ),
             (
-                "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
-                GenericMetricsSetsEntity,
-                EntityKey.GENERIC_METRICS_SETS,
-            ),
-            (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
