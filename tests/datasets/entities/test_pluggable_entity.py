@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
-from functools import partial
-from typing import Mapping, MutableMapping
+from typing import Mapping
 
 import pytest
 import pytz
@@ -13,7 +12,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
@@ -23,7 +21,6 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import Query
 from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
@@ -37,14 +34,12 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 )
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.reader import Reader
 from snuba.request import Request
 from snuba.utils.schemas import AggregateFunction
 from snuba.utils.schemas import Column as SchemaColumn
 from snuba.utils.schemas import DateTime, Nested, UInt
-from snuba.web import QueryResult
 
 
 @pytest.fixture
@@ -132,48 +127,3 @@ def build_request(query_body: Mapping[str, str]) -> Request:
         attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
     )
     return request
-
-
-def test_generic_metrics_sets_vs_pluggable_similar_pipeline_behavior(
-    start_time: datetime, end_time: datetime, pluggable_sets_entity: PluggableEntity
-) -> None:
-    query_body = {
-        "query": f"""
-            MATCH (generic_metrics_sets)
-            SELECT uniq(value) AS unique_values BY project_id, org_id
-            WHERE org_id = 1
-            AND project_id = 2
-            AND metric_id = 3
-            AND tags['a'] = 4
-            AND timestamp >= toDateTime('{start_time}')
-            AND timestamp < toDateTime('{end_time}')
-            GRANULARITY 60
-        """,
-        "dataset": "generic_metrics",
-    }
-
-    # the pipeline modifies the query in the request so we need to construct
-    # two separate ones
-    request = build_request(query_body=query_body)
-    request2 = build_request(query_body=query_body)
-
-    sets_entity: GenericMetricsSetsEntity = GenericMetricsSetsEntity()
-
-    RESULT_MAP: MutableMapping[str, Query] = {}
-
-    def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader, output_name: str
-    ) -> QueryResult:
-        RESULT_MAP[output_name] = query
-        return QueryResult({}, {"experiments": {}, "sql": "", "stats": {}})
-
-    sets_entity.get_query_pipeline_builder().build_execution_pipeline(
-        request=request, runner=partial(query_runner, output_name="existing")
-    ).execute()
-
-    pluggable_sets_entity.get_query_pipeline_builder().build_execution_pipeline(
-        request=request2, runner=partial(query_runner, output_name="pluggable")
-    ).execute()
-
-    (match, failure_test) = RESULT_MAP["existing"].equals(RESULT_MAP["pluggable"])
-    assert match, failure_test

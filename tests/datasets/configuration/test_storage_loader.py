@@ -30,16 +30,6 @@ from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
 from snuba.datasets.storages.functions import agg_storage as functions
 from snuba.datasets.storages.functions import raw_storage as functions_raw
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage as gen_metrics_distributions_bucket,
-)
-from snuba.datasets.storages.generic_metrics import (
-    distributions_storage as gen_metrics_distributions,
-)
-from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as gen_metrics_sets_bucket,
-)
-from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
 from snuba.datasets.storages.groupassignees import storage as groupassignees
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages
 from snuba.datasets.storages.metrics import counters_storage
@@ -158,10 +148,6 @@ class TestStorageConfiguration(ConfigurationTest):
         sessions_raw,
         sessions_org,
         sessions_hourly,
-        gen_metrics_distributions_bucket,
-        gen_metrics_distributions,
-        gen_metrics_sets_bucket,
-        gen_metrics_sets,
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,
