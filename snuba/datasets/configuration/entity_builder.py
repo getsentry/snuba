@@ -63,7 +63,9 @@ def _build_entity_translation_mappers(
     )
     function_mappers: list[FunctionCallMapper] = (
         [
-            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(
+                **fm_config.get("args", {})
+            )
             for fm_config in config_translation_mappers["functions"]
         ]
         if "functions" in config_translation_mappers
@@ -82,7 +84,7 @@ def _build_entity_translation_mappers(
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
             CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
-                **curr_config["args"]
+                **curr_config.get("args", {})
             )
             for curr_config in config_translation_mappers["curried_functions"]
         ]
