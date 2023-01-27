@@ -31,7 +31,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 column=Column(
                     "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
                 ),
-                after="user_email",
+                after="dist",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

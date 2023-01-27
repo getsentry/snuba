@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Set, Type, TypeVar, Union, cast
+from typing import List, Optional, Type, TypeVar, Union, cast
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
@@ -175,7 +175,7 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
     Maps the list of function names to NULL.
     """
 
-    function_names: Set[str]
+    function_names: List[str]
 
     def __post_init__(self) -> None:
         self.function_match = FunctionCallMatch(
@@ -265,7 +265,7 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     the discover dataset file.
     """
 
-    subscript_names: Set[str]
+    subscript_names: List[str]
 
     def attempt_map(
         self,

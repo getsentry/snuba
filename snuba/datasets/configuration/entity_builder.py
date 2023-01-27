@@ -55,7 +55,9 @@ def _build_entity_translation_mappers(
 ) -> TranslationMappers:
     columns_mappers: list[ColumnMapper] = (
         [
-            ColumnMapper.get_from_name(col_config["mapper"])(**col_config["args"])
+            ColumnMapper.get_from_name(col_config["mapper"])(
+                **col_config.get("args", {})
+            )
             for col_config in config_translation_mappers["columns"]
         ]
         if "columns" in config_translation_mappers
@@ -74,7 +76,7 @@ def _build_entity_translation_mappers(
     subscriptable_mappers: list[SubscriptableReferenceMapper] = (
         [
             SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
-                **sub_config["args"]
+                **sub_config.get("args", {})
             )
             for sub_config in config_translation_mappers["subscriptables"]
         ]

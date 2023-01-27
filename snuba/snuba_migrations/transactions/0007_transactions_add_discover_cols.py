@@ -56,7 +56,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 column=Column(
                     "timestamp", DateTime(Modifiers(materialized="finish_ts"))
                 ),
-                after="title",
+                after=("type" if table_name == "transactions_local" else "title"),
             ),
         ]
 
