@@ -39,7 +39,10 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
-        from snuba.datasets.entities.discover import DiscoverEntity
+        from snuba.datasets.entities.discover import (
+            DiscoverEntity,
+            DiscoverTransactionsEntity,
+        )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
@@ -54,6 +57,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/discover/entities/discover.yaml",
                 DiscoverEntity,
                 EntityKey.DISCOVER,
+            ),
+            (
+                "snuba/datasets/configuration/discover/entities/discover_transactions.yaml",
+                DiscoverTransactionsEntity,
+                EntityKey.DISCOVER_TRANSACTIONS,
             ),
             (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
