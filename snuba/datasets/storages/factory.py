@@ -44,9 +44,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             agg_storage as functions_ro_storage,
         )
         from snuba.datasets.storages.functions import raw_storage as functions_storage
-        from snuba.datasets.storages.groupassignees import (
-            storage as groupassignees_storage,
-        )
         from snuba.datasets.storages.groupedmessages import (
             storage as groupedmessages_storage,
         )
@@ -82,8 +79,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._cdc_storages = {
-            storage.get_storage_key(): storage
-            for storage in [groupedmessages_storage, groupassignees_storage]
+            storage.get_storage_key(): storage for storage in [groupedmessages_storage]
         }
 
         self._all_storages = {

@@ -35,7 +35,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
         from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
         from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
@@ -52,7 +51,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             {
                 "discover": DiscoverDataset(),
                 "events": EventsDataset(),
-                "groupassignee": GroupAssigneeDataset(),
                 "groupedmessage": GroupedMessageDataset(),
                 "metrics": MetricsDataset(),
                 "outcomes": OutcomesDataset(),
