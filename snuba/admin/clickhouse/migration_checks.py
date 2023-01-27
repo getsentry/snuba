@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.policies import MigrationPolicy
@@ -158,7 +158,7 @@ class StatusChecker(Checker):
 
 
 def run_migration_checks_and_policies(
-    group_policies: Mapping[str, MigrationPolicy], runner: Runner
+    group_policies: Mapping[str, Set[MigrationPolicy]], runner: Runner
 ) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
     """
     Runs the policies for the given groups in addition to status
@@ -173,7 +173,7 @@ def run_migration_checks_and_policies(
         migration_ids: List[MigrationData] = []
 
         status_checker = StatusChecker(group, migrations)
-        policy = group_policies[group.value]
+        policies = group_policies[group.value]
 
         def do_checking(
             migration_key: MigrationKey,
@@ -184,13 +184,13 @@ def run_migration_checks_and_policies(
             if run_result.allowed:
                 run_result = (
                     RunResult(True)
-                    if policy.can_run(migration_key)
+                    if any(policy.can_run(migration_key) for policy in policies)
                     else RunResult(False, RunReason.RUN_POLICY)
                 )
             if reverse_result.allowed:
                 reverse_result = (
                     ReverseResult(True)
-                    if policy.can_reverse(migration_key)
+                    if any(policy.can_reverse(migration_key) for policy in policies)
                     else ReverseResult(False, ReverseReason.REVERSE_POLICY)
                 )
 

@@ -39,19 +39,23 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
+        from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
+        from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
+        from snuba.datasets.entities.replays import ReplaysEntity
+        from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
             (
-                "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
-                GenericMetricsSetsEntity,
-                EntityKey.GENERIC_METRICS_SETS,
+                "snuba/datasets/configuration/discover/entities/discover.yaml",
+                DiscoverEntity,
+                EntityKey.DISCOVER,
             ),
             (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
@@ -79,9 +83,29 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.OUTCOMES_RAW,
             ),
             (
+                "snuba/datasets/configuration/sessions/entities/org.yaml",
+                OrgSessionsEntity,
+                EntityKey.ORG_SESSIONS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
+                OrgMetricsCountersEntity,
+                EntityKey.ORG_METRICS_COUNTERS,
+            ),
+            (
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
                 EntityKey.EVENTS,
+            ),
+            (
+                "snuba/datasets/configuration/sessions/entities/sessions.yaml",
+                SessionsEntity,
+                EntityKey.SESSIONS,
+            ),
+            (
+                "snuba/datasets/configuration/replays/entities/replays.yaml",
+                ReplaysEntity,
+                EntityKey.REPLAYS,
             ),
             (
                 "snuba/datasets/configuration/profiles/entities/profiles.yaml",
