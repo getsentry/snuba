@@ -26,7 +26,7 @@ from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
-    get_migration_group_polices,
+    get_migration_group_policies,
 )
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -90,7 +90,7 @@ def health() -> Response:
 
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
-    group_policies = get_migration_group_polices()
+    group_policies = get_migration_group_policies(g.user)
     allowed_groups = group_policies.keys()
 
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []

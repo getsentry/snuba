@@ -55,7 +55,9 @@ def _build_entity_translation_mappers(
 ) -> TranslationMappers:
     columns_mappers: list[ColumnMapper] = (
         [
-            ColumnMapper.get_from_name(col_config["mapper"])(**col_config["args"])
+            ColumnMapper.get_from_name(col_config["mapper"])(
+                **col_config.get("args", {})
+            )
             for col_config in config_translation_mappers["columns"]
         ]
         if "columns" in config_translation_mappers
@@ -63,7 +65,9 @@ def _build_entity_translation_mappers(
     )
     function_mappers: list[FunctionCallMapper] = (
         [
-            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(
+                **fm_config.get("args", {})
+            )
             for fm_config in config_translation_mappers["functions"]
         ]
         if "functions" in config_translation_mappers
@@ -72,7 +76,7 @@ def _build_entity_translation_mappers(
     subscriptable_mappers: list[SubscriptableReferenceMapper] = (
         [
             SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
-                **sub_config["args"]
+                **sub_config.get("args", {})
             )
             for sub_config in config_translation_mappers["subscriptables"]
         ]
@@ -82,7 +86,7 @@ def _build_entity_translation_mappers(
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
             CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
-                **curr_config["args"]
+                **curr_config.get("args", {})
             )
             for curr_config in config_translation_mappers["curried_functions"]
         ]

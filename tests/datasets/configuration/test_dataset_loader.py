@@ -5,7 +5,6 @@ from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
 from snuba.datasets.functions import FunctionsDataset
-from snuba.datasets.generic_metrics import GenericMetricsDataset
 from snuba.datasets.metrics import MetricsDataset
 from snuba.datasets.outcomes import OutcomesDataset
 from snuba.datasets.outcomes_raw import OutcomesRawDataset
@@ -20,7 +19,6 @@ class TestDatasetConfiguration(ConfigurationTest):
     def test_build_entity_from_config_matches_python_definition(self) -> None:
         config_built_datasets = get_config_built_datasets()
         test_data = [
-            (GenericMetricsDataset(), config_built_datasets["generic_metrics"]),
             (TransactionsDataset(), config_built_datasets["transactions"]),
             (MetricsDataset(), config_built_datasets["metrics"]),
             (OutcomesRawDataset(), config_built_datasets["outcomes_raw"]),

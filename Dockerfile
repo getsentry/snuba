@@ -54,7 +54,7 @@ RUN set -ex; \
     yarn cache clean && \
     rm -rf node_modules && \
     apt-get purge -y --auto-remove yarn curl nodejs gnupg && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/yarn.list
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
