@@ -137,7 +137,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         if config_joins is None and py_joins is None:
             return
-        assert len(config_joins) == len(py_joins)
+        assert len(config_joins) == len(py_joins), config_entity.entity_key
         if config_joins is None:
             return
         for config_join, py_join in zip(config_joins, py_joins):
