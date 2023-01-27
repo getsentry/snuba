@@ -27,19 +27,12 @@ of the dictionary and the second array contains the values. To make queries fast
 a column like this can be indexed with bloom filters as described in :ref:`bloom`. In general
 we construct this index across datasets for ``tags`` but not for other columns.
 
-This works well when your dataset and query design gives you the ability to filter for exact matches to a small
-number of rows and the flexibility of completely arbitrary keys and values are a real requirement.
+This works well when your dataset and query design gives you the ability to
+filter for exact matches and a large number of rows will NOT be an exact match.
 Often, however, a ClickHouse query filters for rows that contain a substring match or regular
 expression match for a tag value of a given key. This makes bloom filter indexes
 not usable for the query and requires moving (or promoting) those relevant values for a given tag
 key to a new separate column which can support these queries more efficiently [#dupe]_.
-
-It is very efficient for queries to filter by a specific matching value that exists in
-a low number of rows for a given tag key being non-empty or key:value pair on a column
-that contains **just** the values of that specific key. However, in :ref:`selectivity`
-we discuss why this fails when queries contain conditions for a specific ``key=value``
-pair that occurs in a very large percentage of the table data (for example,
-``http_status_code=200`` or ``hasKey(http_status_code)``).
 
 .. _selectivity:
 
