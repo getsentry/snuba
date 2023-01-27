@@ -56,7 +56,7 @@ Bloom filter indexing on dictionary-like columns
 To facilitate faster searching on dictionary columns, we tend to create bloom filter indices
 on a hashes of both the unique ``key`` values of each row as well as hashes of all the ``key=value``
 pairs of each row. The `bloom filter <https://en.wikipedia.org/wiki/Bloom_filter>`_  registers these
-in a stochastic data structure designed to quickly determine which elements do NOT exist in a set,
+in a stochastic data structure designed to quickly determine which elements do NOT exist in a set.
 So that it can model the entire unbounded keyspace in a fixed amount of memory, a bloom filter
 is designed to have false positives. This means that there is actually a performance **penalty**
 if the value is often present in the underlying set: First, the value must be tested
