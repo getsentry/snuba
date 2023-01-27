@@ -10,6 +10,12 @@ TAGS_HASH_MAP_COLUMN = (
     "tags.key, tags.value)"
 )
 
+CONTEXTS_HASH_MAP_COLUMN = (
+    "arrayMap((k, v) -> cityHash64(concat("
+    "replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', v)), "
+    "contexts.key, contexts.value)"
+)
+
 
 def hash_map_int_column_definition(key_column_name: str, value_column_name: str) -> str:
     return (

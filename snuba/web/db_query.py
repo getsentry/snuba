@@ -317,7 +317,7 @@ def _record_rate_limit_metrics(
             },
         )
         metrics.timing(
-            name="table_concurrent_hist",
+            name="table_concurrent_v2",
             value=table_rate_limit_stats.concurrent,
             tags={
                 "table": stats.get("clickhouse_table", ""),

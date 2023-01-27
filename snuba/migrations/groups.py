@@ -137,6 +137,8 @@ class TransactionsLoader(DirectoryLoader):
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
             "0018_transactions_add_profile_id",
+            "0019_transactions_add_indexes_and_context_hash",
+            "0020_transactions_add_codecs",
         ]
 
 
@@ -171,6 +173,9 @@ class OutcomesLoader(DirectoryLoader):
             "0003_outcomes_add_category_and_quantity",
             "0004_outcomes_matview_additions",
             "0005_outcomes_ttl",
+            "0006_outcomes_add_size_col",
+            "0007_outcomes_add_event_id_ttl_codec",
+            "0008_outcomes_add_indexes",
         ]
 
 

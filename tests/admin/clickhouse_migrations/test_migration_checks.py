@@ -167,7 +167,7 @@ def test_run_migration_checks_and_policies(
         else ReverseResult(False, ReverseReason.NOT_RUN_YET)
     )
 
-    checks = run_migration_checks_and_policies({"events": mock_policy}, mock_runner)
+    checks = run_migration_checks_and_policies({"events": {mock_policy}}, mock_runner)
     _, migration_ids = checks[0]
     assert migration_ids[0].can_run == expected[0]
     assert migration_ids[0].can_reverse == expected[1]
