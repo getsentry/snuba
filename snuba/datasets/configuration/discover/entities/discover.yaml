@@ -1,0 +1,423 @@
+version: v1
+kind: entity
+name: discover
+schema:
+  [
+    { name: event_id, type: FixedString, args: { length: 32 }},
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: type, type: String, args: { schema_modifiers: [nullable] } },
+    { name: timestamp, type: DateTime },
+    { name: platform, type: String, args: { schema_modifiers: [nullable] } },
+    { name: environment, type: String, args: { schema_modifiers: [nullable] } },
+    { name: release, type: String, args: { schema_modifiers: [nullable] } },
+    { name: dist, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user, type: String, args: { schema_modifiers: [nullable] } },
+    { name: transaction, type: String, args: { schema_modifiers: [nullable] } },
+    { name: message, type: String, args: { schema_modifiers: [nullable] } },
+    { name: title, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
+    { name: username, type: String, args: { schema_modifiers: [nullable] } },
+    { name: email, type: String, args: { schema_modifiers: [nullable] } },
+    { name: ip_address, type: String, args: { schema_modifiers: [nullable] } },
+    { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
+    { name: sdk_version, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: geo_country_code,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    { name: geo_region, type: String, args: { schema_modifiers: [nullable] } },
+    { name: geo_city, type: String, args: { schema_modifiers: [nullable] } },
+    { name: http_method, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: http_referer,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: contexts,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    { name: trace_id, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: span_id,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 64 },
+    },
+    {
+      name: group_id,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 64 },
+    },
+    {
+      name: primary_hash,
+      type: FixedString,
+      args: { schema_modifiers: [nullable], length: 32 },
+    },
+    { name: level, type: String, args: { schema_modifiers: [nullable] } },
+    { name: logger, type: String, args: { schema_modifiers: [nullable] } },
+    { name: server_name, type: String, args: { schema_modifiers: [nullable] } },
+    { name: site, type: String, args: { schema_modifiers: [nullable] } },
+    { name: url, type: String, args: { schema_modifiers: [nullable] } },
+    { name: location, type: String, args: { schema_modifiers: [nullable] } },
+    { name: culprit, type: String, args: { schema_modifiers: [nullable] } },
+    { name: received, type: DateTime, args: { schema_modifiers: [nullable] } },
+    {
+      name: sdk_integrations,
+      type: Array,
+      args: { schema_modifiers: [nullable], inner_type: { type: String } },
+    },
+    { name: version, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: exception_stacks,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              {
+                name: type,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: value,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: mechanism_type,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: mechanism_handled,
+                type: UInt,
+                args: { schema_modifiers: [nullable], size: 8 },
+              },
+            ],
+        },
+    },
+    {
+      name: exception_frames,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              {
+                name: abs_path,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: filename,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: package,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: module,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: function,
+                type: String,
+                args: { schema_modifiers: [nullable] },
+              },
+              {
+                name: in_app,
+                type: UInt,
+                args: { schema_modifiers: [nullable], size: 8 },
+              },
+              {
+                name: colno,
+                type: UInt,
+                args: { schema_modifiers: [nullable], size: 32 },
+              },
+              {
+                name: lineno,
+                type: UInt,
+                args: { schema_modifiers: [nullable], size: 32 },
+              },
+              { name: stack_level, type: UInt, args: { size: 16 } },
+            ],
+        },
+    },
+    {
+      name: modules,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: name, type: String }, { name: version, type: String }],
+        },
+    },
+    {
+      name: transaction_hash,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 64 },
+    },
+    {
+      name: transaction_op,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: transaction_status,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 8 },
+    },
+    {
+      name: transaction_source,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: duration,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 32 },
+    },
+    {
+      name: measurements,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: Float, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: span_op_breakdowns,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: Float, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: spans,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: op, type: String },
+              { name: group, type: UInt, args: { size: 64 } },
+              { name: exclusive_time, type: Float, args: { size: 64 } },
+              { name: exclusive_time_32, type: Float, args: { size: 32 } },
+            ],
+        },
+    },
+    {
+      name: group_ids,
+      type: Array,
+      args:
+        {
+          inner_type:
+            { type: UInt, args: { schema_modifiers: [nullable], size: 64 } },
+        },
+    },
+    {
+      name: app_start_type,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+  ]
+required_time_column: timestamp
+storages:
+  - storage: discover
+    is_writable: false
+    translation_mappers:
+      columns:
+        - mapper: DefaultNoneColumnMapper
+          args:
+            column_names:
+              - transaction_hash
+              - transaction_op
+              - transaction_status
+              - transaction_source
+              - duration
+              - measurements.key
+              - measurements.value
+              - span_op_breakdowns.key
+              - span_op_breakdowns.value
+              - spans.op
+              - spans.group
+              - spans.exclusive_time
+              - spans.exclusive_time_32
+              - group_ids
+              - app_start_type
+        - mapper: ColumnToLiteral
+          args:
+            from_table_name: null
+            from_col_name: group_id
+            to_literal_value: 0
+        - mapper: DefaultNoneColumnMapper
+          args:
+            column_names:
+              - group_id
+              - primary_hash
+              - level
+              - logger
+              - server_name
+              - site
+              - url
+              - location
+              - culprit
+              - received
+              - sdk_integrations
+              - version
+              - exception_stacks.type
+              - exception_stacks.value
+              - exception_stacks.mechanism_type
+              - exception_stacks.mechanism_handled
+              - exception_frames.abs_path
+              - exception_frames.filename
+              - exception_frames.package
+              - exception_frames.module
+              - exception_frames.function
+              - exception_frames.in_app
+              - exception_frames.colno
+              - exception_frames.lineno
+              - exception_frames.stack_level
+              - modules.name
+              - modules.version
+        - mapper: ColumnToIPAddress
+          args:
+            from_table_name: null
+            from_col_name: ip_address
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: transaction
+            to_table_name: null
+            to_col_name: transaction_name
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: username
+            to_table_name: null
+            to_col_name: user_name
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: email
+            to_table_name: null
+            to_col_name: user_email
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_country_code
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.country_code
+            nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_region
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.region
+            nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_city
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.city
+            nullable: true
+        - mapper: ColumnToNullIf
+          args:
+            from_table_name: null
+            from_col_name: user
+      subscriptables:
+        - mapper: DefaultNoneSubscriptMapper
+          args:
+            subscript_names:
+              - measurements
+              - span_op_breakdowns
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: contexts
+            to_nested_col_table: null
+            to_nested_col_name: contexts
+            value_subcolumn_name: value
+            nullable: false
+      functions:
+        - mapper: DefaultNoneFunctionMapper
+          args:
+            function_names:
+              - apdex
+              - failure_rate
+        - mapper: DefaultNoneFunctionMapper
+          args:
+            function_names:
+              - isHandled
+              - notHandled
+        - mapper: DefaultIfNullFunctionMapper
+      curried_functions:
+        - mapper: DefaultIfNullCurriedFunctionMapper
+storage_selector:
+  selector: DefaultQueryStorageSelector
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: TagsExpanderProcessor
+  - processor: BasicFunctionsProcessor
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - project_id

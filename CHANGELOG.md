@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.1.1
+
+### Various fixes & improvements
+
+- ref(DC): Remove Generic Metrics Python (#3650) by @rahul-kumar-saini
+- ref(config): Create Replays Entity yaml file  (#3643) by @enochtangg
+- ref(config) Create Profiles Entity yaml file (#3642) by @enochtangg
+- feat(DC): create events entity, expand testing, fix transactions yaml (#3645) by @volokluev
+- refDC): Extract session translation mappers (#3636) by @volokluev
+- ref: remove yarn apt list after installation (#3648) by @asottile-sentry
+- feat(api-abuse): Add triggered rate limiter name to Querylog stats (#3625) by @enochtangg
+- migrations: make querylog match SaaS (#3611) by @dbanda
+- build: Arroyo 2.5.0 (#3635) by @lynnagara
+- feat: Clean up unused topic (#3634) by @lynnagara
+- ref(DC): Add FixedString field to configuration (#3630) by @volokluev
+- feat(config): Migrate GroupedMessage and GroupAssignee Entities to YAML (#3616) by @evanh
+- ref(migrations): Simplfy policies and status checks (#3606) by @MeredithAnya
+- fix(outcomes): Add TTL to outcomes dataset (#3615) by @nikhars
+- ref(copy-tables): fix regex (#3631) by @MeredithAnya
+- feat(profiling): Add profile id to transactions table (#3607) by @Zylphrex
+- ref(config) Migrate Outcomes and OutcomesRaw entities to YAML (#3632) by @evanh
+- feat: Tag invalid messages for DLQ with `invalid_message`: `true` (#3633) by @lynnagara
+- ref: Remove invalid TODO (#3624) by @lynnagara
+- feat: Remove ability to override scheduling mode (#3623) by @lynnagara
+- feat(api-abuse): Add timing metrics for table_concurrent (#3628) by @enochtangg
+- ref: Remove debugging code (#3621) by @lynnagara
+- add settings for codecov (#3627) by @volokluev
+- migrations: make errors schema match SaaS (#3604) by @dbanda
+
+_Plus 18 more_
+
 ## 23.1.0
 
 ### Various fixes & improvements
