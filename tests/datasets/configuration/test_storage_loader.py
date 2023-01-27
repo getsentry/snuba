@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.schemas.tables import TableSchema
@@ -25,18 +26,12 @@ from snuba.utils.schemas import AggregateFunction
 CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 from snuba.datasets.storages.discover import storage as discover
+from snuba.datasets.storages.errors import storage as errors
+from snuba.datasets.storages.errors_ro import storage as errors_ro
 from snuba.datasets.storages.functions import agg_storage as functions
 from snuba.datasets.storages.functions import raw_storage as functions_raw
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage as gen_metrics_distributions_bucket,
-)
-from snuba.datasets.storages.generic_metrics import (
-    distributions_storage as gen_metrics_distributions,
-)
-from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as gen_metrics_sets_bucket,
-)
-from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
+from snuba.datasets.storages.groupassignees import storage as groupassignees
+from snuba.datasets.storages.groupedmessages import storage as groupedmessages
 from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
@@ -112,6 +107,15 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
             new.get_table_writer().get_stream_loader(),
         )
 
+    if isinstance(old, CdcStorage) or isinstance(new, CdcStorage):
+        assert isinstance(old, CdcStorage)
+        assert isinstance(new, CdcStorage)
+        assert old.get_postgres_table() == new.get_postgres_table()
+        assert old.get_default_control_topic() == new.get_default_control_topic()
+        assert (
+            old.get_row_processor().config_key() == new.get_row_processor().config_key()
+        )
+
 
 def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> None:
     assert old.get_commit_log_topic_spec() == new.get_commit_log_topic_spec()
@@ -135,15 +139,15 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
         discover,
+        errors,
+        errors_ro,
         functions,
         functions_raw,
+        groupassignees,
+        groupedmessages,
         sessions_raw,
         sessions_org,
         sessions_hourly,
-        gen_metrics_distributions_bucket,
-        gen_metrics_distributions,
-        gen_metrics_sets_bucket,
-        gen_metrics_sets,
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,

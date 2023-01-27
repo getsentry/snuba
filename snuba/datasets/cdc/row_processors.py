@@ -14,6 +14,10 @@ class CdcRowProcessor(ABC, metaclass=RegisteredClass):
         raise NotImplementedError
 
     @classmethod
+    def from_kwargs(cls, **kwargs: str) -> "CdcRowProcessor":
+        return cls(**kwargs)
+
+    @classmethod
     def get_from_name(cls, name: str) -> Type["CdcRowProcessor"]:
         return cast(Type["CdcRowProcessor"], cls.class_from_name(name))
 

@@ -3,8 +3,13 @@ from typing import List
 
 from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelector
-from snuba.datasets.storage import StorageAndMappers, StorageAndMappersNotFound
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
+from snuba.datasets.storage import (
+    EntityStorageConnection,
+    EntityStorageConnectionNotFound,
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.query.logical import Query
 from snuba.query.processors.logical.timeseries_processor import (
     extract_granularity_from_query,
@@ -20,8 +25,8 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_and_mappers: List[StorageAndMappers],
-    ) -> StorageAndMappers:
+        storage_connections: List[EntityStorageConnection],
+    ) -> EntityStorageConnection:
         # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
         # then it is a crash rate alert subscription, and hence we decide on whether to use the
         # materialized storage or the raw storage by examining the time_window.
@@ -50,9 +55,16 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
             },
         )
         if use_materialized_storage:
-            storage = self.get_readable_storage_mapping(storage_and_mappers)
+            for storage_connection in storage_connections:
+                if (
+                    not storage_connection.is_writable
+                    and type(storage_connection.storage) is ReadableTableStorage
+                ):
+                    return storage_connection
         else:
-            storage = self.get_writable_storage_mapping(storage_and_mappers)
-        if storage:
-            return storage
-        raise StorageAndMappersNotFound("Cannot find storage.")
+            for storage_connection in storage_connections:
+                if storage_connection.is_writable and isinstance(
+                    storage_connection.storage, WritableTableStorage
+                ):
+                    return storage_connection
+        raise EntityStorageConnectionNotFound("Cannot find storage.")

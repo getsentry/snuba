@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, NamedTuple, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
@@ -174,13 +175,15 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         return self.__ignore_write_errors
 
 
-class StorageAndMappersNotFound(Exception):
-    pass
-
-
-class StorageAndMappers(NamedTuple):
+@dataclass
+class EntityStorageConnection:
     storage: ReadableStorage
-    mappers: TranslationMappers
+    translation_mappers: TranslationMappers
+    is_writable: bool = False
+
+
+class EntityStorageConnectionNotFound(Exception):
+    pass
 
 
 class StorageNotFound(Exception):

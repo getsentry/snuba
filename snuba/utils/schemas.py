@@ -342,7 +342,13 @@ class Array(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        return "Array({})".format(self.inner_type.for_schema())
+        inner_schema = self.inner_type.for_schema().split("CODEC", 1)
+        if len(inner_schema) == 1:
+            inner_type = inner_schema[0]
+            return f"Array({inner_type})"
+        else:
+            inner_type, codec_modifiers = inner_schema
+            return f"Array({inner_type}) CODEC {codec_modifiers}"
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> Array[TModifiers]:
         return Array(inner_type=self.inner_type, modifiers=modifiers)

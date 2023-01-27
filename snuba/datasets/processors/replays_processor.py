@@ -70,6 +70,12 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["replay_type"] = maybe(
             to_enum(["session", "error"]), replay_event.get("replay_type")
         )
+        processed["error_sample_rate"] = maybe(
+            float, replay_event.get("error_sample_rate")
+        )
+        processed["session_sample_rate"] = maybe(
+            float, replay_event.get("session_sample_rate")
+        )
 
         # Archived can only be 1 or null.
         processed["is_archived"] = (
