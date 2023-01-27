@@ -28,7 +28,7 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 class TestEntityConfigurationComparison(ConfigurationTest):
     """
-    This test compare the YAML config files to the Python ones.
+    This test compares the YAML config files to the Python ones.
     This test suite is only useful as we translate entities to YAML.
     Once all the entities are YAML and the Python ones are removed this
     test suite can also be removed.
