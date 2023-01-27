@@ -41,7 +41,12 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
+        from snuba.datasets.entities.metrics import (
+            MetricsCountersEntity,
+            MetricsDistributionsEntity,
+            MetricsSetsEntity,
+            OrgMetricsCountersEntity,
+        )
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
@@ -91,6 +96,21 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.ORG_METRICS_COUNTERS,
             ),
             (
+                "snuba/datasets/configuration/metrics/entities/metrics_counters.yaml",
+                MetricsCountersEntity,
+                EntityKey.METRICS_COUNTERS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_sets.yaml",
+                MetricsSetsEntity,
+                EntityKey.METRICS_SETS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_distributions.yaml",
+                MetricsDistributionsEntity,
+                EntityKey.METRICS_DISTRIBUTIONS,
+            ),
+            (
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
                 EntityKey.EVENTS,
@@ -119,7 +139,9 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         py_validators = py_entity.get_subscription_validators()
 
         if config_validators is None or py_validators is None:
-            assert config_validators is None and py_validators is None
+            assert (
+                config_validators is None and py_validators is None
+            ), config_entity.entity_key
             return
         assert len(config_validators) == len(py_validators)
 
