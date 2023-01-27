@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
-from snuba.clickhouse.translators.legacy_mappers_we_cant_delete.sessions_mappers import (
+from snuba.clickhouse.translators.snuba.legacy_mappers_we_cant_delete.sessions_mappers import (
     DurationAvgRawMapper,
     DurationQuantilesHourlyMapper,
     DurationQuantilesRawMapper,
