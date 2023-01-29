@@ -25,7 +25,7 @@ python-rapidjson==1.8
 pytz==2022.2.1
 redis==4.3.4
 sentry-arroyo[avro,json,msgpack]==2.5.0
-sentry-relay==0.8.15
+sentry-relay==0.8.17
 sentry-sdk==1.10.1
 simplejson==3.17.6
 structlog==22.1.0
