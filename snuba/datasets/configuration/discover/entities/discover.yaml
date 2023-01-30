@@ -363,8 +363,8 @@ storages:
         - mapper: DefaultNoneSubscriptMapper
           args:
             subscript_names:
-              - measurements
               - span_op_breakdowns
+              - measurements
         - mapper: SubscriptableMapper
           args:
             from_column_table: null
