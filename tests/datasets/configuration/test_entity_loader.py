@@ -40,11 +40,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
-<<<<<<< volo/discover_transactions_yaml
-            DiscoverTransactionsEntity,
-=======
             DiscoverEventsEntity,
->>>>>>> master
+            DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
@@ -190,7 +187,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             assert (
                 config_v.__class__ == py_v.__class__
             ), f"{entity_key.value}: validator mismatch between configuration-loaded sets and python-defined"
-            assert config_v.__dict__ == py_v.__dict__, entity_key.value
+            assert config_v.__dict__ == py_v.__dict__, (entity_key.value, config_v)
 
         assert (
             config_entity.get_all_storages() == py_entity.get_all_storages()
