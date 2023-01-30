@@ -44,7 +44,9 @@ class AddColumnCondition(EntitySubscriptionProcessor):
 
     def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
         if self.extra_condition_data_key not in metadata:
-            raise InvalidQueryException
+            raise InvalidQueryException(
+                f"{self.extra_condition_data_key} not found in metadata: {metadata}"
+            )
         return {self.extra_condition_data_key: metadata[self.extra_condition_data_key]}
 
     def process(
@@ -54,7 +56,10 @@ class AddColumnCondition(EntitySubscriptionProcessor):
         offset: Optional[int] = None,
     ) -> None:
         if self.extra_condition_data_key not in metadata:
-            raise InvalidQueryException
+            raise InvalidQueryException(
+                f"'{self.extra_condition_data_key}' not found in metadata: {metadata}"
+            )
+
         condition_to_add: Expression = binary_condition(
             ConditionFunctions.EQ,
             Column(None, None, self.extra_condition_column),

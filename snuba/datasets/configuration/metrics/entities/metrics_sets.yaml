@@ -109,6 +109,13 @@ validators:
   - validator: GranularityValidator
     args:
       minimum: 10
+
+subscription_processors:
+  - processor: AddColumnCondition
+    args:
+      extra_condition_data_key: organization
+      extra_condition_column: org_id
+
 subscription_validators:
   - validator: AggregationValidator
     args:
