@@ -143,7 +143,8 @@ Steps to resolve the issue:
    ``materialization_version = 1``. It can make sense to control this via the settings file in
    (in ``snuba/settings/__init.py__``)
 3. Run the migration in all relevant environments.
-4. Change the main consumer code, or the setting mentioned above in a specific environment.
+4. Change the main consumer code, or the setting mentioned above in a specific environment, to
+   set ``materialization_version = 1`` on write.
 5. Validate that the consumer is writing rows with the new materialization version, and that
    it produces the expected roll-up results.
 6. Write a migration to remove the now-unused materialized view (``click_events_aggregation_mv``).
