@@ -23,8 +23,6 @@ HARDCODED_STORAGE_KEYS = {
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
     "PROFILES": "profiles",
-    "FUNCTIONS": "functions",
-    "FUNCTIONS_RAW": "functions_raw",
     "REPLAYS": "replays",
 }
 
