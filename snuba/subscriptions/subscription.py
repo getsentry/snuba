@@ -34,13 +34,7 @@ class SubscriptionCreator:
         )
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
-        try:
-            data.validate()
-        except Exception as e:
-            import pdb
-
-            pdb.set_trace()
-            print(e)
+        data.validate()
 
         self._test_request(data, timer)
 
