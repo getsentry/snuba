@@ -38,7 +38,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         reset_dataset_factory()
 
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.functions import FunctionsEntity
@@ -65,11 +64,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/groupassignee/entities/groupassignee.yaml",
                 GroupAssigneeEntity,
                 EntityKey.GROUPASSIGNEE,
-            ),
-            (
-                "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
-                GroupedMessageEntity,
-                EntityKey.GROUPEDMESSAGE,
             ),
             (
                 "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",

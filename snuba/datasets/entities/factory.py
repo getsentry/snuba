@@ -35,7 +35,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         }
 
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
             DiscoverEventsEntity,
@@ -60,7 +59,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
             EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
-            EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
             EntityKey.OUTCOMES: OutcomesEntity,
             EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
             EntityKey.SESSIONS: SessionsEntity,

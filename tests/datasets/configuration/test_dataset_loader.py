@@ -1,5 +1,4 @@
 from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
-from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.events import EventsDataset
@@ -30,7 +29,6 @@ class TestDatasetConfiguration(ConfigurationTest):
             (EventsDataset(), config_built_datasets["events"]),
             (DiscoverDataset(), config_built_datasets["discover"]),
             (GroupAssigneeDataset(), config_built_datasets["groupassignee"]),
-            (GroupedMessageDataset(), config_built_datasets["groupedmessage"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
