@@ -39,7 +39,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
         from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
-        from snuba.datasets.functions import FunctionsDataset
         from snuba.datasets.metrics import MetricsDataset
         from snuba.datasets.outcomes import OutcomesDataset
         from snuba.datasets.outcomes_raw import OutcomesRawDataset
@@ -60,7 +59,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
                 "profiles": ProfilesDataset(),
-                "functions": FunctionsDataset(),
                 "replays": ReplaysDataset(),
             }
         )
