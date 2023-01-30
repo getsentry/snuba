@@ -41,7 +41,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         from snuba.datasets.metrics import MetricsDataset
         from snuba.datasets.outcomes import OutcomesDataset
         from snuba.datasets.outcomes_raw import OutcomesRawDataset
-        from snuba.datasets.profiles import ProfilesDataset
         from snuba.datasets.replays import ReplaysDataset
         from snuba.datasets.sessions import SessionsDataset
         from snuba.datasets.transactions import TransactionsDataset
@@ -56,7 +55,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "outcomes_raw": OutcomesRawDataset(),
                 "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
-                "profiles": ProfilesDataset(),
                 "replays": ReplaysDataset(),
             }
         )

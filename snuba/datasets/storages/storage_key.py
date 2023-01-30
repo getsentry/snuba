@@ -22,7 +22,6 @@ HARDCODED_STORAGE_KEYS = {
     "ORG_SESSIONS": "org_sessions",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "PROFILES": "profiles",
     "REPLAYS": "replays",
 }
 
