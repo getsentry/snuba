@@ -41,12 +41,18 @@ class TransactionEvent:
     transaction_source: Optional[str]
     app_start_type: str = "warm"
     has_app_ctx: bool = True
+    profile_id: Optional[str] = None
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
             return {"start_type": self.app_start_type}
         else:
             return None
+
+    def get_profile_context(self) -> Optional[Mapping[str, str]]:
+        if self.profile_id is None:
+            return None
+        return {"profile_id": self.profile_id}
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -146,6 +152,7 @@ class TransactionEvent:
                         },
                         "app": self.get_app_context(),
                         "experiments": {"test1": 1, "test2": 2},
+                        "profile": self.get_profile_context(),
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -256,6 +263,10 @@ class TransactionEvent:
             ret["ip_address_v4"] = self.ipv4
         else:
             ret["ip_address_v6"] = self.ipv6
+
+        if self.profile_id is not None:
+            ret["profile_id"] = str(uuid.UUID(self.profile_id))
+
         return ret
 
 
@@ -292,6 +303,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
+            profile_id="046852d24483455c8c44f0c8fbf496f9",
         )
 
     def test_skip_non_transactions(self) -> None:
