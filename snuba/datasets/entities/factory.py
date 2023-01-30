@@ -47,8 +47,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.outcomes import OutcomesEntity
-        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
@@ -58,8 +56,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
             EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
-            EntityKey.OUTCOMES: OutcomesEntity,
-            EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
             EntityKey.SESSIONS: SessionsEntity,
             EntityKey.ORG_SESSIONS: OrgSessionsEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,
