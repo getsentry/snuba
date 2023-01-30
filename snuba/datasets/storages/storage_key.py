@@ -8,7 +8,6 @@ HARDCODED_STORAGE_KEYS = {
     "EVENTS_RO": "events_ro",
     "ERRORS": "errors",
     "ERRORS_RO": "errors_ro",
-    "GROUPASSIGNEES": "groupassignees",
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",
@@ -23,8 +22,6 @@ HARDCODED_STORAGE_KEYS = {
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
     "PROFILES": "profiles",
-    "FUNCTIONS": "functions",
-    "FUNCTIONS_RAW": "functions_raw",
     "REPLAYS": "replays",
 }
 

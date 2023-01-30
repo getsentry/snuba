@@ -37,10 +37,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
@@ -59,11 +57,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/groupassignee/entities/groupassignee.yaml",
-                GroupAssigneeEntity,
-                EntityKey.GROUPASSIGNEE,
             ),
             (
                 "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
@@ -104,11 +97,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/profiles/entities/profiles.yaml",
                 ProfilesEntity,
                 EntityKey.PROFILES,
-            ),
-            (
-                "snuba/datasets/configuration/functions/entities/functions.yaml",
-                FunctionsEntity,
-                EntityKey.FUNCTIONS,
             ),
         ]
 

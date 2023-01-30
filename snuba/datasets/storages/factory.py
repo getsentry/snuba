@@ -40,13 +40,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.functions import (
-            agg_storage as functions_ro_storage,
-        )
-        from snuba.datasets.storages.functions import raw_storage as functions_storage
-        from snuba.datasets.storages.groupassignees import (
-            storage as groupassignees_storage,
-        )
         from snuba.datasets.storages.metrics import (
             counters_storage as metrics_counters_storage,
         )
@@ -78,12 +71,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
-        self._cdc_storages = {
-            storage.get_storage_key(): storage for storage in [groupassignees_storage]
-        }
-
         self._all_storages = {
-            **self._cdc_storages,
             **{
                 storage.get_storage_key(): storage
                 for storage in [
@@ -94,7 +82,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     sessions_raw_storage,
                     transactions_storage,
                     profiles_writable_storage,
-                    functions_storage,
                     replays_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
@@ -107,7 +94,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
                     profiles_writable_storage,
-                    functions_ro_storage,
                     metrics_counters_storage,
                     metrics_distributions_storage,
                     metrics_org_counters_storage,
