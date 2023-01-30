@@ -70,12 +70,6 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["replay_type"] = maybe(
             to_enum(["session", "error"]), replay_event.get("replay_type")
         )
-        processed["error_sample_rate"] = maybe(
-            float, replay_event.get("error_sample_rate")
-        )
-        processed["session_sample_rate"] = maybe(
-            float, replay_event.get("session_sample_rate")
-        )
 
         # Archived can only be 1 or null.
         processed["is_archived"] = (
@@ -144,6 +138,12 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["device_brand"] = maybe(to_string, device_context.get("brand"))
         processed["device_family"] = maybe(to_string, device_context.get("family"))
         processed["device_model"] = maybe(to_string, device_context.get("model"))
+
+        replay = contexts.get("replay", {})
+        processed["error_sample_rate"] = maybe(float, replay.get("error_sample_rate"))
+        processed["session_sample_rate"] = maybe(
+            float, replay.get("session_sample_rate")
+        )
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict

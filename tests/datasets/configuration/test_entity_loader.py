@@ -28,7 +28,7 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 class TestEntityConfigurationComparison(ConfigurationTest):
     """
-    This test compare the YAML config files to the Python ones.
+    This test compares the YAML config files to the Python ones.
     This test suite is only useful as we translate entities to YAML.
     Once all the entities are YAML and the Python ones are removed this
     test suite can also be removed.
@@ -37,7 +37,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
@@ -47,6 +46,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
+        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
@@ -64,11 +64,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/groupassignee/entities/groupassignee.yaml",
-                GroupAssigneeEntity,
-                EntityKey.GROUPASSIGNEE,
             ),
             (
                 "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
@@ -129,6 +124,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/profiles/entities/profiles.yaml",
                 ProfilesEntity,
                 EntityKey.PROFILES,
+            ),
+            (
+                "snuba/datasets/configuration/functions/entities/functions.yaml",
+                FunctionsEntity,
+                EntityKey.FUNCTIONS,
             ),
         ]
 

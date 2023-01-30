@@ -253,6 +253,12 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             if app_start_type is not None:
                 processed["app_start_type"] = app_start_type
 
+        profile_context = contexts.get("profile")
+        if profile_context is not None:
+            profile_id = profile_context.get("profile_id")
+            if profile_id is not None:
+                processed["profile_id"] = str(uuid.UUID(profile_id))
+
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             sanitized_contexts
@@ -395,6 +401,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         app_ctx = sanitized_context.get("app", {})
         if app_ctx is not None:
             app_ctx.pop("start_type", None)
+
+        # The profile_id is promoted as a column, so no need to store it
+        # again in the context array
+        profile_ctx = sanitized_context.get("profile", {})
+        profile_ctx.pop("profile_id", None)
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()
