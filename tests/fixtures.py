@@ -190,6 +190,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     unique = "100"
     primary_hash = md5(unique.encode("utf-8")).hexdigest()
     app_start_type = "warm.prewarmed"
+    profile_id = uuid.UUID("046852d2-4483-455c-8c44-f0c8fbf496f9")
 
     return {
         "project_id": PROJECT_ID,
@@ -231,6 +232,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
                 },
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
                 "app": {"start_type": app_start_type},
+                "profile": {"profile_id": profile_id.hex},
             },
             "measurements": {
                 "lcp": {"value": 32.129},
