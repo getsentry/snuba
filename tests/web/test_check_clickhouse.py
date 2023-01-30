@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Sequence
 from unittest import mock
 
@@ -69,3 +71,17 @@ def test_bad_dataset_fails_healthcheck(
     # the bad dataset is enabled and not experimental, therefore the healthcheck
     # should fail
     assert not check_clickhouse(ignore_experimental=True)
+
+
+@mock.patch(
+    "snuba.web.views.get_enabled_dataset_names",
+    return_value=["events"],
+)
+@mock.patch("snuba.clusters.cluster._get_storage_set_cluster_map", return_value={})
+def test_dataset_undefined_storage_set(
+    mock1: mock.MagicMock, mock2: mock.MagicMock
+) -> None:
+    metrics_tags: dict[str, str] = {}
+    assert not check_clickhouse(ignore_experimental=True, metric_tags=metrics_tags)
+    for v in metrics_tags.values():
+        assert isinstance(v, str)
