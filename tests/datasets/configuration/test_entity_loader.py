@@ -37,7 +37,10 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.entities.discover import DiscoverEntity
+        from snuba.datasets.entities.discover import (
+            DiscoverEntity,
+            DiscoverEventsEntity,
+        )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
@@ -98,6 +101,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 ProfilesEntity,
                 EntityKey.PROFILES,
             ),
+            (
+                "snuba/datasets/configuration/discover/entities/discover_events.yaml",
+                DiscoverEventsEntity,
+                EntityKey.DISCOVER_EVENTS,
+            ),
         ]
 
     def _compare_subscription_validators(
@@ -122,7 +130,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         if config_joins is None and py_joins is None:
             return
-        assert len(config_joins) == len(py_joins)
+        assert len(config_joins) == len(py_joins), config_entity.entity_key
         if config_joins is None:
             return
         for config_join, py_join in zip(config_joins, py_joins):
