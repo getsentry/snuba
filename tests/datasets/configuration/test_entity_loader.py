@@ -40,13 +40,13 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
+        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
             MetricsDistributionsEntity,
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.outcomes import OutcomesEntity
         from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
