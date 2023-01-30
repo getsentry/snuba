@@ -6,7 +6,6 @@ HARDCODED_ENTITY_KEYS = {
     "DISCOVER": "discover",
     "EVENTS": "events",
     "GROUPS": "groups",
-    "GROUPASSIGNEE": "groupassignee",
     "GROUPEDMESSAGE": "groupedmessage",
     "METRICS_SETS": "metrics_sets",
     "METRICS_COUNTERS": "metrics_counters",
@@ -20,7 +19,6 @@ HARDCODED_ENTITY_KEYS = {
     "DISCOVER_TRANSACTIONS": "discover_transactions",
     "DISCOVER_EVENTS": "discover_events",
     "PROFILES": "profiles",
-    "FUNCTIONS": "functions",
     "REPLAYS": "replays",
 }
 

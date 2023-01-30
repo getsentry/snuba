@@ -469,10 +469,8 @@ def get_cluster(
         if res is None:
             raise UndefinedClickhouseCluster(
                 f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment",
-                extra_data={
-                    "storage_set_key_not_defined": storage_set_key,
-                    "slice_id": slice_id,
-                },
+                storage_set_key_not_defined=storage_set_key.value,
+                slice_id=slice_id,
             )
 
     else:
@@ -481,6 +479,6 @@ def get_cluster(
         if res is None:
             raise UndefinedClickhouseCluster(
                 f"{storage_set_key} is not defined in the CLUSTERS setting for this environment",
-                extra_data={"storage_set_key_not_defined": storage_set_key},
+                storage_set_key_not_defined=storage_set_key.value,
             )
     return res

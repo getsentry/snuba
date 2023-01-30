@@ -28,7 +28,7 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 class TestEntityConfigurationComparison(ConfigurationTest):
     """
-    This test compare the YAML config files to the Python ones.
+    This test compares the YAML config files to the Python ones.
     This test suite is only useful as we translate entities to YAML.
     Once all the entities are YAML and the Python ones are removed this
     test suite can also be removed.
@@ -37,11 +37,14 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
+<<<<<<< volo/discover_transactions_yaml
             DiscoverTransactionsEntity,
+=======
+            DiscoverEventsEntity,
+>>>>>>> master
         )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
@@ -67,11 +70,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/groupassignee/entities/groupassignee.yaml",
-                GroupAssigneeEntity,
-                EntityKey.GROUPASSIGNEE,
             ),
             (
                 "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
@@ -118,6 +116,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 ProfilesEntity,
                 EntityKey.PROFILES,
             ),
+            (
+                "snuba/datasets/configuration/discover/entities/discover_events.yaml",
+                DiscoverEventsEntity,
+                EntityKey.DISCOVER_EVENTS,
+            ),
         ]
 
     def _compare_subscription_validators(
@@ -142,7 +145,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         if config_joins is None and py_joins is None:
             return
-        assert len(config_joins) == len(py_joins)
+        assert len(config_joins) == len(py_joins), config_entity.entity_key
         if config_joins is None:
             return
         for config_join, py_join in zip(config_joins, py_joins):

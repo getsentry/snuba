@@ -34,7 +34,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             ]
         }
 
-        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
@@ -42,7 +41,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.functions import FunctionsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
             MetricsDistributionsEntity,
@@ -59,7 +57,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         entity_map_pre_execute = {
             EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
             EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
             EntityKey.OUTCOMES: OutcomesEntity,
             EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
@@ -73,7 +70,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
             EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
             EntityKey.PROFILES: ProfilesEntity,
-            EntityKey.FUNCTIONS: FunctionsEntity,
             EntityKey.REPLAYS: ReplaysEntity,
         }
 
