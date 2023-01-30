@@ -40,8 +40,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.entities.discover import DiscoverEntity
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
-        from snuba.datasets.entities.outcomes import OutcomesEntity
-        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
         from snuba.datasets.entities.profiles import ProfilesEntity
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
@@ -57,16 +55,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
-                OutcomesEntity,
-                EntityKey.OUTCOMES,
-            ),
-            (
-                "snuba/datasets/configuration/outcomes/entities/outcomes_raw.yaml",
-                OutcomesRawEntity,
-                EntityKey.OUTCOMES_RAW,
             ),
             (
                 "snuba/datasets/configuration/sessions/entities/org.yaml",
