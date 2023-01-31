@@ -1,11 +1,18 @@
 import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
-from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTranslator
-from snuba.datasets.entities.discover import (
-    null_function_translation_mappers,
-    transaction_translation_mappers,
+from snuba.clickhouse.translators.snuba.allowed import (
+    DefaultIfNullCurriedFunctionMapper,
+    DefaultIfNullFunctionMapper,
+    DefaultNoneColumnMapper,
+    DefaultNoneFunctionMapper,
 )
+from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral
+from snuba.clickhouse.translators.snuba.mapping import (
+    SnubaClickhouseMappingTranslator,
+    TranslationMappers,
+)
+from snuba.datasets.factory import reset_dataset_factory
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -14,6 +21,24 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.snql.discover_entity_selection import EVENTS_COLUMNS
+
+transaction_translation_mappers = TranslationMappers(
+    columns=[
+        ColumnToLiteral(None, "group_id", 0),
+        DefaultNoneColumnMapper([c.flattened for c in EVENTS_COLUMNS]),
+    ],
+    functions=[DefaultNoneFunctionMapper(["isHandled", "notHandled"])],
+)
+
+null_function_translation_mappers = TranslationMappers(
+    curried_functions=[DefaultIfNullCurriedFunctionMapper()],
+    functions=[DefaultIfNullFunctionMapper()],
+)
+
+
+reset_dataset_factory()
+
 
 test_data = [
     pytest.param(
