@@ -392,7 +392,7 @@ def config_changes() -> RespTuple:
 
 @application.route("/health")
 def health() -> Response:
-
+    start = time.time()
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
 
@@ -422,7 +422,9 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-
+    metrics.timing(
+        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+    )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 

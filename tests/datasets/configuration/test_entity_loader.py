@@ -40,12 +40,15 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
             DiscoverEventsEntity,
+            DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
-        from snuba.datasets.entities.outcomes import OutcomesEntity
-        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
-        from snuba.datasets.entities.profiles import ProfilesEntity
+        from snuba.datasets.entities.metrics import (
+            MetricsCountersEntity,
+            MetricsDistributionsEntity,
+            MetricsSetsEntity,
+            OrgMetricsCountersEntity,
+        )
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
@@ -57,19 +60,14 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.DISCOVER,
             ),
             (
+                "snuba/datasets/configuration/discover/entities/discover_transactions.yaml",
+                DiscoverTransactionsEntity,
+                EntityKey.DISCOVER_TRANSACTIONS,
+            ),
+            (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
-                OutcomesEntity,
-                EntityKey.OUTCOMES,
-            ),
-            (
-                "snuba/datasets/configuration/outcomes/entities/outcomes_raw.yaml",
-                OutcomesRawEntity,
-                EntityKey.OUTCOMES_RAW,
             ),
             (
                 "snuba/datasets/configuration/sessions/entities/org.yaml",
@@ -80,6 +78,21 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
                 OrgMetricsCountersEntity,
                 EntityKey.ORG_METRICS_COUNTERS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_counters.yaml",
+                MetricsCountersEntity,
+                EntityKey.METRICS_COUNTERS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_sets.yaml",
+                MetricsSetsEntity,
+                EntityKey.METRICS_SETS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_distributions.yaml",
+                MetricsDistributionsEntity,
+                EntityKey.METRICS_DISTRIBUTIONS,
             ),
             (
                 "snuba/datasets/configuration/events/entities/events.yaml",
@@ -97,11 +110,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.REPLAYS,
             ),
             (
-                "snuba/datasets/configuration/profiles/entities/profiles.yaml",
-                ProfilesEntity,
-                EntityKey.PROFILES,
-            ),
-            (
                 "snuba/datasets/configuration/discover/entities/discover_events.yaml",
                 DiscoverEventsEntity,
                 EntityKey.DISCOVER_EVENTS,
@@ -115,7 +123,9 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         py_validators = py_entity.get_subscription_validators()
 
         if config_validators is None or py_validators is None:
-            assert config_validators is None and py_validators is None
+            assert (
+                config_validators is None and py_validators is None
+            ), config_entity.entity_key
             return
         assert len(config_validators) == len(py_validators)
 
@@ -175,7 +185,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             assert (
                 config_v.__class__ == py_v.__class__
             ), f"{entity_key.value}: validator mismatch between configuration-loaded sets and python-defined"
-            assert config_v.__dict__ == py_v.__dict__, entity_key.value
+            assert config_v.__dict__ == py_v.__dict__, (entity_key.value, config_v)
 
         assert (
             config_entity.get_all_storages() == py_entity.get_all_storages()

@@ -53,13 +53,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             polymorphic_bucket as metrics_polymorphic_storage,
         )
         from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
-        from snuba.datasets.storages.outcomes import (
-            materialized_storage as outcomes_hourly_storage,
-        )
-        from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw_storage
-        from snuba.datasets.storages.profiles import (
-            writable_storage as profiles_writable_storage,
-        )
         from snuba.datasets.storages.querylog import storage as querylog_storage
         from snuba.datasets.storages.replays import storage as replays_storage
         from snuba.datasets.storages.sessions import (
@@ -77,11 +70,9 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 for storage in [
                     # WritableStorages
                     errors_storage,
-                    outcomes_raw_storage,
                     querylog_storage,
                     sessions_raw_storage,
                     transactions_storage,
-                    profiles_writable_storage,
                     replays_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
@@ -90,10 +81,8 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     # Readable Storages
                     discover_storage,
                     errors_ro_storage,
-                    outcomes_hourly_storage,
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
-                    profiles_writable_storage,
                     metrics_counters_storage,
                     metrics_distributions_storage,
                     metrics_org_counters_storage,

@@ -238,6 +238,18 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
                 ],
             ),
+            (
+                "generic-metrics-counters-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_counters_raw",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--consumer-group=snuba-gen-metrics-counters-consumers",
+                ],
+            ),
         ]
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -292,6 +304,20 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--entity=generic_metrics_sets",
                             "--consumer-group=snuba-generic-metrics-sets-subscriptions-schedulers",
                             "--followed-consumer-group=snuba-generic-metrics-sets-consumers",
+                            "--auto-offset-reset=latest",
+                            "--log-level=debug",
+                            "--delay-seconds=1",
+                            "--schedule-ttl=10",
+                        ],
+                    ),
+                    (
+                        "subscriptions-scheduler-generic-metrics-counters",
+                        [
+                            "snuba",
+                            "subscriptions-scheduler",
+                            "--entity=generic_metrics_counters",
+                            "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
+                            "--followed-consumer-group=snuba-generic-metrics-counters-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
                             "--delay-seconds=1",

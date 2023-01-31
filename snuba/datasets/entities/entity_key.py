@@ -10,14 +10,11 @@ HARDCODED_ENTITY_KEYS = {
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",
-    "OUTCOMES": "outcomes",
-    "OUTCOMES_RAW": "outcomes_raw",
     "SESSIONS": "sessions",
     "ORG_SESSIONS": "org_sessions",
     "TRANSACTIONS": "transactions",
     "DISCOVER_TRANSACTIONS": "discover_transactions",
     "DISCOVER_EVENTS": "discover_events",
-    "PROFILES": "profiles",
     "REPLAYS": "replays",
 }
 
