@@ -18,8 +18,6 @@ HARDCODED_ENTITY_KEYS = {
     "TRANSACTIONS": "transactions",
     "DISCOVER_TRANSACTIONS": "discover_transactions",
     "DISCOVER_EVENTS": "discover_events",
-    "PROFILES": "profiles",
-    "FUNCTIONS": "functions",
     "REPLAYS": "replays",
 }
 

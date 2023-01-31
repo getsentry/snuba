@@ -40,10 +40,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.functions import (
-            agg_storage as functions_ro_storage,
-        )
-        from snuba.datasets.storages.functions import raw_storage as functions_storage
         from snuba.datasets.storages.groupedmessages import (
             storage as groupedmessages_storage,
         )
@@ -64,9 +60,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             materialized_storage as outcomes_hourly_storage,
         )
         from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw_storage
-        from snuba.datasets.storages.profiles import (
-            writable_storage as profiles_writable_storage,
-        )
         from snuba.datasets.storages.querylog import storage as querylog_storage
         from snuba.datasets.storages.replays import storage as replays_storage
         from snuba.datasets.storages.sessions import (
@@ -93,8 +86,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     querylog_storage,
                     sessions_raw_storage,
                     transactions_storage,
-                    profiles_writable_storage,
-                    functions_storage,
                     replays_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
@@ -106,8 +97,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     outcomes_hourly_storage,
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
-                    profiles_writable_storage,
-                    functions_ro_storage,
                     metrics_counters_storage,
                     metrics_distributions_storage,
                     metrics_org_counters_storage,

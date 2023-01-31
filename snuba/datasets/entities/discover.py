@@ -125,7 +125,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
 events_translation_mappers = TranslationMappers(
     columns=[DefaultNoneColumnMapper([c.flattened for c in TRANSACTIONS_COLUMNS])],
     functions=[DefaultNoneFunctionMapper(["apdex", "failure_rate"])],
-    subscriptables=[DefaultNoneSubscriptMapper(["measurements", "span_op_breakdowns"])],
+    subscriptables=[DefaultNoneSubscriptMapper(["span_op_breakdowns", "measurements"])],
 )
 
 transaction_translation_mappers = TranslationMappers(

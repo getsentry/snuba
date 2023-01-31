@@ -114,10 +114,6 @@ DEFAULT_ROLES = [
         actions={ExecuteNoneAction(list(MIGRATIONS_RESOURCES.values()))},
     ),
     Role(
-        name="MigrationsLimitedExecutor",
-        actions={ExecuteNonBlockingAction(list(MIGRATIONS_RESOURCES.values()))},
-    ),
-    Role(
         name="TestMigrationsExecutor",
         actions={ExecuteAllAction([MIGRATIONS_RESOURCES["test_migration"]])},
     ),

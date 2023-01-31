@@ -70,6 +70,8 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: profiles-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
+        name: profiling-functions-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
         name: replays-consumer
   - kind: KubernetesCronJob
     selector:
