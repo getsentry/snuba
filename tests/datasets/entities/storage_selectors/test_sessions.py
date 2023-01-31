@@ -3,10 +3,8 @@ from typing import List
 import pytest
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.sessions import (
-    sessions_hourly_translators,
-    sessions_raw_translators,
-)
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.sessions import (
     SessionsQueryStorageSelector,
@@ -17,7 +15,7 @@ from snuba.datasets.storage import (
     EntityStorageConnectionNotFound,
     Storage,
 )
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import SubscriptionQuerySettings
@@ -37,16 +35,7 @@ TEST_CASES = [
         GRANULARITY 60
         """,
         get_dataset("sessions"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.SESSIONS_HOURLY), sessions_hourly_translators
-            ),
-            EntityStorageConnection(
-                get_writable_storage(StorageKey.SESSIONS_RAW),
-                sessions_raw_translators,
-                True,
-            ),
-        ],
+        get_entity(EntityKey.SESSIONS).get_all_storage_connections(),
         SessionsQueryStorageSelector(),
         get_storage(StorageKey.SESSIONS_RAW),
         id="Sessions storage selector",
@@ -62,16 +51,7 @@ TEST_CASES = [
         AND started < toDateTime('2022-01-01 03:00:00')
         """,
         get_dataset("sessions"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.SESSIONS_HOURLY), sessions_hourly_translators
-            ),
-            EntityStorageConnection(
-                get_writable_storage(StorageKey.SESSIONS_RAW),
-                sessions_raw_translators,
-                True,
-            ),
-        ],
+        get_entity(EntityKey.SESSIONS).get_all_storage_connections(),
         SessionsQueryStorageSelector(),
         get_storage(StorageKey.SESSIONS_HOURLY),
         id="Sessions storage selector",
@@ -98,7 +78,7 @@ def test_query_storage_selector(
     assert selected_storage.storage == expected_storage
 
 
-def test_assert_raises():
+def test_assert_raises() -> None:
     query, _ = parse_snql_query(
         """
         MATCH (events)
@@ -110,6 +90,7 @@ def test_assert_raises():
         dataset=get_dataset("events"),
     )
     with pytest.raises(EntityStorageConnectionNotFound):
+        assert isinstance(query, Query)
         SessionsQueryStorageSelector().select_storage(
             query, SubscriptionQuerySettings(), []
         )

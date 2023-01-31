@@ -40,7 +40,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         from snuba.datasets.events import EventsDataset
         from snuba.datasets.metrics import MetricsDataset
         from snuba.datasets.replays import ReplaysDataset
-        from snuba.datasets.sessions import SessionsDataset
         from snuba.datasets.transactions import TransactionsDataset
 
         self._dataset_map.update(
@@ -49,7 +48,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "events": EventsDataset(),
                 "groupedmessage": GroupedMessageDataset(),
                 "metrics": MetricsDataset(),
-                "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
                 "replays": ReplaysDataset(),
             }

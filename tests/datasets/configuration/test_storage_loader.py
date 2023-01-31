@@ -38,9 +38,6 @@ from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
-from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
-from snuba.datasets.storages.sessions import org_materialized_storage as sessions_org
-from snuba.datasets.storages.sessions import raw_storage as sessions_raw
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -136,9 +133,6 @@ class TestStorageConfiguration(ConfigurationTest):
         errors,
         errors_ro,
         groupedmessages,
-        sessions_raw,
-        sessions_org,
-        sessions_hourly,
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,
