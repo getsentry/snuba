@@ -255,6 +255,12 @@ validators:
     required_filter_columns:
     - org_id
     - project_id
+subscription_processors:
+  - processor: AddColumnCondition
+    args:
+      extra_condition_data_key: organization
+      extra_condition_column: org_id
+
 subscription_validators:
   - validator: AggregationValidator
     args:

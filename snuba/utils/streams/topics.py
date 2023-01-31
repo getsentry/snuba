@@ -23,6 +23,9 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS = (
         "scheduled-subscriptions-generic-metrics-distributions"
     )
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
+        "scheduled-subscriptions-generic-metrics-counters"
+    )
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
@@ -31,6 +34,9 @@ class Topic(Enum):
     )
     SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS = (
         "generic-metrics-distributions-subscription-results"
+    )
+    SUBSCRIPTION_RESULTS_GENERIC_METRICS_COUNTERS = (
+        "generic-metrics-counters-subscription-results"
     )
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
@@ -41,6 +47,7 @@ class Topic(Enum):
     GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
         "snuba-generic-metrics-distributions-commit-log"
     )
+    GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
     GENERIC_EVENTS = "generic-events"
 
     ATTRIBUTION = "snuba-attribution"

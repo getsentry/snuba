@@ -4,8 +4,6 @@ from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
 from snuba.datasets.metrics import MetricsDataset
-from snuba.datasets.outcomes import OutcomesDataset
-from snuba.datasets.outcomes_raw import OutcomesRawDataset
 from snuba.datasets.sessions import SessionsDataset
 from snuba.datasets.transactions import TransactionsDataset
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -17,8 +15,6 @@ class TestDatasetConfiguration(ConfigurationTest):
         test_data = [
             (TransactionsDataset(), config_built_datasets["transactions"]),
             (MetricsDataset(), config_built_datasets["metrics"]),
-            (OutcomesRawDataset(), config_built_datasets["outcomes_raw"]),
-            (OutcomesDataset(), config_built_datasets["outcomes"]),
             (SessionsDataset(), config_built_datasets["sessions"]),
             (EventsDataset(), config_built_datasets["events"]),
             (DiscoverDataset(), config_built_datasets["discover"]),

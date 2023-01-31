@@ -35,6 +35,7 @@ class SubscriptionCreator:
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
         data.validate()
+
         self._test_request(data, timer)
 
         identifier = SubscriptionIdentifier(

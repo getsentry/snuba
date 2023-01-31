@@ -44,9 +44,12 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
-        from snuba.datasets.entities.outcomes import OutcomesEntity
-        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
+        from snuba.datasets.entities.metrics import (
+            MetricsCountersEntity,
+            MetricsDistributionsEntity,
+            MetricsSetsEntity,
+            OrgMetricsCountersEntity,
+        )
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
@@ -72,16 +75,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.GROUPEDMESSAGE,
             ),
             (
-                "snuba/datasets/configuration/outcomes/entities/outcomes.yaml",
-                OutcomesEntity,
-                EntityKey.OUTCOMES,
-            ),
-            (
-                "snuba/datasets/configuration/outcomes/entities/outcomes_raw.yaml",
-                OutcomesRawEntity,
-                EntityKey.OUTCOMES_RAW,
-            ),
-            (
                 "snuba/datasets/configuration/sessions/entities/org.yaml",
                 OrgSessionsEntity,
                 EntityKey.ORG_SESSIONS,
@@ -90,6 +83,21 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
                 OrgMetricsCountersEntity,
                 EntityKey.ORG_METRICS_COUNTERS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_counters.yaml",
+                MetricsCountersEntity,
+                EntityKey.METRICS_COUNTERS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_sets.yaml",
+                MetricsSetsEntity,
+                EntityKey.METRICS_SETS,
+            ),
+            (
+                "snuba/datasets/configuration/metrics/entities/metrics_distributions.yaml",
+                MetricsDistributionsEntity,
+                EntityKey.METRICS_DISTRIBUTIONS,
             ),
             (
                 "snuba/datasets/configuration/events/entities/events.yaml",
@@ -115,7 +123,9 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         py_validators = py_entity.get_subscription_validators()
 
         if config_validators is None or py_validators is None:
-            assert config_validators is None and py_validators is None
+            assert (
+                config_validators is None and py_validators is None
+            ), config_entity.entity_key
             return
         assert len(config_validators) == len(py_validators)
 
