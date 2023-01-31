@@ -6,7 +6,6 @@ from snuba.datasets.factory import get_config_built_datasets
 from snuba.datasets.metrics import MetricsDataset
 from snuba.datasets.outcomes import OutcomesDataset
 from snuba.datasets.outcomes_raw import OutcomesRawDataset
-from snuba.datasets.profiles import ProfilesDataset
 from snuba.datasets.replays import ReplaysDataset
 from snuba.datasets.sessions import SessionsDataset
 from snuba.datasets.transactions import TransactionsDataset
@@ -23,7 +22,6 @@ class TestDatasetConfiguration(ConfigurationTest):
             (OutcomesDataset(), config_built_datasets["outcomes"]),
             (SessionsDataset(), config_built_datasets["sessions"]),
             (ReplaysDataset(), config_built_datasets["replays"]),
-            (ProfilesDataset(), config_built_datasets["profiles"]),
             (EventsDataset(), config_built_datasets["events"]),
             (DiscoverDataset(), config_built_datasets["discover"]),
             (GroupedMessageDataset(), config_built_datasets["groupedmessage"]),

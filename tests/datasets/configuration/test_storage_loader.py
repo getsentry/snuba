@@ -38,7 +38,6 @@ from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.outcomes import materialized_storage as outcomes_hourly
 from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw
-from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
@@ -150,7 +149,6 @@ class TestStorageConfiguration(ConfigurationTest):
         outcomes_hourly,
         outcomes_raw,
         transactions,
-        profiles,
         replays,
         querylog,
     ]
