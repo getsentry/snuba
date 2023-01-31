@@ -12,7 +12,6 @@ from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
-from snuba.datasets.factory import reset_dataset_factory
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -35,9 +34,6 @@ null_function_translation_mappers = TranslationMappers(
     curried_functions=[DefaultIfNullCurriedFunctionMapper()],
     functions=[DefaultIfNullFunctionMapper()],
 )
-
-
-reset_dataset_factory()
 
 
 test_data = [
