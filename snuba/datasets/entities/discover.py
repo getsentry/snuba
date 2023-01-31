@@ -1,7 +1,6 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
-    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -119,7 +118,6 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ),
         ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
         ("app_start_type", String(Modifiers(nullable=True))),
-        ("profile_id", UUID(Modifiers(nullable=True))),
     ]
 )
 

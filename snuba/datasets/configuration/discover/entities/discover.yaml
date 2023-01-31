@@ -249,11 +249,6 @@ schema:
       type: String,
       args: { schema_modifiers: [nullable] },
     },
-    {
-      name: profile_id,
-      type: UUID,
-      args: { schema_modifiers: [nullable] },
-    },
   ]
 required_time_column: timestamp
 storages:
@@ -279,7 +274,6 @@ storages:
               - spans.exclusive_time_32
               - group_ids
               - app_start_type
-              - profile_id
         - mapper: ColumnToLiteral
           args:
             from_table_name: null
