@@ -38,10 +38,13 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         reset_dataset_factory()
 
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
-        from snuba.datasets.entities.discover import DiscoverEntity
+        from snuba.datasets.entities.discover import (
+            DiscoverEntity,
+            DiscoverEventsEntity,
+            DiscoverTransactionsEntity,
+        )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import OrgMetricsCountersEntity
-        from snuba.datasets.entities.profiles import ProfilesEntity
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
@@ -51,6 +54,11 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/discover/entities/discover.yaml",
                 DiscoverEntity,
                 EntityKey.DISCOVER,
+            ),
+            (
+                "snuba/datasets/configuration/discover/entities/discover_transactions.yaml",
+                DiscoverTransactionsEntity,
+                EntityKey.DISCOVER_TRANSACTIONS,
             ),
             (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
@@ -88,9 +96,9 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 EntityKey.REPLAYS,
             ),
             (
-                "snuba/datasets/configuration/profiles/entities/profiles.yaml",
-                ProfilesEntity,
-                EntityKey.PROFILES,
+                "snuba/datasets/configuration/discover/entities/discover_events.yaml",
+                DiscoverEventsEntity,
+                EntityKey.DISCOVER_EVENTS,
             ),
         ]
 
@@ -116,7 +124,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
         if config_joins is None and py_joins is None:
             return
-        assert len(config_joins) == len(py_joins)
+        assert len(config_joins) == len(py_joins), config_entity.entity_key
         if config_joins is None:
             return
         for config_join, py_join in zip(config_joins, py_joins):
@@ -161,7 +169,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             assert (
                 config_v.__class__ == py_v.__class__
             ), f"{entity_key.value}: validator mismatch between configuration-loaded sets and python-defined"
-            assert config_v.__dict__ == py_v.__dict__, entity_key.value
+            assert config_v.__dict__ == py_v.__dict__, (entity_key.value, config_v)
 
         assert (
             config_entity.get_all_storages() == py_entity.get_all_storages()

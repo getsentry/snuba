@@ -39,7 +39,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
         from snuba.datasets.metrics import MetricsDataset
-        from snuba.datasets.profiles import ProfilesDataset
         from snuba.datasets.replays import ReplaysDataset
         from snuba.datasets.sessions import SessionsDataset
         from snuba.datasets.transactions import TransactionsDataset
@@ -52,7 +51,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "metrics": MetricsDataset(),
                 "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
-                "profiles": ProfilesDataset(),
                 "replays": ReplaysDataset(),
             }
         )
