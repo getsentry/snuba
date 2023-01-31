@@ -124,6 +124,7 @@ TEST_CASES_BUCKETS = [
                 "set_values": [324234, 345345, 456456, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
@@ -146,6 +147,7 @@ TEST_CASES_BUCKETS = [
                 "value": 123.123,
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
@@ -168,6 +170,7 @@ TEST_CASES_BUCKETS = [
                 "values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 90,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
@@ -421,6 +424,7 @@ TEST_CASES_POLYMORPHIC = [
                 "set_values": [324234, 345345, 456456, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
@@ -440,6 +444,7 @@ TEST_CASES_POLYMORPHIC = [
                 "count_value": 123.123,
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
@@ -459,6 +464,7 @@ TEST_CASES_POLYMORPHIC = [
                 "distribution_values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 90,
+                "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
