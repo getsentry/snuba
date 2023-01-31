@@ -39,7 +39,6 @@ from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.outcomes import materialized_storage as outcomes_hourly
 from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw
 from snuba.datasets.storages.querylog import storage as querylog
-from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
 from snuba.datasets.storages.sessions import org_materialized_storage as sessions_org
 from snuba.datasets.storages.sessions import raw_storage as sessions_raw
@@ -149,7 +148,6 @@ class TestStorageConfiguration(ConfigurationTest):
         outcomes_hourly,
         outcomes_raw,
         transactions,
-        replays,
         querylog,
     ]
 

@@ -18,7 +18,6 @@ HARDCODED_ENTITY_KEYS = {
     "TRANSACTIONS": "transactions",
     "DISCOVER_TRANSACTIONS": "discover_transactions",
     "DISCOVER_EVENTS": "discover_events",
-    "REPLAYS": "replays",
 }
 
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}
