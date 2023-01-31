@@ -6,8 +6,11 @@ import googleapiclient.discovery
 # not sure if both of these are needed...
 from google.oauth2 import service_account
 
-GCP_PROJECT_ID = 123455789  # todo move to a setting
+from snuba.settings import ADMIN_GCP_PROJECT_ID
+
 GCP_USER_ROLES: MutableMapping[str, List[str]] = defaultdict(list)
+
+ROLE_PREFIX = "roles/clickhouseMigrations."
 
 
 def set_google_roles() -> None:
@@ -31,12 +34,17 @@ def set_google_roles() -> None:
     # will return an instance of a gcp policy, example payload:
     # https://cloud.google.com/resource-manager/reference/rest/Shared.Types/Policy
     response = (
-        service.projects().getIamPolicy(resource=GCP_PROJECT_ID, body={}).execute()
+        service.projects()
+        .getIamPolicy(resource=ADMIN_GCP_PROJECT_ID, body={})
+        .execute()
     )
 
     GCP_USER_ROLES.clear()
     for binding in response["bindings"]:
-        role = binding["role"].split("roles/")[1]
+        if not binding["role"].startswith(ROLE_PREFIX):
+            # we don't care about any non-migrations roles
+            continue
+        role = binding["role"].split(ROLE_PREFIX)[1]
         for member in binding["members"]:
             _, email = member.split(":")
             # TODO: handle group email e.g. team-sns@sentry.io

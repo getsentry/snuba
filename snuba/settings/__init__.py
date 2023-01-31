@@ -33,6 +33,7 @@ ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 ADMIN_AUTH_PROVIDER = "NOOP"
 ADMIN_AUTH_JWT_AUDIENCE = ""
 
+ADMIN_GCP_PROJECT_ID = os.environ.get("ADMIN_GCP_PROJECT_ID")
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {

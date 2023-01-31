@@ -4,9 +4,9 @@ from typing import Callable
 
 from flask import request
 
-from snuba import settings
+from snuba import settings, state
 from snuba.admin.auth_roles import DEFAULT_ROLES
-from snuba.admin.gcp_roles import GCP_USER_ROLES
+from snuba.admin.gcp_roles import GCP_USER_ROLES, set_google_roles
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
@@ -47,8 +47,15 @@ def iap_authorize() -> AdminUser:
         raise UnauthorizedException("no JWT present in request headers")
 
     user = validate_assertion(assertion)
-    gcp_roles = GCP_USER_ROLES[user.email]
-    user.roles = [role for role in DEFAULT_ROLES if role.name in gcp_roles]
+
+    if state.get_config("fetch_google_roles", False):
+        if not GCP_USER_ROLES.keys():
+            set_google_roles()
+
+        gcp_roles = GCP_USER_ROLES[user.email]
+        user.roles = [role for role in DEFAULT_ROLES if role.name in gcp_roles]
+    else:
+        user.roles = DEFAULT_ROLES
     return user
 
 
