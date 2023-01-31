@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import md5
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 import pytest
 
@@ -396,6 +396,39 @@ class TestReplaysProcessor:
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
+
+    def test_process_message_ip_address_variants(self) -> None:
+        """Test ingestion for various ip-address variants."""
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        message = ReplayEvent.empty_set()
+
+        message.ipv4 = "hello world"
+        result = ReplaysProcessor().process_message(message.serialize(), meta)
+        result = cast(InsertBatch, result)
+        assert "ip_address_v4" not in result.rows[0]
+
+        message.ipv4 = ""
+        result = ReplaysProcessor().process_message(message.serialize(), meta)
+        result = cast(InsertBatch, result)
+        assert "ip_address_v4" not in result.rows[0]
+
+        message.ipv4 = None
+        result = ReplaysProcessor().process_message(message.serialize(), meta)
+        result = cast(InsertBatch, result)
+        assert "ip_address_v4" not in result.rows[0]
+
+        message.ipv4 = "0.0.0.0"
+        result = ReplaysProcessor().process_message(message.serialize(), meta)
+        result = cast(InsertBatch, result)
+        assert result.rows[0]["ip_address_v4"] == "0.0.0.0"
+
+        message.ipv4 = "127.0.0.1"
+        result = ReplaysProcessor().process_message(message.serialize(), meta)
+        result = cast(InsertBatch, result)
+        assert result.rows[0]["ip_address_v4"] == "127.0.0.1"
 
     def test_process_message_invalid_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
