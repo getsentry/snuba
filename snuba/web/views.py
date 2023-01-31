@@ -423,7 +423,7 @@ def health() -> Response:
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
     metrics.timing(
-        "healthcheck_timing", time.time() - start, tags={"thorough": str(thorough)}
+        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
     )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
