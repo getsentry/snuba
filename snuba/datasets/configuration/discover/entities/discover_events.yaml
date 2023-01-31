@@ -282,6 +282,7 @@ storages:
               - spans.exclusive_time_32
               - group_ids
               - app_start_type
+              - profile_id
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -405,6 +406,7 @@ storages:
               - spans.exclusive_time_32
               - group_ids
               - app_start_type
+              - profile_id
       subscriptables:
         - mapper: SubscriptableMapper
           args:
