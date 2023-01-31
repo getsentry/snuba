@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Optional, Sequence
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
@@ -198,7 +199,11 @@ def _build_validation_mode(mode: str | None) -> ColumnValidationMode:
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    try:
+        config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    except Exception as e:
+        logging.exception("could not load entity from file: " + file_path)
+        raise e
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
         storages=_build_storage_connections(config["storages"]),
