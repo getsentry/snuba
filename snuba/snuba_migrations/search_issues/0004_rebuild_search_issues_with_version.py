@@ -50,8 +50,7 @@ columns: List[Column[Modifiers]] = [
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
-    Column("http_referer", String(Modifiers(nullable=True))),
-    Column("version", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("version", UInt(8)),
     Column("message_timestamp", DateTime()),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
@@ -99,7 +98,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_local_new",
+                table_name="search_issues_local",
                 target=OperationTarget.LOCAL,
             ),
             operations.RenameTable(
