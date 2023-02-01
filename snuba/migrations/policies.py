@@ -75,7 +75,7 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
 
         if status == Status.COMPLETED and timestamp:
             oldest_allowed_timestamp = datetime.now() + timedelta(
-                minutes=-MAX_REVERT_TIME_WINDOW_HRS
+                hours=-MAX_REVERT_TIME_WINDOW_HRS
             )
             if timestamp >= oldest_allowed_timestamp:
                 return False if migration.blocking else True

@@ -110,7 +110,7 @@ class TestMigrationPolicies:
         "snuba.migrations.runner.Runner.get_status",
         return_value=(
             Status.COMPLETED,
-            datetime.now() + timedelta(minutes=-(MAX_REVERT_TIME_WINDOW_HRS - 5)),
+            datetime.now() + timedelta(hours=-(MAX_REVERT_TIME_WINDOW_HRS - 5)),
         ),
     )
     def test_completed_migration_reverse(self, mock_get_status: Mock) -> None:
