@@ -6,7 +6,7 @@ import pytest
 
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import (
-    MAX_REVERT_TIME_WINDOW_MINS,
+    MAX_REVERT_TIME_WINDOW_HRS,
     AllMigrationsPolicy,
     MigrationPolicy,
     NoMigrationsPolicy,
@@ -110,7 +110,7 @@ class TestMigrationPolicies:
         "snuba.migrations.runner.Runner.get_status",
         return_value=(
             Status.COMPLETED,
-            datetime.now() + timedelta(minutes=-(MAX_REVERT_TIME_WINDOW_MINS - 5)),
+            datetime.now() + timedelta(minutes=-(MAX_REVERT_TIME_WINDOW_HRS - 5)),
         ),
     )
     def test_completed_migration_reverse(self, mock_get_status: Mock) -> None:
