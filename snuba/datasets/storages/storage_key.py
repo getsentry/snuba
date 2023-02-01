@@ -7,7 +7,6 @@ HARDCODED_STORAGE_KEYS = {
     "EVENTS_RO": "events_ro",
     "ERRORS": "errors",
     "ERRORS_RO": "errors_ro",
-    "GROUPEDMESSAGES": "groupedmessages",
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",

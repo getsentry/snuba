@@ -34,7 +34,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             ]
         }
 
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
@@ -48,7 +47,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
 
         entity_map_pre_execute = {
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
             EntityKey.SESSIONS: SessionsEntity,
             EntityKey.ORG_SESSIONS: OrgSessionsEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,

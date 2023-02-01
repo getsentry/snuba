@@ -1,4 +1,3 @@
-from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
@@ -18,7 +17,6 @@ class TestDatasetConfiguration(ConfigurationTest):
             (SessionsDataset(), config_built_datasets["sessions"]),
             (ReplaysDataset(), config_built_datasets["replays"]),
             (EventsDataset(), config_built_datasets["events"]),
-            (GroupedMessageDataset(), config_built_datasets["groupedmessage"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
