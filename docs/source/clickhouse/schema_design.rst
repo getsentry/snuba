@@ -1,8 +1,18 @@
+=======================================
 ClickHouse Schema Design Best Practices
 =======================================
 
-Columns based on dictionary data
---------------------------------
+.. tip::
+    This is a work-in-progress document for collecting ClickHouse schema and querying
+    best-practices based on experiences running ClickHouse at scale at Sentry.
+    It is subject to change and if something doesn't seem right please
+    submit a PR to Snuba.
+
+.. contents:: :local:
+
+
+Columns based on dictionary data (tag promotion)
+------------------------------------------------
 
 ClickHouse is a columnar datastore, and at run-time it loads columns on-demand
 based on the columns referenced in the query (both the columns ``SELECT`` ed
@@ -11,36 +21,55 @@ and not load them for every row for every query is part of the performance advan
 ClickHouse provides over a traditional RDBMS (like PostgreSQL).
 
 Commonly, a data schema contains a flexible key:value pair mapping
-(canonically: ``tags`` or ``contexts``) and stores that
-data in a column that contains two ``Nested`` arrays where the first array contains the keys
-of the dictionary and the second array contains the values. This works well when
-your dataset design gives you the ability to filter based on other attributes to a small
-number of rows and the flexibility of completely arbitrary keys and values are a real requirement.
-Often, however, a ClickHouse user is interested in rows that contain a specific tag key or a
-specific ``key=value`` pair. In this case one is often best-served by creating a top-level
-column and "promoting" the data to it [#dupe]_.
+(canonically at Sentry: ``tags`` or ``contexts``) and stores that
+data in a ``Nested`` column that contains two arrays where the first array contains the keys
+of the dictionary and the second array contains the values. To make queries faster,
+a column like this can be indexed with bloom filters as described in :ref:`bloom`. In general
+we construct this index across datasets for ``tags`` but not for other columns.
 
-This promotion is preferable on a couple dimensions:
+This works well when your dataset and query design gives you the ability to
+filter for exact matches and a large number of rows will NOT be an exact match.
+Often, however, a ClickHouse query filters for rows that contain a substring match or regular
+expression match for a tag value of a given key. This makes bloom filter indexes
+not usable for the query and, depending on the other selectivity attributes of your query,
+can necessitate moving (or promoting) those relevant values for a given tag key to a new separate
+column [#dupe]_.
 
-1. Even though it looks like a dictionary, our tags and contexts "maps" are actually arrays of keys and values.
-   With array accesses Clickhouse needs to locate the index of the key whose value needs to be looked up.
-   That is an O(N) lookup. The same key may be located at different indexes for each row.
-   Once the index is known, looking up its value is O(1) since you perform direct index access.
-   If the query has to lookup M rows, this becomes an O(M * N) in terms of time complexity.
+.. _selectivity:
 
-   With direct column access, there is no index lookup for a key. The overall complexity to lookup M rows
-   for "promoted columns" is O(M).
-2. Queries that filter based on an array column may have to load the entire column into memory
-   in order to do filtering. Adding a new index on top of a top-level column is a more
-   straightforward operation that guarantees more consistent performance outcomes vs. iterating
-   over an array
+Selectivity in queries and indices
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Queries are much more efficient when they have the attribute of being low-selectivity on
+the table indexes -- meaning the query conditions on indexed columns filter the dataset
+to a very small proportion of the overall number of rows. High selectivity
+can break the efficiency of the bloom-filter style index on dictionary columns
+(see :ref:`bloom`). In cases of high-selectivity queries, there is a negative performance impact on both
+bloom-filter indexed columns as well as promoted tag value columns (when searching for a ``key=value``
+pair exact match). The promoted column can make the penalty a bit less severe because
+it does not load tag values from unrelated keys. Still, an effort should be made to avoid
+low-selectivity queries.
+
+.. _bloom:
+
+Bloom filter indexing on dictionary-like columns
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+To facilitate faster searching on dictionary columns, we tend to create bloom filter indices
+on a hashes of both the unique ``key`` values of each row as well as hashes of all the ``key=value``
+pairs of each row. The `bloom filter <https://en.wikipedia.org/wiki/Bloom_filter>`_  registers these
+in a stochastic data structure designed to quickly determine which elements do NOT exist in a set.
+So that it can model the entire unbounded keyspace in a fixed amount of memory, a bloom filter
+is designed to have false positives. This means that there is actually a performance **penalty**
+if the value is often present in the underlying set: First, the value must be tested
+against the bloom filter (which will always return "maybe present"), and after
+that operation occurs a full scan of the column must be performed.
+
+Due to their structure, bloom filters are only good for exact value searching. They
+cannot be used for "is user-value a prefix of column?" or "does column match regex?" style queries.
+Those styles of queries require a separate column to search.
 
 .. [#dupe] During migration from non-promoted to promoted, putting the data in both map and
            top-level column may be necessary so that queries of old rows can still access the
            attributes. After the table goes through a full TTL period and the API/storage definition
            is changed to serve the values from the top-level field, message processors should be changed
            to stop writing the data in duplicate places.
-
-..
-   # (TODO: add some information to the above section about how we have
-   done indexes on arrays, and when that might be appropriate)
