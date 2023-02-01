@@ -149,4 +149,3 @@ Steps to resolve the issue:
 5. Validate that the consumer is writing rows with the new materialization version, and that
    it produces the expected roll-up results.
 6. Write a migration to remove the now-unused materialized view (``click_events_aggregation_mv``).
-
