@@ -40,12 +40,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import (
-            MetricsCountersEntity,
-            MetricsDistributionsEntity,
-            MetricsSetsEntity,
-            OrgMetricsCountersEntity,
-        )
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
@@ -58,10 +52,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             EntityKey.TRANSACTIONS: TransactionsEntity,
             EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
             EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
-            EntityKey.METRICS_SETS: MetricsSetsEntity,
-            EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-            EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
-            EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
             EntityKey.REPLAYS: ReplaysEntity,
         }
 

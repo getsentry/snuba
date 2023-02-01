@@ -23,7 +23,7 @@ from snuba.consumers.consumer import (
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
-from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.datasets.storages.factory import get_cdc_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -219,11 +219,8 @@ def test_multistorage_strategy(
 
 
 def test_metrics_writing_e2e() -> None:
-    from snuba.datasets.storages.metrics import (
-        distributions_storage,
-        polymorphic_bucket,
-    )
-
+    distributions_storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS)
+    polymorphic_bucket = get_writable_storage(StorageKey.METRICS_RAW)
     dist_message = json.dumps(
         {
             "org_id": 1,

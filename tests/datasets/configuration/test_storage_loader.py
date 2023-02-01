@@ -28,13 +28,6 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
-from snuba.datasets.storages.metrics import counters_storage
-from snuba.datasets.storages.metrics import (
-    distributions_storage as metrics_distributions_storage,
-)
-from snuba.datasets.storages.metrics import org_counters_storage
-from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
-from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
@@ -137,11 +130,6 @@ class TestStorageConfiguration(ConfigurationTest):
         sessions_raw,
         sessions_org,
         sessions_hourly,
-        metrics_sets,
-        counters_storage,
-        metrics_distributions_storage,
-        metrics_raw,
-        org_counters_storage,
         transactions,
         replays,
         querylog,
