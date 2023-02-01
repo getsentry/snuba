@@ -31,6 +31,8 @@ from snuba.util import force_bytes
 class ReplayEvent:
     replay_id: str
     replay_type: str
+    error_sample_rate: float | None
+    session_sample_rate: float | None
     segment_id: Any
     trace_ids: Any
     error_ids: Any
@@ -64,6 +66,8 @@ class ReplayEvent:
         return cls(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
+            error_sample_rate=0,
+            session_sample_rate=0,
             title=None,
             error_ids=[],
             trace_ids=[],
@@ -126,6 +130,10 @@ class ReplayEvent:
                     "span_id": "affa5649681a1eeb",
                     "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
                 },
+                "replay": {
+                    "error_sample_rate": self.error_sample_rate,
+                    "session_sample_rate": self.session_sample_rate,
+                },
                 "os": {
                     "name": self.os_name,
                     "version": self.os_version,
@@ -180,6 +188,8 @@ class ReplayEvent:
             "project_id": 1,
             "replay_id": str(uuid.UUID(self.replay_id)),
             "replay_type": self.replay_type,
+            "error_sample_rate": self.error_sample_rate,
+            "session_sample_rate": self.session_sample_rate,
             "event_hash": event_hash,
             "segment_id": self.segment_id,
             "trace_ids": list(
@@ -237,6 +247,8 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
+            error_sample_rate=0.5,
+            session_sample_rate=0.5,
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
@@ -282,6 +294,8 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="other",
+            error_sample_rate=None,
+            session_sample_rate=None,
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
@@ -320,6 +334,8 @@ class TestReplaysProcessor:
         assert isinstance(processed_message, InsertBatch)
         assert processed_message.rows[0]["urls"] == ["http://localhost:8001", "0"]
         assert processed_message.rows[0]["replay_type"] is None
+        assert processed_message.rows[0]["error_sample_rate"] is None
+        assert processed_message.rows[0]["session_sample_rate"] is None
         assert processed_message.rows[0]["platform"] == "0"
         assert processed_message.rows[0]["dist"] == "0"
         assert processed_message.rows[0]["user_name"] == "0"

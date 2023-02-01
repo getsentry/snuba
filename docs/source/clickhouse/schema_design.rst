@@ -31,8 +31,9 @@ This works well when your dataset and query design gives you the ability to
 filter for exact matches and a large number of rows will NOT be an exact match.
 Often, however, a ClickHouse query filters for rows that contain a substring match or regular
 expression match for a tag value of a given key. This makes bloom filter indexes
-not usable for the query and requires moving (or promoting) those relevant values for a given tag
-key to a new separate column which can support these queries more efficiently [#dupe]_.
+not usable for the query and, depending on the other selectivity attributes of your query,
+can necessitate moving (or promoting) those relevant values for a given tag key to a new separate
+column [#dupe]_.
 
 .. _selectivity:
 
@@ -148,3 +149,4 @@ Steps to resolve the issue:
 5. Validate that the consumer is writing rows with the new materialization version, and that
    it produces the expected roll-up results.
 6. Write a migration to remove the now-unused materialized view (``click_events_aggregation_mv``).
+

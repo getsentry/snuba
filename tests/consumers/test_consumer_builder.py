@@ -1,5 +1,11 @@
+import json
+import time
+from datetime import datetime
+from unittest.mock import Mock
+
 import pytest
-from arroyo import Topic
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from confluent_kafka import Producer
 
 from snuba import environment
@@ -8,10 +14,13 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
+from snuba.datasets.storages import errors
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from tests.fixtures import get_raw_event
+from tests.test_consumer import get_row_count
 
 test_storage_key = StorageKey("errors")
 consumer_group_name = "my_consumer_group"
@@ -151,3 +160,39 @@ def test_optional_kafka_overrides() -> None:
             consumer_builder_with_opt.commit_log_topic.name
             == optional_kafka_params.commit_log_topic
         ), "Commit log topic name should match commit log Kafka topic override"
+
+
+def test_run_processing_strategy() -> None:
+    assert get_row_count(errors.storage) == 0
+
+    commit = Mock()
+    partitions = Mock()
+    strategy_factory = consumer_builder.build_streaming_strategy_factory()
+    strategy = strategy_factory.create_with_partitions(commit, partitions)
+
+    raw_message = get_raw_event()
+    json_string = json.dumps([2, "insert", raw_message, []])
+
+    message = Message(
+        BrokerValue(
+            KafkaPayload(None, json_string.encode("utf-8"), []),
+            Partition(Topic("events"), 0),
+            0,
+            datetime.now(),
+        )
+    )
+
+    strategy.submit(message)
+
+    # Wait for the commit
+    for i in range(10):
+        time.sleep(0.5)
+        strategy.poll()
+        if commit.call_count == 1:
+            break
+
+    assert commit.call_count == 1
+    assert get_row_count(errors.storage) == 1
+
+    strategy.close()
+    strategy.join()

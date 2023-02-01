@@ -78,6 +78,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_sets",
             "generic_metrics_distributions",
             "search_issues",
+            "generic_metrics_counters",
         },
         "single_node": True,
     },
@@ -204,7 +205,6 @@ HTTP_WRITER_BUFFER_SIZE = 1
 ENFORCE_RETENTION: bool = False
 LOWER_RETENTION_DAYS = 30
 DEFAULT_RETENTION_DAYS = 90
-RETENTION_OVERRIDES: Mapping[int, int] = {}
 
 MAX_PREWHERE_CONDITIONS = 1
 
@@ -228,7 +228,7 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000

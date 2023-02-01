@@ -3,20 +3,23 @@ from typing import Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
-    ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToLiteral,
     ColumnToMapping,
+    ColumnToNullIf,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.custom_function import (
@@ -35,26 +38,11 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 transaction_translator = TranslationMappers(
     columns=[
-        ColumnToFunction(
+        ColumnToIPAddress(
             None,
             "ip_address",
-            "coalesce",
-            (
-                FunctionCall(
-                    None,
-                    "IPv4NumToString",
-                    (Column(None, None, "ip_address_v4"),),
-                ),
-                FunctionCall(
-                    None,
-                    "IPv6NumToString",
-                    (Column(None, None, "ip_address_v6"),),
-                ),
-            ),
         ),
-        ColumnToFunction(
-            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
-        ),
+        ColumnToNullIf(None, "user"),
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
         # ``discover`` dataset and the standalone ``transaction`` dataset. In
@@ -101,20 +89,21 @@ class BaseTransactionsEntity(Entity, ABC):
             if custom_mappers is None
             else transaction_translator.concat(custom_mappers)
         )
+        storages = [EntityStorageConnection(storage, mappers, True)]
 
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=StorageQueryPlanBuilder(
-                storages=[StorageAndMappers(storage, mappers)],
+                storages=storages,
+                selector=DefaultQueryStorageSelector(),
             )
         )
 
         super().__init__(
-            storages=[storage],
+            storages=storages,
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
             join_relationships={},
-            writable_storage=storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="finish_ts",
             subscription_processors=None,
             subscription_validators=[

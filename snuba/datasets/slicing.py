@@ -12,7 +12,7 @@ SENTRY_LOGICAL_PARTITIONS = 256
 
 def map_org_id_to_logical_partition(org_id: int) -> int:
     """
-    Maps an org_id to a logical partition. Since SENTRY_LOGICAL_PARTITIONS is
+    Maps an org id to a logical partition. Since SENTRY_LOGICAL_PARTITIONS is
     fixed, an org id will always be mapped to the same logical partition.
     """
     return org_id % SENTRY_LOGICAL_PARTITIONS

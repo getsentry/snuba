@@ -145,6 +145,16 @@ class TestValidateMigrations:
             "",
         ),
         (
+            False,
+            False,
+            [drop_col_local_op, drop_col_local_op],
+            [],
+            [],
+            [drop_col_dist_op, drop_col_dist_op],
+            does_not_raise(),
+            "",
+        ),
+        (
             True,
             True,
             [create_local_op, add_col_local_op],

@@ -1,6 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -19,21 +20,24 @@ from snuba.clickhouse.translators.snuba.allowed import (
 )
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
-    ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToLiteral,
     ColumnToMapping,
+    ColumnToNullIf,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.storage import StorageAndMappers
+from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -115,22 +119,23 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ),
         ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
         ("app_start_type", String(Modifiers(nullable=True))),
+        ("profile_id", UUID(Modifiers(nullable=True))),
     ]
 )
 
 
 events_translation_mappers = TranslationMappers(
-    columns=[DefaultNoneColumnMapper(TRANSACTIONS_COLUMNS)],
-    functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
-    subscriptables=[DefaultNoneSubscriptMapper({"measurements", "span_op_breakdowns"})],
+    columns=[DefaultNoneColumnMapper([c.flattened for c in TRANSACTIONS_COLUMNS])],
+    functions=[DefaultNoneFunctionMapper(["apdex", "failure_rate"])],
+    subscriptables=[DefaultNoneSubscriptMapper(["span_op_breakdowns", "measurements"])],
 )
 
 transaction_translation_mappers = TranslationMappers(
     columns=[
         ColumnToLiteral(None, "group_id", 0),
-        DefaultNoneColumnMapper(EVENTS_COLUMNS),
+        DefaultNoneColumnMapper([c.flattened for c in EVENTS_COLUMNS]),
     ],
-    functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
+    functions=[DefaultNoneFunctionMapper(["isHandled", "notHandled"])],
 )
 
 null_function_translation_mappers = TranslationMappers(
@@ -191,22 +196,9 @@ class DiscoverEntity(Entity):
             .concat(
                 TranslationMappers(
                     columns=[
-                        ColumnToFunction(
+                        ColumnToIPAddress(
                             None,
                             "ip_address",
-                            "coalesce",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "IPv4NumToString",
-                                    (Column(None, None, "ip_address_v4"),),
-                                ),
-                                FunctionCall(
-                                    None,
-                                    "IPv6NumToString",
-                                    (Column(None, None, "ip_address_v6"),),
-                                ),
-                            ),
                         ),
                         ColumnToColumn(None, "transaction", None, "transaction_name"),
                         ColumnToColumn(None, "username", None, "user_name"),
@@ -235,11 +227,9 @@ class DiscoverEntity(Entity):
                             "geo.city",
                             nullable=True,
                         ),
-                        ColumnToFunction(
+                        ColumnToNullIf(
                             None,
                             "user",
-                            "nullIf",
-                            (Column(None, None, "user"), Literal(None, "")),
                         ),
                     ]
                 ).concat(
@@ -252,15 +242,17 @@ class DiscoverEntity(Entity):
                 ),
             )
         )
+        storages = [EntityStorageConnection(discover_storage, mappers, False)]
         discover_storage_plan_builder = StorageQueryPlanBuilder(
-            storages=[StorageAndMappers(discover_storage, mappers)],
+            storages=storages,
+            selector=DefaultQueryStorageSelector(),
         )
         discover_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=discover_storage_plan_builder
         )
 
         super().__init__(
-            storages=[discover_storage],
+            storages=storages,
             query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns
@@ -268,8 +260,7 @@ class DiscoverEntity(Entity):
                 + self.__transactions_columns
             ),
             join_relationships={},
-            writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            validators=[EntityRequiredColumnValidator(["project_id"])],
             required_time_column="timestamp",
             subscription_processors=None,
             subscription_validators=None,

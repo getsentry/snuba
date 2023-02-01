@@ -1,4 +1,3 @@
-import logging
 import signal
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
@@ -126,13 +125,6 @@ def subscriptions_executor(
         )
     )
 
-    # TODO: Consider removing and always passing via CLI.
-    # If a value provided via config, it overrides the one provided via CLI.
-    # This is so we can quickly change this in an emergency.
-    stale_threshold_seconds = state.get_config(
-        f"subscriptions_stale_threshold_sec_{dataset_name}", stale_threshold_seconds
-    )
-
     processor = build_executor_consumer(
         dataset_name,
         entity_names,
@@ -147,10 +139,6 @@ def subscriptions_executor(
     )
 
     def handler(signum: int, frame: Any) -> None:
-        # TODO: Temporary code for debugging executor shutdown
-        logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
-
         processor.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)

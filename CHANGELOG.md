@@ -1,5 +1,67 @@
 # Changelog
 
+## 23.1.1
+
+### Various fixes & improvements
+
+- ref(DC): Remove Generic Metrics Python (#3650) by @rahul-kumar-saini
+- ref(config): Create Replays Entity yaml file  (#3643) by @enochtangg
+- ref(config) Create Profiles Entity yaml file (#3642) by @enochtangg
+- feat(DC): create events entity, expand testing, fix transactions yaml (#3645) by @volokluev
+- refDC): Extract session translation mappers (#3636) by @volokluev
+- ref: remove yarn apt list after installation (#3648) by @asottile-sentry
+- feat(api-abuse): Add triggered rate limiter name to Querylog stats (#3625) by @enochtangg
+- migrations: make querylog match SaaS (#3611) by @dbanda
+- build: Arroyo 2.5.0 (#3635) by @lynnagara
+- feat: Clean up unused topic (#3634) by @lynnagara
+- ref(DC): Add FixedString field to configuration (#3630) by @volokluev
+- feat(config): Migrate GroupedMessage and GroupAssignee Entities to YAML (#3616) by @evanh
+- ref(migrations): Simplfy policies and status checks (#3606) by @MeredithAnya
+- fix(outcomes): Add TTL to outcomes dataset (#3615) by @nikhars
+- ref(copy-tables): fix regex (#3631) by @MeredithAnya
+- feat(profiling): Add profile id to transactions table (#3607) by @Zylphrex
+- ref(config) Migrate Outcomes and OutcomesRaw entities to YAML (#3632) by @evanh
+- feat: Tag invalid messages for DLQ with `invalid_message`: `true` (#3633) by @lynnagara
+- ref: Remove invalid TODO (#3624) by @lynnagara
+- feat: Remove ability to override scheduling mode (#3623) by @lynnagara
+- feat(api-abuse): Add timing metrics for table_concurrent (#3628) by @enochtangg
+- ref: Remove debugging code (#3621) by @lynnagara
+- add settings for codecov (#3627) by @volokluev
+- migrations: make errors schema match SaaS (#3604) by @dbanda
+
+_Plus 18 more_
+
+## 23.1.0
+
+### Various fixes & improvements
+
+- feat(DC): Add simple Dataset configs (#3586) by @rahul-kumar-saini
+- bug(DC): Add config built storage keys to all_storages dictionary in factory (#3502) by @enochtangg
+- bump search_issues storage occurrence_type_id int size (#3593) by @enochtangg
+- feat: Change settings.TOPIC_PARTITION_COUNTS to use logical topic name (#3589) by @lynnagara
+- feat: Arroyo 2.4.0 (#3585) by @lynnagara
+- feat(admin): implement basic admin user roles (#3522) by @MeredithAnya
+- fix: Change DefaultNoneColumnMapper to use a normal set (#3580) by @evanh
+- update migrations doc to reflect new style (#3584) by @dbanda
+- fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3579) by @volokluev
+- feat(slices): Make Subscription Scheduler filter by slice ID (#3338) by @ayirr7
+- Revert "fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3540)" (#3578) by @volokluev
+- Pick up self-hosted CI bugfix (#3577) by @chadwhitacre
+- fix(DC): Bring EntityContainsColumnsValidator back to config entities (#3540) by @volokluev
+- feat(oncall): add the request_id to the query breadcrumbs (#3561) by @volokluev
+- feat(DC): Add Storage selector support for Entity configuration (#3545) by @enochtangg
+- feat(issue-platform): increase occurrence_type_id column size from UInt8 to UInt16 (#3575) by @barkbarkimashark
+- feat(issue-platform): process extra fields from event (#3571) by @barkbarkimashark
+- docs(schema): why do we promote tags? (#3574) by @onewland
+- Remove sorting experiment on sql conditions (#3567) by @enochtangg
+- ref: Add docstring about ``topic_name`` vs ``get_physical_topic_name``. (#3568) by @lynnagara
+- feat(ops): allow disabled entities for storage sets that are not in use (#3572) by @onewland
+- test(consumer): Add preliminary unit tests to ConsumerBuilder (#3389) by @ayirr7
+- docs(slicing): Add mega-cluster and basic consumer setup (#3433) by @ayirr7
+- feat(consumer): Remove parallel collect option (#3555) by @lynnagara
+
+_Plus 39 more_
+
 ## 22.12.0
 
 ### Various fixes & improvements

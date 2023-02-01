@@ -170,7 +170,13 @@ def check_clickhouse(
 
     except UndefinedClickhouseCluster as err:
         if metric_tags is not None and isinstance(err.extra_data, dict):
-            metric_tags.update(err.extra_data)
+            # Be a little defensive here, since it's not always obvious this extra data
+            # is being passed to metrics, and we might want non-string values in the
+            # exception data.
+            for k, v in err.extra_data.items():
+                if isinstance(v, str):
+                    metric_tags[k] = v
+
         logger.error(err)
         return False
 
@@ -386,7 +392,7 @@ def config_changes() -> RespTuple:
 
 @application.route("/health")
 def health() -> Response:
-
+    start = time.time()
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
 
@@ -416,7 +422,9 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-
+    metrics.timing(
+        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+    )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
@@ -666,45 +674,55 @@ if application.debug or application.testing:
         storage = entity.get_writable_storage()
         assert storage is not None
 
-        if type_ == "insert":
-            from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
+        try:
+            if type_ == "insert":
+                from snuba.consumers.consumer import build_batch_writer, process_message
+                from snuba.consumers.strategy_factory import (
+                    KafkaConsumerStrategyFactory,
+                )
 
-            table_writer = storage.get_table_writer()
-            stream_loader = table_writer.get_stream_loader()
+                table_writer = storage.get_table_writer()
+                stream_loader = table_writer.get_stream_loader()
 
-            def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
-                pass
+                def commit(
+                    offsets: Mapping[Partition, int], force: bool = False
+                ) -> None:
+                    pass
 
-            validate_schema = True
+                validate_schema = True
 
-            strategy = KafkaConsumerStrategyFactory(
-                stream_loader.get_pre_filter(),
-                functools.partial(
-                    process_message,
-                    stream_loader.get_processor(),
-                    "consumer_grouup",
-                    stream_loader.get_default_topic_spec().topic,
-                    validate_schema,
-                ),
-                build_batch_writer(table_writer, metrics=metrics),
-                max_batch_size=1,
-                max_batch_time=1.0,
-                processes=None,
-                input_block_size=None,
-                output_block_size=None,
-            ).create_with_partitions(commit, {})
-            strategy.submit(message)
-            strategy.close()
-            strategy.join()
-        else:
-            from snuba.replacer import ReplacerWorker
+                strategy = KafkaConsumerStrategyFactory(
+                    stream_loader.get_pre_filter(),
+                    functools.partial(
+                        process_message,
+                        stream_loader.get_processor(),
+                        "consumer_grouup",
+                        stream_loader.get_default_topic_spec().topic,
+                        validate_schema,
+                    ),
+                    build_batch_writer(table_writer, metrics=metrics),
+                    max_batch_size=1,
+                    max_batch_time=1.0,
+                    processes=None,
+                    input_block_size=None,
+                    output_block_size=None,
+                ).create_with_partitions(commit, {})
+                strategy.submit(message)
+                strategy.close()
+                strategy.join()
+            else:
+                from snuba.replacer import ReplacerWorker
 
-            worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
-            processed = worker.process_message(message)
-            if processed is not None:
-                batch = [processed]
-                worker.flush_batch(batch)
+                worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
+                processed = worker.process_message(message)
+                if processed is not None:
+                    batch = [processed]
+                    worker.flush_batch(batch)
+        except Exception as e:
+            # TODO: This is a temporary workaround so that we return a more useful error when
+            # attempting to write to a dataset where the migration hasn't been run. This should be
+            # no longer necessary once we have more advanced dataset management in place.
+            raise InternalServerError(str(e), original_exception=e)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 

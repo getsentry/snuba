@@ -222,6 +222,7 @@ class SchedulerBuilder:
         delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -257,11 +258,14 @@ class SchedulerBuilder:
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
-            Topic(self.__commit_log_topic_spec.topic_name),
+            Topic(
+                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
+            ),
             self.__build_strategy_factory(),
             IMMEDIATE,
         )
@@ -276,12 +280,14 @@ class SchedulerBuilder:
             self.__producer,
             self.__scheduled_topic_spec,
             self.__metrics,
+            self.__slice_id,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         consumer_configuration = build_kafka_consumer_configuration(
             self.__commit_log_topic_spec.topic,
             self.__consumer_group,
+            self.__slice_id,
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
         )
@@ -330,6 +336,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -337,6 +344,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__producer = producer
         self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
         self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
             entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
@@ -351,6 +359,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
                 partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,
+                slice_id=self.__slice_id,
             )
             for index in range(self.__partitions)
         }
@@ -367,6 +376,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             commit,
             self.__stale_threshold_seconds,
             self.__metrics,
+            self.__slice_id,
         )
 
         return TickBuffer(

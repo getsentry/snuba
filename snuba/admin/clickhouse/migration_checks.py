@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-from snuba.admin.migrations_policies import get_migration_group_polices
 from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -157,85 +157,48 @@ class StatusChecker(Checker):
         return ReverseResult(True)
 
 
-class PolicyChecker(Checker):
-    """
-    The PolicyChecker validates whether you can run or
-    reverse a migration based on the policy for the
-    migration's group.
-
-    Policies are defined in the ADMIN_ALLOWED_MIGRATION_GROUPS
-    setting.
-    """
-
-    def can_run(self, migration_key: MigrationKey) -> RunResult:
-        if get_migration_group_polices()[migration_key.group.value].can_run(
-            migration_key
-        ):
-            return RunResult(True)
-        else:
-            return RunResult(False, RunReason.RUN_POLICY)
-
-    def can_reverse(self, migration_key: MigrationKey) -> ReverseResult:
-        if get_migration_group_polices()[migration_key.group.value].can_reverse(
-            migration_key
-        ):
-            return ReverseResult(True)
-        else:
-            return ReverseResult(False, ReverseReason.REVERSE_POLICY)
-
-
-def do_checks(
-    checkers: Sequence[Checker], migration_key: MigrationKey
-) -> Tuple[RunResult, ReverseResult]:
-    """
-    Execute the can_run and can_reverse functionality
-    for the checkers.
-
-    Returns the failed Result(s) for the first
-    check to fail in the sequence, otherwise returns
-    a passing Result.
-    """
-
-    assert len(checkers) >= 1
-
-    for checker in checkers:
-        run_result = checker.can_run(migration_key)
-        if not run_result.allowed:
-            break
-
-    for checker in checkers:
-        reverse_result = checker.can_reverse(migration_key)
-        if not reverse_result.allowed:
-            break
-
-    return run_result, reverse_result
-
-
-def run_migration_checks_for_groups(
-    allowed_groups: Sequence[MigrationGroup], runner: Runner
+def run_migration_checks_and_policies(
+    group_policies: Mapping[str, Set[MigrationPolicy]], runner: Runner
 ) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
     """
-    Gets the statuses of all the migrations within each group
-    listed in the allowed_groups and runs the StatusChecker
-    and PolicyChecker (in that order) for said migrations.
+    Runs the policies for the given groups in addition to status
+    checks for all groups.
 
     Returns the results of those checks along with the statuses
     for the migrations.
     """
     group_results: List[Tuple[MigrationGroup, Sequence[MigrationData]]] = []
 
-    for group, migrations in runner.show_all([g.value for g in allowed_groups]):
-
+    for group, migrations in runner.show_all([g for g in group_policies.keys()]):
         migration_ids: List[MigrationData] = []
 
         status_checker = StatusChecker(group, migrations)
-        policy_checker = PolicyChecker()
+        policies = group_policies[group.value]
 
-        checkers = [status_checker, policy_checker]
+        def do_checking(
+            migration_key: MigrationKey,
+        ) -> Tuple[RunResult, ReverseResult]:
+            run_result = status_checker.can_run(migration_key)
+            reverse_result = status_checker.can_reverse(migration_key)
+
+            if run_result.allowed:
+                run_result = (
+                    RunResult(True)
+                    if any(policy.can_run(migration_key) for policy in policies)
+                    else RunResult(False, RunReason.RUN_POLICY)
+                )
+            if reverse_result.allowed:
+                reverse_result = (
+                    ReverseResult(True)
+                    if any(policy.can_reverse(migration_key) for policy in policies)
+                    else ReverseResult(False, ReverseReason.REVERSE_POLICY)
+                )
+
+            return run_result, reverse_result
 
         for details in migrations:
-            run_result, reverse_result = do_checks(
-                checkers, MigrationKey(group, details.migration_id)
+            run_result, reverse_result = do_checking(
+                MigrationKey(group, details.migration_id)
             )
             migration_ids.append(
                 MigrationData(

@@ -11,6 +11,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
+from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
     CommitLogConfig,
@@ -208,6 +209,18 @@ class ConsumerBuilder:
                 }
             )
 
+        def log_general_error(e: KafkaError) -> None:
+            with configure_scope() as scope:
+                scope.fingerprint = [e.code(), e.name()]
+                logger.warning(
+                    "Error callback from librdKafka %s, %s, %s",
+                    e.code(),
+                    e.name(),
+                    e.str(),
+                )
+
+        configuration["error_cb"] = log_general_error
+
         consumer = KafkaConsumer(
             configuration,
             commit_retry_policy=self.__commit_retry_policy,
@@ -215,7 +228,7 @@ class ConsumerBuilder:
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
-    def __build_streaming_strategy_factory(
+    def build_streaming_strategy_factory(
         self,
         slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
@@ -278,5 +291,5 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.__build_streaming_strategy_factory(slice_id), slice_id
+            self.build_streaming_strategy_factory(slice_id), slice_id
         )

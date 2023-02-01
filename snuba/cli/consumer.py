@@ -4,6 +4,7 @@ from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
+import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
@@ -46,7 +47,6 @@ logger = logging.getLogger(__name__)
     "storage_name",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
-        + ["search_issues"]
     ),
     help="The storage to target",
     required=True,
@@ -136,6 +136,7 @@ def consumer(
     setup_sentry()
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
+    sentry_sdk.set_tag("storage", storage_name)
 
     metrics_tags = {
         "group": consumer_group,
