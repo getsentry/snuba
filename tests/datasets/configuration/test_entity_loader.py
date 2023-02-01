@@ -37,7 +37,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
             MetricsDistributionsEntity,
@@ -78,11 +77,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/metrics/entities/metrics_distributions.yaml",
                 MetricsDistributionsEntity,
                 EntityKey.METRICS_DISTRIBUTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/events/entities/events.yaml",
-                EventsEntity,
-                EntityKey.EVENTS,
             ),
             (
                 "snuba/datasets/configuration/sessions/entities/sessions.yaml",

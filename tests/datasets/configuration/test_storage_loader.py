@@ -20,13 +20,6 @@ from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
-from snuba.utils.schemas import AggregateFunction
-
-# this has to be done before the storage import because there's a cyclical dependency error
-CONFIG_BUILT_STORAGES = get_config_built_storages()
-
-from snuba.datasets.storages.errors import storage as errors
-from snuba.datasets.storages.errors_ro import storage as errors_ro
 from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
@@ -41,7 +34,11 @@ from snuba.datasets.storages.sessions import org_materialized_storage as session
 from snuba.datasets.storages.sessions import raw_storage as sessions_raw
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.utils.schemas import AggregateFunction
 from tests.datasets.configuration.utils import ConfigurationTest
+
+# this has to be done before the storage import because there's a cyclical dependency error
+CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 
 def _deep_compare_storages(old: Storage, new: Storage) -> None:
@@ -130,8 +127,6 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
-        errors,
-        errors_ro,
         sessions_raw,
         sessions_org,
         sessions_hourly,

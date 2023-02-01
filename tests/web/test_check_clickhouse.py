@@ -4,7 +4,7 @@ from typing import Sequence
 from unittest import mock
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.events import EventsDataset
+from snuba.datasets.factory import get_dataset
 from snuba.web.views import check_clickhouse
 
 
@@ -44,7 +44,7 @@ class BadDataset(Dataset):
 
 def fake_get_dataset(name: str) -> Dataset:
     return {
-        "events": EventsDataset(),
+        "events": get_dataset("events"),
         "experimental": ExperimentalDataset(),
         "bad": BadDataset(),
     }[name]

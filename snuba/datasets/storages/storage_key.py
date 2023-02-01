@@ -3,10 +3,6 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 HARDCODED_STORAGE_KEYS = {
-    "EVENTS": "events",
-    "EVENTS_RO": "events_ro",
-    "ERRORS": "errors",
-    "ERRORS_RO": "errors_ro",
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",

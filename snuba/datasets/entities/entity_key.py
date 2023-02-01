@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 HARDCODED_ENTITY_KEYS = {
-    "EVENTS": "events",
     "GROUPS": "groups",
     "METRICS_SETS": "metrics_sets",
     "METRICS_COUNTERS": "metrics_counters",

@@ -37,8 +37,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         }
 
         # TODO: Remove these as they are converted to configs
-        from snuba.datasets.storages.errors import storage as errors_storage
-        from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
         from snuba.datasets.storages.metrics import (
             counters_storage as metrics_counters_storage,
         )
@@ -68,7 +66,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 storage.get_storage_key(): storage
                 for storage in [
                     # WritableStorages
-                    errors_storage,
                     querylog_storage,
                     sessions_raw_storage,
                     transactions_storage,
@@ -78,7 +75,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     metrics_counters_storage,
                     metrics_polymorphic_storage,
                     # Readable Storages
-                    errors_ro_storage,
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
                     metrics_counters_storage,
