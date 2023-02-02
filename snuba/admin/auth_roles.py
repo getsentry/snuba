@@ -114,6 +114,10 @@ DEFAULT_ROLES = [
         actions={ExecuteNoneAction(list(MIGRATIONS_RESOURCES.values()))},
     ),
     Role(
+        name="ReplaysNonBlockingMigrations",
+        actions={ExecuteNonBlockingAction([MIGRATIONS_RESOURCES["replays"]])},
+    ),
+    Role(
         name="TestMigrationsExecutor",
         actions={ExecuteAllAction([MIGRATIONS_RESOURCES["test_migration"]])},
     ),
