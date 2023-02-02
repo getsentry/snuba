@@ -62,8 +62,8 @@ class Migration(migration.ClickhouseNodeMigration):
     """
     This migration rebuilds the search_issues table by collapsing all migrations from 0001-0003 into a single migration
     and adding the following changes:
-    - add version column to support replacements
-    - modify ReplacingMergeTree engine to use the new version column
+    - add a `deleted` column to support replacements
+    - modify ReplacingMergeTree engine to use the new `deleted` column
     """
 
     blocking = False
