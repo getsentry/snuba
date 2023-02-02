@@ -1,7 +1,9 @@
 import logging
 from typing import Any
+from unittest import mock
 
 import pytest
+from flask.testing import FlaskClient
 
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser.exceptions import ParsingException
@@ -21,6 +23,13 @@ invalid_query_exception_test_cases = [
 ]
 
 
+@pytest.fixture
+def snuba_api() -> FlaskClient:
+    from snuba.web.views import application
+
+    return application.test_client()
+
+
 @pytest.mark.parametrize(
     "exception, expected_log_level", invalid_query_exception_test_cases
 )
@@ -32,3 +41,11 @@ def test_handle_invalid_query(
         _ = handle_invalid_query(exception)
         for record in caplog.records:
             assert record.levelname == expected_log_level
+
+
+def test_check_envoy_health(snuba_api):
+    response = snuba_api.get("/health_envoy")
+    assert response.status_code == 200
+    with mock.patch("snuba.web.views.check_down_file_exists", return_value=True):
+        response = snuba_api.get("/health_envoy")
+        assert response.status_code == 503

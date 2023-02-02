@@ -390,6 +390,21 @@ def config_changes() -> RespTuple:
     )
 
 
+@application.route("/health_envoy")
+def health_envoy() -> Response:
+    down_file_exists = check_down_file_exists()
+
+    body: Mapping[str, Union[str, bool]]
+    if not down_file_exists:
+        status = 200
+    else:
+        status = 503
+
+    if status != 200:
+        metrics.increment("healthcheck_envoy_failed")
+    return Response(json.dumps({}), status, {"Content-Type": "application/json"})
+
+
 @application.route("/health")
 def health() -> Response:
     start = time.time()
