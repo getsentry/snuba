@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
+from structlog.testing import CapturingLogger
 
 from snuba.admin.auth import _set_roles
 from snuba.admin.auth_roles import ROLES, generate_test_role
@@ -277,7 +278,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert mock_run_migration.call_count == 1
 
 
-def test_get_iam_roles() -> None:
+def test_get_iam_roles(caplog: Any) -> None:
     system_role = generate_test_role("system", "all")
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
@@ -336,3 +337,14 @@ def test_get_iam_roles() -> None:
                 ROLES["TestMigrationsExecutor"],
                 system_role,
             ]
+
+        with patch(
+            "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
+        ):
+            log = CapturingLogger()
+            with patch("snuba.admin.auth.logger", log):
+                user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
+                _set_roles(user3)
+                assert "IAM policy file not found file_not_exists.json" in str(
+                    log.calls
+                )
