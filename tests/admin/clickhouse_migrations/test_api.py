@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 from unittest.mock import patch
@@ -8,8 +9,10 @@ import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.admin.auth_roles import generate_test_role
+from snuba.admin.auth import _set_roles
+from snuba.admin.auth_roles import ROLES, generate_test_role
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
+from snuba.admin.user import AdminUser
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
@@ -272,3 +275,64 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}
             assert mock_run_migration.call_count == 1
+
+
+def test_get_iam_roles() -> None:
+    system_role = generate_test_role("system", "all")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(
+            json.dumps(
+                {
+                    "bindings": [
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/NonBlockingMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/TestMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                                "user:test_user3@sentry.io",
+                            ],
+                            "role": "roles/owner",
+                        },
+                    ]
+                }
+            ).encode("utf-8")
+        )
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                system_role,
+            ]
+
+            user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
+            _set_roles(user2)
+
+            assert user2.roles == [
+                ROLES["TestMigrationsExecutor"],
+                system_role,
+            ]
