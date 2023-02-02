@@ -50,7 +50,7 @@ columns: List[Column[Modifiers]] = [
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
-    Column("version", UInt(8)),
+    Column("deleted", UInt(8)),
     Column("message_timestamp", DateTime()),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
@@ -77,7 +77,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(project_id, toStartOfDay(receive_timestamp), primary_hash, cityHash64(occurrence_id))",
-                    version_column="version",
+                    version_column="deleted",
                     partition_by="(retention_days, toMonday(receive_timestamp))",
                     sample_by="cityHash64(occurrence_id)",
                     settings={"index_granularity": "8192"},
