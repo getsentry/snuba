@@ -30,6 +30,8 @@ CLIENT_DISCARD_REASONS = frozenset(
         "before_send",
         "event_processor",
         "sample_rate",
+        "send_error",
+        "internal_sdk_error",
     ]
 )
 
