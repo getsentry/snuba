@@ -37,7 +37,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
             DiscoverEventsEntity,
@@ -68,11 +67,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
-                GroupedMessageEntity,
-                EntityKey.GROUPEDMESSAGE,
             ),
             (
                 "snuba/datasets/configuration/metrics/entities/org_counters.yaml",

@@ -40,9 +40,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.groupedmessages import (
-            storage as groupedmessages_storage,
-        )
         from snuba.datasets.storages.metrics import (
             counters_storage as metrics_counters_storage,
         )
@@ -60,12 +57,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.replays import storage as replays_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
-        self._cdc_storages = {
-            storage.get_storage_key(): storage for storage in [groupedmessages_storage]
-        }
-
         self._all_storages = {
-            **self._cdc_storages,
             **{
                 storage.get_storage_key(): storage
                 for storage in [

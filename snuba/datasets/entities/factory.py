@@ -34,7 +34,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             ]
         }
 
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
             DiscoverEventsEntity,
@@ -53,7 +52,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         entity_map_pre_execute = {
             EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,
             EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
             EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,

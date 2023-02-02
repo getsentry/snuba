@@ -28,7 +28,6 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
-from snuba.datasets.storages.groupedmessages import storage as groupedmessages
 from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
@@ -132,7 +131,6 @@ class TestStorageConfiguration(ConfigurationTest):
         discover,
         errors,
         errors_ro,
-        groupedmessages,
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,
