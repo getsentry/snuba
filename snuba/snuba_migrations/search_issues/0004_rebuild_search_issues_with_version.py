@@ -130,7 +130,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_dist_new",
+                table_name="search_issues_dist",
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.RenameTable(
