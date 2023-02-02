@@ -113,7 +113,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="search_issues_dist_new",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="search_issues_dist_new",
+                    local_table_name="search_issues_local",
                     sharding_key="cityHash64(occurrence_id)",
                 ),
                 target=OperationTarget.DISTRIBUTED,
