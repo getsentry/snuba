@@ -114,8 +114,7 @@ class ConsumerBuilder:
             else:
                 self.replacements_topic = None
 
-        if self.replacements_topic is not None:
-            assert replacement_topic_spec is not None
+        if replacement_topic_spec is not None:
             self.replacements_producer = Producer(
                 build_kafka_producer_configuration(
                     replacement_topic_spec.topic,
@@ -141,8 +140,7 @@ class ConsumerBuilder:
             else:
                 self.commit_log_topic = None
 
-        if self.commit_log_topic is not None:
-            assert commit_log_topic_spec is not None
+        if commit_log_topic_spec is not None:
             self.commit_log_producer = Producer(
                 build_kafka_producer_configuration(
                     commit_log_topic_spec.topic,
@@ -271,11 +269,7 @@ class ConsumerBuilder:
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
-                replacements_producer=(
-                    self.replacements_producer
-                    if self.replacements_topic is not None
-                    else None
-                ),
+                replacements_producer=self.replacements_producer,
                 replacements_topic=self.replacements_topic,
                 slice_id=slice_id,
                 commit_log_config=commit_log_config,
