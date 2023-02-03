@@ -37,11 +37,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.entities.discover import (
-            DiscoverEntity,
-            DiscoverEventsEntity,
-            DiscoverTransactionsEntity,
-        )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
@@ -53,16 +48,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
-            (
-                "snuba/datasets/configuration/discover/entities/discover.yaml",
-                DiscoverEntity,
-                EntityKey.DISCOVER,
-            ),
-            (
-                "snuba/datasets/configuration/discover/entities/discover_transactions.yaml",
-                DiscoverTransactionsEntity,
-                EntityKey.DISCOVER_TRANSACTIONS,
-            ),
             (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
@@ -97,11 +82,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/replays/entities/replays.yaml",
                 ReplaysEntity,
                 EntityKey.REPLAYS,
-            ),
-            (
-                "snuba/datasets/configuration/discover/entities/discover_events.yaml",
-                DiscoverEventsEntity,
-                EntityKey.DISCOVER_EVENTS,
             ),
         ]
 

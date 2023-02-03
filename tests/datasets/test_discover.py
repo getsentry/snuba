@@ -4,8 +4,11 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import get_dataset, reset_dataset_factory
+from snuba.query.data_source.simple import Entity as EntitySource
 from snuba.query.snql.parser import parse_snql_query
+
+reset_dataset_factory()
 
 test_data = [
     ({"conditions": [["type", "=", "transaction"]]}, EntityKey.DISCOVER_TRANSACTIONS),
@@ -170,5 +173,6 @@ def test_data_source(
     request = json_to_snql(query_body, "discover")
     request.validate()
     query, _ = parse_snql_query(str(request.query), dataset)
-
-    assert query.get_from_clause().key == expected_entity
+    entity = query.get_from_clause()
+    assert isinstance(entity, EntitySource)
+    assert entity.key == expected_entity
