@@ -35,20 +35,14 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
-        from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
         from snuba.datasets.metrics import MetricsDataset
-        from snuba.datasets.sessions import SessionsDataset
         from snuba.datasets.transactions import TransactionsDataset
 
         self._dataset_map.update(
             {
-                "discover": DiscoverDataset(),
                 "events": EventsDataset(),
-                "groupedmessage": GroupedMessageDataset(),
                 "metrics": MetricsDataset(),
-                "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
             }
         )

@@ -37,12 +37,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
     def setup_class(self) -> None:
         reset_dataset_factory()
 
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
-        from snuba.datasets.entities.discover import (
-            DiscoverEntity,
-            DiscoverEventsEntity,
-            DiscoverTransactionsEntity,
-        )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
@@ -50,34 +44,13 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
             (
-                "snuba/datasets/configuration/discover/entities/discover.yaml",
-                DiscoverEntity,
-                EntityKey.DISCOVER,
-            ),
-            (
-                "snuba/datasets/configuration/discover/entities/discover_transactions.yaml",
-                DiscoverTransactionsEntity,
-                EntityKey.DISCOVER_TRANSACTIONS,
-            ),
-            (
                 "snuba/datasets/configuration/transactions/entities/transactions.yaml",
                 TransactionsEntity,
                 EntityKey.TRANSACTIONS,
-            ),
-            (
-                "snuba/datasets/configuration/groupedmessage/entities/groupedmessage.yaml",
-                GroupedMessageEntity,
-                EntityKey.GROUPEDMESSAGE,
-            ),
-            (
-                "snuba/datasets/configuration/sessions/entities/org.yaml",
-                OrgSessionsEntity,
-                EntityKey.ORG_SESSIONS,
             ),
             (
                 "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
@@ -103,16 +76,6 @@ class TestEntityConfigurationComparison(ConfigurationTest):
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
                 EntityKey.EVENTS,
-            ),
-            (
-                "snuba/datasets/configuration/sessions/entities/sessions.yaml",
-                SessionsEntity,
-                EntityKey.SESSIONS,
-            ),
-            (
-                "snuba/datasets/configuration/discover/entities/discover_events.yaml",
-                DiscoverEventsEntity,
-                EntityKey.DISCOVER_EVENTS,
             ),
         ]
 

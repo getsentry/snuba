@@ -5,7 +5,6 @@ import pytest
 from snuba.clickhouse.query import Query
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -23,21 +22,21 @@ span_id_as_uint64 = int(span_id_hex, 16)
 
 
 @pytest.mark.parametrize(
-    "entity, expected_table_name",
+    "entity_key, expected_table_name",
     [
         pytest.param(
-            get_entity(EntityKey.DISCOVER),
+            "discover",
             "discover",
             id="discover",
         ),
         pytest.param(
-            get_entity(EntityKey.EVENTS),
+            "events",
             "errors",
             id="events",
         ),
     ],
 )
-def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
+def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
     """In order to save space in the contexts column and provide faster query
     performance, we promote span_id to a proper column and don't store it in the
     actual contexts object in the DB.
@@ -48,6 +47,7 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
     This test makes sure that our query pipeline will do the proper column promotion and conversion
     """
 
+    entity = get_entity(EntityKey(entity_key))
     dataset_name = "discover"
 
     # The client queries by contexts[trace.span_id] even though that's not how we store it
