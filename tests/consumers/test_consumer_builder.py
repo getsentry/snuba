@@ -121,8 +121,8 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     # are passed in, stronger checks are performed
     # in a separate test below
 
-    consumer_builder.replacements_topic
-    consumer_builder.commit_log_topic
+    con_build.replacements_topic
+    con_build.commit_log_topic
 
     con_build.replacements_producer
     con_build.commit_log_producer
