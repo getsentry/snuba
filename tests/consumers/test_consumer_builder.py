@@ -6,7 +6,6 @@ from unittest.mock import Mock
 import pytest
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from confluent_kafka import Producer
 
 from snuba import environment
 from snuba.consumers.consumer_builder import (
@@ -56,10 +55,10 @@ consumer_builder = ConsumerBuilder(
 
 optional_kafka_params = KafkaParameters(
     raw_topic="raw",
-    replacements_topic="replacements",
+    replacements_topic="event-replacements",
     bootstrap_servers=["cli.server:9092", "cli2.server:9092"],
     group_id=consumer_group_name,
-    commit_log_topic="commit_log",
+    commit_log_topic="snuba-commit-log",
     auto_offset_reset="earliest",
     strict_offset_reset=False,
     queued_max_messages_kbytes=1,
@@ -104,10 +103,6 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
 
     assert con_build.broker_config is not None
 
-    assert con_build.producer_broker_config is not None
-
-    assert isinstance(con_build.producer, Producer)
-
     assert isinstance(con_build.metrics, MetricsBackend)
 
     assert con_build.max_batch_size == 3
@@ -126,8 +121,11 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     # are passed in, stronger checks are performed
     # in a separate test below
 
-    consumer_builder.replacements_topic
-    consumer_builder.commit_log_topic
+    con_build.replacements_topic
+    con_build.commit_log_topic
+
+    con_build.replacements_producer
+    con_build.commit_log_producer
 
     con_build.bootstrap_servers
     con_build.strict_offset_reset
