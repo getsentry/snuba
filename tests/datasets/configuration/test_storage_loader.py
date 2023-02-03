@@ -34,7 +34,6 @@ from snuba.datasets.storages.metrics import (
 from snuba.datasets.storages.metrics import org_counters_storage
 from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
-from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -136,7 +135,6 @@ class TestStorageConfiguration(ConfigurationTest):
         org_counters_storage,
         transactions,
         replays,
-        querylog,
     ]
 
     def test_config_file_discovery(self) -> None:
