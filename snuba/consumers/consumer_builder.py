@@ -113,7 +113,6 @@ class ConsumerBuilder:
                 )
             else:
                 self.replacements_topic = None
-                self.replacements_producer = None
 
         if self.replacements_topic is not None:
             self.replacements_producer = Producer(
@@ -126,6 +125,8 @@ class ConsumerBuilder:
                     },
                 )
             )
+        else:
+            self.replacements_producer = None
 
         self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
@@ -138,7 +139,6 @@ class ConsumerBuilder:
                 )
             else:
                 self.commit_log_topic = None
-                self.commit_log_producer = None
 
         if self.commit_log_topic is not None:
             self.commit_log_producer = Producer(
@@ -147,6 +147,8 @@ class ConsumerBuilder:
                     bootstrap_servers=kafka_params.bootstrap_servers,
                 ),
             )
+        else:
+            self.commit_log_producer = None
 
         self.stats_callback = stats_callback
         self.metrics = metrics
