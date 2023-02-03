@@ -43,7 +43,7 @@ def test_handle_invalid_query(
             assert record.levelname == expected_log_level
 
 
-def test_check_envoy_health(snuba_api):
+def test_check_envoy_health(snuba_api: FlaskClient) -> None:
     response = snuba_api.get("/health_envoy")
     assert response.status_code == 200
     with mock.patch("snuba.web.views.check_down_file_exists", return_value=True):
