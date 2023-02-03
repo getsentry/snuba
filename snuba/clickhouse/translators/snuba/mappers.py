@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -24,6 +25,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
+from snuba.utils.registered_class import import_submodules_in_directory
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -332,3 +334,10 @@ class FunctionNameMapper(FunctionCallMapper):
 
 
 # TODO: build more of these mappers.
+
+import_submodules_in_directory(
+    os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "legacy_mappers_we_cant_delete"
+    ),
+    "snuba.clickhouse.translators.snuba.legacy_mappers_we_cant_delete",
+)

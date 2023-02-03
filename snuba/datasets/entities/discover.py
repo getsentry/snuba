@@ -1,6 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -118,14 +119,15 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ),
         ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
         ("app_start_type", String(Modifiers(nullable=True))),
+        ("profile_id", UUID(Modifiers(nullable=True))),
     ]
 )
 
 
 events_translation_mappers = TranslationMappers(
     columns=[DefaultNoneColumnMapper([c.flattened for c in TRANSACTIONS_COLUMNS])],
-    functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
-    subscriptables=[DefaultNoneSubscriptMapper({"measurements", "span_op_breakdowns"})],
+    functions=[DefaultNoneFunctionMapper(["apdex", "failure_rate"])],
+    subscriptables=[DefaultNoneSubscriptMapper(["span_op_breakdowns", "measurements"])],
 )
 
 transaction_translation_mappers = TranslationMappers(
@@ -133,7 +135,7 @@ transaction_translation_mappers = TranslationMappers(
         ColumnToLiteral(None, "group_id", 0),
         DefaultNoneColumnMapper([c.flattened for c in EVENTS_COLUMNS]),
     ],
-    functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
+    functions=[DefaultNoneFunctionMapper(["isHandled", "notHandled"])],
 )
 
 null_function_translation_mappers = TranslationMappers(

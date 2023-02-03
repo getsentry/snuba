@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Optional, Sequence
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
@@ -23,7 +24,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors.logical import LogicalQueryProcessor
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import ColumnValidationMode, QueryValidator
 
 
 class InvalidEntityConfigException(Exception):
@@ -55,7 +56,9 @@ def _build_entity_translation_mappers(
 ) -> TranslationMappers:
     columns_mappers: list[ColumnMapper] = (
         [
-            ColumnMapper.get_from_name(col_config["mapper"])(**col_config["args"])
+            ColumnMapper.get_from_name(col_config["mapper"])(
+                **col_config.get("args", {})
+            )
             for col_config in config_translation_mappers["columns"]
         ]
         if "columns" in config_translation_mappers
@@ -63,7 +66,9 @@ def _build_entity_translation_mappers(
     )
     function_mappers: list[FunctionCallMapper] = (
         [
-            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(
+                **fm_config.get("args", {})
+            )
             for fm_config in config_translation_mappers["functions"]
         ]
         if "functions" in config_translation_mappers
@@ -72,7 +77,7 @@ def _build_entity_translation_mappers(
     subscriptable_mappers: list[SubscriptableReferenceMapper] = (
         [
             SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
-                **sub_config["args"]
+                **sub_config.get("args", {})
             )
             for sub_config in config_translation_mappers["subscriptables"]
         ]
@@ -82,7 +87,7 @@ def _build_entity_translation_mappers(
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
             CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
-                **curr_config["args"]
+                **curr_config.get("args", {})
             )
             for curr_config in config_translation_mappers["curried_functions"]
         ]
@@ -181,8 +186,24 @@ def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelations
     return relationships
 
 
+def _build_validation_mode(mode: str | None) -> ColumnValidationMode:
+    if not mode:
+        return ColumnValidationMode.DO_NOTHING
+
+    if mode == "warn":
+        return ColumnValidationMode.WARN
+    elif mode == "error":
+        return ColumnValidationMode.ERROR
+
+    raise InvalidEntityConfigException(f"{mode} is not a valid validation mode")
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    try:
+        config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    except Exception as e:
+        logging.exception("could not load entity from file: " + file_path)
+        raise e
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
         storages=_build_storage_connections(config["storages"]),
@@ -191,6 +212,7 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         columns=parse_columns(config["schema"]),
         required_time_column=config["required_time_column"],
         validators=_build_entity_validators(config["validators"]),
+        validate_data_model=_build_validation_mode(config.get("validate_data_model")),
         join_relationships=_build_join_relationships(config),
         partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),

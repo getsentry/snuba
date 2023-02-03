@@ -170,7 +170,13 @@ def check_clickhouse(
 
     except UndefinedClickhouseCluster as err:
         if metric_tags is not None and isinstance(err.extra_data, dict):
-            metric_tags.update(err.extra_data)
+            # Be a little defensive here, since it's not always obvious this extra data
+            # is being passed to metrics, and we might want non-string values in the
+            # exception data.
+            for k, v in err.extra_data.items():
+                if isinstance(v, str):
+                    metric_tags[k] = v
+
         logger.error(err)
         return False
 
@@ -386,7 +392,7 @@ def config_changes() -> RespTuple:
 
 @application.route("/health")
 def health() -> Response:
-
+    start = time.time()
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
 
@@ -416,7 +422,9 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-
+    metrics.timing(
+        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+    )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 

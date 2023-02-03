@@ -1,17 +1,14 @@
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Tuple
 from unittest.mock import Mock, patch
 
 import pytest
 
 from snuba.admin.clickhouse.migration_checks import (
-    PolicyChecker,
-    Result,
     ReverseReason,
     ReverseResult,
     RunReason,
     RunResult,
     StatusChecker,
-    do_checks,
 )
 from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
@@ -28,34 +25,6 @@ class ExampleLoader(DirectoryLoader):
 
 def group_loader() -> GroupLoader:
     return ExampleLoader()
-
-
-def test_do_checks() -> None:
-    checker1 = Mock()
-    checker2 = Mock()
-
-    checker1.can_run.return_value = RunResult(False, RunReason.ALREADY_RUN)
-    checker1.can_reverse.return_value = ReverseResult(False, ReverseReason.NOT_RUN_YET)
-    checker2.can_run.return_value = RunResult(True)
-    checker2.can_reverse.return_value = ReverseResult(False, ReverseReason.NOT_RUN_YET)
-
-    run, reverse = do_checks(
-        [checker1, checker2], MigrationKey(MigrationGroup("querylog"), "0001_xxx")
-    )
-    assert run.allowed == False
-    assert reverse.allowed == False
-
-    assert checker2.can_run.call_count == 0
-    assert checker2.can_reverse.call_count == 0
-
-    run, reverse = do_checks(
-        [checker2, checker1], MigrationKey(MigrationGroup("querylog"), "0001_xxx")
-    )
-    assert run.allowed == False
-    assert reverse.allowed == False
-
-    assert checker1.can_run.call_count == 2
-    assert checker1.can_reverse.call_count == 1
 
 
 RUN_MIGRATIONS: Sequence[MigrationDetails] = [
@@ -153,43 +122,52 @@ def test_status_checker_errors() -> None:
         checker.can_reverse(MigrationKey(MigrationGroup("events"), migration_id))
 
 
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
+
+
+@patch(
+    "snuba.admin.clickhouse.migration_checks.get_group_loader",
+    return_value=group_loader(),
+)
+@patch("snuba.admin.clickhouse.migration_checks.StatusChecker")
+@patch("snuba.migrations.runner.Runner")
 @pytest.mark.parametrize(
-    "migration_id, policy, action, expected_allowed, expected_reason",
+    "policy_result, status_result, expected",
     [
-        pytest.param(
-            "0001_querylog",
-            "AllMigrationsPolicy",
-            "run",
-            True,
-            None,
-        ),
-        pytest.param(
-            "0001_querylog",
-            "NoMigrationsPolicy",
-            "reverse",
-            False,
-            ReverseReason.REVERSE_POLICY,
-        ),
+        # Policy          Status          Final Result
+        # [Run, Reverse], [Run, Reverse], [Can Run, Can Reverse]
+        ((True, True), (True, True), (True, True)),
+        ((True, False), (True, True), (True, False)),
+        ((False, True), (True, True), (False, True)),
+        ((False, True), (True, False), (False, False)),
     ],
 )
-def test_policy_checker_run(
-    migration_id: str,
-    policy: str,
-    action: str,
-    expected_allowed: bool,
-    expected_reason: Optional[Union[RunReason, ReverseReason]],
+def test_run_migration_checks_and_policies(
+    group_loader: Mock,
+    mock_checker: Mock,
+    mock_runner: Mock,
+    policy_result: Tuple[bool, bool],
+    status_result: Tuple[bool, bool],
+    expected: Tuple[bool, bool],
 ) -> None:
+    mock_policy = Mock()
+    checker = mock_checker()
+    mock_runner.show_all.return_value = [
+        (MigrationGroup("events"), [MigrationDetails("0001", Status.COMPLETED, True)])
+    ]
 
-    with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {"querylog": policy},
-    ):
-        group = MigrationGroup("querylog")
-        checker = PolicyChecker()
-        if action == "run":
-            result: Result = checker.can_run(MigrationKey(group, migration_id))
-        if action == "reverse":
-            result = checker.can_reverse(MigrationKey(group, migration_id))
+    mock_policy.can_run.return_value = policy_result[0]
+    mock_policy.can_reverse.return_value = policy_result[1]
+    checker.can_run.return_value = (
+        RunResult(True) if status_result[0] else RunResult(False, RunReason.ALREADY_RUN)
+    )
+    checker.can_reverse.return_value = (
+        ReverseResult(True)
+        if status_result[1]
+        else ReverseResult(False, ReverseReason.NOT_RUN_YET)
+    )
 
-        assert result.allowed == expected_allowed
-        assert result.reason == expected_reason
+    checks = run_migration_checks_and_policies({"events": {mock_policy}}, mock_runner)
+    _, migration_ids = checks[0]
+    assert migration_ids[0].can_run == expected[0]
+    assert migration_ids[0].can_reverse == expected[1]

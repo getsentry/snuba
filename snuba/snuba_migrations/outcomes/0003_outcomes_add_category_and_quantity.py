@@ -71,25 +71,25 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
                 column=Column("quantity", UInt(32)),
-                after=None,
+                after="reason",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
                 column=Column("category", UInt(8)),
-                after=None,
+                after="timestamp",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
                 column=Column("quantity", UInt(64)),
-                after=None,
+                after="reason",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
                 column=Column("category", UInt(8)),
-                after=None,
+                after="timestamp",
             ),
         ]
 

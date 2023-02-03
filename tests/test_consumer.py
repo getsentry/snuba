@@ -23,6 +23,8 @@ from snuba.consumers.consumer import (
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
@@ -153,14 +155,16 @@ def test_multistorage_strategy(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
 ) -> None:
-    from snuba.datasets.storages import groupassignees, groupedmessages
     from tests.datasets.cdc.test_groupassignee import TestGroupassignee
     from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
+
+    groupassignees_storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
+    groupedmessages_storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
 
     commit = Mock()
     partitions = Mock()
 
-    storages = [groupassignees.storage, groupedmessages.storage]
+    storages = [groupassignees_storage, groupedmessages_storage]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
         storages,
@@ -179,12 +183,12 @@ def test_multistorage_strategy(
         KafkaPayload(
             None,
             json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
-            [("table", groupassignees.storage.get_postgres_table().encode("utf8"))],
+            [("table", groupassignees_storage.get_postgres_table().encode("utf8"))],
         ),
         KafkaPayload(
             None,
             json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
-            [("table", groupedmessages.storage.get_postgres_table().encode("utf8"))],
+            [("table", groupedmessages_storage.get_postgres_table().encode("utf8"))],
         ),
     ]
 
@@ -196,8 +200,8 @@ def test_multistorage_strategy(
     ]
 
     with assert_changes(
-        lambda: get_row_count(groupassignees.storage), 0, 1
-    ), assert_changes(lambda: get_row_count(groupedmessages.storage), 0, 1):
+        lambda: get_row_count(groupedmessages_storage), 0, 1
+    ), assert_changes(lambda: get_row_count(groupedmessages_storage), 0, 1):
 
         for message in messages:
             strategy.submit(message)

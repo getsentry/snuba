@@ -11,6 +11,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
+from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
     CommitLogConfig,
@@ -217,6 +218,18 @@ class ConsumerBuilder:
                     "stats_cb": self.stats_callback,
                 }
             )
+
+        def log_general_error(e: KafkaError) -> None:
+            with configure_scope() as scope:
+                scope.fingerprint = [e.code(), e.name()]
+                logger.warning(
+                    "Error callback from librdKafka %s, %s, %s",
+                    e.code(),
+                    e.name(),
+                    e.str(),
+                )
+
+        configuration["error_cb"] = log_general_error
 
         consumer = KafkaConsumer(
             configuration,

@@ -34,41 +34,24 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             ]
         }
 
-        from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
-        from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
             DiscoverEntity,
             DiscoverEventsEntity,
             DiscoverTransactionsEntity,
         )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.functions import FunctionsEntity
-        from snuba.datasets.entities.generic_metrics import (
-            GenericMetricsDistributionsEntity,
-            GenericMetricsSetsEntity,
-        )
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
             MetricsDistributionsEntity,
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.outcomes import OutcomesEntity
-        from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
-        from snuba.datasets.entities.profiles import ProfilesEntity
         from snuba.datasets.entities.replays import ReplaysEntity
-        from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_map_pre_execute = {
             EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
-            EntityKey.GROUPEDMESSAGE: GroupedMessageEntity,
-            EntityKey.OUTCOMES: OutcomesEntity,
-            EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
-            EntityKey.SESSIONS: SessionsEntity,
-            EntityKey.ORG_SESSIONS: OrgSessionsEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,
             EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
             EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
@@ -76,11 +59,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
             EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
             EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-            EntityKey.PROFILES: ProfilesEntity,
-            EntityKey.FUNCTIONS: FunctionsEntity,
             EntityKey.REPLAYS: ReplaysEntity,
-            EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
-            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
         }
 
         self._entity_map.update(

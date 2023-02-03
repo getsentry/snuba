@@ -28,20 +28,6 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
-from snuba.datasets.storages.functions import agg_storage as functions
-from snuba.datasets.storages.functions import raw_storage as functions_raw
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage as gen_metrics_distributions_bucket,
-)
-from snuba.datasets.storages.generic_metrics import (
-    distributions_storage as gen_metrics_distributions,
-)
-from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as gen_metrics_sets_bucket,
-)
-from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
-from snuba.datasets.storages.groupassignees import storage as groupassignees
-from snuba.datasets.storages.groupedmessages import storage as groupedmessages
 from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
@@ -49,14 +35,8 @@ from snuba.datasets.storages.metrics import (
 from snuba.datasets.storages.metrics import org_counters_storage
 from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
-from snuba.datasets.storages.outcomes import materialized_storage as outcomes_hourly
-from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw
-from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
-from snuba.datasets.storages.sessions import materialized_storage as sessions_hourly
-from snuba.datasets.storages.sessions import org_materialized_storage as sessions_org
-from snuba.datasets.storages.sessions import raw_storage as sessions_raw
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -151,26 +131,12 @@ class TestStorageConfiguration(ConfigurationTest):
         discover,
         errors,
         errors_ro,
-        functions,
-        functions_raw,
-        groupassignees,
-        groupedmessages,
-        sessions_raw,
-        sessions_org,
-        sessions_hourly,
-        gen_metrics_distributions_bucket,
-        gen_metrics_distributions,
-        gen_metrics_sets_bucket,
-        gen_metrics_sets,
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,
         metrics_raw,
         org_counters_storage,
-        outcomes_hourly,
-        outcomes_raw,
         transactions,
-        profiles,
         replays,
         querylog,
     ]

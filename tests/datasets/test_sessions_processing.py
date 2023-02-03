@@ -9,7 +9,9 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages.sessions import raw_schema, read_schema
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.query_settings import (
@@ -21,6 +23,11 @@ from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.web import QueryResult
+
+sessions_read_schema = get_storage(StorageKey.SESSIONS_HOURLY).get_schema()
+sessions_raw_schema = get_storage(StorageKey.SESSIONS_RAW).get_schema()
+assert isinstance(sessions_read_schema, TableSchema)
+assert isinstance(sessions_raw_schema, TableSchema)
 
 
 def test_sessions_processing() -> None:
@@ -112,7 +119,7 @@ selector_tests = [
             ],
         },
         False,
-        read_schema.get_table_name(),
+        sessions_read_schema.get_table_name(),
         id="Select hourly by default",
     ),
     pytest.param(
@@ -127,7 +134,7 @@ selector_tests = [
             ],
         },
         False,
-        read_schema.get_table_name(),
+        sessions_read_schema.get_table_name(),
         id="Select hourly if not grouped by started time",
     ),
     pytest.param(
@@ -143,7 +150,7 @@ selector_tests = [
             ],
         },
         False,
-        raw_schema.get_table_name(),
+        sessions_raw_schema.get_table_name(),
         id="Select raw depending on granularity",
     ),
     pytest.param(
@@ -164,7 +171,7 @@ selector_tests = [
             ],
         },
         True,
-        raw_schema.get_table_name(),
+        sessions_raw_schema.get_table_name(),
         id="Select raw if its a dataset subscription and time_window is <=1h",
     ),
     pytest.param(
@@ -185,7 +192,7 @@ selector_tests = [
             ],
         },
         True,
-        read_schema.get_table_name(),
+        sessions_read_schema.get_table_name(),
         id="Select materialized if its a dataset subscription and time_window > 1h",
     ),
 ]

@@ -102,8 +102,6 @@ class ReplayEvent:
             "type": "replay_event",
             "replay_id": self.replay_id,
             "replay_type": self.replay_type,
-            "error_sample_rate": self.error_sample_rate,
-            "session_sample_rate": self.session_sample_rate,
             "segment_id": self.segment_id,
             "tags": {"customtag": "is_set", "transaction": self.title},
             "urls": self.urls,
@@ -131,6 +129,10 @@ class ReplayEvent:
                     "op": "pageload",
                     "span_id": "affa5649681a1eeb",
                     "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                },
+                "replay": {
+                    "error_sample_rate": self.error_sample_rate,
+                    "session_sample_rate": self.session_sample_rate,
                 },
                 "os": {
                     "name": self.os_name,
