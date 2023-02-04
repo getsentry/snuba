@@ -8,6 +8,7 @@ from typing import Optional, Sequence, Tuple
 
 import pandas as pd
 import sqlparse
+import termcolor
 
 curses.setupterm()
 
@@ -21,11 +22,20 @@ DEFAULT_CH_HOST = "localhost"
 DEFAULT_CH_PORT = 9000
 
 
+class ColoredText:
+    def __init__(self, color: str) -> None:
+        self.color = color
+
+    def __call__(self, text: str) -> str:
+        return termcolor.colored(text, self.color)
+
+
 # https://stackoverflow.com/questions/32500167/how-to-show-diff-of-two-string-sequences-in-colors
-red = "\033[38;2;255;0;0m{text}\033[38;2;255;255;255m"
-green = "\033[38;2;0;255;0m{text}\033[38;2;255;255;255m"
-blue = "\033[38;2;0;0;255m{text}\033[38;2;255;255;255m"
-white = "\033[38;2;255;255;255m{text}\033[38;2;255;255;255m"
+
+red = ColoredText("red")
+green = ColoredText("green")
+blue = ColoredText("blue")
+white = ColoredText("white")
 
 
 def get_edits_string(old: str, new: str, clip: bool = True, padding: int = 100) -> str:
@@ -39,17 +49,17 @@ def get_edits_string(old: str, new: str, clip: bool = True, padding: int = 100) 
 
     for code in codes:
         if code[0] == "equal":
-            result += white.format(text=old[code[1] : code[2]])
+            result += white(text=old[code[1] : code[2]])
         elif code[0] == "delete":
-            result += red.format(text=old[code[1] : code[2]])
+            result += red(text=old[code[1] : code[2]])
             start = min(len(result), start)
             end = max(len(result), end)
         elif code[0] == "insert":
-            result += green.format(text=new[code[3] : code[4]])
+            result += green(text=new[code[3] : code[4]])
             start = min(len(result), start)
             end = max(len(result), end)
         elif code[0] == "replace":
-            result += red.format(text=old[code[1] : code[2]]) + green.format(
+            result += red(text=old[code[1] : code[2]]) + green(
                 text=new[code[3] : code[4]]
             )
             start = min(len(result), start)
@@ -130,8 +140,10 @@ def main(
     for i, row in df.iterrows():
         if str(row["table"]).strip() != "nan":
             table_name = row["table"]
-            if groups and table_name not in groups:
-                continue
+            if groups:
+                matching_groups = [x for x in groups if x in table_name]
+                if not matching_groups:
+                    continue
 
             saas_query = (
                 str(row[saas_col])
@@ -163,6 +175,14 @@ def main(
             saas_query = re.sub("\s+", " ", saas_query).strip()
             saas_query = sqlparse.format(saas_query, reindent_aligned=True)
             saas_query = ch_format(saas_query)
+
+            if not local_query:
+                print(table_name, "is missing in local", "\n")
+                continue
+
+            if not saas_query:
+                print(table_name, "is missing in saas", "\n")
+                continue
 
             if saas_query != local_query:
                 print(table_name, "is different", "\n")
