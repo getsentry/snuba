@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import itertools
 import sys
 import time
 from contextlib import redirect_stdout
@@ -94,50 +93,39 @@ def health() -> Response:
 
 @application.route("/migrations/all_schemas")
 def migration_get_all_schemas() -> Response:
-    # get `show create table` for all tables
     rows: List[Mapping[str, str | None]] = []
     for storage_info in get_storage_info():
-
         storage_name = storage_info["storage_name"]
         storage = get_storage(StorageKey(storage_name))
         cluster = storage.get_cluster()
         database = cluster.get_database()
-        local_table_name = storage_info["local_table_name"]
         local_nodes = storage_info["local_nodes"]
         dist_nodes = storage_info["dist_nodes"]
 
-        # try one of every node type starting with the local query node
-        nodes_groups = itertools.zip_longest(
-            [storage_info["query_node"]], local_nodes, dist_nodes, fillvalue=None
-        )
-
-        def find_table_schema() -> Optional[str]:
-            for group in nodes_groups:
-                for node in group:
-                    if node is None:
-                        continue
-                    try:
-                        result = run_system_query_on_host_with_sql(
-                            node["host"],
-                            node["port"],
-                            storage_name,
-                            f"select create_table_query from system.tables where database='{database}' and name='{local_table_name}'",
-                        )
-                        if result.results:
-                            return str(result.results[0][0])
-                    except ClickhouseError:
-                        continue
-                    finally:
-                        time.sleep(0.01)
-            return None
-
-        rows.append(
-            {
-                "storage_name": storage_name,
-                "table_name": local_table_name,
-                "create_table_query": find_table_schema(),
-            }
-        )
+        # fetch schemas from all nodes. if a node is down, we'll just skip it
+        # exact duplicates are skipped but table with same names but different schemas are not
+        for node in [storage_info["query_node"], *local_nodes, *dist_nodes]:
+            if node is None:
+                continue
+            try:
+                result = run_system_query_on_host_with_sql(
+                    node["host"],
+                    node["port"],
+                    storage_name,
+                    f"select name, create_table_query from system.tables where database='{database}'",
+                )
+                if result.results:
+                    for name, query in result.results:
+                        schema_entry = {
+                            "table_name": name,
+                            "create_table_query": query,
+                        }
+                        if schema_entry not in rows:
+                            rows.append(schema_entry)
+            except ClickhouseError:
+                continue
+            finally:
+                time.sleep(0.01)
 
     return make_response(jsonify(rows), 200)
 

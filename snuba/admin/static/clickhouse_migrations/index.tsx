@@ -188,8 +188,8 @@ function ClickhouseMigrations(props: { api: Client }) {
 
   function dowloadSchemas() {
     props.api.getSchemas().then((schema_info) => {
-      let header_row = "storage,table,saas_schema";
-      let csv_data_rows=schema_info.map(schema =>`"${schema.storage_name}","${schema.table_name}","${schema.create_table_query || ""}"`)
+      let header_row = "table,saas_schema";
+      let csv_data_rows=schema_info.map(schema =>`"${schema.table_name}","${schema.create_table_query || ""}"`)
       let csv_rows = [header_row].concat(csv_data_rows)
 
       // create a csv blob and download it by simulating a click on a link
