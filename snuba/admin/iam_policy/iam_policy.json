@@ -1,0 +1,19 @@
+{
+    "bindings": [
+      {
+        "members": [
+          "user:fpacifici@sentry.io",
+          "user:meredith@sentry.io",
+          "user:nikhar.saxena@sentry.io",
+          "user:dalitso.banda@sentry.io"
+        ],
+        "role": "roles/NonBlockingMigrationsExecutor"
+      },
+      {
+        "members": [
+          "group:team-sns@sentry.io"
+        ],
+        "role": "roles/MigrationsReader"
+      }
+    ]
+  }
