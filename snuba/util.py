@@ -2,6 +2,7 @@ import inspect
 import logging
 import numbers
 import re
+import sys
 from datetime import date, datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
@@ -24,6 +25,8 @@ from typing import (
 import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 from dateutil.parser import parse as dateutil_parse
+from sentry_sdk import capture_event
+from sentry_sdk.utils import event_from_exception
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
@@ -275,3 +278,19 @@ def with_span(op: str = "function") -> Callable[[F], F]:
         return cast(F, wrapper)
 
     return decorator
+
+
+def capture_warning(exc_info: Any = None) -> None:
+    """
+    Sentry doesn't provide a clean way to capture a warning exception, except
+    automatically using integrations like LoggingIntegration. Instead, use this
+    manual method if you want to capture an exception without logging.
+
+    :param exc_info: the exception to capture, if None then sys.exc_info() is used.
+    """
+    if exc_info is None:
+        exc_info = sys.exc_info()
+
+    event, hint = event_from_exception(exc_info)
+    event["level"] = "warning"
+    capture_event(event, hint)

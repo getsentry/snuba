@@ -519,10 +519,10 @@ def dataset_query(
                 "type": "rate-limited",
                 "message": str(cause),
             }
-            logger.warning(
-                str(cause),
-                exc_info=True,
-            )
+            # Capture the warning and log the error separately, to avoid
+            # cluttering the logs with stack traces when this happens
+            util.capture_warning()
+            logger.warning(str(cause))
         elif isinstance(cause, ClickhouseError):
             status = get_http_status_for_clickhouse_error(cause)
             details = {
