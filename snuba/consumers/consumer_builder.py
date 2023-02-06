@@ -13,9 +13,11 @@ from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 from sentry_sdk.api import configure_scope
 
+from snuba.cli.multistorage_consumer import (
+    build_multistorage_streaming_strategy_factory,
+)
 from snuba.consumers.consumer import (
     CommitLogConfig,
-    MultistorageConsumerProcessingStrategyFactory,
     build_batch_writer,
     process_message,
 )
@@ -283,43 +285,6 @@ class ConsumerBuilder:
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
-    # We currently don't having slicing implemented for multistorage case
-    def build_multistorage_streaming_strategy_factory(
-        self,
-    ) -> ProcessingStrategyFactory[KafkaPayload]:
-
-        if self.commit_log_topic:
-            commit_log_config = CommitLogConfig(
-                self.commit_log_producer, self.commit_log_topic, self.group_id
-            )
-        else:
-            commit_log_config = None
-
-        dead_letter_policies = {
-            storage.get_table_writer()
-            .get_stream_loader()
-            .get_dead_letter_queue_policy_creator()
-            for storage in self.storages.values()
-        }
-
-        dead_letter_policy_creator = dead_letter_policies.pop()
-        if dead_letter_policies:
-            raise ValueError("only one dead letter policy is supported")
-
-        strategy_factory = MultistorageConsumerProcessingStrategyFactory(
-            [*self.storages.values()],
-            self.max_batch_size,
-            self.max_batch_time_ms / 1000.0,
-            processes=self.processes,
-            input_block_size=self.input_block_size,
-            output_block_size=self.output_block_size,
-            metrics=self.metrics,
-            dead_letter_policy_creator=dead_letter_policy_creator,
-            commit_log_config=commit_log_config,
-        )
-
-        return strategy_factory
-
     def build_streaming_strategy_factory(
         self,
         slice_id: Optional[int] = None,
@@ -395,5 +360,17 @@ class ConsumerBuilder:
             )
         else:
             return self.__build_consumer(
-                self.build_multistorage_streaming_strategy_factory(), slice_id
+                build_multistorage_streaming_strategy_factory(
+                    self.commit_log_producer,
+                    self.commit_log_topic,
+                    self.consumer_group,
+                    self.storages,
+                    self.max_batch_size,
+                    self.max_batch_time_ms,
+                    self.processes,
+                    self.input_block_size,
+                    self.output_block_size,
+                    self.metrics,
+                ),
+                slice_id,
             )
