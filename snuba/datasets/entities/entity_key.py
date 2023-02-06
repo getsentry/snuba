@@ -9,7 +9,6 @@ HARDCODED_ENTITY_KEYS = {
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",
-    "TRANSACTIONS": "transactions",
 }
 
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}
