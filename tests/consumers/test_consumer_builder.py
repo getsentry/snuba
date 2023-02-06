@@ -101,7 +101,7 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
     # Depending on the attribute, we can verify this
     # to different degrees
 
-    storages = con_build.storages.values()
+    storages = list(con_build.storages.values())
     if len(storages) == 1:
         assert storages[0] == get_writable_storage(test_storage_keys[0])
 
