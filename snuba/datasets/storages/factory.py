@@ -52,7 +52,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             polymorphic_bucket as metrics_polymorphic_storage,
         )
         from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
-        from snuba.datasets.storages.replays import storage as replays_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._all_storages = {
@@ -62,7 +61,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     # WritableStorages
                     errors_storage,
                     transactions_storage,
-                    replays_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
                     metrics_counters_storage,

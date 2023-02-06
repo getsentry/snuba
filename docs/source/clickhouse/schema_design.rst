@@ -54,6 +54,7 @@ low-selectivity queries.
 
 Bloom filter indexing on dictionary-like columns
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 To facilitate faster searching on dictionary columns, we tend to create bloom filter indices
 on a hashes of both the unique ``key`` values of each row as well as hashes of all the ``key=value``
 pairs of each row. The `bloom filter <https://en.wikipedia.org/wiki/Bloom_filter>`_  registers these
@@ -73,3 +74,78 @@ Those styles of queries require a separate column to search.
            attributes. After the table goes through a full TTL period and the API/storage definition
            is changed to serve the values from the top-level field, message processors should be changed
            to stop writing the data in duplicate places.
+
+
+Aggregate Tables and Materialization
+------------------------------------
+
+A common use case for ClickHouse and Snuba is to ingest raw data and automatically
+roll it up to aggregate values (keyed by a custom set of dimensions). This lets
+a dataset owner simplify their write logic while getting the query benefits of
+rows that are pre-aggregated. This is done with what we'll call a raw table
+(the table the consumer writes to), an aggregate table (the table the API reads from)
+and a materialized view (which describes how the data should be transformed from
+raw to aggregate).
+
+`Sample usage of a materialized view/aggregate table from the official ClickHouse Documentation <https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/aggregatingmergetree#example-of-an-aggregated-materialized-view>`_.
+Note that contrary to this example, the aggregate table definition in Snuba is
+always separate from the materialized view definition (which is just a ClickHouse SQL
+transformation, similar to a PostgreSQL trigger).
+
+In general, Snuba follows the naming conventions here:
+
+* (``widgets_raw_local``, ``widgets_raw_dist``) for the raw (local, distributed) tables
+* ``widgets_aggregation_mv`` for the materialized view (this only exists on storage nodes)
+* (``widgets_aggregated_local``, ``widgets_aggregated_dist``) for the roll-up/aggregated (local, distributed) tables
+
+Materialized views are immutable so it's normal to have multiple versions of
+``widgets_aggregation_mv`` when behavior is updated, with suffixes like
+``widgets_aggregation_mv_v1``, ``widgets_aggregation_mv_v2``, etc. Migration
+between materialized view versions are described in the next section but in general
+old materialized views should be discarded once they are no longer used.
+
+Schema migrations using materialization_version
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As we discussed at the end of the prior section, materialized view logic cannot
+be updated in place. In order to continuously roll-up input data without data
+loss or duplication in the aggregate table, we control logic changes with a
+column on the raw table, ``materialization_version``, and making the materialized
+view logic depend on specific values of that column. To update MV logic, you
+create a new materialized view that looks for the last used value of
+``materialization_version`` plus one and then, after that's been created in all
+relevant environments, update the consumer to write the new materialization_version
+to the raw column.
+
+Here is how this might look in practice:
+
+Context:
+
+1. There is a raw table ``click_events_raw_local``, that has a field named
+   ``click_duration``, of type Float64. A snuba consumer is setting this to 0 for
+   certain types of click events.
+2. There is a materialized view ``click_events_aggregation_mv`` that is writing
+   a ``quantilesState()`` value for a ``click_duration`` column in ``click_events_aggregated_local``
+   including those zero-values. This materialized view looks for the value of
+   ``materialization_version = 0`` in its WHERE condition.
+3. The query users are being surprised by p90, p95, and p99 values that are taking into
+   account zero-duration click events which don't make sense for the use case.
+
+To resolve this confusion, we don't want to set quantilesState for ``click_duration`` if
+the incoming ``click_duration`` is 0.
+
+Steps to resolve the issue:
+
+1. Create a new materialized view ``click_events_aggregation_mv_v1`` via the migration system. This new materialized
+   view will use the WHERE clause or some kind of filtering to avoid setting quantilesState(0)
+   in the write for the ``click_duration`` column. This new materialized will only operate on
+   inputs in ``click_events_raw_local`` where ``materialization_version = 1``
+2. Test that this fixes the issue in your local environment by changing your consumer to use
+   ``materialization_version = 1``. It can make sense to control this via the settings file in
+   (in ``snuba/settings/__init.py__``)
+3. Run the migration in all relevant environments.
+4. Change the materialization_version setting mentioned above in a specific environment, to
+   set ``materialization_version = 1`` on write.
+5. Validate that the consumer is writing rows with the new materialization version, and that
+   it produces the expected roll-up results.
+6. Write a migration to remove the now-unused materialized view (``click_events_aggregation_mv``).
