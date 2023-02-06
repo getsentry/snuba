@@ -37,18 +37,8 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         }
 
         # TODO: Remove these as they are converted to configs
-        from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.querylog import storage as querylog_storage
-        from snuba.datasets.storages.replays import storage as replays_storage
-        from snuba.datasets.storages.sessions import (
-            materialized_storage as sessions_hourly_storage,
-        )
-        from snuba.datasets.storages.sessions import (
-            org_materialized_storage as org_sessions_hourly_storage,
-        )
-        from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._all_storages = {
@@ -57,15 +47,9 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 for storage in [
                     # WritableStorages
                     errors_storage,
-                    querylog_storage,
-                    sessions_raw_storage,
                     transactions_storage,
-                    replays_storage,
                     # Readable Storages
-                    discover_storage,
                     errors_ro_storage,
-                    sessions_hourly_storage,
-                    org_sessions_hourly_storage,
                 ]
             },
             **self._config_built_storages,

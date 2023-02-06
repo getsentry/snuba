@@ -1,8 +1,17 @@
 import logging
 
 from snuba import environment
-from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
+from snuba.clickhouse.columns import (
+    UUID,
+    Array,
+    ColumnSet,
+    DateTime,
+    FixedString,
+    Float,
+    Nested,
+)
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.conditions import (
     BINARY_OPERATORS,
@@ -32,9 +41,81 @@ will require an entity to always be specified by the user.
 
 """
 
-EVENTS = EntityKey.DISCOVER_EVENTS
-TRANSACTIONS = EntityKey.DISCOVER_TRANSACTIONS
-EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
+
+# NOTE: These will need to be updated if/when events and transaction columns change.
+# TODO: Figure out a way to get this information automatically.
+EVENTS_COLUMNS = ColumnSet(
+    [
+        ("group_id", UInt(64, Modifiers(nullable=True))),
+        ("primary_hash", FixedString(32, Modifiers(nullable=True))),
+        # Promoted tags
+        ("level", String(Modifiers(nullable=True))),
+        ("logger", String(Modifiers(nullable=True))),
+        ("server_name", String(Modifiers(nullable=True))),
+        ("site", String(Modifiers(nullable=True))),
+        ("url", String(Modifiers(nullable=True))),
+        ("location", String(Modifiers(nullable=True))),
+        ("culprit", String(Modifiers(nullable=True))),
+        ("received", DateTime(Modifiers(nullable=True))),
+        ("sdk_integrations", Array(String(), Modifiers(nullable=True))),
+        ("version", String(Modifiers(nullable=True))),
+        # exception interface
+        (
+            "exception_stacks",
+            Nested(
+                [
+                    ("type", String(Modifiers(nullable=True))),
+                    ("value", String(Modifiers(nullable=True))),
+                    ("mechanism_type", String(Modifiers(nullable=True))),
+                    ("mechanism_handled", UInt(8, Modifiers(nullable=True))),
+                ]
+            ),
+        ),
+        (
+            "exception_frames",
+            Nested(
+                [
+                    ("abs_path", String(Modifiers(nullable=True))),
+                    ("filename", String(Modifiers(nullable=True))),
+                    ("package", String(Modifiers(nullable=True))),
+                    ("module", String(Modifiers(nullable=True))),
+                    ("function", String(Modifiers(nullable=True))),
+                    ("in_app", UInt(8, Modifiers(nullable=True))),
+                    ("colno", UInt(32, Modifiers(nullable=True))),
+                    ("lineno", UInt(32, Modifiers(nullable=True))),
+                    ("stack_level", UInt(16)),
+                ]
+            ),
+        ),
+        ("modules", Nested([("name", String()), ("version", String())])),
+    ]
+)
+
+TRANSACTIONS_COLUMNS = ColumnSet(
+    [
+        ("transaction_hash", UInt(64, Modifiers(nullable=True))),
+        ("transaction_op", String(Modifiers(nullable=True))),
+        ("transaction_status", UInt(8, Modifiers(nullable=True))),
+        ("transaction_source", String(Modifiers(nullable=True))),
+        ("duration", UInt(32, Modifiers(nullable=True))),
+        ("measurements", Nested([("key", String()), ("value", Float(64))])),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))])),
+        (
+            "spans",
+            Nested(
+                [
+                    ("op", String()),
+                    ("group", UInt(64)),
+                    ("exclusive_time", Float(64)),
+                    ("exclusive_time_32", Float(32)),
+                ]
+            ),
+        ),
+        ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
+        ("app_start_type", String(Modifiers(nullable=True))),
+        ("profile_id", UUID(Modifiers(nullable=True))),
+    ]
+)
 
 
 def select_discover_entity(query: Query) -> EntityKey:
@@ -93,13 +174,13 @@ def match_query_to_entity(
                     event_types.add(event_type)
                 elif result.string("function") == ConditionFunctions.NEQ:
                     if event_type == "transaction":
-                        return EVENTS
+                        return EntityKey.DISCOVER_EVENTS
 
     if len(event_types) == 1 and "transaction" in event_types:
-        return TRANSACTIONS
+        return EntityKey.DISCOVER_TRANSACTIONS
 
     if len(event_types) > 0 and "transaction" not in event_types:
-        return EVENTS
+        return EntityKey.DISCOVER_EVENTS
 
     # If we cannot clearly pick an entity from the top level conditions, then
     # inspect the columns requested to infer a selection.
@@ -138,13 +219,13 @@ def match_query_to_entity(
 
     if has_event_columns and has_transaction_columns:
         # Impossible query, use the merge table
-        return EVENTS_AND_TRANSACTIONS
+        return EntityKey.DISCOVER
     elif has_event_columns:
-        return EVENTS
+        return EntityKey.DISCOVER_EVENTS
     elif has_transaction_columns:
-        return TRANSACTIONS
+        return EntityKey.DISCOVER_TRANSACTIONS
     else:
-        return EVENTS_AND_TRANSACTIONS
+        return EntityKey.DISCOVER
 
 
 def _track_bad_query(
@@ -168,10 +249,12 @@ def _track_bad_query(
         if transactions_only_columns.get(schema_col_name):
             transaction_columns.add(schema_col_name)
 
-    event_mismatch = event_columns and selected_entity == TRANSACTIONS
+    event_mismatch = (
+        event_columns and selected_entity == EntityKey.DISCOVER_TRANSACTIONS
+    )
     transaction_mismatch = transaction_columns and selected_entity in [
-        EVENTS,
-        EVENTS_AND_TRANSACTIONS,
+        EntityKey.DISCOVER_EVENTS,
+        EntityKey.DISCOVER,
     ]
 
     if event_mismatch or transaction_mismatch:
@@ -192,9 +275,7 @@ def _track_bad_query(
             },
         )
 
-    if selected_entity == EVENTS_AND_TRANSACTIONS and (
-        event_columns or transaction_columns
-    ):
+    if selected_entity == EntityKey.DISCOVER and (event_columns or transaction_columns):
         # Not possible in future with merge table
         missing_events_columns = ",".join(sorted(event_columns))
         missing_transactions_columns = ",".join(sorted(transaction_columns))

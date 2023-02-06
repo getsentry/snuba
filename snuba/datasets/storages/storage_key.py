@@ -3,18 +3,12 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 HARDCODED_STORAGE_KEYS = {
-    "DISCOVER": "discover",
     "EVENTS": "events",
     "EVENTS_RO": "events_ro",
     "ERRORS": "errors",
     "ERRORS_RO": "errors_ro",
-    "QUERYLOG": "querylog",
-    "SESSIONS_RAW": "sessions_raw",
-    "SESSIONS_HOURLY": "sessions_hourly",
-    "ORG_SESSIONS": "org_sessions",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "REPLAYS": "replays",
 }
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}

@@ -34,25 +34,12 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             ]
         }
 
-        from snuba.datasets.entities.discover import (
-            DiscoverEntity,
-            DiscoverEventsEntity,
-            DiscoverTransactionsEntity,
-        )
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.replays import ReplaysEntity
-        from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_map_pre_execute = {
-            EntityKey.DISCOVER: DiscoverEntity,
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.SESSIONS: SessionsEntity,
-            EntityKey.ORG_SESSIONS: OrgSessionsEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,
-            EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
-            EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
-            EntityKey.REPLAYS: ReplaysEntity,
         }
 
         self._entity_map.update(

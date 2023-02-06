@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from typing import Callable
+import json
+from typing import Callable, Sequence
 
+import structlog
 from flask import request
 
 from snuba import settings
-from snuba.admin.auth_roles import DEFAULT_ROLES
+from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
+logger = structlog.get_logger().bind(module=__name__)
 
 
 class UnauthorizedException(Exception):
@@ -33,10 +37,41 @@ def authorize_request() -> AdminUser:
     return _set_roles(provider())
 
 
+def _is_member_of_group(user: AdminUser, group: str) -> bool:
+    # TODO this will be handled by gcp identity once we have the service account
+    # https://cloud.google.com/identity/docs/how-to/query-memberships#searching_for_all_memberships_in_a_group
+    return False
+
+
+def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
+    iam_roles = []
+    try:
+        with open(settings.ADMIN_IAM_POLICY_FILE, "r") as policy_file:
+            policy = json.load(policy_file)
+            for binding in policy["bindings"]:
+                role: str = binding["role"].split("roles/")[-1]
+                for member in binding["members"]:
+                    if f"user:{user.email}" == member:
+                        iam_roles.append(role)
+                        break
+                    if member.startswith("group:"):
+                        group = member.split("group:")[-1]
+                        if _is_member_of_group(user, group):
+                            iam_roles.append(role)
+                            break
+    except FileNotFoundError:
+        logger.warn(
+            f"IAM policy file not found {settings.ADMIN_IAM_POLICY_FILE}. Using default roles only."
+        )
+
+    return iam_roles
+
+
 def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
     # to subset of DEFAULT_ROLES based on IAM roles
-    user.roles = DEFAULT_ROLES
+    iam_roles = get_iam_roles_from_file(user)
+    user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
     return user
 
 

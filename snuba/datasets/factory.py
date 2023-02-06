@@ -35,19 +35,13 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
-        from snuba.datasets.replays import ReplaysDataset
-        from snuba.datasets.sessions import SessionsDataset
         from snuba.datasets.transactions import TransactionsDataset
 
         self._dataset_map.update(
             {
-                "discover": DiscoverDataset(),
                 "events": EventsDataset(),
-                "sessions": SessionsDataset(),
                 "transactions": TransactionsDataset(),
-                "replays": ReplaysDataset(),
             }
         )
 
