@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.transactions import TransactionsEntity
+from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -197,7 +197,7 @@ def test_timeseries_format_expressions(
         condition=exp_condition,
     )
 
-    entity = TransactionsEntity()
+    entity = get_entity(EntityKey.TRANSACTIONS)
     processors = entity.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
@@ -234,7 +234,7 @@ def test_invalid_datetime() -> None:
         ),
     )
 
-    entity = TransactionsEntity()
+    entity = get_entity(EntityKey.TRANSACTIONS)
     processors = entity.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
