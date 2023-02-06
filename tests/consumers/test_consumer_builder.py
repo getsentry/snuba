@@ -21,12 +21,12 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.fixtures import get_raw_event
 from tests.test_consumer import get_row_count
 
-test_storage_key = StorageKey("errors")
+test_storage_keys = [StorageKey("errors")]
 consumer_group_name = "my_consumer_group"
 
 # Below, a ConsumerBuilder with only required args
 consumer_builder = ConsumerBuilder(
-    storage_key=test_storage_key,
+    storage_keys=test_storage_keys,
     kafka_params=KafkaParameters(
         raw_topic=None,
         replacements_topic=None,
@@ -48,7 +48,10 @@ consumer_builder = ConsumerBuilder(
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
-        tags={"group": consumer_group_name, "storage": test_storage_key.value},
+        tags={
+            "group": consumer_group_name,
+            "storage": "_".join([test_storage_keys[0].value, "m"]),
+        },
     ),
     slice_id=None,
 )
@@ -69,7 +72,7 @@ optional_kafka_params = KafkaParameters(
 # and optional args, but only those with
 # no default values
 consumer_builder_with_opt = ConsumerBuilder(
-    storage_key=test_storage_key,
+    storage_keys=test_storage_keys,
     kafka_params=optional_kafka_params,
     processing_params=ProcessingParameters(
         processes=5,
@@ -81,7 +84,10 @@ consumer_builder_with_opt = ConsumerBuilder(
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
-        tags={"group": consumer_group_name, "storage": test_storage_key.value},
+        tags={
+            "group": consumer_group_name,
+            "storage": "_".join([test_storage_keys[0].value, "m"]),
+        },
     ),
     slice_id=None,
 )
@@ -95,21 +101,23 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
     # Depending on the attribute, we can verify this
     # to different degrees
 
-    assert con_build.storage == get_writable_storage(test_storage_key)
+    storages = con_build.storages
+    if len(storages.values()) == 1:
+        assert storages[0] == get_writable_storage(test_storage_keys[0])
 
-    assert con_build.consumer_group == consumer_group_name
+        assert con_build.consumer_group == consumer_group_name
 
-    assert isinstance(con_build.raw_topic, Topic)
+        assert isinstance(con_build.raw_topic, Topic)
 
-    assert con_build.broker_config is not None
+        assert con_build.broker_config is not None
 
-    assert isinstance(con_build.metrics, MetricsBackend)
+        assert isinstance(con_build.metrics, MetricsBackend)
 
-    assert con_build.max_batch_size == 3
-    assert con_build.max_batch_time_ms == 4
-    assert con_build.auto_offset_reset == "earliest"
-    assert con_build.queued_max_messages_kbytes == 1
-    assert con_build.queued_min_messages == 2
+        assert con_build.max_batch_size == 3
+        assert con_build.max_batch_time_ms == 4
+        assert con_build.auto_offset_reset == "earliest"
+        assert con_build.queued_max_messages_kbytes == 1
+        assert con_build.queued_min_messages == 2
 
 
 @pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
