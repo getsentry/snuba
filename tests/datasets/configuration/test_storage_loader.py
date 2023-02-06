@@ -25,7 +25,6 @@ from snuba.utils.schemas import AggregateFunction
 # this has to be done before the storage import because there's a cyclical dependency error
 CONFIG_BUILT_STORAGES = get_config_built_storages()
 
-from snuba.datasets.storages.discover import storage as discover
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
 from snuba.datasets.storages.metrics import counters_storage
@@ -35,8 +34,6 @@ from snuba.datasets.storages.metrics import (
 from snuba.datasets.storages.metrics import org_counters_storage
 from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
-from snuba.datasets.storages.querylog import storage as querylog
-from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -128,7 +125,6 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
-        discover,
         errors,
         errors_ro,
         metrics_sets,
@@ -137,8 +133,6 @@ class TestStorageConfiguration(ConfigurationTest):
         metrics_raw,
         org_counters_storage,
         transactions,
-        replays,
-        querylog,
     ]
 
     def test_config_file_discovery(self) -> None:

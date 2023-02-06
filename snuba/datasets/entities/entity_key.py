@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 HARDCODED_ENTITY_KEYS = {
-    "DISCOVER": "discover",
     "EVENTS": "events",
     "GROUPS": "groups",
     "METRICS_SETS": "metrics_sets",
@@ -11,9 +10,6 @@ HARDCODED_ENTITY_KEYS = {
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
     "METRICS_DISTRIBUTIONS": "metrics_distributions",
     "TRANSACTIONS": "transactions",
-    "DISCOVER_TRANSACTIONS": "discover_transactions",
-    "DISCOVER_EVENTS": "discover_events",
-    "REPLAYS": "replays",
 }
 
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}

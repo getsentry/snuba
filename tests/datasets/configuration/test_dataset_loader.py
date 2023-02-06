@@ -1,9 +1,7 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
 from snuba.datasets.metrics import MetricsDataset
-from snuba.datasets.replays import ReplaysDataset
 from snuba.datasets.transactions import TransactionsDataset
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -14,9 +12,7 @@ class TestDatasetConfiguration(ConfigurationTest):
         test_data = [
             (TransactionsDataset(), config_built_datasets["transactions"]),
             (MetricsDataset(), config_built_datasets["metrics"]),
-            (ReplaysDataset(), config_built_datasets["replays"]),
             (EventsDataset(), config_built_datasets["events"]),
-            (DiscoverDataset(), config_built_datasets["discover"]),
         ]
         for test in test_data:
             self._dataset_config_matches_python_definition(*test)
