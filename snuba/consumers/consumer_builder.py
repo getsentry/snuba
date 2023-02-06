@@ -126,8 +126,10 @@ class ConsumerBuilder:
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
 
+        # We establish that there is only one input raw topic,
+        # one commit log topic, and one replacements topic amongst the storages
+        # We retain the raw logical topic for producer/consumer configuration
         self.__topic = verify_single_topic([*self.storages.values()])
-        # we established we have only one topic
 
         # Ensure that the slice, storage set combination is valid
         for writable_storage in self.storages.values():
