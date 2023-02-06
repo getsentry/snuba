@@ -4,7 +4,6 @@ from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
-import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
@@ -13,7 +12,10 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
-from snuba.datasets.storages.factory import get_writable_storage_keys
+from snuba.datasets.storages.factory import (
+    get_writable_storage,
+    get_writable_storage_keys,
+)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -44,11 +46,12 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--storage",
-    "storage_name",
+    "storage_names",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
     ),
-    help="The storage to target",
+    help="The storages to target",
+    multiple=True,
     required=True,
 )
 @click.option(
@@ -116,7 +119,7 @@ def consumer(
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    storage_name: str,
+    storage_names: str,
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -135,12 +138,16 @@ def consumer(
     setup_logging(log_level)
     setup_sentry()
     logger.info("Consumer Starting")
-    storage_key = StorageKey(storage_name)
-    sentry_sdk.set_tag("storage", storage_name)
+    storages = {
+        key: get_writable_storage(key)
+        for key in (StorageKey(name) for name in storage_names)
+    }
+    storage_keys = [*storages.keys()]
+    # sentry_sdk.set_tag("storage", storage_name)
 
     metrics_tags = {
         "group": consumer_group,
-        "storage": storage_key.value,
+        "storage": "_".join([storage_keys[0].value, "m"]),
     }
 
     if slice_id:
@@ -154,7 +161,7 @@ def consumer(
         metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
+        storage_keys=storage_keys,
         kafka_params=KafkaParameters(
             raw_topic=raw_events_topic,
             replacements_topic=replacements_topic,

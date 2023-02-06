@@ -15,11 +15,14 @@ from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
     CommitLogConfig,
+    MultistorageConsumerProcessingStrategyFactory,
     build_batch_writer,
     process_message,
 )
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
-from snuba.datasets.slicing import validate_passed_slice
+
+# from snuba.datasets.slicing import validate_passed_slice
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
@@ -30,6 +33,7 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
 )
+from snuba.utils.streams.topics import Topic as SnubaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +58,50 @@ class ProcessingParameters:
     output_block_size: Optional[int]
 
 
+def verify_single_topic(storages: Sequence[WritableTableStorage]) -> str:
+    stream_loaders = {
+        storage.get_table_writer().get_stream_loader() for storage in storages
+    }
+
+    default_topics = {
+        stream_loader.get_default_topic_spec().topic_name
+        for stream_loader in stream_loaders
+    }
+
+    commit_log_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_commit_log_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    replacement_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_replacement_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    # XXX: The ``StreamProcessor`` only supports a single topic at this time,
+    # but is easily modified. The topic routing in the processing strategy is a
+    # bit trickier (but also shouldn't be too bad.)
+    topic = Topic(default_topics.pop())
+    if default_topics:
+        raise ValueError("only one topic is supported")
+    commit_log_topics.pop()
+    if commit_log_topics:
+        raise ValueError("only one commit log topic is supported")
+    replacement_topics.pop()
+    if replacement_topics:
+        raise ValueError("only one commit log topic is supported")
+
+    return topic.name
+
+
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -63,7 +111,7 @@ class ConsumerBuilder:
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_keys: Sequence[StorageKey],
         kafka_params: KafkaParameters,
         processing_params: ProcessingParameters,
         max_batch_size: int,
@@ -75,31 +123,32 @@ class ConsumerBuilder:
         validate_schema: bool = False,
         profile_path: Optional[str] = None,
     ) -> None:
-        self.storage = get_writable_storage(storage_key)
+        self.storages = {key: get_writable_storage(key) for key in storage_keys}
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
-        topic = (
-            self.storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic
-        )
+
+        self.__topic = verify_single_topic(list(self.storages.values()))
+        # we established we have only one topic
 
         # Ensure that the slice, storage set combination is valid
-        validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
+        # validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
-            topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
+            SnubaTopic(self.__topic),
+            slice_id,
+            bootstrap_servers=kafka_params.bootstrap_servers,
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
 
-        stream_loader = self.storage.get_table_writer().get_stream_loader()
+        stream_loader = (
+            self.storages[storage_keys[0]].get_table_writer().get_stream_loader()
+        )
 
         self.raw_topic: Topic
+        default_topic_spec = stream_loader.get_default_topic_spec()
         if kafka_params.raw_topic is not None:
             self.raw_topic = Topic(kafka_params.raw_topic)
         else:
-            default_topic_spec = stream_loader.get_default_topic_spec()
             self.raw_topic = Topic(default_topic_spec.get_physical_topic_name(slice_id))
 
         self.replacements_topic: Optional[Topic]
@@ -186,16 +235,8 @@ class ConsumerBuilder:
         slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
-        # retrieves the default logical topic
-        topic = (
-            self.storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic
-        )
-
         configuration = build_kafka_consumer_configuration(
-            topic,
+            SnubaTopic(self.__topic),
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             slice_id=slice_id,
@@ -237,11 +278,53 @@ class ConsumerBuilder:
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
+    def build_multistorage_streaming_strategy_factory(
+        self,
+        slice_id: Optional[int] = None,
+    ) -> ProcessingStrategyFactory[KafkaPayload]:
+
+        if self.commit_log_topic:
+            commit_log_config = CommitLogConfig(
+                self.commit_log_producer, self.commit_log_topic, self.group_id
+            )
+        else:
+            commit_log_config = None
+
+        dead_letter_policies = {
+            storage.get_table_writer()
+            .get_stream_loader()
+            .get_dead_letter_queue_policy_creator()
+            for storage in self.storages.values()
+        }
+
+        dead_letter_policy_creator = dead_letter_policies.pop()
+        if dead_letter_policies:
+            raise ValueError("only one dead letter policy is supported")
+
+        strategy_factory = MultistorageConsumerProcessingStrategyFactory(
+            [*self.storages.values()],
+            self.max_batch_size,
+            self.max_batch_time_ms / 1000.0,
+            processes=self.processes,
+            input_block_size=self.input_block_size,
+            output_block_size=self.output_block_size,
+            metrics=self.metrics,
+            dead_letter_policy_creator=dead_letter_policy_creator,
+            commit_log_config=commit_log_config,
+        )
+
+        return strategy_factory
+
     def build_streaming_strategy_factory(
         self,
         slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
-        table_writer = self.storage.get_table_writer()
+
+        # this is the case of single storage
+        storages = list(self.storages.values())
+        storage = storages[0]
+
+        table_writer = storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
         logical_topic = stream_loader.get_default_topic_spec().topic
@@ -301,6 +384,12 @@ class ConsumerBuilder:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(
-            self.build_streaming_strategy_factory(slice_id), slice_id
-        )
+
+        if len(self.storages.values()) == 1:
+            return self.__build_consumer(
+                self.build_streaming_strategy_factory(slice_id), slice_id
+            )
+        else:
+            return self.__build_consumer(
+                self.build_multistorage_streaming_strategy_factory(slice_id), slice_id
+            )
