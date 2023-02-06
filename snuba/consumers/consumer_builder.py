@@ -20,8 +20,7 @@ from snuba.consumers.consumer import (
     process_message,
 )
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
-
-# from snuba.datasets.slicing import validate_passed_slice
+from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -127,11 +126,12 @@ class ConsumerBuilder:
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
 
-        self.__topic = verify_single_topic(list(self.storages.values()))
+        self.__topic = verify_single_topic([*self.storages.values()])
         # we established we have only one topic
 
         # Ensure that the slice, storage set combination is valid
-        # validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
+        for writable_storage in self.storages.values():
+            validate_passed_slice(writable_storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
             SnubaTopic(self.__topic),
@@ -140,9 +140,12 @@ class ConsumerBuilder:
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
 
-        stream_loader = (
-            self.storages[storage_keys[0]].get_table_writer().get_stream_loader()
-        )
+        # Get a random storage from the storage dict
+        rand_storage = [*self.storages.values()][0]
+        # We assume that the different topics are all on the same Kafka cluster
+        # and that all storages are associated with the same Kafka cluster
+        # (see multistorage consumer for clarification)
+        stream_loader = rand_storage.get_table_writer().get_stream_loader()
 
         self.raw_topic: Topic
         default_topic_spec = stream_loader.get_default_topic_spec()
@@ -278,9 +281,9 @@ class ConsumerBuilder:
 
         return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
+    # We currently don't having slicing implemented for multistorage case
     def build_multistorage_streaming_strategy_factory(
         self,
-        slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
 
         if self.commit_log_topic:
@@ -320,8 +323,7 @@ class ConsumerBuilder:
         slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
 
-        # this is the case of single storage
-        storages = list(self.storages.values())
+        storages = [*self.storages.values()]
         storage = storages[0]
 
         table_writer = storage.get_table_writer()
@@ -385,11 +387,11 @@ class ConsumerBuilder:
         Builds the consumer.
         """
 
-        if len(self.storages.values()) == 1:
+        if len(self.storages) == 1:
             return self.__build_consumer(
                 self.build_streaming_strategy_factory(slice_id), slice_id
             )
         else:
             return self.__build_consumer(
-                self.build_multistorage_streaming_strategy_factory(slice_id), slice_id
+                self.build_multistorage_streaming_strategy_factory(), slice_id
             )

@@ -145,10 +145,16 @@ def consumer(
     storage_keys = [*storages.keys()]
     # sentry_sdk.set_tag("storage", storage_name)
 
-    metrics_tags = {
-        "group": consumer_group,
-        "storage": "_".join([storage_keys[0].value, "m"]),
-    }
+    if len(storages) == 1:
+        metrics_tags = {
+            "group": consumer_group,
+            "storage": storage_keys[0].value,
+        }
+    else:
+        metrics_tags = {
+            "group": consumer_group,
+            "storage": "_".join([storage_keys[0].value, "m"]),
+        }
 
     if slice_id:
         metrics_tags["slice_id"] = str(slice_id)
