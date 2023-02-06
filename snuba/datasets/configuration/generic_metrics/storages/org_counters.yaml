@@ -3,7 +3,7 @@ kind: readable_storage
 name: generic_org_metrics_counters
 storage:
   key: generic_org_metrics_counters
-  set_key: generic_org_metrics_counters
+  set_key: generic_metrics_counters
 schema:
   columns:
     [
