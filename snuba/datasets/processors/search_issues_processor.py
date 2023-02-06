@@ -170,7 +170,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
 
     def _process_contexts(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
-    ):
+    ) -> None:
         contexts = event_data.get("contexts", {})
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
