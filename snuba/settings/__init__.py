@@ -43,6 +43,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "replays": "NonBlockingMigrationsPolicy",
     "test_migration": "AllMigrationsPolicy",
 }
+MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 

@@ -4,9 +4,8 @@ from datetime import datetime, timedelta
 from snuba.migrations.groups import get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.settings import MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
 from snuba.utils.registered_class import RegisteredClass
-
-MAX_REVERT_TIME_WINDOW_HRS = 24
 
 
 class MigrationPolicy(ABC, metaclass=RegisteredClass):
@@ -75,7 +74,7 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
 
         if status == Status.COMPLETED and timestamp:
             oldest_allowed_timestamp = datetime.now() + timedelta(
-                hours=-MAX_REVERT_TIME_WINDOW_HRS
+                hours=-MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
             )
             if timestamp >= oldest_allowed_timestamp:
                 return False if migration.blocking else True
