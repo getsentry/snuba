@@ -254,6 +254,98 @@ class TestSearchIssuesMessageProcessor:
         assert "sdk_name" in insert_row and insert_row["sdk_name"] == "python"
         assert "sdk_version" in insert_row and insert_row["sdk_version"] == "1.2.3"
 
+    def test_extract_context_filters_non_dict(self, message_base):
+        message_base["data"]["contexts"] = {
+            "string": "blah",
+            "int": 1,
+            "float": 1.1,
+            "array": ["a", "b", "c"],
+            "scalar": {
+                "string": "scalar_value",
+                "int": 99,
+                "float": 123.111,
+            },
+            "nested_dict": {
+                "array": [1, 2, 3],
+                "dict": {
+                    "key1": "value1",
+                    "key2": "value2",
+                    "key3": "value3",
+                },
+                "string": "blah_nested",
+                "int": 2,
+                "float": 2.2,
+            },
+        }
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "contexts.key" in insert_row and insert_row["contexts.key"] == [
+            "scalar.string",
+            "scalar.int",
+            "scalar.float",
+            "nested_dict.string",
+            "nested_dict.int",
+            "nested_dict.float",
+        ]
+        assert "contexts.value" in insert_row and insert_row["contexts.value"] == [
+            "scalar_value",
+            "99",
+            "123.111",
+            "blah_nested",
+            "2",
+            "2.2",
+        ]
+
+    def test_extract_context_non_string_dict_keys(self, message_base):
+        message_base["data"]["contexts"] = {
+            "scalar": {
+                1: "val1",
+                2: "val2",
+                10: 1,
+                20: 2,
+                100: 1.1,
+                200: 2.2,
+                1.1: "float_val_1",
+                2.2: "float_val_2",
+                10.1: 10,
+                20.1: 20,
+                100.1: 100.1,
+                200.1: 200.1,
+            },
+        }
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "contexts.key" in insert_row and insert_row["contexts.key"] == [
+            "scalar.1",
+            "scalar.2",
+            "scalar.10",
+            "scalar.20",
+            "scalar.100",
+            "scalar.200",
+            "scalar.1.1",
+            "scalar.2.2",
+            "scalar.10.1",
+            "scalar.20.1",
+            "scalar.100.1",
+            "scalar.200.1",
+        ]
+        assert "contexts.value" in insert_row and insert_row["contexts.value"] == [
+            "val1",
+            "val2",
+            "1",
+            "2",
+            "1.1",
+            "2.2",
+            "float_val_1",
+            "float_val_2",
+            "10",
+            "20",
+            "100.1",
+            "200.1",
+        ]
+
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
             ensure_uuid("not_a_uuid")
