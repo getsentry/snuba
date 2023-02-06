@@ -96,7 +96,7 @@ def verify_single_topic(storages: Sequence[WritableTableStorage]) -> str:
         raise ValueError("only one commit log topic is supported")
     replacement_topics.pop()
     if replacement_topics:
-        raise ValueError("only one commit log topic is supported")
+        raise ValueError("only one replacement topic is supported")
 
     return topic.name
 
