@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from random import randint
 from typing import Iterator, Optional
 
 from confluent_kafka import KafkaError
@@ -99,10 +98,6 @@ def record_attribution(attr_data: AttributionData) -> None:
             "app_id"
         ] = attr_data.app_id.key  # Don't record the entire AppID, just the key
         data_str = safe_dumps(data)
-
-        # Log out a small number of rows temporarily to validate what is being sent to the consumer
-        if randint(1, 10000) == 1:
-            logger.info(data_str)
 
         producer = _attribution_producer()
         producer.poll(0)  # trigger queued delivery callbacks
