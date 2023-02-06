@@ -4,7 +4,7 @@ from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.factory import reset_dataset_factory
+from snuba.core.initialize import initialize_snuba
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations import migration, operations
@@ -129,7 +129,7 @@ COLUMNS = [
 
 
 def backfill_errors(logger: logging.Logger) -> None:
-    reset_dataset_factory()  # ensure configuration is loaded
+    initialize_snuba()  # ensure configuration is loaded
     errors_storage = get_writable_storage(StorageKey.ERRORS)
     cluster = errors_storage.get_cluster()
     database_name = cluster.get_database()
