@@ -53,7 +53,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
         from snuba.datasets.storages.querylog import storage as querylog_storage
-        from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._all_storages = {
             **{
@@ -62,7 +61,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     # WritableStorages
                     errors_storage,
                     querylog_storage,
-                    transactions_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
                     metrics_counters_storage,

@@ -44,14 +44,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
-            (
-                "snuba/datasets/configuration/transactions/entities/transactions.yaml",
-                TransactionsEntity,
-                EntityKey.TRANSACTIONS,
-            ),
             (
                 "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
                 OrgMetricsCountersEntity,

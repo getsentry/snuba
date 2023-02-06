@@ -41,11 +41,9 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_map_pre_execute = {
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.TRANSACTIONS: TransactionsEntity,
             EntityKey.METRICS_SETS: MetricsSetsEntity,
             EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
             EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
