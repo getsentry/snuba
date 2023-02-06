@@ -390,6 +390,30 @@ def config_changes() -> RespTuple:
     )
 
 
+@application.route("/health_envoy")
+def health_envoy() -> Response:
+    """K8s can decide to shut down the pod, at which point it will write the down file.
+    This down file signals that we have to drain the pod, and not accept any new traffic.
+    In SaaS, envoy is the thing that will decided to route traffic to this node or not. It
+    uses this endpoint to make that decision.
+
+    This differs from the generic health endpoint because the pod can still be healthy
+    but just not accepting traffic. That way k8s will not restart it until it is drained
+    """
+
+    down_file_exists = check_down_file_exists()
+
+    body: Mapping[str, Union[str, bool]]
+    if not down_file_exists:
+        status = 200
+    else:
+        status = 503
+
+    if status != 200:
+        metrics.increment("healthcheck_envoy_failed")
+    return Response(json.dumps({}), status, {"Content-Type": "application/json"})
+
+
 @application.route("/health")
 def health() -> Response:
     start = time.time()
