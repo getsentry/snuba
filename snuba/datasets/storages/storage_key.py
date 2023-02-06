@@ -15,7 +15,6 @@ HARDCODED_STORAGE_KEYS = {
     "QUERYLOG": "querylog",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "REPLAYS": "replays",
 }
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}
