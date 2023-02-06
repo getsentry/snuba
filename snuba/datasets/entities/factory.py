@@ -40,19 +40,14 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             MetricsSetsEntity,
             OrgMetricsCountersEntity,
         )
-        from snuba.datasets.entities.replays import ReplaysEntity
-        from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_map_pre_execute = {
-            EntityKey.SESSIONS: SessionsEntity,
-            EntityKey.ORG_SESSIONS: OrgSessionsEntity,
             EntityKey.TRANSACTIONS: TransactionsEntity,
             EntityKey.METRICS_SETS: MetricsSetsEntity,
             EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
             EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
             EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-            EntityKey.REPLAYS: ReplaysEntity,
         }
 
         self._entity_map.update(

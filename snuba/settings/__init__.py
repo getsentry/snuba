@@ -33,6 +33,12 @@ ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 ADMIN_AUTH_PROVIDER = "NOOP"
 ADMIN_AUTH_JWT_AUDIENCE = ""
 
+# file path to the IAM policy file which contains the roles
+ADMIN_IAM_POLICY_FILE = os.environ.get(
+    "ADMIN_IAM_POLICY_FILE",
+    f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
+)
+
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {

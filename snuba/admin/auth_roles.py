@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Optional, Sequence, Set, Type, TypeVar, Union
+from typing import Generic, Optional, Sequence, Set, Type, TypeVar
 
 from snuba import settings
 
@@ -82,7 +82,7 @@ MIGRATIONS_RESOURCES = {
 @dataclass(frozen=True)
 class Role:
     name: str
-    actions: Set[Union[MigrationAction]]
+    actions: Set[MigrationAction]
 
 
 def generate_test_role(
@@ -108,13 +108,22 @@ def generate_test_role(
     return Role(name=name, actions={action([resource])})
 
 
-DEFAULT_ROLES = [
-    Role(
+ROLES = {
+    "MigrationsReader": Role(
         name="MigrationsReader",
         actions={ExecuteNoneAction(list(MIGRATIONS_RESOURCES.values()))},
     ),
-    Role(
+    "NonBlockingMigrationsExecutor": Role(
+        name="NonBlockingMigrationsExecutor",
+        actions={ExecuteNoneAction(list(MIGRATIONS_RESOURCES.values()))},
+    ),
+    "TestMigrationsExecutor": Role(
         name="TestMigrationsExecutor",
         actions={ExecuteAllAction([MIGRATIONS_RESOURCES["test_migration"]])},
     ),
+}
+
+DEFAULT_ROLES = [
+    ROLES["MigrationsReader"],
+    ROLES["TestMigrationsExecutor"],
 ]

@@ -9,12 +9,8 @@ HARDCODED_STORAGE_KEYS = {
     "METRICS_SETS": "metrics_sets",
     "METRICS_RAW": "metrics_raw",
     "QUERYLOG": "querylog",
-    "SESSIONS_RAW": "sessions_raw",
-    "SESSIONS_HOURLY": "sessions_hourly",
-    "ORG_SESSIONS": "org_sessions",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "REPLAYS": "replays",
 }
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}

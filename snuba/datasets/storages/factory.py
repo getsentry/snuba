@@ -51,14 +51,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
         from snuba.datasets.storages.querylog import storage as querylog_storage
-        from snuba.datasets.storages.replays import storage as replays_storage
-        from snuba.datasets.storages.sessions import (
-            materialized_storage as sessions_hourly_storage,
-        )
-        from snuba.datasets.storages.sessions import (
-            org_materialized_storage as org_sessions_hourly_storage,
-        )
-        from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._all_storages = {
@@ -67,16 +59,12 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 for storage in [
                     # WritableStorages
                     querylog_storage,
-                    sessions_raw_storage,
                     transactions_storage,
-                    replays_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
                     metrics_counters_storage,
                     metrics_polymorphic_storage,
                     # Readable Storages
-                    sessions_hourly_storage,
-                    org_sessions_hourly_storage,
                     metrics_counters_storage,
                     metrics_distributions_storage,
                     metrics_org_counters_storage,
