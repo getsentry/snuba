@@ -27,13 +27,6 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
-from snuba.datasets.storages.metrics import counters_storage
-from snuba.datasets.storages.metrics import (
-    distributions_storage as metrics_distributions_storage,
-)
-from snuba.datasets.storages.metrics import org_counters_storage
-from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
-from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -126,11 +119,6 @@ class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
         errors,
         errors_ro,
-        metrics_sets,
-        counters_storage,
-        metrics_distributions_storage,
-        metrics_raw,
-        org_counters_storage,
     ]
 
     def test_config_file_discovery(self) -> None:

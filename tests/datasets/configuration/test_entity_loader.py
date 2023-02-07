@@ -38,34 +38,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         reset_dataset_factory()
 
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import (
-            MetricsCountersEntity,
-            MetricsDistributionsEntity,
-            MetricsSetsEntity,
-            OrgMetricsCountersEntity,
-        )
 
         self.test_data = [
-            (
-                "snuba/datasets/configuration/metrics/entities/org_counters.yaml",
-                OrgMetricsCountersEntity,
-                EntityKey.ORG_METRICS_COUNTERS,
-            ),
-            (
-                "snuba/datasets/configuration/metrics/entities/metrics_counters.yaml",
-                MetricsCountersEntity,
-                EntityKey.METRICS_COUNTERS,
-            ),
-            (
-                "snuba/datasets/configuration/metrics/entities/metrics_sets.yaml",
-                MetricsSetsEntity,
-                EntityKey.METRICS_SETS,
-            ),
-            (
-                "snuba/datasets/configuration/metrics/entities/metrics_distributions.yaml",
-                MetricsDistributionsEntity,
-                EntityKey.METRICS_DISTRIBUTIONS,
-            ),
             (
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
@@ -161,7 +135,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:
-            self._config_matches_python_definition(*test)  # type: ignore
+            self._config_matches_python_definition(*test)
 
 
 class TestEntityConfiguration(ConfigurationTest):

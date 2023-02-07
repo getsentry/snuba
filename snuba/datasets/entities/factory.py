@@ -35,19 +35,9 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         }
 
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.metrics import (
-            MetricsCountersEntity,
-            MetricsDistributionsEntity,
-            MetricsSetsEntity,
-            OrgMetricsCountersEntity,
-        )
 
         entity_map_pre_execute = {
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.METRICS_SETS: MetricsSetsEntity,
-            EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-            EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
-            EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
         }
 
         self._entity_map.update(
