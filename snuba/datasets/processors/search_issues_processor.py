@@ -71,7 +71,6 @@ class IssueEventData(TypedDict, total=False):
     dist: Optional[str]  # tags[sentry:dist] -> dist
     # (tags[sentry:user] or user[id]) -> user
 
-    # TODO: when we process contexts, make sure to also conditionally extract out trace_id
     # contexts aliases
     # contexts.trace.trace_id -> trace_id
 
@@ -176,6 +175,11 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
+
+        # promote fields within contexts to a top-level column
+        trace = contexts.get("trace", {})
+        if trace.get("trace_id") is not None:
+            processed["trace_id"] = ensure_uuid(_unicodify(trace["trace_id"]))
 
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
