@@ -115,7 +115,7 @@ ROLES = {
     ),
     "NonBlockingMigrationsExecutor": Role(
         name="NonBlockingMigrationsExecutor",
-        actions={ExecuteNoneAction(list(MIGRATIONS_RESOURCES.values()))},
+        actions={ExecuteNonBlockingAction(list(MIGRATIONS_RESOURCES.values()))},
     ),
     "TestMigrationsExecutor": Role(
         name="TestMigrationsExecutor",

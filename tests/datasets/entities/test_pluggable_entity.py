@@ -12,7 +12,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
 )
@@ -33,6 +32,7 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query

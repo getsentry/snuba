@@ -2,32 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-HARDCODED_STORAGE_KEYS = {
-    "METRICS_COUNTERS": "metrics_counters",
-    "ORG_METRICS_COUNTERS": "org_metrics_counters",
-    "METRICS_DISTRIBUTIONS": "metrics_distributions",
-    "METRICS_SETS": "metrics_sets",
-    "METRICS_RAW": "metrics_raw",
-    "QUERYLOG": "querylog",
-    "SPANS": "spans",
-    "TRANSACTIONS": "transactions",
-}
-
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}
 
 
 class _StorageKey(type):
     def __getattr__(cls, attr: str) -> "StorageKey":
-        if attr not in HARDCODED_STORAGE_KEYS and attr not in REGISTERED_STORAGE_KEYS:
+        if attr not in REGISTERED_STORAGE_KEYS:
             raise AttributeError(attr)
 
         return StorageKey(attr.lower())
 
     def __iter__(cls) -> Iterator[StorageKey]:
-        return iter(
-            StorageKey(value)
-            for value in {**HARDCODED_STORAGE_KEYS, **REGISTERED_STORAGE_KEYS}.values()
-        )
+        return iter(StorageKey(value) for value in REGISTERED_STORAGE_KEYS.values())
 
 
 class StorageKey(metaclass=_StorageKey):

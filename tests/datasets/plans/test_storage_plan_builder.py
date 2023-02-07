@@ -13,17 +13,17 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
 )
-from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import EntityStorageConnection
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -70,11 +70,7 @@ TEST_CASES = [
             AND project_id = 1
         """,
         get_dataset("transactions"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.TRANSACTIONS), transaction_translator, True
-            ),
-        ],
+        get_entity(EntityKey.TRANSACTIONS).get_all_storage_connections(),
         DefaultQueryStorageSelector(),
         None,
         StorageSetKey.TRANSACTIONS,
@@ -90,14 +86,7 @@ TEST_CASES = [
             AND project_id = 1
         """,
         get_dataset("events"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.ERRORS_RO), errors_translators
-            ),
-            EntityStorageConnection(
-                get_writable_storage(StorageKey.ERRORS), errors_translators, True
-            ),
-        ],
+        get_entity(EntityKey.EVENTS).get_all_storage_connections(),
         ErrorsQueryStorageSelector(),
         None,
         StorageSetKey.EVENTS,

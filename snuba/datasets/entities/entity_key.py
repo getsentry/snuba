@@ -2,30 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-HARDCODED_ENTITY_KEYS = {
-    "GROUPS": "groups",
-    "METRICS_SETS": "metrics_sets",
-    "METRICS_COUNTERS": "metrics_counters",
-    "ORG_METRICS_COUNTERS": "org_metrics_counters",
-    "METRICS_DISTRIBUTIONS": "metrics_distributions",
-    "TRANSACTIONS": "transactions",
-}
-
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}
 
 
 class _EntityKey(type):
     def __getattr__(cls, attr: str) -> "EntityKey":
-        if attr not in HARDCODED_ENTITY_KEYS and attr not in REGISTERED_ENTITY_KEYS:
+        if attr not in REGISTERED_ENTITY_KEYS:
             raise AttributeError(attr)
 
         return EntityKey(attr.lower())
 
     def __iter__(cls) -> Iterator[EntityKey]:
-        return iter(
-            EntityKey(value)
-            for value in {**HARDCODED_ENTITY_KEYS, **REGISTERED_ENTITY_KEYS}.values()
-        )
+        return iter(EntityKey(value) for value in REGISTERED_ENTITY_KEYS.values())
 
 
 class EntityKey(metaclass=_EntityKey):

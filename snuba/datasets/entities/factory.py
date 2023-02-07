@@ -23,7 +23,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             self.__initialize()
 
     def __initialize(self) -> None:
-
         self._config_built_entities = {
             entity.entity_key: entity
             for entity in [
@@ -32,34 +31,10 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
                     settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
                 )
             ]
+            if entity.entity_key.value not in settings.DISABLED_ENTITIES
         }
 
-        from snuba.datasets.entities.metrics import (
-            MetricsCountersEntity,
-            MetricsDistributionsEntity,
-            MetricsSetsEntity,
-            OrgMetricsCountersEntity,
-        )
-        from snuba.datasets.entities.transactions import TransactionsEntity
-
-        entity_map_pre_execute = {
-            EntityKey.TRANSACTIONS: TransactionsEntity,
-            EntityKey.METRICS_SETS: MetricsSetsEntity,
-            EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-            EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
-            EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-        }
-
-        self._entity_map.update(
-            {
-                k: v()
-                for (k, v) in entity_map_pre_execute.items()
-                if k.value not in settings.DISABLED_ENTITIES
-            }
-        )
-
-        self._entity_map.update(self._config_built_entities)
-
+        self._entity_map = self._config_built_entities
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
     def iter_all(self) -> Generator[Entity, None, None]:

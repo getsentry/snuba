@@ -35,18 +35,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.metrics import MetricsDataset
-        from snuba.datasets.transactions import TransactionsDataset
-
-        self._dataset_map.update(
-            {
-                "metrics": MetricsDataset(),
-                "transactions": TransactionsDataset(),
-            }
-        )
-
         self._dataset_map.update(self._config_built_datasets)
-
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
     def iter_all(self) -> Generator[Dataset, None, None]:
