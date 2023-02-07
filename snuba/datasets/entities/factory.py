@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from glob import glob
-from typing import Generator, MutableMapping, Optional, Sequence, Type
+from typing import Generator, Optional, Sequence, Type
 
 import sentry_sdk
 
@@ -18,8 +20,8 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
         with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
             initialize_storage_factory()
-            self._entity_map: MutableMapping[EntityKey, Entity] = {}
-            self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
+            self._entity_map: dict[EntityKey, PluggableEntity] = {}
+            self._name_map: dict[Type[Entity], EntityKey] = {}
             self.__initialize()
 
     def __initialize(self) -> None:
@@ -31,10 +33,13 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
                     settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
                 )
             ]
-            if entity.entity_key.value not in settings.DISABLED_ENTITIES
         }
 
-        self._entity_map = self._config_built_entities
+        self._entity_map = {
+            k: v
+            for k, v in self._config_built_entities.items()
+            if k.value not in settings.DISABLED_ENTITIES
+        }
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
     def iter_all(self) -> Generator[Entity, None, None]:
