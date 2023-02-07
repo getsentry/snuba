@@ -4,9 +4,6 @@ from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.core.initialize import initialize_snuba
-from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations import migration, operations
 from snuba.migrations.operations import InsertIntoSelect
 
@@ -129,6 +126,10 @@ COLUMNS = [
 
 
 def backfill_errors(logger: logging.Logger) -> None:
+    from snuba.core.initialize import initialize_snuba
+    from snuba.datasets.storages.factory import get_writable_storage
+    from snuba.datasets.storages.storage_key import StorageKey
+
     initialize_snuba()  # ensure configuration is loaded
     errors_storage = get_writable_storage(StorageKey.ERRORS)
     cluster = errors_storage.get_cluster()
