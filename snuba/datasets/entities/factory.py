@@ -113,5 +113,5 @@ def reset_entity_factory() -> None:
 
 
 # Used by test cases to store FakeEntity. The reset_entity_factory() should be used after override.
-def override_entity_map(name: EntityKey, entity: Entity) -> None:
+def override_entity_map(name: EntityKey, entity: PluggableEntity) -> None:
     _ent_factory()._entity_map[name] = entity
