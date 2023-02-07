@@ -4,6 +4,7 @@ from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
+import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
@@ -119,7 +120,7 @@ def consumer(
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    storage_names: str,
+    storage_names: Sequence[str],
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -143,7 +144,7 @@ def consumer(
         for key in (StorageKey(name) for name in storage_names)
     }
     storage_keys = [*storages.keys()]
-    # sentry_sdk.set_tag("storage", storage_name)
+    sentry_sdk.set_tag("storage", ",".join(storage_names))
 
     if len(storages) == 1:
         metrics_tags = {

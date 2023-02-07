@@ -101,23 +101,22 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
     # Depending on the attribute, we can verify this
     # to different degrees
 
-    storages = list(con_build.storages.values())
-    if len(storages) == 1:
-        assert storages[0] == get_writable_storage(test_storage_keys[0])
+    for storage_key in con_build.storages.keys():
+        assert con_build.storages[storage_key] == get_writable_storage(storage_key)
 
-        assert con_build.consumer_group == consumer_group_name
+    assert con_build.consumer_group == consumer_group_name
 
-        assert isinstance(con_build.raw_topic, Topic)
+    assert isinstance(con_build.raw_topic, Topic)
 
-        assert con_build.broker_config is not None
+    assert con_build.broker_config is not None
 
-        assert isinstance(con_build.metrics, MetricsBackend)
+    assert isinstance(con_build.metrics, MetricsBackend)
 
-        assert con_build.max_batch_size == 3
-        assert con_build.max_batch_time_ms == 4
-        assert con_build.auto_offset_reset == "earliest"
-        assert con_build.queued_max_messages_kbytes == 1
-        assert con_build.queued_min_messages == 2
+    assert con_build.max_batch_size == 3
+    assert con_build.max_batch_time_ms == 4
+    assert con_build.auto_offset_reset == "earliest"
+    assert con_build.queued_max_messages_kbytes == 1
+    assert con_build.queued_min_messages == 2
 
 
 @pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
