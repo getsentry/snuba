@@ -1,13 +1,21 @@
 import itertools
 import json
 from datetime import datetime, timedelta
-from typing import Any, Callable, Iterable, Mapping, Tuple, Union
+from typing import Any, Callable, Iterable, Mapping, Tuple, Union, cast
 
 import pytest
 import pytz
 from pytest import approx
+from snuba_sdk import Request
+from snuba_sdk.column import Column
+from snuba_sdk.conditions import Condition, Op
+from snuba_sdk.entity import Entity
+from snuba_sdk.expressions import Granularity
+from snuba_sdk.query import Query
 
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -380,6 +388,95 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         )
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
+
+
+class TestOrgGenericMetricsApiCounters(BaseApiTest):
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
+
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
+
+        # values for test data
+        self.started = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        )
+        self.mapping_meta = SHARED_MAPPING_META
+
+        self.storage = cast(
+            WritableTableStorage,
+            get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_writable_storage(),
+        )
+        print(self.storage.get_storage_key())
+
+        self.default_tags = SHARED_TAGS
+        self.use_case_id = "performance"
+        self.base_time = utc_yesterday_12_15()
+
+        self.metric_id = 1001
+        self.org_id = 101
+        self.project_ids = [1, 2]  # 2 projects
+        self.generate_counters()
+
+    def generate_counters(self) -> None:
+        events = []
+        for p in self.project_ids:
+            processed = (
+                self.storage.get_table_writer()
+                .get_stream_loader()
+                .get_processor()
+                .process_message(
+                    (
+                        {
+                            "org_id": self.org_id,
+                            "project_id": p,
+                            "unit": "ms",
+                            "type": InputType.COUNTER.value,
+                            "value": 1.0,
+                            "timestamp": self.base_time.timestamp(),
+                            "tags": self.default_tags,
+                            "metric_id": self.metric_id,
+                            "retention_days": RETENTION_DAYS,
+                            "mapping_meta": self.mapping_meta,
+                            "use_case_id": self.use_case_id,
+                        }
+                    ),
+                    KafkaMessageMetadata(0, 0, self.base_time),
+                )
+            )
+            if processed:
+                events.append(processed)
+        write_processed_messages(self.storage, events)
+
+    def test_simple(self) -> None:
+        query = Query(
+            match=Entity("generic_org_metrics_counters"),
+            select=[Column("org_id"), Column("project_id")],
+            groupby=[Column("org_id"), Column("project_id")],
+            where=[
+                Condition(
+                    Column("timestamp"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
+                ),
+                Condition(Column("timestamp"), Op.LT, datetime.utcnow()),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        response = self.app.post(
+            "/generic_metrics/snql",
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 2
+        assert data["data"][0]["org_id"] == self.org_id
+        assert data["data"][0]["project_id"] == self.project_id
+        assert data["data"][1]["org_id"] == self.org_id
+        assert data["data"][1]["project_id"] == self.project_id2
 
 
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
