@@ -257,24 +257,26 @@ def multistorage_consumer(
         build_kafka_producer_configuration(commit_log_topic_spec.topic)
     )
 
-    multistorage_strategy_factory = build_multistorage_streaming_strategy_factory(
-        producer,
-        commit_log,
-        consumer_group,
-        storages,
-        max_batch_size,
-        max_batch_time_ms,
-        processes,
-        input_block_size,
-        output_block_size,
-        metrics,
+    multistorage_streaming_strategy_factory = (
+        build_multistorage_streaming_strategy_factory(
+            producer,
+            commit_log,
+            consumer_group,
+            storages,
+            max_batch_size,
+            max_batch_time_ms,
+            processes,
+            input_block_size,
+            output_block_size,
+            metrics,
+        )
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
         consumer,
         topic,
-        multistorage_strategy_factory,
+        multistorage_streaming_strategy_factory,
         IMMEDIATE,
     )
 

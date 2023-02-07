@@ -144,12 +144,12 @@ class ConsumerBuilder:
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
 
-        # Get a random storage from the storage dict
-        rand_storage = [*self.storages.values()][0]
+        # Get first storage from the storage dict
+        storage = [*self.storages.values()][0]
         # We assume that the different topics are all on the same Kafka cluster
         # and that all storages are associated with the same Kafka cluster
         # (see multistorage consumer for clarification)
-        stream_loader = rand_storage.get_table_writer().get_stream_loader()
+        stream_loader = storage.get_table_writer().get_stream_loader()
 
         self.raw_topic: Topic
         default_topic_spec = stream_loader.get_default_topic_spec()
