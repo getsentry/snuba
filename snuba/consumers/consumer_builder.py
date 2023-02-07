@@ -15,6 +15,7 @@ from sentry_sdk.api import configure_scope
 
 from snuba.cli.multistorage_consumer import (
     build_multistorage_streaming_strategy_factory,
+    verify_single_topic,
 )
 from snuba.consumers.consumer import (
     CommitLogConfig,
@@ -23,7 +24,6 @@ from snuba.consumers.consumer import (
 )
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
-from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
@@ -59,50 +59,6 @@ class ProcessingParameters:
     output_block_size: Optional[int]
 
 
-def verify_single_topic(storages: Sequence[WritableTableStorage]) -> str:
-    stream_loaders = {
-        storage.get_table_writer().get_stream_loader() for storage in storages
-    }
-
-    default_topics = {
-        stream_loader.get_default_topic_spec().topic_name
-        for stream_loader in stream_loaders
-    }
-
-    commit_log_topics = {
-        spec.topic_name
-        for spec in (
-            stream_loader.get_commit_log_topic_spec()
-            for stream_loader in stream_loaders
-        )
-        if spec is not None
-    }
-
-    replacement_topics = {
-        spec.topic_name
-        for spec in (
-            stream_loader.get_replacement_topic_spec()
-            for stream_loader in stream_loaders
-        )
-        if spec is not None
-    }
-
-    # XXX: The ``StreamProcessor`` only supports a single topic at this time,
-    # but is easily modified. The topic routing in the processing strategy is a
-    # bit trickier (but also shouldn't be too bad.)
-    topic = Topic(default_topics.pop())
-    if default_topics:
-        raise ValueError("only one topic is supported")
-    commit_log_topics.pop()
-    if commit_log_topics:
-        raise ValueError("only one commit log topic is supported")
-    replacement_topics.pop()
-    if replacement_topics:
-        raise ValueError("only one replacement topic is supported")
-
-    return topic.name
-
-
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -131,14 +87,18 @@ class ConsumerBuilder:
         # We establish that there is only one input raw topic,
         # one commit log topic, and one replacements topic amongst the storages
         # We retain the raw logical topic for producer/consumer configuration
-        self.__topic = verify_single_topic([*self.storages.values()])
+        (
+            self.raw_logical_topic,
+            _,
+            _,
+        ) = verify_single_topic([*self.storages.values()])
 
         # Ensure that the slice, storage set combination is valid
         for writable_storage in self.storages.values():
             validate_passed_slice(writable_storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
-            SnubaTopic(self.__topic),
+            SnubaTopic(self.raw_logical_topic),
             slice_id,
             bootstrap_servers=kafka_params.bootstrap_servers,
         )
@@ -243,7 +203,7 @@ class ConsumerBuilder:
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
-            SnubaTopic(self.__topic),
+            SnubaTopic(self.raw_logical_topic),
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             slice_id=slice_id,

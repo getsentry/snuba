@@ -1,6 +1,6 @@
 import logging
 import signal
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import click
 import rapidjson
@@ -140,49 +140,15 @@ def multistorage_consumer(
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
 
+    # Defaults
+    topic, commit_log, _ = verify_single_topic([*storages.values()])
+
+    # Overrides
     if raw_events_topic:
         topic = Topic(raw_events_topic)
-    else:
-        topics = {
-            storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic_name
-            for storage in storages.values()
-        }
 
-        # XXX: The ``StreamProcessor`` only supports a single topic at this time,
-        # but is easily modified. The topic routing in the processing strategy is a
-        # bit trickier (but also shouldn't be too bad.)
-        topic = Topic(topics.pop())
-        if topics:
-            raise ValueError("only one topic is supported")
-
-    commit_log: Optional[Topic]
     if commit_log_topic:
         commit_log = Topic(commit_log_topic)
-    else:
-        # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
-        # time. (It is less easily modified.) This also assumes the commit log
-        # topic is on the same Kafka cluster as the input topic.
-        commit_log_topics = {
-            spec.topic_name
-            for spec in (
-                storage.get_table_writer()
-                .get_stream_loader()
-                .get_commit_log_topic_spec()
-                for storage in storages.values()
-            )
-            if spec is not None
-        }
-
-        if commit_log_topics:
-            commit_log = Topic(commit_log_topics.pop())
-        else:
-            commit_log = None
-
-        if commit_log_topics:
-            raise ValueError("only one commit log topic is supported")
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -286,6 +252,60 @@ def multistorage_consumer(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     processor.run()
+
+
+def verify_single_topic(
+    storages: Sequence[WritableTableStorage],
+) -> Tuple[Topic, Optional[Topic], Optional[Topic]]:
+    stream_loaders = {
+        storage.get_table_writer().get_stream_loader() for storage in storages
+    }
+
+    default_topics = {
+        stream_loader.get_default_topic_spec().topic_name
+        for stream_loader in stream_loaders
+    }
+
+    commit_log_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_commit_log_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    replacement_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_replacement_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    # XXX: The ``StreamProcessor`` only supports a single topic at this time,
+    # but is easily modified. The topic routing in the processing strategy is a
+    # bit trickier (but also shouldn't be too bad.)
+    topic = Topic(default_topics.pop())
+    if default_topics:
+        raise ValueError("only one topic is supported")
+
+    if commit_log_topics:
+        commit_log_topic = Topic(commit_log_topics.pop())
+    else:
+        commit_log_topic = None
+    if commit_log_topics:
+        raise ValueError("only one commit log topic is supported")
+
+    if replacement_topics:
+        replacement_topic = Topic(replacement_topics.pop())
+    else:
+        replacement_topic = None
+    if replacement_topics:
+        raise ValueError("only one replacement topic is supported")
+
+    return (topic, commit_log_topic, replacement_topic)
 
 
 def build_multistorage_streaming_strategy_factory(
