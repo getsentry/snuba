@@ -1,13 +1,13 @@
-extern crate rust_arroyo;
+extern crate rust_snuba;
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
-use rust_arroyo::processing::strategies::{
+use rust_snuba::backends::kafka::config::KafkaConfig;
+use rust_snuba::backends::kafka::types::KafkaPayload;
+use rust_snuba::backends::kafka::KafkaConsumer;
+use rust_snuba::processing::strategies::{
     CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
-use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Message, Partition, Position, Topic};
+use rust_snuba::processing::StreamProcessor;
+use rust_snuba::types::{Message, Partition, Position, Topic};
 use std::collections::HashMap;
 use std::time::Duration;
 
