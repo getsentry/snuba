@@ -179,7 +179,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         # promote fields within contexts to a top-level column
         trace = contexts.get("trace", {})
         if trace.get("trace_id") is not None:
-            processed["trace_id"] = ensure_uuid(_unicodify(trace["trace_id"]))
+            trace_id = _unicodify(trace["trace_id"])
+            if trace_id is not None:
+                processed["trace_id"] = ensure_uuid(trace_id)
 
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
