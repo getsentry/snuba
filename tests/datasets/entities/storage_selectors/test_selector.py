@@ -2,19 +2,15 @@ from typing import List
 
 import pytest
 
-from snuba.clickhouse.translators.snuba.mappers import (
-    FunctionNameMapper,
-    SubscriptableMapper,
-)
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import (
     DefaultQueryStorageSelector,
     QueryStorageSelectorError,
     SimpleQueryStorageSelector,
 )
-from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storage import EntityStorageConnection, Storage
 from snuba.datasets.storages.factory import get_storage
@@ -34,11 +30,7 @@ TEST_CASES = [
             AND project_id = 1
         """,
         get_dataset("transactions"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.TRANSACTIONS), transaction_translator, True
-            ),
-        ],
+        get_entity(EntityKey.TRANSACTIONS).get_all_storage_connections(),
         DefaultQueryStorageSelector(),
         get_storage(StorageKey.TRANSACTIONS),
         id="Default storage selector",
@@ -55,59 +47,7 @@ TEST_CASES = [
         GRANULARITY 60
         """,
         get_dataset("generic_metrics"),
-        [
-            EntityStorageConnection(
-                get_storage(StorageKey.GENERIC_METRICS_SETS),
-                TranslationMappers(
-                    functions=[
-                        FunctionNameMapper("uniq", "uniqCombined64Merge"),
-                        FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
-                    ],
-                    subscriptables=[
-                        SubscriptableMapper(
-                            from_column_table=None,
-                            from_column_name="tags_raw",
-                            to_nested_col_table=None,
-                            to_nested_col_name="tags",
-                            value_subcolumn_name="raw_value",
-                        ),
-                        SubscriptableMapper(
-                            from_column_table=None,
-                            from_column_name="tags",
-                            to_nested_col_table=None,
-                            to_nested_col_name="tags",
-                            value_subcolumn_name="indexed_value",
-                        ),
-                    ],
-                ),
-            ),
-            EntityStorageConnection(
-                get_storage(StorageKey.GENERIC_METRICS_SETS_RAW),
-                TranslationMappers(
-                    functions=[
-                        FunctionNameMapper("uniq", "uniqCombined64Merge"),
-                        FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
-                    ],
-                    subscriptables=[
-                        SubscriptableMapper(
-                            from_column_table=None,
-                            from_column_name="tags_raw",
-                            to_nested_col_table=None,
-                            to_nested_col_name="tags",
-                            value_subcolumn_name="raw_value",
-                        ),
-                        SubscriptableMapper(
-                            from_column_table=None,
-                            from_column_name="tags",
-                            to_nested_col_table=None,
-                            to_nested_col_name="tags",
-                            value_subcolumn_name="indexed_value",
-                        ),
-                    ],
-                ),
-                True,
-            ),
-        ],
+        get_entity(EntityKey.GENERIC_METRICS_SETS).get_all_storage_connections(),
         SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_SETS.value),
         get_storage(StorageKey.GENERIC_METRICS_SETS),
         id="Simple storage selector",
@@ -135,7 +75,7 @@ def test_default_query_storage_selector(
     assert selected_storage.storage == expected_storage
 
 
-def test_assert_raises():
+def test_assert_raises() -> None:
     query, _ = parse_snql_query(
         """ MATCH (generic_metrics_sets)
         SELECT uniq(value) AS unique_values BY project_id, org_id
@@ -150,4 +90,5 @@ def test_assert_raises():
     )
     selector = SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_SETS.value)
     with pytest.raises(QueryStorageSelectorError):
+        assert isinstance(query, Query)
         selector.select_storage(query, HTTPQuerySettings(), [])
