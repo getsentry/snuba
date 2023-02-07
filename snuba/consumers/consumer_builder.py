@@ -98,7 +98,7 @@ class ConsumerBuilder:
             validate_passed_slice(writable_storage.get_storage_set_key(), slice_id)
 
         self.broker_config = get_default_kafka_configuration(
-            SnubaTopic(self.raw_logical_topic),
+            SnubaTopic(self.raw_logical_topic.name),
             slice_id,
             bootstrap_servers=kafka_params.bootstrap_servers,
         )
@@ -203,7 +203,7 @@ class ConsumerBuilder:
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
-            SnubaTopic(self.raw_logical_topic),
+            SnubaTopic(self.raw_logical_topic.name),
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             slice_id=slice_id,
