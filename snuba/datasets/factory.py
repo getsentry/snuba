@@ -36,12 +36,10 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         }
 
         from snuba.datasets.events import EventsDataset
-        from snuba.datasets.transactions import TransactionsDataset
 
         self._dataset_map.update(
             {
                 "events": EventsDataset(),
-                "transactions": TransactionsDataset(),
             }
         )
 

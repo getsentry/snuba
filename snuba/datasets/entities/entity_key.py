@@ -5,7 +5,6 @@ from typing import Any, Iterator
 HARDCODED_ENTITY_KEYS = {
     "EVENTS": "events",
     "GROUPS": "groups",
-    "TRANSACTIONS": "transactions",
 }
 
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}

@@ -38,14 +38,8 @@ class TestEntityConfigurationComparison(ConfigurationTest):
         reset_dataset_factory()
 
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.transactions import TransactionsEntity
 
         self.test_data = [
-            (
-                "snuba/datasets/configuration/transactions/entities/transactions.yaml",
-                TransactionsEntity,
-                EntityKey.TRANSACTIONS,
-            ),
             (
                 "snuba/datasets/configuration/events/entities/events.yaml",
                 EventsEntity,
@@ -141,7 +135,7 @@ class TestEntityConfigurationComparison(ConfigurationTest):
 
     def test_config_matches_python_definition(self) -> None:
         for test in self.test_data:
-            self._config_matches_python_definition(*test)  # type: ignore
+            self._config_matches_python_definition(*test)
 
 
 class TestEntityConfiguration(ConfigurationTest):

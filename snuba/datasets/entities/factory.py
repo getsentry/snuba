@@ -35,11 +35,9 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         }
 
         from snuba.datasets.entities.events import EventsEntity
-        from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_map_pre_execute = {
             EntityKey.EVENTS: EventsEntity,
-            EntityKey.TRANSACTIONS: TransactionsEntity,
         }
 
         self._entity_map.update(

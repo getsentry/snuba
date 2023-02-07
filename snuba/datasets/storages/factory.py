@@ -39,7 +39,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         # TODO: Remove these as they are converted to configs
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.transactions import storage as transactions_storage
 
         self._all_storages = {
             **{
@@ -47,7 +46,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 for storage in [
                     # WritableStorages
                     errors_storage,
-                    transactions_storage,
                     # Readable Storages
                     errors_ro_storage,
                 ]

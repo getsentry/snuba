@@ -8,7 +8,6 @@ HARDCODED_STORAGE_KEYS = {
     "ERRORS": "errors",
     "ERRORS_RO": "errors_ro",
     "SPANS": "spans",
-    "TRANSACTIONS": "transactions",
 }
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}

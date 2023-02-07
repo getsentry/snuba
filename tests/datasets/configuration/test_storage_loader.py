@@ -27,7 +27,6 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 from snuba.datasets.storages.errors import storage as errors
 from snuba.datasets.storages.errors_ro import storage as errors_ro
-from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -120,7 +119,6 @@ class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
         errors,
         errors_ro,
-        transactions,
     ]
 
     def test_config_file_discovery(self) -> None:

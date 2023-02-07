@@ -1,7 +1,6 @@
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_config_built_datasets
-from snuba.datasets.transactions import TransactionsDataset
 from tests.datasets.configuration.utils import ConfigurationTest
 
 
@@ -9,7 +8,6 @@ class TestDatasetConfiguration(ConfigurationTest):
     def test_build_entity_from_config_matches_python_definition(self) -> None:
         config_built_datasets = get_config_built_datasets()
         test_data = [
-            (TransactionsDataset(), config_built_datasets["transactions"]),
             (EventsDataset(), config_built_datasets["events"]),
         ]
         for test in test_data:
