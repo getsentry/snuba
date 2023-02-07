@@ -52,7 +52,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             polymorphic_bucket as metrics_polymorphic_storage,
         )
         from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
-        from snuba.datasets.storages.querylog import storage as querylog_storage
 
         self._all_storages = {
             **{
@@ -60,7 +59,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                 for storage in [
                     # WritableStorages
                     errors_storage,
-                    querylog_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
                     metrics_counters_storage,

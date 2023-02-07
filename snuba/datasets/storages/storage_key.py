@@ -12,7 +12,6 @@ HARDCODED_STORAGE_KEYS = {
     "METRICS_DISTRIBUTIONS": "metrics_distributions",
     "METRICS_SETS": "metrics_sets",
     "METRICS_RAW": "metrics_raw",
-    "QUERYLOG": "querylog",
     "SPANS": "spans",
 }
 

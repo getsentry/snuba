@@ -17,6 +17,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
     enforce_retention,
+    extract_extra_contexts,
     extract_extra_tags,
     extract_http,
     extract_user,
@@ -167,6 +168,15 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         processed["sdk_name"] = _unicodify(sdk.get("name"))
         processed["sdk_version"] = _unicodify(sdk.get("version"))
 
+    def _process_contexts(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        contexts = event_data.get("contexts", {})
+
+        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
+            contexts
+        )
+
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
     ) -> Sequence[Mapping[str, Any]]:
@@ -215,9 +225,6 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
-            # TODO: fix the below field assignments to actually extract from event data
-            "contexts.key": [],
-            "contexts.value": [],
         }
 
         # optional fields
@@ -229,6 +236,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         )  # user_name, user_id, user_email, ip_address_v4/ip_address_v6
         self._process_request_data(event_data, fields)  # http_method, http_referer
         self._process_sdk_data(event_data, fields)  # sdk_name, sdk_version
+        self._process_contexts(event_data, fields)  # contexts.key, contexts.value
 
         return [
             {
