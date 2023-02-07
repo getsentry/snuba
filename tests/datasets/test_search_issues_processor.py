@@ -224,9 +224,6 @@ class TestSearchIssuesMessageProcessor:
         assert insert_row["tags.key"] == list(sorted_tags.keys())
         assert insert_row["tags.value"] == list(sorted_tags.values())
 
-    def test_extract_contexts(self, message_base):
-        pass
-
     def test_extract_http(self, message_base):
         message_base["data"]["request"] = {
             "method": "GET",
@@ -345,6 +342,19 @@ class TestSearchIssuesMessageProcessor:
             "100.1",
             "200.1",
         ]
+
+    def test_extract_trace_id_from_contexts(self, message_base):
+        trace_id = str(uuid.uuid4().hex)
+        message_base["data"]["contexts"] = {"trace": {"trace_id": trace_id}}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["trace_id"] == ensure_uuid(trace_id)
+
+        for invalid_trace_id in ["", "im a little tea pot", 1, 1.1]:
+            message_base["data"]["contexts"]["trace"]["trace_id"] = invalid_trace_id
+            with pytest.raises(ValueError):
+                self.process_message(message_base)
 
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
