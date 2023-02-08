@@ -6,6 +6,12 @@ from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 import pytest
 import pytz
 from pytest import approx
+from snuba_sdk import Function, Request
+from snuba_sdk.column import Column
+from snuba_sdk.conditions import Condition, Op
+from snuba_sdk.entity import Entity
+from snuba_sdk.expressions import Granularity
+from snuba_sdk.query import Query
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
@@ -380,6 +386,203 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         )
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
+
+
+class TestGenericMetricsApiCounters(BaseApiTest):
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "generic_metrics_counters"
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
+
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
+        self.count = 10
+        self.org_id = 1
+        self.project_id = 2
+        self.metric_id = 3
+        self.base_time = utc_yesterday_12_15()
+        self.default_tags = SHARED_TAGS
+        self.mapping_meta = SHARED_MAPPING_META
+
+        self.use_case_id = "performance"
+        self.start_time = self.base_time
+        self.end_time = (
+            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
+        )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
+        self.generate_counters()
+
+    def generate_counters(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
+        rows = [
+            self.write_storage.get_table_writer()
+            .get_stream_loader()
+            .get_processor()
+            .process_message(
+                {
+                    "org_id": self.org_id,
+                    "project_id": self.project_id,
+                    "unit": "ms",
+                    "type": InputType.COUNTER.value,
+                    "value": 1.0,
+                    "timestamp": self.base_time.timestamp() + n,
+                    "tags": self.default_tags,
+                    "metric_id": self.metric_id,
+                    "retention_days": RETENTION_DAYS,
+                    "mapping_meta": self.mapping_meta,
+                    "use_case_id": self.use_case_id,
+                },
+                KafkaMessageMetadata(0, 0, self.base_time),
+            )
+            for n in range(self.count)
+        ]
+        write_processed_messages(self.write_storage, [row for row in rows if row])
+
+    def test_retrieval_basic(self) -> None:
+        query_str = f"""MATCH (generic_metrics_counters)
+                    SELECT sum(value) AS total BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 60
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["total"] == 10.0
+
+    def test_arbitrary_granularity(self) -> None:
+        query_str = f"""MATCH (generic_metrics_counters)
+                SELECT sum(value) AS total BY project_id, org_id
+                WHERE org_id = {self.org_id}
+                AND project_id = {self.project_id}
+                AND metric_id = {self.metric_id}
+                AND timestamp >= toDateTime('{self.hour_before_start_time}')
+                AND timestamp < toDateTime('{self.hour_after_start_time}')
+                GRANULARITY 3600
+                """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+
+class TestOrgGenericMetricsApiCounters(BaseApiTest):
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "generic_metrics_counters"
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
+        self.count = 3600
+        self.base_time = utc_yesterday_12_15()
+
+        self.start_time = self.base_time
+        self.end_time = (
+            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
+        )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
+        self.mapping_meta = SHARED_MAPPING_META
+        self.default_tags = SHARED_TAGS
+
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
+
+        self.use_case_id = "performance"
+
+        self.metric_id = 1001
+        self.org_id = 101
+        self.project_ids = [1, 2]  # 2 projects
+        self.generate_counters()
+
+    def generate_counters(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
+        events = []
+        for n in range(self.count):
+            for p in self.project_ids:
+                processed = (
+                    self.write_storage.get_table_writer()
+                    .get_stream_loader()
+                    .get_processor()
+                    .process_message(
+                        (
+                            {
+                                "org_id": self.org_id,
+                                "project_id": p,
+                                "unit": "ms",
+                                "type": InputType.COUNTER.value,
+                                "value": 1.0,
+                                "timestamp": self.base_time.timestamp() + n,
+                                "tags": self.default_tags,
+                                "metric_id": 1,
+                                "retention_days": RETENTION_DAYS,
+                                "mapping_meta": self.mapping_meta,
+                                "use_case_id": self.use_case_id,
+                            }
+                        ),
+                        KafkaMessageMetadata(0, 0, self.base_time),
+                    )
+                )
+                if processed:
+                    events.append(processed)
+        write_processed_messages(self.write_storage, events)
+
+    def test_simple(self) -> None:
+        query = Query(
+            match=Entity("generic_org_metrics_counters"),
+            select=[
+                Function("sum", [Column("value")], "value"),
+                Column("org_id"),
+                Column("project_id"),
+            ],
+            groupby=[Column("org_id"), Column("project_id")],
+            where=[
+                Condition(Column("metric_id"), Op.EQ, 1),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 2
+        assert data["data"][0] == {"org_id": 101, "project_id": 1, "value": 3600.0}
+        assert data["data"][1] == {"org_id": 101, "project_id": 2, "value": 3600.0}
 
 
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
