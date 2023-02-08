@@ -1,13 +1,14 @@
 import logging
 import signal
-from typing import Any, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 import click
 import rapidjson
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
+from arroyo.processing.strategies import ProcessingStrategyFactory
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
@@ -15,6 +16,7 @@ from snuba.consumers.consumer import (
     CommitLogConfig,
     MultistorageConsumerProcessingStrategyFactory,
 )
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
     get_writable_storage,
     get_writable_storage_keys,
@@ -22,6 +24,7 @@ from snuba.datasets.storages.factory import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.state import get_config
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -259,6 +262,44 @@ def multistorage_consumer(
 
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
+    strategy_factory = build_multistorage_streaming_strategy_factory(
+        storages,
+        max_batch_size,
+        max_batch_time_ms,
+        processes,
+        input_block_size,
+        output_block_size,
+        metrics,
+        commit_log_config,
+    )
+
+    configure_metrics(StreamMetricsAdapter(metrics))
+    processor = StreamProcessor(
+        consumer,
+        topic,
+        strategy_factory,
+        IMMEDIATE,
+    )
+
+    def handler(signum: int, frame: Any) -> None:
+        processor.signal_shutdown()
+
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+    processor.run()
+
+
+def build_multistorage_streaming_strategy_factory(
+    storages: Dict[Any, WritableTableStorage],
+    max_batch_size: int,
+    max_batch_time_ms: int,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+    metrics: MetricsBackend,
+    commit_log_config: Optional[CommitLogConfig],
+) -> ProcessingStrategyFactory[KafkaPayload]:
+
     dead_letter_policies = {
         storage.get_table_writer()
         .get_stream_loader()
@@ -272,27 +313,16 @@ def multistorage_consumer(
     if dead_letter_policies:
         raise ValueError("only one dead letter policy is supported")
 
-    configure_metrics(StreamMetricsAdapter(metrics))
-    processor = StreamProcessor(
-        consumer,
-        topic,
-        MultistorageConsumerProcessingStrategyFactory(
-            [*storages.values()],
-            max_batch_size,
-            max_batch_time_ms / 1000.0,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            metrics=metrics,
-            dead_letter_policy_creator=dead_letter_policy_creator,
-            commit_log_config=commit_log_config,
-        ),
-        IMMEDIATE,
+    strategy_factory = MultistorageConsumerProcessingStrategyFactory(
+        [*storages.values()],
+        max_batch_size,
+        max_batch_time_ms / 1000.0,
+        processes=processes,
+        input_block_size=input_block_size,
+        output_block_size=output_block_size,
+        metrics=metrics,
+        dead_letter_policy_creator=dead_letter_policy_creator,
+        commit_log_config=commit_log_config,
     )
 
-    def handler(signum: int, frame: Any) -> None:
-        processor.signal_shutdown()
-
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-    processor.run()
+    return strategy_factory
