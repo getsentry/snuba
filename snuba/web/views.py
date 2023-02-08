@@ -433,8 +433,8 @@ def health() -> Response:
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
-    if not down_file_exists and clickhouse_health:
-        body = {"status": "ok"}
+    if clickhouse_health:
+        body = {"status": "ok", "down_file_exists": down_file_exists}
         status = 200
     else:
         body = {
