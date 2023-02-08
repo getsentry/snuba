@@ -1,6 +1,6 @@
 import logging
 import signal
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
@@ -263,7 +263,7 @@ def multistorage_consumer(
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
     strategy_factory = build_multistorage_streaming_strategy_factory(
-        storages,
+        [*storages.values()],
         max_batch_size,
         max_batch_time_ms,
         processes,
@@ -290,7 +290,7 @@ def multistorage_consumer(
 
 
 def build_multistorage_streaming_strategy_factory(
-    storages: Dict[Any, WritableTableStorage],
+    storages: Sequence[WritableTableStorage],
     max_batch_size: int,
     max_batch_time_ms: int,
     processes: Optional[int],
@@ -304,7 +304,7 @@ def build_multistorage_streaming_strategy_factory(
         storage.get_table_writer()
         .get_stream_loader()
         .get_dead_letter_queue_policy_creator()
-        for storage in storages.values()
+        for storage in storages
     }
 
     # Only one dead letter policy is supported. All storages must share the same
@@ -314,7 +314,7 @@ def build_multistorage_streaming_strategy_factory(
         raise ValueError("only one dead letter policy is supported")
 
     strategy_factory = MultistorageConsumerProcessingStrategyFactory(
-        [*storages.values()],
+        storages,
         max_batch_size,
         max_batch_time_ms / 1000.0,
         processes=processes,
