@@ -504,7 +504,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
         self.count = 3600
-        self.base_time = datetime.utcnow()
+        self.base_time = utc_yesterday_12_15()
 
         self.start_time = self.base_time
         self.end_time = (
@@ -512,8 +512,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         )
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
-        self.mapping_meta = {}
-        self.default_tags = {}
+        self.mapping_meta = SHARED_MAPPING_META
+        self.default_tags = SHARED_TAGS
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
 
@@ -560,7 +560,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         query = Query(
             match=Entity("generic_org_metrics_counters"),
             select=[
-                Function("sum", [Column("value")]),
+                Function("sum", [Column("value")], "value"),
                 Column("org_id"),
                 Column("project_id"),
             ],
@@ -581,6 +581,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 2
+        assert data["data"][0] == {"org_id": 101, "project_id": 1, "value": 3600.0}
+        assert data["data"][1] == {"org_id": 101, "project_id": 2, "value": 3600.0}
 
 
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
