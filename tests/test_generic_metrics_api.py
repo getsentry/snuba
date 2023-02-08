@@ -389,9 +389,15 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
 
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
-    def post(self, url: str, data: str) -> Any:
-        return self.app.post(url, data=data, headers={"referer": "test"})
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
 
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "generic_metrics_counters"
+
+    @pytest.fixture(autouse=True)
     def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
         self.post = _build_snql_post_methods
 
@@ -404,6 +410,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         self.end_time = (
             self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.mapping_meta = SHARED_MAPPING_META
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
@@ -417,6 +425,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         self.generate_counters()
 
     def generate_counters(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
         events = []
         for n in range(self.count):
             for p in self.project_ids:
@@ -453,8 +462,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             select=[Column("org_id"), Column("project_id")],
             groupby=[Column("org_id"), Column("project_id")],
             where=[
-                Condition(Column("timestamp"), Op.GTE, self.start_time),
-                Condition(Column("timestamp"), Op.LT, self.end_time),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
             ],
             granularity=Granularity(3600),
         )
