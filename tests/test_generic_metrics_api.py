@@ -388,6 +388,85 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert smallest_time_bucket.minute == 0
 
 
+class TestGenericMetricsApiCounters(BaseApiTest):
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "generic_metrics_counters"
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
+
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
+        self.count = 10
+        self.org_id = 1
+        self.project_id = 2
+        self.metric_id = 3
+        self.base_time = utc_yesterday_12_15()
+        self.default_tags = SHARED_TAGS
+        self.mapping_meta = SHARED_MAPPING_META
+
+        self.use_case_id = "performance"
+        self.start_time = self.base_time
+        self.end_time = (
+            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
+        )
+        self.generate_counters()
+
+    def generate_counters(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
+        rows = [
+            self.write_storage.get_table_writer()
+            .get_stream_loader()
+            .get_processor()
+            .process_message(
+                {
+                    "org_id": self.org_id,
+                    "project_id": self.project_id,
+                    "unit": "ms",
+                    "type": InputType.COUNTER.value,
+                    "value": 1.0,
+                    "timestamp": self.base_time.timestamp() + n,
+                    "tags": self.default_tags,
+                    "metric_id": self.metric_id,
+                    "retention_days": RETENTION_DAYS,
+                    "mapping_meta": self.mapping_meta,
+                    "use_case_id": self.use_case_id,
+                },
+                KafkaMessageMetadata(0, 0, self.base_time),
+            )
+            for n in range(self.count)
+        ]
+        write_processed_messages(self.write_storage, [row for row in rows if row])
+
+    def test_retrieval_basic(self) -> None:
+        query_str = f"""MATCH (generic_metrics_counters)
+                    SELECT sum(value) AS total BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 60
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["total"] == 10.0
+
+
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -412,11 +491,11 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         )
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
-        self.mapping_meta = SHARED_MAPPING_META
+        self.mapping_meta = {}
+        self.default_tags = {}
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
 
-        self.default_tags = SHARED_TAGS
         self.use_case_id = "performance"
 
         self.metric_id = 1001
@@ -443,7 +522,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
                                 "value": 1.0,
                                 "timestamp": self.base_time.timestamp() + n,
                                 "tags": self.default_tags,
-                                "metric_id": self.metric_id,
+                                "metric_id": 1,
                                 "retention_days": RETENTION_DAYS,
                                 "mapping_meta": self.mapping_meta,
                                 "use_case_id": self.use_case_id,
@@ -459,8 +538,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
     def test_simple(self) -> None:
         query = Query(
             match=Entity("generic_org_metrics_counters"),
-            select=[Column("org_id"), Column("project_id")],
-            groupby=[Column("org_id"), Column("project_id")],
+            select=[Column("value"), Column("org_id"), Column("project_id")],
+            groupby=[Column("value"), Column("org_id"), Column("project_id")],
             where=[
                 Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
                 Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
