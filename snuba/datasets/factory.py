@@ -35,16 +35,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.events import EventsDataset
-
-        self._dataset_map.update(
-            {
-                "events": EventsDataset(),
-            }
-        )
-
         self._dataset_map.update(self._config_built_datasets)
-
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
     def iter_all(self) -> Generator[Dataset, None, None]:

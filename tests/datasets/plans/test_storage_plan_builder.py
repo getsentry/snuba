@@ -4,6 +4,13 @@ import pytest
 
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToIPAddress,
+    ColumnToMapping,
+    SubscriptableMapper,
+)
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -22,6 +29,35 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
+
+errors_translators = TranslationMappers(
+    columns=[
+        ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+        ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+        ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+        ColumnToIPAddress(None, "ip_address"),
+        ColumnToColumn(None, "transaction", None, "transaction_name"),
+        ColumnToColumn(None, "username", None, "user_name"),
+        ColumnToColumn(None, "email", None, "user_email"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
+    ],
+    subscriptables=[
+        SubscriptableMapper(None, "tags", None, "tags"),
+        SubscriptableMapper(None, "contexts", None, "contexts"),
+    ],
+)
+
 
 TEST_CASES = [
     pytest.param(

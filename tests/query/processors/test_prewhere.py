@@ -6,7 +6,8 @@ from snuba_sdk.legacy import json_to_snql
 from snuba import settings
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
-from snuba.datasets.storages.errors_common import all_columns
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -15,6 +16,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.logical import Query
 from snuba.query.processors.physical.prewhere import PrewhereProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
@@ -284,8 +286,11 @@ def test_prewhere(
     ]
     request = json_to_snql(query_body, "events")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), events)
-    query = identity_translate(query)
+    snql_query, _ = parse_snql_query(str(request.query), events)
+    assert isinstance(snql_query, Query)
+    query = identity_translate(snql_query)
+
+    all_columns = get_storage(StorageKey.ERRORS).get_schema().get_columns()
     query.set_from_clause(Table("my_table", all_columns, final=final))
 
     query_settings = HTTPQuerySettings()

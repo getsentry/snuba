@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any
 
 import pytest
 from fastjsonschema.exceptions import JsonSchemaValueException
@@ -11,10 +11,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToNullIf,
 )
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity import Entity
-from snuba.datasets.factory import reset_dataset_factory
-from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -24,118 +20,6 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
         if isinstance(obj, object_class):
             return obj
     return None
-
-
-class TestEntityConfigurationComparison(ConfigurationTest):
-    """
-    This test compares the YAML config files to the Python ones.
-    This test suite is only useful as we translate entities to YAML.
-    Once all the entities are YAML and the Python ones are removed this
-    test suite can also be removed.
-    """
-
-    def setup_class(self) -> None:
-        reset_dataset_factory()
-
-        from snuba.datasets.entities.events import EventsEntity
-
-        self.test_data = [
-            (
-                "snuba/datasets/configuration/events/entities/events.yaml",
-                EventsEntity,
-                EntityKey.EVENTS,
-            ),
-        ]
-
-    def _compare_subscription_validators(
-        self, config_entity: PluggableEntity, py_entity: Entity
-    ) -> None:
-        config_validators = config_entity.get_subscription_validators()
-        py_validators = py_entity.get_subscription_validators()
-
-        if config_validators is None or py_validators is None:
-            assert (
-                config_validators is None and py_validators is None
-            ), config_entity.entity_key
-            return
-        assert len(config_validators) == len(py_validators)
-
-        for config_join, py_join in zip(config_validators, py_validators):
-            assert config_join.__dict__ == py_join.__dict__, config_entity.entity_key
-
-    def _compare_join_relationships(
-        self, config_entity: PluggableEntity, py_entity: Entity
-    ) -> None:
-        config_joins = config_entity.get_all_join_relationships()
-        py_joins = py_entity.get_all_join_relationships()
-
-        if config_joins is None and py_joins is None:
-            return
-        assert len(config_joins) == len(py_joins), config_entity.entity_key
-        if config_joins is None:
-            return
-        for config_join, py_join in zip(config_joins, py_joins):
-            assert config_join == py_join, config_entity.entity_key
-
-    def _compare_storage_mappers(
-        self, config_entity: PluggableEntity, py_entity: Entity
-    ) -> None:
-        config_connections = config_entity.get_all_storage_connections()
-        py_connections = py_entity.get_all_storage_connections()
-
-        assert len(config_connections) == len(py_connections)
-
-        for config_conn, py_conn in zip(config_connections, py_connections):
-            assert config_conn == py_conn, config_entity.entity_key
-
-    def _config_matches_python_definition(
-        self, config_path: str, entity: Type[Entity], entity_key: EntityKey
-    ) -> None:
-        config_entity = build_entity_from_config(config_path)
-        py_entity = entity()  # type: ignore
-
-        assert isinstance(config_entity, PluggableEntity), entity_key.value
-        assert config_entity.entity_key == entity_key, entity_key.value
-
-        assert len(config_entity.get_query_processors()) == len(
-            py_entity.get_query_processors()
-        ), entity_key.value
-        for (config_qp, py_qp) in zip(
-            config_entity.get_query_processors(), py_entity.get_query_processors()
-        ):
-            assert (
-                config_qp.__class__ == py_qp.__class__
-            ), f"{entity_key.value}: query processor mismatch between configuration-loaded sets and python-defined"
-
-        assert len(config_entity.get_validators()) == len(
-            py_entity.get_validators()
-        ), entity_key.value
-        for (config_v, py_v) in zip(
-            config_entity.get_validators(), py_entity.get_validators()
-        ):
-            assert (
-                config_v.__class__ == py_v.__class__
-            ), f"{entity_key.value}: validator mismatch between configuration-loaded sets and python-defined"
-            assert config_v.__dict__ == py_v.__dict__, (entity_key.value, config_v)
-
-        assert (
-            config_entity.get_all_storages() == py_entity.get_all_storages()
-        ), entity_key.value
-        assert (
-            config_entity.required_time_column == py_entity.required_time_column
-        ), entity_key.value
-
-        assert (
-            config_entity.get_data_model() == py_entity.get_data_model()
-        ), entity_key.value
-
-        self._compare_storage_mappers(config_entity, py_entity)
-        self._compare_join_relationships(config_entity, py_entity)
-        self._compare_subscription_validators(config_entity, py_entity)
-
-    def test_config_matches_python_definition(self) -> None:
-        for test in self.test_data:
-            self._config_matches_python_definition(*test)
 
 
 class TestEntityConfiguration(ConfigurationTest):

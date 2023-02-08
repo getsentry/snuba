@@ -36,22 +36,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             ]
         }
 
-        # TODO: Remove these as they are converted to configs
-        from snuba.datasets.storages.errors import storage as errors_storage
-        from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-
-        self._all_storages = {
-            **{
-                storage.get_storage_key(): storage
-                for storage in [
-                    # WritableStorages
-                    errors_storage,
-                    # Readable Storages
-                    errors_ro_storage,
-                ]
-            },
-            **self._config_built_storages,
-        }
+        self._all_storages = self._config_built_storages
 
     def iter_all(self) -> Generator[Storage, None, None]:
         for storage in self._all_storages.values():

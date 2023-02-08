@@ -3,8 +3,14 @@ from typing import List
 import pytest
 
 from snuba import state
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToIPAddress,
+    ColumnToMapping,
+    SubscriptableMapper,
+)
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.events import errors_translators
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
 from snuba.datasets.factory import get_dataset
@@ -18,6 +24,35 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
+
+errors_translators = TranslationMappers(
+    columns=[
+        ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+        ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+        ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+        ColumnToIPAddress(None, "ip_address"),
+        ColumnToColumn(None, "transaction", None, "transaction_name"),
+        ColumnToColumn(None, "username", None, "user_name"),
+        ColumnToColumn(None, "email", None, "user_email"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
+    ],
+    subscriptables=[
+        SubscriptableMapper(None, "tags", None, "tags"),
+        SubscriptableMapper(None, "contexts", None, "contexts"),
+    ],
+)
+
 
 TEST_CASES = [
     pytest.param(
@@ -90,7 +125,7 @@ def test_query_storage_selector(
     assert selected_storage.storage == expected_storage
 
 
-def test_assert_raises():
+def test_assert_raises() -> None:
     query, _ = parse_snql_query(
         """
         MATCH (events)
@@ -102,4 +137,5 @@ def test_assert_raises():
         dataset=get_dataset("events"),
     )
     with pytest.raises(EntityStorageConnectionNotFound):
+        assert isinstance(query, Query)
         ErrorsQueryStorageSelector().select_storage(query, HTTPQuerySettings(), [])
