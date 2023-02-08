@@ -1,5 +1,5 @@
 use super::{ConsumeError, MessageStorage, TopicDoesNotExist, TopicExists};
-use crate::types::{Message, Partition, Topic};
+use crate::arroyo::types::{Message, Partition, Topic};
 use chrono::{DateTime, Utc};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -152,8 +152,8 @@ impl<TPayload: Clone> MessageStorage<TPayload> for MemoryMessageStorage<TPayload
 mod tests {
     use super::MemoryMessageStorage;
     use super::TopicContent;
-    use crate::backends::storages::MessageStorage;
-    use crate::types::{Message, Partition, Topic};
+    use crate::arroyo::backends::storages::MessageStorage;
+    use crate::arroyo::types::{Message, Partition, Topic};
     use chrono::Utc;
 
     #[test]

@@ -1,7 +1,7 @@
 pub mod strategies;
 
-use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::types::{Message, Partition, Topic};
+use crate::arroyo::backends::{AssignmentCallbacks, Consumer};
+use crate::arroyo::types::{Message, Partition, Topic};
 use std::collections::HashMap;
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
@@ -211,11 +211,11 @@ mod tests {
         CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
     };
     use super::StreamProcessor;
-    use crate::backends::local::broker::LocalBroker;
-    use crate::backends::local::LocalConsumer;
-    use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::types::{Message, Partition, Position, Topic};
-    use crate::utils::clock::SystemClock;
+    use crate::arroyo::backends::local::broker::LocalBroker;
+    use crate::arroyo::backends::local::LocalConsumer;
+    use crate::arroyo::backends::storages::memory::MemoryMessageStorage;
+    use crate::arroyo::types::{Message, Partition, Position, Topic};
+    use crate::arroyo::utils::clock::SystemClock;
     use std::collections::HashMap;
     use std::time::Duration;
     use uuid::Uuid;

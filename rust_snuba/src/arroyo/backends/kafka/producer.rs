@@ -1,7 +1,7 @@
-use crate::backends::kafka::config::KafkaConfig;
-use crate::backends::kafka::types::KafkaPayload;
-use crate::backends::Producer as ArroyoProducer;
-use crate::types::TopicOrPartition;
+use crate::arroyo::backends::kafka::config::KafkaConfig;
+use crate::arroyo::backends::kafka::types::KafkaPayload;
+use crate::arroyo::backends::Producer as ArroyoProducer;
+use crate::arroyo::types::TopicOrPartition;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{BaseProducer, BaseRecord, Producer};
 use std::time::Duration;
@@ -68,10 +68,10 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
 #[cfg(test)]
 mod tests {
     use super::KafkaProducer;
-    use crate::backends::kafka::config::KafkaConfig;
-    use crate::backends::kafka::types::KafkaPayload;
-    use crate::backends::Producer;
-    use crate::types::{Topic, TopicOrPartition};
+    use crate::arroyo::backends::kafka::config::KafkaConfig;
+    use crate::arroyo::backends::kafka::types::KafkaPayload;
+    use crate::arroyo::backends::Producer;
+    use crate::arroyo::types::{Topic, TopicOrPartition};
     #[test]
     fn test_producer() {
         let topic = Topic {

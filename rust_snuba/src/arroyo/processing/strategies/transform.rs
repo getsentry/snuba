@@ -1,7 +1,7 @@
-use crate::processing::strategies::{
+use crate::arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
-use crate::types::Message;
+use crate::arroyo::types::Message;
 use std::time::Duration;
 
 pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
@@ -44,10 +44,10 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
 #[cfg(test)]
 mod tests {
     use super::Transform;
-    use crate::processing::strategies::{
+    use crate::arroyo::processing::strategies::{
         CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     };
-    use crate::types::{Message, Partition, Topic};
+    use crate::arroyo::types::{Message, Partition, Topic};
     use chrono::Utc;
     use std::time::Duration;
 

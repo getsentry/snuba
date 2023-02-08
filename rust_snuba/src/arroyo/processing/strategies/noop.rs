@@ -1,6 +1,6 @@
-use crate::backends::kafka::types::KafkaPayload;
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-use crate::types::{Message, Partition, Position};
+use crate::arroyo::backends::kafka::types::KafkaPayload;
+use crate::arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::arroyo::types::{Message, Partition, Position};
 use log::info;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -72,9 +72,9 @@ pub fn new(commit_frequency: Duration) -> NoopCommit {
 
 #[cfg(test)]
 mod tests {
-    use crate::backends::kafka::types::KafkaPayload;
-    use crate::processing::strategies::{noop, CommitRequest, ProcessingStrategy};
-    use crate::types::{Message, Partition, Position, Topic};
+    use crate::arroyo::backends::kafka::types::KafkaPayload;
+    use crate::arroyo::processing::strategies::{noop, CommitRequest, ProcessingStrategy};
+    use crate::arroyo::types::{Message, Partition, Position, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
