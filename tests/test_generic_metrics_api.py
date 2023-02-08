@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 import pytest
 import pytz
 from pytest import approx
-from snuba_sdk import Request
+from snuba_sdk import Function, Request
 from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.entity import Entity
@@ -418,6 +418,8 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         self.end_time = (
             self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.generate_counters()
 
     def generate_counters(self) -> None:
@@ -465,6 +467,25 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
         assert data["data"][0]["total"] == 10.0
+
+    def test_arbitrary_granularity(self) -> None:
+        query_str = f"""MATCH (generic_metrics_counters)
+                SELECT sum(value) AS total BY project_id, org_id
+                WHERE org_id = {self.org_id}
+                AND project_id = {self.project_id}
+                AND metric_id = {self.metric_id}
+                AND timestamp >= toDateTime('{self.hour_before_start_time}')
+                AND timestamp < toDateTime('{self.hour_after_start_time}')
+                GRANULARITY 3600
+                """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
 
 
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
@@ -538,9 +559,14 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
     def test_simple(self) -> None:
         query = Query(
             match=Entity("generic_org_metrics_counters"),
-            select=[Column("value"), Column("org_id"), Column("project_id")],
-            groupby=[Column("value"), Column("org_id"), Column("project_id")],
+            select=[
+                Function("sum", [Column("value")]),
+                Column("org_id"),
+                Column("project_id"),
+            ],
+            groupby=[Column("org_id"), Column("project_id")],
             where=[
+                Condition(Column("metric_id"), Op.EQ, 1),
                 Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
                 Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
             ],

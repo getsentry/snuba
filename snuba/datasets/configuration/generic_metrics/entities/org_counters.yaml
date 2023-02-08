@@ -8,6 +8,11 @@ schema:
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
+    {
+      name: value,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [ { type: Float, args: { size: 64 } } ] },
+    },
   ]
 required_time_column: timestamp
 
@@ -15,6 +20,15 @@ storages:
   - storage: generic_org_metrics_counters
     is_writable: false
     translation_mappers:
+      functions:
+        - mapper: FunctionNameMapper
+          args:
+            from_name: sum
+            to_name: sumMerge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: sumIf
+            to_name: sumMergeIf
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -29,7 +43,13 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
-  - processor: GranularityProcessor
+  - processor: MappedGranularityProcessor
+    args:
+      accepted_granularities:
+        60: 1
+        3600: 2
+        86400: 3
+      default_granularity: 1
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:
