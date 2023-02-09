@@ -10,6 +10,8 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 
+_MAX_CH_THREADS = 4
+
 
 @audit_log
 def run_querylog_query(query: str, user: str) -> ClickhouseResult:
@@ -32,6 +34,18 @@ def describe_querylog_schema() -> ClickhouseResult:
     return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
 
 
+def _get_clickhouse_threads() -> int:
+    config_threads = state.get_config("admin.querylog_threads", _MAX_CH_THREADS)
+    try:
+        return min(
+            int(config_threads) if config_threads is not None else _MAX_CH_THREADS,
+            _MAX_CH_THREADS,
+        )
+    except ValueError:
+        # in case the config is set incorrectly
+        return _MAX_CH_THREADS
+
+
 def __run_querylog_query(query: str) -> ClickhouseResult:
     """
     Runs given Query against Querylog table in ClickHouse. This function assumes valid
@@ -40,9 +54,10 @@ def __run_querylog_query(query: str) -> ClickhouseResult:
     connection = get_ro_query_node_connection(
         StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERY
     )
+
     query_result = connection.execute(
         query=query,
         with_column_types=True,
-        settings={"max_threads": state.get_config("admin.querylog_threads", 4)},
+        settings={"max_threads": _get_clickhouse_threads()},
     )
     return query_result
