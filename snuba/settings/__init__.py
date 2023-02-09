@@ -42,12 +42,12 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system": "NonBlockingMigrationsPolicy",
-    "generic_metrics": "NonBlockingMigrationsPolicy",
-    "profiles": "NonBlockingMigrationsPolicy",
-    "functions": "NonBlockingMigrationsPolicy",
-    "replays": "NonBlockingMigrationsPolicy",
-    "test_migration": "AllMigrationsPolicy",
+    "system",
+    "generic_metrics",
+    "profiles",
+    "functions",
+    "replays",
+    "test_migration",
 }
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
