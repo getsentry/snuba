@@ -104,7 +104,7 @@ logger = logging.getLogger(__name__)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
-    commit_log_topic: str,
+    commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
     max_batch_size: int,
