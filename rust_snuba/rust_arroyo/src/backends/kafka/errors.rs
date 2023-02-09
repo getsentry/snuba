@@ -1,6 +1,6 @@
 use rdkafka::error::{KafkaError, RDKafkaErrorCode};
 
-use crate::arroyo::backends::ConsumerError;
+use crate::backends::ConsumerError;
 
 impl From<KafkaError> for ConsumerError {
     fn from(err: KafkaError) -> Self {

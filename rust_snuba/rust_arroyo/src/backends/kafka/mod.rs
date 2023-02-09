@@ -2,9 +2,9 @@ use super::kafka::config::KafkaConfig;
 use super::AssignmentCallbacks;
 use super::Consumer as ArroyoConsumer;
 use super::ConsumerError;
-use crate::arroyo::backends::kafka::types::KafkaPayload;
-use crate::arroyo::types::Message as ArroyoMessage;
-use crate::arroyo::types::{Partition, Position, Topic};
+use crate::backends::kafka::types::KafkaPayload;
+use crate::types::Message as ArroyoMessage;
+use crate::types::{Partition, Position, Topic};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -309,9 +309,9 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
 #[cfg(test)]
 mod tests {
     use super::{AssignmentCallbacks, KafkaConsumer};
-    use crate::arroyo::backends::kafka::config::KafkaConfig;
-    use crate::arroyo::backends::Consumer;
-    use crate::arroyo::types::{Partition, Position, Topic};
+    use crate::backends::kafka::config::KafkaConfig;
+    use crate::backends::Consumer;
+    use crate::types::{Partition, Position, Topic};
     use chrono::Utc;
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;

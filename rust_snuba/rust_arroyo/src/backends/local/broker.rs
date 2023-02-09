@@ -1,6 +1,6 @@
-use crate::arroyo::backends::storages::{ConsumeError, MessageStorage, TopicDoesNotExist, TopicExists};
-use crate::arroyo::types::{Message, Partition, Topic};
-use crate::arroyo::utils::clock::Clock;
+use crate::backends::storages::{ConsumeError, MessageStorage, TopicDoesNotExist, TopicExists};
+use crate::types::{Message, Partition, Topic};
+use crate::utils::clock::Clock;
 use chrono::DateTime;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -153,9 +153,9 @@ impl<TPayload: Clone> LocalBroker<TPayload> {
 #[cfg(test)]
 mod tests {
     use super::LocalBroker;
-    use crate::arroyo::backends::storages::memory::MemoryMessageStorage;
-    use crate::arroyo::types::{Partition, Topic};
-    use crate::arroyo::utils::clock::SystemClock;
+    use crate::backends::storages::memory::MemoryMessageStorage;
+    use crate::types::{Partition, Topic};
+    use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
     use uuid::Uuid;
 

@@ -1,7 +1,7 @@
 pub mod broker;
 
 use super::{AssignmentCallbacks, Consumer, ConsumerError};
-use crate::arroyo::types::{Message, Partition, Position, Topic};
+use crate::types::{Message, Partition, Position, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
@@ -296,11 +296,11 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 #[cfg(test)]
 mod tests {
     use super::{AssignmentCallbacks, LocalConsumer};
-    use crate::arroyo::backends::local::broker::LocalBroker;
-    use crate::arroyo::backends::storages::memory::MemoryMessageStorage;
-    use crate::arroyo::backends::Consumer;
-    use crate::arroyo::types::{Partition, Position, Topic};
-    use crate::arroyo::utils::clock::SystemClock;
+    use crate::backends::local::broker::LocalBroker;
+    use crate::backends::storages::memory::MemoryMessageStorage;
+    use crate::backends::Consumer;
+    use crate::types::{Partition, Position, Topic};
+    use crate::utils::clock::SystemClock;
     use chrono::Utc;
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;

@@ -199,7 +199,7 @@ pub fn time(key: &str, value: u64, tags: Option<HashMap<&str, &str>>, sample_rat
 
 #[cfg(test)]
 mod tests {
-    use crate::arroyo::utils::metrics::{gauge, increment, init, time, METRICS_CLIENT};
+    use crate::utils::metrics::{gauge, increment, init, time, METRICS_CLIENT};
     use std::collections::HashMap;
 
     #[test]

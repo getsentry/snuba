@@ -1,4 +1,4 @@
-use crate::arroyo::types::{Message, Partition, Position};
+use crate::types::{Message, Partition, Position};
 use std::collections::HashMap;
 use std::time::Duration;
 
