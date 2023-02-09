@@ -47,6 +47,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "profiles",
     "functions",
     "replays",
+    "search_issues",
     "test_migration",
 }
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
