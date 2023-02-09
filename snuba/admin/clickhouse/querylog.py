@@ -1,3 +1,4 @@
+from snuba import state
 from snuba.admin.audit_log.querylog import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -39,5 +40,9 @@ def __run_querylog_query(query: str) -> ClickhouseResult:
     connection = get_ro_query_node_connection(
         StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERY
     )
-    query_result = connection.execute(query=query, with_column_types=True)
+    query_result = connection.execute(
+        query=query,
+        with_column_types=True,
+        settings={"max_threads": state.get_config("admin.querylog_threads", 4)},
+    )
     return query_result
