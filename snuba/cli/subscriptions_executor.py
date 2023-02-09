@@ -31,16 +31,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(
-        [
-            EntityKey.EVENTS.value,
-            EntityKey.TRANSACTIONS.value,
-            EntityKey.METRICS_COUNTERS.value,
-            EntityKey.METRICS_SETS.value,
-            EntityKey.GENERIC_METRICS_SETS.value,
-            EntityKey.GENERIC_METRICS_DISTRIBUTIONS.value,
-        ]
-    ),
+    type=click.Choice([entity_key.value for entity_key in EntityKey]),
     help="The entity to target.",
 )
 @click.option(
