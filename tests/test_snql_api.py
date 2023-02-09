@@ -1067,3 +1067,66 @@ class TestSnQLApi(BaseApiTest):
 
         assert b"DB::Exception: Illegal type" in response.data
         assert response.status_code == 400
+
+    def test_invalid_tag_queries(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS `count`
+                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                    WHERE ifNull(tags[user_flow], '') = 'buy'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'www.something.com'
+                    AND tags[error_code] = '2300'
+                    AND tags[count] = 419
+                    ORDER BY time ASC LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 400
+        data = response.json
+        assert data["error"]["type"] == "invalid_query"
+        assert (
+            data["error"]["message"]
+            == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+        )
+
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS `count`
+                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                    WHERE ifNull(tags[user_flow], '') = 'buy'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'www.something.com'
+                    AND tags[error_code] IN array('2300')
+                    AND tags[count] IN array(419, 70, 175, 181, 58)
+                    ORDER BY time ASC LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 400
+        data = response.json
+        assert data["error"]["type"] == "invalid_query"
+        assert (
+            data["error"]["message"]
+            == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+        )
