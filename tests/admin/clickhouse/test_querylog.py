@@ -12,6 +12,6 @@ from snuba.admin.clickhouse.querylog import _MAX_CH_THREADS, _get_clickhouse_thr
         pytest.param("invalid_value", _MAX_CH_THREADS, id="invalid_value"),
     ],
 )
-def test_get_clickhouse_threads(config_val, expected_threads):
+def test_get_clickhouse_threads(config_val, expected_threads) -> None:
     state.set_config("admin.querylog_threads", config_val)
     assert _get_clickhouse_threads() == expected_threads
