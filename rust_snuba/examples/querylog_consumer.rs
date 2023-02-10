@@ -14,9 +14,41 @@ use rust_snuba::processing::querylog_processor;
 use rust_snuba::processing::querylog_processor::ProcessedQueryLog;
 use rust_snuba::processing::querylog_processor::RawQueryLogKafkaJson;
 use rust_snuba::types::{Partition, Topic};
+use rust_snuba::utils::clickhouse_client;
+use rust_snuba::utils::clickhouse_client::ClickhouseClient;
 use std::collections::HashMap;
 use std::time::Duration;
 use rdkafka::consumer::base_consumer::BaseConsumer;
+
+
+const TIMEOUT_MS: Duration = Duration::from_millis(2000);
+const TABLE_NAME: &str = "querylog";
+
+pub struct QueryLogConsumer{
+    consumer: KafkaConsumer,
+    topic: Topic,
+    config: KafkaConfig,
+    client: ClickhouseClient,
+}
+
+impl QueryLogConsumer {
+    pub fn run(){
+
+    }
+}
+
+pub fn new(config: KafkaConfig, topic: Topic, client: ClickhouseClient,
+    clickhouse_hostname: String, clickhouse_port: u16, clickhouse_table: String) -> QueryLogConsumer {
+    let consumer = KafkaConsumer::new(config.clone());
+    let client: ClickhouseClient = clickhouse_client::new(clickhouse_hostname,clickhouse_port, clickhouse_table);
+    QueryLogConsumer {
+        consumer,
+        topic,
+        config,
+        client
+    }
+}
+
 
 struct EmptyCallbacks {}
 impl AssignmentCallbacks for EmptyCallbacks {
