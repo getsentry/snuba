@@ -1,6 +1,6 @@
 import logging
 import signal
-from typing import Any, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import click
 import rapidjson
@@ -9,6 +9,9 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
+    DeadLetterQueuePolicy,
+)
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
@@ -31,6 +34,7 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+from snuba.utils.streams.topics import Topic as SnubaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -140,23 +144,17 @@ def multistorage_consumer(
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
 
+    (
+        logical_raw_topic,
+        logical_commit_topic,
+        _,
+        dead_letter_policy,
+    ) = get_logical_topics([*storages.values()])
+
     if raw_events_topic:
         topic = Topic(raw_events_topic)
     else:
-        topics = {
-            storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic_name
-            for storage in storages.values()
-        }
-
-        # XXX: The ``StreamProcessor`` only supports a single topic at this time,
-        # but is easily modified. The topic routing in the processing strategy is a
-        # bit trickier (but also shouldn't be too bad.)
-        topic = Topic(topics.pop())
-        if topics:
-            raise ValueError("only one topic is supported")
+        topic = logical_raw_topic
 
     commit_log: Optional[Topic]
     if commit_log_topic:
@@ -165,24 +163,7 @@ def multistorage_consumer(
         # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
         # time. (It is less easily modified.) This also assumes the commit log
         # topic is on the same Kafka cluster as the input topic.
-        commit_log_topics = {
-            spec.topic_name
-            for spec in (
-                storage.get_table_writer()
-                .get_stream_loader()
-                .get_commit_log_topic_spec()
-                for storage in storages.values()
-            )
-            if spec is not None
-        }
-
-        if commit_log_topics:
-            commit_log = Topic(commit_log_topics.pop())
-        else:
-            commit_log = None
-
-        if commit_log_topics:
-            raise ValueError("only one commit log topic is supported")
+        commit_log = logical_commit_topic
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -194,16 +175,8 @@ def multistorage_consumer(
     # that most deployments are going to be using the default configuration.
     storage_keys = [*storages.keys()]
 
-    kafka_topic = (
-        storages[storage_keys[0]]
-        .get_table_writer()
-        .get_stream_loader()
-        .get_default_topic_spec()
-        .topic
-    )
-
     consumer_configuration = build_kafka_consumer_configuration(
-        kafka_topic,
+        SnubaTopic(logical_raw_topic.name),
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=not no_strict_offset_reset,
@@ -248,16 +221,10 @@ def multistorage_consumer(
         # XXX: This relies on the assumptions that a.) all storages are
         # located on the same Kafka cluster (validated above.)
 
-        commit_log_topic_spec = (
-            storages[storage_keys[0]]
-            .get_table_writer()
-            .get_stream_loader()
-            .get_commit_log_topic_spec()
-        )
-        assert commit_log_topic_spec is not None
+        assert logical_commit_topic is not None
 
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(commit_log_topic_spec.topic)
+            build_kafka_producer_configuration(SnubaTopic(logical_commit_topic.name))
         )
 
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
@@ -271,6 +238,7 @@ def multistorage_consumer(
         output_block_size,
         metrics,
         commit_log_config,
+        dead_letter_policy,
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -289,6 +257,79 @@ def multistorage_consumer(
     processor.run()
 
 
+LogicalTopicTuple = Tuple[
+    Topic,
+    Optional[Topic],
+    Optional[Topic],
+    Optional[Callable[[], DeadLetterQueuePolicy]],
+]
+
+
+def get_logical_topics(
+    storages: Sequence[WritableTableStorage],
+) -> LogicalTopicTuple:
+    stream_loaders = {
+        storage.get_table_writer().get_stream_loader() for storage in storages
+    }
+
+    default_topics = {
+        stream_loader.get_default_topic_spec().topic_name
+        for stream_loader in stream_loaders
+    }
+
+    commit_log_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_commit_log_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    replacement_topics = {
+        spec.topic_name
+        for spec in (
+            stream_loader.get_replacement_topic_spec()
+            for stream_loader in stream_loaders
+        )
+        if spec is not None
+    }
+
+    dead_letter_policies = {
+        stream_loader.get_dead_letter_queue_policy_creator()
+        for stream_loader in stream_loaders
+    }
+
+    # XXX: The ``StreamProcessor`` only supports a single topic at this time,
+    # but is easily modified. The topic routing in the processing strategy is a
+    # bit trickier (but also shouldn't be too bad.)
+    topic = Topic(default_topics.pop())
+    if default_topics:
+        raise ValueError("only one topic is supported")
+
+    if commit_log_topics:
+        commit_log_topic = Topic(commit_log_topics.pop())
+    else:
+        commit_log_topic = None
+    if commit_log_topics:
+        raise ValueError("only one commit log topic is supported")
+
+    if replacement_topics:
+        replacement_topic = Topic(replacement_topics.pop())
+    else:
+        replacement_topic = None
+    if replacement_topics:
+        raise ValueError("only one replacement topic is supported")
+
+    # Only one dead letter policy is supported. All storages must share the same
+    # dead letter policy creator
+    dead_letter_policy_creator = dead_letter_policies.pop()
+    if dead_letter_policies:
+        raise ValueError("only one dead letter policy is supported")
+
+    return (topic, commit_log_topic, replacement_topic, dead_letter_policy_creator)
+
+
 def build_multistorage_streaming_strategy_factory(
     storages: Sequence[WritableTableStorage],
     max_batch_size: int,
@@ -298,20 +339,8 @@ def build_multistorage_streaming_strategy_factory(
     output_block_size: Optional[int],
     metrics: MetricsBackend,
     commit_log_config: Optional[CommitLogConfig],
+    dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]],
 ) -> ProcessingStrategyFactory[KafkaPayload]:
-
-    dead_letter_policies = {
-        storage.get_table_writer()
-        .get_stream_loader()
-        .get_dead_letter_queue_policy_creator()
-        for storage in storages
-    }
-
-    # Only one dead letter policy is supported. All storages must share the same
-    # dead letter policy creator
-    dead_letter_policy_creator = dead_letter_policies.pop()
-    if dead_letter_policies:
-        raise ValueError("only one dead letter policy is supported")
 
     strategy_factory = MultistorageConsumerProcessingStrategyFactory(
         storages,
@@ -321,7 +350,7 @@ def build_multistorage_streaming_strategy_factory(
         input_block_size=input_block_size,
         output_block_size=output_block_size,
         metrics=metrics,
-        dead_letter_policy_creator=dead_letter_policy_creator,
+        dead_letter_policy_creator=dead_letter_policy,
         commit_log_config=commit_log_config,
     )
 
