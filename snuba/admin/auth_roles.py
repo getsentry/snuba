@@ -72,10 +72,8 @@ class ExecuteNoneAction(MigrationAction):
     pass
 
 
-# todo, shoudln't need .keys() once ADMIN_ALLOWED_MIGRATION_GROUPS is a set not dict
 MIGRATIONS_RESOURCES = {
-    group: MigrationResource(group)
-    for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.keys()
+    group: MigrationResource(group) for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
 }
 
 

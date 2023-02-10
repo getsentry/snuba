@@ -110,6 +110,7 @@ class EventsLoader(DirectoryLoader):
             "0016_drop_legacy_events",
             "0017_errors_add_indexes",
             "0018_errors_ro_add_tags_hash_map",
+            "0019_add_replay_id_column",
         ]
 
 
@@ -139,6 +140,7 @@ class TransactionsLoader(DirectoryLoader):
             "0018_transactions_add_profile_id",
             "0019_transactions_add_indexes_and_context_hash",
             "0020_transactions_add_codecs",
+            "0021_transactions_add_replay_id",
         ]
 
 

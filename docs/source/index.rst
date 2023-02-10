@@ -17,4 +17,5 @@ Contents:
    migrations/modes
    contributing/environment
    clickhouse/death_queries
+   clickhouse/topology
    clickhouse/schema_design
