@@ -34,7 +34,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=target,
             )
             for table_name, target in [
-                ("errors_local", OperationTarget.LOCAL),
                 ("errors_dist", OperationTarget.DISTRIBUTED),
+                ("errors_local", OperationTarget.LOCAL),
             ]
         ]
