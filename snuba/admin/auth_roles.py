@@ -119,9 +119,14 @@ ROLES = {
         name="TestMigrationsExecutor",
         actions={ExecuteAllAction([MIGRATIONS_RESOURCES["test_migration"]])},
     ),
+    "SearchIssuesExecutor": Role(
+        name="SearchIssuesExecutor",
+        actions={ExecuteNonBlockingAction([MIGRATIONS_RESOURCES["search_issues"]])},
+    ),
 }
 
 DEFAULT_ROLES = [
     ROLES["MigrationsReader"],
     ROLES["TestMigrationsExecutor"],
+    ROLES["SearchIssuesExecutor"],
 ]
