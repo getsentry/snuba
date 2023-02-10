@@ -292,10 +292,10 @@ class TagConditionValidator(QueryValidator):
             if match:
                 column = match.expression("column")
                 col_str: str
-                if isinstance(column, SubscriptableReferenceExpr):
-                    col_str = f"{column.column.column_name}[{column.key.value}]"
-                elif isinstance(column, Column):
-                    col_str = column.column_name
+                if not isinstance(column, SubscriptableReferenceExpr):
+                    return  # only fail things on the tags[] column
+
+                col_str = f"{column.column.column_name}[{column.key.value}]"
                 error_prefix = f"invalid tag condition on '{col_str}':"
 
                 rhs = match.expression("rhs")
@@ -305,7 +305,7 @@ class TagConditionValidator(QueryValidator):
                             f"{error_prefix} {rhs.value} must be a string"
                         )
                 elif isinstance(rhs, FunctionCall):
-                    # The rhs is an array function
+                    # The rhs is guaranteed to be an array function because of the match
                     for param in rhs.parameters:
                         if isinstance(param, Literal) and not isinstance(
                             param.value, str
