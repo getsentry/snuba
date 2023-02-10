@@ -1,9 +1,14 @@
+import pytest
+
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.storage_selectors.errors import ErrorsQueryStorageSelector
+from snuba.datasets.entities.storage_selectors.errors import (
+    ErrorsQueryStorageSelector,
+    _should_use_readonly_storage,
+)
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -74,3 +79,29 @@ def test_storage_selector() -> None:
         ).storage
         == storage
     )
+
+
+@pytest.mark.parametrize(
+    "need_consistent, enable_events_readonly_table, errors_force_consistent_sample_rate, expected",
+    [
+        (False, True, 0.0, True),
+        (False, True, 1.0, False),
+        (False, False, 0.5, False),
+        (False, False, None, False),
+        (True, True, 0.5, False),
+        (True, True, 1.0, False),
+        (True, False, 0.5, False),
+    ],
+)
+def test_should_use_readonly_storage(
+    need_consistent: bool,
+    enable_events_readonly_table: bool,
+    errors_force_consistent_sample_rate: float,
+    expected: bool,
+) -> None:
+    state.set_config("enable_events_readonly_table", enable_events_readonly_table)
+    if errors_force_consistent_sample_rate:
+        state.set_config(
+            "errors_force_consistent_sample_rate", errors_force_consistent_sample_rate
+        )
+    assert _should_use_readonly_storage(need_consistent) == expected

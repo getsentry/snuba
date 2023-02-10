@@ -1,3 +1,4 @@
+import random
 from typing import List
 
 from snuba import state
@@ -12,6 +13,23 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 
 
+def _should_use_readonly_storage(need_consistent: bool) -> bool:
+    """
+    Helper method to determine if we should use the readonly storage for the
+    errors storage selector.
+    """
+    if not state.get_config("enable_events_readonly_table", False):
+        return False
+
+    if need_consistent:
+        return False
+
+    if random.random() < state.get_config("errors_force_consistent_sample_rate", 0.0):
+        return False
+
+    return True
+
+
 class ErrorsQueryStorageSelector(QueryStorageSelector):
     # NOTE: This storage selector does not support multiple readable storages.
     def select_storage(
@@ -20,9 +38,8 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         query_settings: QuerySettings,
         storage_connections: List[EntityStorageConnection],
     ) -> EntityStorageConnection:
-        use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", False)
-            and not query_settings.get_consistent()
+        use_readonly_storage = _should_use_readonly_storage(
+            query_settings.get_consistent()
         )
 
         if use_readonly_storage:
