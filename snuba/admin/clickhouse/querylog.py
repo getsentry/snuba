@@ -13,6 +13,10 @@ from snuba.datasets.storages.storage_key import StorageKey
 _MAX_CH_THREADS = 4
 
 
+class BadThreadsValue(Exception):
+    pass
+
+
 @audit_log
 def run_querylog_query(query: str, user: str) -> ClickhouseResult:
     """
@@ -43,7 +47,9 @@ def _get_clickhouse_threads() -> int:
         )
     except ValueError:
         # in case the config is set incorrectly
-        return _MAX_CH_THREADS
+        raise BadThreadsValue(
+            f"{config_threads} is not a valid configuration option for Clickhouse `max_threads`"
+        )
 
 
 def __run_querylog_query(query: str) -> ClickhouseResult:
