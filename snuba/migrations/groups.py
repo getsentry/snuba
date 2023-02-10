@@ -110,6 +110,7 @@ class EventsLoader(DirectoryLoader):
             "0016_drop_legacy_events",
             "0017_errors_add_indexes",
             "0018_errors_ro_add_tags_hash_map",
+            "0019_add_replay_id_column",
         ]
 
 
