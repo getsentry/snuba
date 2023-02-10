@@ -140,6 +140,7 @@ class TransactionsLoader(DirectoryLoader):
             "0018_transactions_add_profile_id",
             "0019_transactions_add_indexes_and_context_hash",
             "0020_transactions_add_codecs",
+            "0021_transactions_add_replay_id",
         ]
 
 
