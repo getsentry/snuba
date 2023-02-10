@@ -355,6 +355,10 @@ validators:
       validator: TagConditionValidator,
       args: {}
     },
+    {
+      validator: DatetimeConditionValidator,
+      args: {}
+    },
   ]
 
 required_time_column: finish_ts
