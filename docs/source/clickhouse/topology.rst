@@ -32,9 +32,9 @@ distinguish between distributed tables (generally using the ClickHouse table eng
 `Distributed <https://clickhouse.com/docs/en/engines/table-engines/special/distributed/>`_)
 and local tables (generally using one of the
 `MergeTree-derived <https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/>`_
-table engines). Distributed tables exist to aggregate from the shards of local tables, and following
-the sequence above, distributed tables tend to be created on query nodes and local tables
-tend to be created on storage nodes.
+table engines). Distributed tables exist to aggregate from the shards of local table.
+Distributed tables are created on query nodes and local tables are created on
+storage nodes.
 
 Tying it all together
 ---------------------
