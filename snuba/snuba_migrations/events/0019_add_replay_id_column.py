@@ -21,7 +21,7 @@ class Migration(migration.ClickhouseNodeMigration):
             )
             for table_name, target in [
                 ("errors_local", OperationTarget.LOCAL),
-                ("transactions_dist", OperationTarget.DISTRIBUTED),
+                ("errors_dist", OperationTarget.DISTRIBUTED),
             ]
         ]
 
