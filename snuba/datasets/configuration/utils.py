@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
+    Enum,
     Float,
     Nested,
     SchemaModifiers,
@@ -158,6 +159,8 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         )
     elif col["type"] == "FixedString":
         column_type = FixedString(col["args"]["length"], modifiers)
+    elif col["type"] == "Enum":
+        column_type = Enum(col["args"]["values"], modifiers)
     assert column_type is not None
     return column_type
 
