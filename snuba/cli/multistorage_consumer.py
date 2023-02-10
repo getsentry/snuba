@@ -5,9 +5,10 @@ from typing import Any, Optional, Sequence
 import click
 import rapidjson
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
+from arroyo.processing.strategies import ProcessingStrategyFactory
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
@@ -15,6 +16,7 @@ from snuba.consumers.consumer import (
     CommitLogConfig,
     MultistorageConsumerProcessingStrategyFactory,
 )
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
     get_writable_storage,
     get_writable_storage_keys,
@@ -22,6 +24,7 @@ from snuba.datasets.storages.factory import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.state import get_config
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -104,7 +107,7 @@ logger = logging.getLogger(__name__)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
-    commit_log_topic: str,
+    commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
     max_batch_size: int,
@@ -259,34 +262,22 @@ def multistorage_consumer(
 
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
-    dead_letter_policies = {
-        storage.get_table_writer()
-        .get_stream_loader()
-        .get_dead_letter_queue_policy_creator()
-        for storage in storages.values()
-    }
-
-    # Only one dead letter policy is supported. All storages must share the same
-    # dead letter policy creator
-    dead_letter_policy_creator = dead_letter_policies.pop()
-    if dead_letter_policies:
-        raise ValueError("only one dead letter policy is supported")
+    strategy_factory = build_multistorage_streaming_strategy_factory(
+        [*storages.values()],
+        max_batch_size,
+        max_batch_time_ms,
+        processes,
+        input_block_size,
+        output_block_size,
+        metrics,
+        commit_log_config,
+    )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
         consumer,
         topic,
-        MultistorageConsumerProcessingStrategyFactory(
-            [*storages.values()],
-            max_batch_size,
-            max_batch_time_ms / 1000.0,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            metrics=metrics,
-            dead_letter_policy_creator=dead_letter_policy_creator,
-            commit_log_config=commit_log_config,
-        ),
+        strategy_factory,
         IMMEDIATE,
     )
 
@@ -296,3 +287,42 @@ def multistorage_consumer(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     processor.run()
+
+
+def build_multistorage_streaming_strategy_factory(
+    storages: Sequence[WritableTableStorage],
+    max_batch_size: int,
+    max_batch_time_ms: int,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+    metrics: MetricsBackend,
+    commit_log_config: Optional[CommitLogConfig],
+) -> ProcessingStrategyFactory[KafkaPayload]:
+
+    dead_letter_policies = {
+        storage.get_table_writer()
+        .get_stream_loader()
+        .get_dead_letter_queue_policy_creator()
+        for storage in storages
+    }
+
+    # Only one dead letter policy is supported. All storages must share the same
+    # dead letter policy creator
+    dead_letter_policy_creator = dead_letter_policies.pop()
+    if dead_letter_policies:
+        raise ValueError("only one dead letter policy is supported")
+
+    strategy_factory = MultistorageConsumerProcessingStrategyFactory(
+        storages,
+        max_batch_size,
+        max_batch_time_ms / 1000.0,
+        processes=processes,
+        input_block_size=input_block_size,
+        output_block_size=output_block_size,
+        metrics=metrics,
+        dead_letter_policy_creator=dead_letter_policy_creator,
+        commit_log_config=commit_log_config,
+    )
+
+    return strategy_factory
