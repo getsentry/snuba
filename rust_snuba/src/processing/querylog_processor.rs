@@ -7,7 +7,7 @@ pub type RawQueryLogKafkaJson = HashMap<String, Value>;
 type QueryList = HashMap<String, Vec<Value>>;
 // int x = 5;
 // TODO prob move to a separate file
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Default,Debug, Deserialize, Serialize)]
 pub struct ProcessedQueryLog
 {
     request_id: String,
@@ -19,6 +19,8 @@ pub struct ProcessedQueryLog
     query_list: QueryList,
 
 }
+
+
 
 fn _remove_invalid_pid(project_id: &String) -> bool {
     let pid =  project_id.parse::<i32>();
@@ -68,17 +70,29 @@ macro_rules! unwrap_string {
     };
 }
 
+macro_rules! unwrap_request {
+    ($obj:expr, $key:expr) => {
+        $obj.get("request").unwrap()
+        .as_object().unwrap()
+        .get($key).unwrap()
+    };
+}
+
 pub fn process(message: RawQueryLogKafkaJson, result: &mut ProcessedQueryLog ) {
 
-    result.request_id = message.get("request_id").unwrap().as_str().unwrap_or_default().to_string();
-    let obj: HashMap<String, Value> = HashMap::new();
-    result.request_body = unwrap_string!( obj, "request_body");
-    result.referrer = unwrap_string!( obj, "referrer");
-    result.dataset = unwrap_string!( obj, "dataset");
+    result.request_id = message.get("request").unwrap()
+                            .as_object().unwrap()
+                            .get("id").unwrap()
+                            .as_str().unwrap_or_default().to_string();
 
-
-
-    result.organization = Some(message.get("organization").unwrap().as_str().unwrap_or_default().to_string());
+    // let obj: HashMap<String, Value> = HashMap::new();
+    let unwrapped_body = unwrap_request!( message, "body").as_object();
+    result.request_body =serde_json::to_string(&unwrapped_body).unwrap_or_default();
+    result.referrer = unwrap_request!( message, "referrer").as_str().unwrap_or_default().to_string();
+    result.dataset = unwrap_string!( message, "dataset");
+    if message.get("organization").is_some() {
+        result.organization = Some(message.get("organization").unwrap().as_str().unwrap_or_default().to_string());
+    }
     match message.get("query_list") {
         Some(query_list) => {
             //let raw_query_list_map: Vec<HashMap<String, Value>> = query_list.as_array().unwrap().iter().map(|x| x.as_object().unwrap()).collect();

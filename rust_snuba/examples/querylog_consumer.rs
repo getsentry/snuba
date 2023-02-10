@@ -62,23 +62,23 @@ fn main() {
         let res = consumer.poll(Some(Duration::from_millis(2000)));
         match res.unwrap() {
             Some(x) => {
-                println!("MSG {}", x);
+                println!("\n MSG {}", x);
                 // TODO: do something with the message
                 let payload = x.payload.payload.unwrap();
 
                 // send msg x to clickhouse using Clickhouse Client
                 let json_str = String::from_utf8(payload).unwrap();
-                let json_obj: RawQueryLogKafkaJson = serde_json::from_str(&json_str);
-                match json_obj {
+                let some_json_obj: Result<RawQueryLogKafkaJson, serde_json::Error> = serde_json::from_str(&json_str);
+                match some_json_obj {
                     Ok(json_obj) => {
-                        println!("json_obj: {}", json_obj);
-                        let mut processed_result: ProcessedQueryLog = {};
-                        querylog_processor::process(json_obj,  &mut &processed_result);
-                        println!("processed_result: {}", processed_result);
+                        println!("\n json_obj: {}", serde_json::to_string(&json_obj).unwrap());
+                        let processed_result: &mut ProcessedQueryLog =  &mut ProcessedQueryLog::default();
+                        querylog_processor::process(json_obj,  processed_result);
+                        println!("\n processed_result: {:?}", processed_result);
                     }
                     Err(e) => {
-                        println!("JSON Error: {}", e);
-                        fatal!("JSON Error: {}", e);
+                        println!("\nJSON Error: {}", e);
+                        panic!("JSON Error: {}", e)
                     }
                 }
 
