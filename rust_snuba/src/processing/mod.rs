@@ -1,4 +1,5 @@
 pub mod strategies;
+pub mod querylog_processor;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{Message, Partition, Topic};

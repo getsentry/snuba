@@ -71,7 +71,7 @@ fn create_kafka_message(msg: BorrowedMessage) -> ArroyoMessage<KafkaPayload> {
     )
 }
 
-struct CustomContext {
+pub struct CustomContext {
     // This is horrible. I want to mutate callbacks (to invoke on_assign)
     // From the pre_rebalance function.
     // But pre_rebalance gets &self and not &mut self.
@@ -140,7 +140,7 @@ pub struct KafkaConsumer {
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    consumer: Option<BaseConsumer<CustomContext>>,
+    pub consumer: Option<BaseConsumer<CustomContext>>,
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
