@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -29,6 +30,8 @@ from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
+
+logger = logging.getLogger(__name__)
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -323,6 +326,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
+            return []
+        if self.__distributed_cluster_name is None:
+            logger.error(
+                "distributed_cluster_name is not set, but is_single_node is False."
+                "This is likely a configuration error. Returning empty list."
+            )
             return []
         assert (
             self.__distributed_cluster_name is not None
