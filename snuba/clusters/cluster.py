@@ -328,7 +328,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         if self.__single_node:
             return []
         if self.__distributed_cluster_name is None:
-            logger.error(
+            logger.warning(
                 "distributed_cluster_name is not set, but is_single_node is False."
                 "This is likely a configuration error. Returning empty list."
             )
