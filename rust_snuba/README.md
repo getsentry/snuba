@@ -13,6 +13,6 @@ cargo build --all-targets
 ```
 
 Run the consumer
-`snuba rust_consumer --storage querylog`
+`cargo run --bin querylog_consumer`
 or
-`./target/debug/examples/querylog_consumer`
+`./target/debug/querylog_consumer`

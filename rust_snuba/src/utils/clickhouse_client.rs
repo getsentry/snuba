@@ -7,10 +7,30 @@ pub struct ClickhouseClient {
     headers: HeaderMap<HeaderValue>,
     table: String,
 }
-
 impl ClickhouseClient {
+    pub fn new(hostname: &str, http_port: u16, table: &str) -> ClickhouseClient {
+        let mut client = ClickhouseClient {
+            client: Client::new(),
+            url: format!("http://{}:{}", hostname, http_port),
+            headers: HeaderMap::new(),
+            table: table.to_string(),
+        };
+
+        client
+            .headers
+            .insert(CONNECTION, HeaderValue::from_static("keep-alive"));
+        client
+            .headers
+            .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        client
+            .headers
+            .insert("X-ClickHouse-Database", HeaderValue::from_static("default"));
+        client
+    }
+
     pub async fn send(&self, body: String) -> Result<Response, Error> {
-        self.client
+
+        let res = self.client
             .post(self.url.clone())
             .headers(self.headers.clone())
             .body(body)
@@ -19,26 +39,26 @@ impl ClickhouseClient {
                 format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
             )])
             .send()
-            .await
+            .await;
+
+        // println!("Response status {}", res.as_ref().unwrap().text());
+        return res
+
     }
 }
 
-pub fn new(hostname: &str, http_port: u16, table: &str) -> ClickhouseClient {
-    let mut client = ClickhouseClient {
-        client: Client::new(),
-        url: format!("http://{}:{}", hostname, http_port),
-        headers: HeaderMap::new(),
-        table: table.to_string(),
-    };
 
-    client
-        .headers
-        .insert(CONNECTION, HeaderValue::from_static("keep-alive"));
-    client
-        .headers
-        .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
-    client
-        .headers
-        .insert("X-ClickHouse-Database", HeaderValue::from_static("default"));
-    client
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn it_works() -> Result<(), reqwest::Error>{
+        let client: ClickhouseClient = ClickhouseClient::new("localhost",8123, "querylog_local");
+
+        println!("{}", "running test");
+        let res = client.send("[]".to_string()).await;
+        println!("Response status {}", res.unwrap().status());
+        Ok(())
+    }
 }

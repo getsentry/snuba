@@ -8,7 +8,6 @@ use rdkafka::consumer::Consumer;
 use rdkafka::consumer::StreamConsumer;
 use std::collections::HashMap;
 use std::time::Duration;
-use rdkafka::consumer::base_consumer::BaseConsumer;
 
 use crate::backends::AssignmentCallbacks;
 use crate::backends::Consumer as ConsumerTrait;
@@ -16,16 +15,13 @@ use crate::backends::kafka::CustomContext;
 use crate::backends::kafka::KafkaConsumer;
 use crate::backends::kafka::config::KafkaConfig;
 use crate::processing::querylog_processor;
-use crate::processing::querylog_processor::ProcessedQueryLog;
 use crate::processing::querylog_processor::RawQueryLogKafkaJson;
 use crate::types::Partition;
 use crate::types::Topic;
-use crate::utils::clickhouse_client;
 use crate::utils::clickhouse_client::ClickhouseClient;
 
 
 const TIMEOUT_MS: Duration = Duration::from_millis(2000);
-const TABLE_NAME: &str = "default.querylog_local";
 
 pub struct QueryLogConsumer{
     consumer: KafkaConsumer,
@@ -66,16 +62,15 @@ impl QueryLogConsumer {
                     match some_json_obj {
                         Ok(json_obj) => {
                             println!("\n json_obj: {}", serde_json::to_string(&json_obj).unwrap());
-                            let processed_result: &mut ProcessedQueryLog =  &mut ProcessedQueryLog::default();
-                            querylog_processor::process(json_obj,  processed_result);
-                            println!("\n processed_result: {:?}", processed_result);
+                            let processed_json_body = querylog_processor::process(json_obj);
 
                             // send msg x to clickhouse using Clickhouse Client
-                            let body = serde_json::to_string(&processed_result).unwrap();
-                            self.client.send(body).await.unwrap();
+                            println!("\n processed_result:\n {}\n", processed_json_body);
+                            let resp = self.client.send(processed_json_body).await.unwrap();
+                            assert!(resp.status().is_success());
 
-                            // commit offset
-                            self.consumer.commit_positions().unwrap();
+                            // commit offset //TODO figure out how to handle offsets
+                            // self.consumer.commit_pos itions().unwrap();
                         }
                         Err(e) => {
                             println!("\nJSON Error: {}", e);
@@ -109,28 +104,5 @@ fn commit_offsets(
         .collect();
     let partition_list = TopicPartitionList::from_topic_map(&topic_map).unwrap();
     consumer.commit(&partition_list, CommitMode::Sync).unwrap();
-
-
-    // .commit(&partition_list, CommitMode::Sync).unwrap();
-}
-
-fn main() {
-
-    // TODO we can get these from the yaml file
-    let config = KafkaConfig::new_consumer_config(
-        vec!["localhost:9092".to_string()],
-        "my_group".to_string(),
-        "latest".to_string(),
-        false,
-        None,
-    );
-    // let mut consumer = KafkaConsumer::new(config);
-    let topic = Topic {
-        name: "snuba-queries".to_string(),
-    };
-    let client: ClickhouseClient = clickhouse_client::new("localhost",9000, TABLE_NAME);
-
-    let mut querylog_consumer: QueryLogConsumer = QueryLogConsumer::new(config, topic, client);
-    block_on(querylog_consumer.run());
 
 }

@@ -10,7 +10,7 @@ from snuba.environment import setup_logging, setup_sentry
 
 logger = logging.getLogger(__name__)
 RUST_ENVIRONMENT = os.environ.get("RUST_ENVIRONMENT", "debug")
-RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/examples"
+RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/"
 
 
 @click.command()
@@ -33,12 +33,9 @@ def rust_consumer(
     setup_logging(log_level)
     setup_sentry()
     logger.info("Consumer Starting")
-    # storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
 
     subprocess.run(
         [f"{RUST_PATH}/{storage_name}_consumer"],
         check=True,
-        # stdout=subprocess.STDOUT,
-        # stderr=subprocess.PIPE,
     )
