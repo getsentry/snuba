@@ -16,6 +16,9 @@ pub struct ProcessedQueryLog
     projects: Vec<String>,
     organization: Option<String>,
     query_list: QueryList,
+    timestamp: Option<u64>,
+    duration_ms: Option<u64>,
+    status: Option<String>,
 
 }
 
@@ -27,6 +30,9 @@ fn _processed_querylog_to_json(processed_querylog: &ProcessedQueryLog) -> String
     json_map.insert("dataset".to_string(), Value::String(processed_querylog.dataset.clone()));
     json_map.insert("projects".to_string(), Value::Array(processed_querylog.projects.iter().map(|x| Value::String(x.clone())).collect()));
     json_map.insert("organization".to_string(), Value::String(processed_querylog.organization.clone().unwrap_or("".to_string())));
+    json_map.insert("timestamp".to_string(), Value::Number(processed_querylog.timestamp.unwrap_or_default().into()));
+    json_map.insert("duration_ms".to_string(), Value::Number(processed_querylog.duration_ms.unwrap_or_default().into()));
+    json_map.insert("status".to_string(), Value::String(processed_querylog.status.as_ref().unwrap_or(&"".to_string()).to_string()));
 
     for (k,v) in &processed_querylog.query_list {
         json_map.insert(k.to_string(), Value::Array(v.clone()));
@@ -35,6 +41,37 @@ fn _processed_querylog_to_json(processed_querylog: &ProcessedQueryLog) -> String
 
     return serde_json::to_string(&json_arr).unwrap();
 }
+
+fn _fix_missing(processed_query_log: &mut ProcessedQueryLog, message: RawQueryLogKafkaJson){
+    // missing_fields = {}
+    let timing = message.get("timing");
+
+    match timing {
+        Some(timing) => {
+            let timestamp = timing.get("timestamp");
+            let duration_ms = timing.get("duration_ms");
+
+            if processed_query_log.timestamp.is_none() && timestamp.is_some() {
+                processed_query_log.timestamp = timestamp.unwrap().as_u64();
+            }
+            if processed_query_log.duration_ms.is_none() && duration_ms.is_some() {
+                processed_query_log.duration_ms = duration_ms.unwrap().as_u64();
+            }
+
+        }
+        None => {}
+    }
+    let status = message.get("status");
+    match status {
+        Some(status) => {
+            if processed_query_log.status.is_none() {
+                processed_query_log.status = Some(status.as_str().unwrap().to_string());
+            }
+        }
+        None => {}
+    }
+}
+
 
 
 fn _remove_invalid_pid(project_id: &String) -> bool {
@@ -134,6 +171,7 @@ pub fn process(message: RawQueryLogKafkaJson) -> String {
             let query_list_it = query_list.as_array().unwrap().iter();
             let raw_query_list_map: Vec<Map<String, Value>> = query_list_it.map(|x| x.as_object().unwrap().clone()).collect();
             extract_query_list(&raw_query_list_map, &mut result);
+            _fix_missing(&mut result, message);
             return _processed_querylog_to_json(&result);
         }
         None => todo!(),
