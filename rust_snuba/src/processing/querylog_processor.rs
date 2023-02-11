@@ -5,7 +5,6 @@ use serde_json::{Value, Map};
 
 pub type RawQueryLogKafkaJson = HashMap<String, Value>;
 type QueryList = HashMap<String, Vec<Value>>;
-// int x = 5;
 // TODO prob move to a separate file
 #[derive(Default,Debug, Deserialize, Serialize)]
 pub struct ProcessedQueryLog
@@ -52,7 +51,6 @@ fn _push_or_create_query_list(query_list_map: &mut QueryList, key: &str, query_l
 fn extract_query_list(raw_query_list_map: &Vec<Map<String,Value>>, processed_query_log: &mut ProcessedQueryLog) {
     for query_list_item in raw_query_list_map  {
         // TODO prob can get rid of this clone with lifetimes
-        // processed_query_log.query_list.get_mut("query_list").unwrap().push(query_list_item.clone());
         _push_or_create_query_list(&mut processed_query_log.query_list, "clickhouse.sql", query_list_item["sql"].clone())
     }
 }

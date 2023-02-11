@@ -23,12 +23,12 @@ impl ClickhouseClient {
     }
 }
 
-pub fn new(hostname: String, http_port: u16, table: String) -> ClickhouseClient {
+pub fn new(hostname: &str, http_port: u16, table: &str) -> ClickhouseClient {
     let mut client = ClickhouseClient {
         client: Client::new(),
         url: format!("http://{}:{}", hostname, http_port),
         headers: HeaderMap::new(),
-        table,
+        table: table.to_string(),
     };
 
     client
