@@ -260,7 +260,7 @@ class TestReplaysProcessor:
             replay_start_timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
             platform="python",
             dist="",
-            urls=["http://localhost:8001"],
+            urls=["http://127.0.0.1:8001"],
             is_archived=True,
             user_name="me",
             user_id="232",
@@ -307,7 +307,7 @@ class TestReplaysProcessor:
             replay_start_timestamp=str(int(now.timestamp())),
             platform=0,
             dist=0,
-            urls=["http://localhost:8001", None, 0],
+            urls=["http://127.0.0.1:8001", None, 0],
             is_archived=True,
             user_name=0,
             user_id=0,
@@ -332,7 +332,7 @@ class TestReplaysProcessor:
             message.serialize(), meta
         )
         assert isinstance(processed_message, InsertBatch)
-        assert processed_message.rows[0]["urls"] == ["http://localhost:8001", "0"]
+        assert processed_message.rows[0]["urls"] == ["http://127.0.0.1:8001", "0"]
         assert processed_message.rows[0]["replay_type"] is None
         assert processed_message.rows[0]["error_sample_rate"] is None
         assert processed_message.rows[0]["session_sample_rate"] is None

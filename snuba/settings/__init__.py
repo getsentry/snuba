@@ -28,7 +28,7 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
-ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 ADMIN_AUTH_JWT_AUDIENCE = ""
@@ -63,7 +63,7 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -126,7 +126,7 @@ class RedisClusterConfig(TypedDict):
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
 REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
@@ -185,7 +185,7 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
-    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "127.0.0.1:9092"),
     "security.protocol": os.environ.get("KAFKA_SECURITY_PROTOCOL", "plaintext"),
     "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
     "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
