@@ -8,7 +8,7 @@ To run the app locally:
 snuba admin
 ```
 
-The server should be running on http://localhost:1219
+The server should be running on http://127.0.0.1:1219
 
 # Developing the Javascript
 

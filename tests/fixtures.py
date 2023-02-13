@@ -335,7 +335,7 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
                             }
                         },
                         "request": {
-                            "url": "http://localhost:3000/",
+                            "url": "http://127.0.0.1:3000/",
                             "headers": {
                                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
                             },

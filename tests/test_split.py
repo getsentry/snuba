@@ -75,7 +75,7 @@ def test_no_split(
         return QueryResult({}, {})
 
     strategy = SimpleQueryPlanExecutionStrategy(
-        ClickhouseCluster("localhost", 1024, "default", "", "default", 80, set(), True),
+        ClickhouseCluster("127.0.0.1", 1024, "default", "", "default", 80, set(), True),
         [],
         [
             ColumnSplitQueryStrategy(
@@ -213,7 +213,7 @@ def test_col_split(
     )
 
     strategy = SimpleQueryPlanExecutionStrategy(
-        ClickhouseCluster("localhost", 1024, "default", "", "default", 80, set(), True),
+        ClickhouseCluster("127.0.0.1", 1024, "default", "", "default", 80, set(), True),
         [],
         [
             ColumnSplitQueryStrategy(id_column, project_column, timestamp_column),

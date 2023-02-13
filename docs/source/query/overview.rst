@@ -153,7 +153,7 @@ Sending a test query through the web UI
 =======================================
 
 Snuba has a minimal web UI you can use to send queries. You can run Snuba
-locally and the web UI will be accessible at ``http://localhost:1218/[DATASET NAME]/snql``.
+locally and the web UI will be accessible at ``http://127.0.0.1:1218/[DATASET NAME]/snql``.
 
 .. image:: /_static/query/snubaUI.png
 
@@ -222,7 +222,7 @@ The complete version looks like this (in debug mode) ::
         "stats": {
             "clickhouse_table": "errors_local",
             "final": false,
-            "referrer": "http://localhost:1218/events/snql",
+            "referrer": "http://127.0.0.1:1218/events/snql",
             "sample": null,
             "project_rate": 0,
             "project_concurrent": 1,
@@ -275,7 +275,7 @@ successful query are present.
 Creating a Subscription query
 =============================
 
-Send the payload as a POST to  ``localhost:1218/[DATASET NAME]/[ENTITY NAME]/subscriptions``.
+Send the payload as a POST to  ``127.0.0.1:1218/[DATASET NAME]/[ENTITY NAME]/subscriptions``.
 
 Request Format
 ===============

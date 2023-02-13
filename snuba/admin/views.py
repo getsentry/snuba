@@ -239,9 +239,9 @@ def kafka_topics() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "localhost", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
+#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
 #  -H 'Content-Type: application/json' \
-#  http://localhost:1219/run_clickhouse_system_query
+#  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
@@ -282,7 +282,7 @@ def clickhouse_system_query() -> Response:
 #
 # curl -X POST \
 #  -H 'Content-Type: application/json' \
-#  http://localhost:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
+#  http://127.0.0.1:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
 @application.route("/clickhouse_trace_query", methods=["POST"])
 def clickhouse_trace_query() -> Response:
     req = json.loads(request.data)
