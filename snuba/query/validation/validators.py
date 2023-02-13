@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
@@ -18,10 +19,12 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Or
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet, Date, DateTime
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment_metrics, "query.validators")
 
 
 class ColumnValidationMode(Enum):
@@ -360,7 +363,16 @@ class DatetimeConditionValidator(QueryValidator):
                         if isinstance(rhs, Literal):
                             if not isinstance(rhs.value, datetime):
                                 lhs = match.expression("column")
-                                raise InvalidQueryException(
+                                # TODO: change this to a proper exception after ensuring the product isn't
+                                # passing bad queries
+                                metrics.increment(
+                                    "datetime_condition_error",
+                                    tags={
+                                        "column": str(lhs),
+                                        "entity": query.get_from_clause().key.value,
+                                    },
+                                )
+                                logger.warning(
                                     f"{lhs} requires datetime conditions: '{rhs.value}' is not a valid datetime"
                                 )
                         elif isinstance(rhs, FunctionCall):
@@ -370,6 +382,15 @@ class DatetimeConditionValidator(QueryValidator):
                                     param.value, datetime
                                 ):
                                     lhs = match.expression("column")
-                                    raise InvalidQueryException(
+                                    # TODO: change this to a proper exception after ensuring the product isn't
+                                    # passing bad queries
+                                    metrics.increment(
+                                        "datetime_condition_error",
+                                        tags={
+                                            "column": str(lhs),
+                                            "entity": query.get_from_clause().key.value,
+                                        },
+                                    )
+                                    logger.warning(
                                         f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
                                     )
