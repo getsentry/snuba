@@ -16,6 +16,7 @@ from snuba.admin.clickhouse.system_queries import validate_system_query
         "SELECT * FROM system.clusters WHERE cluster == 'my_cluster'",  # where clause
         "SELECT * FROM system.clusters WHERE toInt32(shard_num) == 1",  # where clause with fn
         "SELECT * FROM system.clusters LIMIT 100",  # limit
+        "SELECT empty('str') FROM system.clusters LIMIT 100",  # literal str params
     ],
 )
 def test_valid_system_query(sql_query: str) -> None:
