@@ -1,5 +1,6 @@
 import itertools
 import logging
+import random
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -551,13 +552,15 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
-    validate: bool,
+    validate: float,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
-        decoded = codec.decode(message.payload.value, validate=validate)
+        decoded = codec.decode(
+            message.payload.value, validate=random.random() < validate
+        )
         result = processor.process_message(
             decoded,
             KafkaMessageMetadata(
