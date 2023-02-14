@@ -32,10 +32,7 @@ from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
     ParallelTransformStep,
-)
-from arroyo.processing.strategies import ProcessingStrategy
-from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
-from arroyo.processing.strategies import (
+    ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
     RunTaskInThreads,
@@ -103,16 +100,13 @@ class BytesInsertBatch(NamedTuple):
             return type(self), (self.rows, self.origin_timestamp)
 
 
-class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
+class InsertBatchWriter:
     def __init__(self, writer: BatchWriter[JSONRow], metrics: MetricsBackend) -> None:
         self.__writer = writer
         self.__metrics = metrics
 
         self.__messages: MutableSequence[Message[BytesInsertBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
@@ -186,16 +180,13 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
         pass
 
 
-class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
+class ReplacementBatchWriter:
     def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
         self.__producer = producer
         self.__topic = topic
 
         self.__messages: MutableSequence[Message[ReplacementBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[ReplacementBatch]) -> None:
         assert not self.__closed
@@ -249,7 +240,7 @@ class ProcessedMessageBatchWriter:
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
-        replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
+        replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
@@ -260,12 +251,6 @@ class ProcessedMessageBatchWriter:
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
-
-    def poll(self) -> None:
-        self.__insert_batch_writer.poll()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.poll()
 
     def submit(
         self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]
@@ -427,10 +412,6 @@ class MultistorageCollector:
             ],
         ] = defaultdict(list)
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-
-    def poll(self) -> None:
-        for step in self.__steps.values():
-            step.poll()
 
     def submit(
         self,
@@ -780,7 +761,7 @@ class MultistorageConsumerProcessingStrategyFactory(
 
         transform_function = self.__process_message_fn
 
-        inner_strategy: ProcessingStep[MultistorageKafkaPayload]
+        inner_strategy: ProcessingStrategy[MultistorageKafkaPayload]
 
         if self.__processes is None:
             inner_strategy = TransformStep(transform_function, collect)
