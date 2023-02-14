@@ -14,7 +14,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     """
 
-    blocking = True
+    blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [

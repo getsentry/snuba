@@ -4,7 +4,7 @@ from snuba.web.db_query import _get_cache_partition, _get_cache_wait_timeout
 
 
 def test_cache_partition() -> None:
-    pool = ClickhousePool("localhost", 9000, "", "", "")
+    pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
     reader1 = NativeDriverReader(None, pool, None)
     reader2 = NativeDriverReader(None, pool, None)
 
@@ -23,7 +23,7 @@ def test_cache_partition() -> None:
 
 
 def test_cache_wait_timeout() -> None:
-    pool = ClickhousePool("localhost", 9000, "", "", "")
+    pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
     default_reader = NativeDriverReader(None, pool, None)
     tiger_errors_reader = NativeDriverReader("tiger_errors", pool, None)
     tiger_transactions_reader = NativeDriverReader("tiger_transactions", pool, None)
