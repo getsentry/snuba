@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Add the materialized columns required for the Discover merge table.
     """
@@ -56,7 +56,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column(
                     "timestamp", DateTime(Modifiers(materialized="finish_ts"))
                 ),
-                after="title",
+                after=("type" if table_name == "transactions_local" else "title"),
             ),
         ]
 

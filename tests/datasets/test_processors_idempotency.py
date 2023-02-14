@@ -8,9 +8,18 @@ from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.processors.transactions_processor import (
     TransactionsMessageProcessor,
 )
-from snuba.datasets.storages.errors_common import promoted_tag_columns
 from snuba.processor import InsertEvent, MessageProcessor
 from tests.fixtures import get_raw_error_message, get_raw_transaction_message
+
+promoted_tag_columns = {
+    "environment": "environment",
+    "sentry:release": "release",
+    "sentry:dist": "dist",
+    "sentry:user": "user",
+    "transaction": "transaction_name",
+    "level": "level",
+}
+
 
 test_data = [
     pytest.param(

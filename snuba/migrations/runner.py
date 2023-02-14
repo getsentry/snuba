@@ -23,7 +23,7 @@ from snuba.migrations.errors import (
 )
 from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
-from snuba.migrations.operations import SqlOperation
+from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
 
 logger = logging.getLogger("snuba.migrations")
@@ -440,11 +440,15 @@ class Runner:
 
         for migration in migrations:
             if isinstance(migration, ClickhouseNodeMigration):
-                operations = (
-                    migration.forwards_local()
-                    if node_type == ClickhouseNodeType.LOCAL
-                    else migration.forwards_dist()
-                )
+                operations = [
+                    op
+                    for op in migration.forwards_ops()
+                    if (
+                        op.target == OperationTarget.LOCAL
+                        if node_type == ClickhouseNodeType.LOCAL
+                        else op.target == OperationTarget.DISTRIBUTED
+                    )
+                ]
 
                 for sql_op in operations:
                     if isinstance(sql_op, SqlOperation):

@@ -2,8 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
+from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.storage import Storage, WritableTableStorage
+from snuba.datasets.storage import (
+    EntityStorageConnection,
+    Storage,
+    WritableTableStorage,
+)
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -26,18 +32,18 @@ class Entity(Describable, ABC):
     def __init__(
         self,
         *,
-        storages: Sequence[Storage],
+        storages: Sequence[EntityStorageConnection],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
-        writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
+        subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
+        subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
-        self.__writable_storage = writable_storage
 
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
@@ -45,6 +51,8 @@ class Entity(Describable, ABC):
         self.__data_model = EntityColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
+        self.__subscription_processors = subscription_processors
+        self.__subscription_validators = subscription_validators
         self.required_time_column = required_time_column
 
         columns_exist_validator = EntityContainsColumnsValidator(
@@ -93,11 +101,30 @@ class Entity(Describable, ABC):
 
     def get_all_storages(self) -> Sequence[Storage]:
         """
-        Returns all storages for this entity.
+        Returns all storage and mappers for this entity.
         This method should be used for schema bootstrap and migrations.
         It is not supposed to be used during query processing.
         """
+        return [storage_connection.storage for storage_connection in self.__storages]
+
+    def get_all_storage_connections(self) -> Sequence[EntityStorageConnection]:
+        """
+        Returns all storage and mappers for this entity.
+        """
         return self.__storages
+
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+        """
+        Temporarily support getting the writable storage from an entity.
+        Once consumers/replacers no longer reference entity, this can be removed
+        and entity can have more than one writable storage.
+        """
+        for storage_connection in self.__storages:
+            if storage_connection.is_writable and isinstance(
+                storage_connection.storage, WritableTableStorage
+            ):
+                return storage_connection.storage
+        return None
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """
@@ -117,13 +144,21 @@ class Entity(Describable, ABC):
         """
         return self.__validators
 
-    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+    def get_subscription_processors(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
         """
-        Temporarily support getting the writable storage from an entity.
-        Once consumers/replacers no longer reference entity, this can be removed
-        and entity can have more than one writable storage.
+        Provides an entity subscription processors to be run on on subscription queries.
         """
-        return self.__writable_storage
+        return self.__subscription_processors
+
+    def get_subscription_validators(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+        """
+        Provides an entity subscription validators to be run on on subscription queries.
+        """
+        return self.__subscription_validators
 
     def describe(self) -> Description:
         relationships = []

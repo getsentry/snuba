@@ -134,7 +134,7 @@ def test_run_optimize_with_partition_tracker() -> None:
         storage=storage,
         database=database,
         parallel=1,
-        clickhouse_host="localhost",
+        clickhouse_host="127.0.0.1",
         tracker=tracker,
     )
     assert num_optimized == 0
@@ -147,7 +147,7 @@ def test_run_optimize_with_partition_tracker() -> None:
         storage=storage,
         database=database,
         parallel=1,
-        clickhouse_host="localhost",
+        clickhouse_host="127.0.0.1",
         tracker=tracker,
     )
     assert num_optimized == original_num_partitions
@@ -239,7 +239,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
                 storage=storage,
                 database=database,
                 parallel=1,
-                clickhouse_host="localhost",
+                clickhouse_host="127.0.0.1",
                 tracker=tracker,
             )
             assert num_optimized == original_num_partitions
@@ -270,7 +270,7 @@ def test_merge_info() -> None:
         mock_clickhouse_execute.return_value = merge_query_result
         merge_info = optimize.get_current_large_merges(
             clickhouse=ClickhousePool(
-                "localhost", 9000, "user", "password", "database"
+                "127.0.0.1", 9000, "user", "password", "database"
             ),
             database="default",
             table="errors_local",
@@ -295,7 +295,7 @@ def test_merge_info() -> None:
         )
         busy = optimize.is_busy_merging(
             clickhouse=ClickhousePool(
-                "localhost", 9000, "user", "password", "database"
+                "127.0.0.1", 9000, "user", "password", "database"
             ),
             database="default",
             table="errors_local",

@@ -1,4 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Sequence
+
+from snuba.admin.auth_roles import Role
 
 
 @dataclass
@@ -10,3 +13,4 @@ class AdminUser:
 
     email: str
     id: str
+    roles: Sequence[Role] = field(default_factory=list)

@@ -45,3 +45,15 @@ class MetricsWrapper(MetricsBackend):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         self.__backend.timing(self.__merge_name(name), value, self.__merge_tags(tags))
+
+    def events(
+        self,
+        title: str,
+        text: str,
+        alert_type: str,
+        priority: str,
+        tags: Optional[Tags] = None,
+    ) -> None:
+        self.__backend.events(
+            title, text, alert_type, priority, self.__merge_tags(tags)
+        )

@@ -1,14 +1,12 @@
-from typing import TYPE_CHECKING, Dict, Sequence
+from typing import Dict, Sequence
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.functions import AGGREGATION_FUNCTIONS
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-
-if TYPE_CHECKING:
-    from snuba.datasets.storage import ReadableTableStorage
 
 
 def _col_is_nullable(col: FlattenedColumn) -> bool:
@@ -16,6 +14,9 @@ def _col_is_nullable(col: FlattenedColumn) -> bool:
     if isinstance(modifiers, SchemaModifiers):
         return modifiers.nullable
     return False
+
+
+StorageKeyStr = str
 
 
 class NullColumnCaster(ClickhouseQueryProcessor):
@@ -51,12 +52,26 @@ class NullColumnCaster(ClickhouseQueryProcessor):
     And clickhouse will not throw an error since the column will be interpreted as nullable
 
 
+    Usage:
+        The initialization arguments of this processor are the string
+        representation of the storage keys e.g.
+
+        NullColumnCaster(["errors", "transactions"])
+
     """
 
     def _find_mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
+        # This has to be imported here since the storage factory will also initialize this query processor
+        # and importing it at the top will create an import cycle
+
+        # This is a strange query processor because it takes storages as argument. We don't have
+        # good first-class support for merge tables in snuba atm (12/06/2022) which makes us rely on this hack
+        from snuba.datasets.storages.factory import get_storage
+
         mismatched_col_name_to_col: Dict[str, FlattenedColumn] = {}
         col_name_to_nullable: Dict[str, bool] = {}
-        for table_storage in self.__merge_table_sources:
+        for table_storage_key in self.__merge_table_sources_keys:
+            table_storage = get_storage(StorageKey(table_storage_key))
             for col in table_storage.get_schema().get_columns():
                 col_is_nullable = _col_is_nullable(col)
                 other_storage_column_is_nullable = col_name_to_nullable.get(
@@ -71,18 +86,24 @@ class NullColumnCaster(ClickhouseQueryProcessor):
 
         return mismatched_col_name_to_col
 
-    def __init__(self, merge_table_sources: Sequence["ReadableTableStorage"]):
+    def __init__(self, merge_table_sources: Sequence[StorageKeyStr]):
         """
         Args:
-            merge_table_sources: sequence of the storages which make up the merge table,
+            merge_table_sources: sequence of the storage keys which make up the merge table,
             This is necessary to find which fields need to be cast to nullable
 
         """
-        self.__merge_table_sources = merge_table_sources
-        self.__mismatched_null_columns = self._find_mismatched_null_columns()
+        self.__merge_table_sources_keys = merge_table_sources
+        self.__mismatched_null_columns: Dict[str, FlattenedColumn] = {}
 
     @property
     def mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
+        # The first time the query processor is run, we calculate the mismatched null columns
+        # which never change. We don't do this at initialization time because there is no guarantee that
+        # all the storages will be loaded at the time this query processor is
+
+        if not self.__mismatched_null_columns:
+            self.__mismatched_null_columns = self._find_mismatched_null_columns()
         return self.__mismatched_null_columns
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:

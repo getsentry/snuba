@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from random import randint
 from typing import Iterator, Optional
 
 from confluent_kafka import KafkaError
@@ -33,6 +32,7 @@ class QueryAttributionData:
 class AttributionData:
     app_id: AppID
     referrer: str
+    parent_api: str
     request_id: str
     timestamp: int
     duration_ms: int
@@ -46,6 +46,7 @@ def log_attribution_to_metrics(attr_data: AttributionData) -> None:
         tags = {
             "app_id": attr_data.app_id.key,
             "referrer": attr_data.referrer,
+            "parent_api": attr_data.parent_api,
             "dataset": attr_data.dataset,
             "entity": attr_data.entity,
             "table": q.table,
@@ -97,10 +98,6 @@ def record_attribution(attr_data: AttributionData) -> None:
             "app_id"
         ] = attr_data.app_id.key  # Don't record the entire AppID, just the key
         data_str = safe_dumps(data)
-
-        # Log out a small number of rows temporarily to validate what is being sent to the consumer
-        if randint(1, 10000) == 1:
-            logger.info(data_str)
 
         producer = _attribution_producer()
         producer.poll(0)  # trigger queued delivery callbacks

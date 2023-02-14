@@ -35,38 +35,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             ]
         }
 
-        from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
-        from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
-        from snuba.datasets.discover import DiscoverDataset
-        from snuba.datasets.events import EventsDataset
-        from snuba.datasets.functions import FunctionsDataset
-        from snuba.datasets.metrics import MetricsDataset
-        from snuba.datasets.outcomes import OutcomesDataset
-        from snuba.datasets.outcomes_raw import OutcomesRawDataset
-        from snuba.datasets.profiles import ProfilesDataset
-        from snuba.datasets.replays import ReplaysDataset
-        from snuba.datasets.sessions import SessionsDataset
-        from snuba.datasets.transactions import TransactionsDataset
-
-        self._dataset_map.update(
-            {
-                "discover": DiscoverDataset(),
-                "events": EventsDataset(),
-                "groupassignee": GroupAssigneeDataset(),
-                "groupedmessage": GroupedMessageDataset(),
-                "metrics": MetricsDataset(),
-                "outcomes": OutcomesDataset(),
-                "outcomes_raw": OutcomesRawDataset(),
-                "sessions": SessionsDataset(),
-                "transactions": TransactionsDataset(),
-                "profiles": ProfilesDataset(),
-                "functions": FunctionsDataset(),
-                "replays": ReplaysDataset(),
-            }
-        )
-
         self._dataset_map.update(self._config_built_datasets)
-
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
     def iter_all(self) -> Generator[Dataset, None, None]:

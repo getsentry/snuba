@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
@@ -11,17 +12,22 @@ from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
+from snuba.admin.audit_log.action import AuditLogAction
+from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
-from snuba.admin.migrations_policies import check_migration_perms
-from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
+from snuba.admin.migrations_policies import (
+    check_migration_perms,
+    get_migration_group_policies,
+)
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -35,7 +41,7 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -44,8 +50,8 @@ logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
-notification_client = RuntimeConfigAutoClient()
 runner = Runner()
+audit_log = AuditLog()
 
 
 @application.errorhandler(UnauthorizedException)
@@ -84,18 +90,17 @@ def health() -> Response:
 
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
+    group_policies = get_migration_group_policies(g.user)
+    allowed_groups = group_policies.keys()
+
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
-    allowed_groups: Sequence[MigrationGroup] = [
-        group
-        for group in get_active_migration_groups()
-        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
-    ]
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-    for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
+    for group, migrations in run_migration_checks_and_policies(group_policies, runner):
         migration_ids = [asdict(m) for m in migrations]
         res.append({"group": group.value, "migration_ids": migration_ids})
+
     return make_response(jsonify(res), 200)
 
 
@@ -157,7 +162,18 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     fake = request.args.get("fake", False, type=str_to_bool)
     dry_run = request.args.get("dry_run", False, type=str_to_bool)
 
+    user = request.headers.get(USER_HEADER_KEY)
+
     def do_action() -> None:
+        if not dry_run:
+            audit_log.record(
+                user or "",
+                AuditLogAction.RAN_MIGRATION_STARTED
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION_STARTED,
+                {"migration": str(migration_key), "force": force, "fake": fake},
+            )
+
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
         else:
@@ -165,10 +181,28 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 migration_key, force=force, fake=fake, dry_run=dry_run
             )
 
+        if not dry_run:
+            audit_log.record(
+                user or "",
+                AuditLogAction.RAN_MIGRATION_COMPLETED
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+                {"migration": str(migration_key), "force": force, "fake": fake},
+                notify=True,
+            )
+
     try:
         # temporarily redirect stdout to a buffer so we can return it
         with io.StringIO() as output:
-            with redirect_stdout(output):
+            # write output to both the buffer and stdout
+            class OutputRedirector(io.StringIO):
+                stdout = sys.stdout
+
+                def write(self, s: str) -> int:
+                    self.stdout.write(s)
+                    return output.write(s)
+
+            with redirect_stdout(OutputRedirector()):
                 do_action()
             return make_response(jsonify({"stdout": output.getvalue()}), 200)
 
@@ -187,7 +221,13 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
 
 @application.route("/clickhouse_queries")
 def clickhouse_queries() -> Response:
-    res = [q.to_json() for q in SystemQuery.all_queries()]
+    res = [q.to_json() for q in SystemQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/querylog_queries")
+def querylog_queries() -> Response:
+    res = [q.to_json() for q in QuerylogQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -199,9 +239,9 @@ def kafka_topics() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "localhost", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
+#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
 #  -H 'Content-Type: application/json' \
-#  http://localhost:1219/run_clickhouse_system_query
+#  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
@@ -242,7 +282,7 @@ def clickhouse_system_query() -> Response:
 #
 # curl -X POST \
 #  -H 'Content-Type: application/json' \
-#  http://localhost:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
+#  http://127.0.0.1:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
 @application.route("/clickhouse_trace_query", methods=["POST"])
 def clickhouse_trace_query() -> Response:
     req = json.loads(request.data)
@@ -416,10 +456,11 @@ def configs() -> Response:
             "type": evaluated_type,
         }
 
-        notification_client.notify(
-            RuntimeConfigAction.ADDED,
-            {"option": key, "old": None, "new": evaluated_value},
-            user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.ADDED_OPTION,
+            {"option": key, "new": evaluated_value},
+            notify=True,
         )
 
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
@@ -470,10 +511,11 @@ def config(config_key: str) -> Response:
         if request.args.get("keepDescription") is None:
             state.delete_config_description(config_key, user=user)
 
-        notification_client.notify(
-            RuntimeConfigAction.REMOVED,
-            {"option": config_key, "old": old, "new": None},
-            user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.REMOVED_OPTION,
+            {"option": config_key, "old": str(old) if not old else old},
+            notify=True,
         )
 
         return Response("", 200)
@@ -523,10 +565,15 @@ def config(config_key: str) -> Response:
         evaluated_type = get_config_type_from_value(evaluated_value)
 
         # Send notification
-        notification_client.notify(
-            RuntimeConfigAction.UPDATED,
-            {"option": config_key, "old": old, "new": evaluated_value},
-            user=user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.UPDATED_OPTION,
+            {
+                "option": config_key,
+                "old": str(old) if not old else old,
+                "new": evaluated_value,
+            },
+            notify=True,
         )
 
         config = {

@@ -11,13 +11,13 @@ from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
+    enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
     extract_http,
     extract_nested,
     extract_user,
-    override_and_enforce_retention,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
@@ -85,8 +85,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             # We are purposely using a naive datetime here to work with the
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
-            retention_days = override_and_enforce_retention(
-                event["project_id"],
+            retention_days = enforce_retention(
                 event.get("retention_days"),
                 datetime.utcfromtimestamp(data["timestamp"]),
             )
@@ -254,6 +253,12 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             if app_start_type is not None:
                 processed["app_start_type"] = app_start_type
 
+        profile_context = contexts.get("profile")
+        if profile_context is not None:
+            profile_id = profile_context.get("profile_id")
+            if profile_id is not None:
+                processed["profile_id"] = str(uuid.UUID(profile_id))
+
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             sanitized_contexts
@@ -396,6 +401,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         app_ctx = sanitized_context.get("app", {})
         if app_ctx is not None:
             app_ctx.pop("start_type", None)
+
+        # The profile_id is promoted as a column, so no need to store it
+        # again in the context array
+        profile_ctx = sanitized_context.get("profile", {})
+        profile_ctx.pop("profile_id", None)
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()

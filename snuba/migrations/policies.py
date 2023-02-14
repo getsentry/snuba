@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 
 from snuba.migrations.groups import get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.settings import MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
 from snuba.utils.registered_class import RegisteredClass
 
 
@@ -63,12 +65,20 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
         return False if migration.blocking else True
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
-        status, _ = Runner().get_status(migration_key)
+        status, timestamp = Runner().get_status(migration_key)
+        migration = get_group_loader(migration_key.group).load_migration(
+            migration_key.migration_id
+        )
         if status == Status.IN_PROGRESS:
-            migration = get_group_loader(migration_key.group).load_migration(
-                migration_key.migration_id
-            )
             return False if migration.blocking else True
+
+        if status == Status.COMPLETED and timestamp:
+            oldest_allowed_timestamp = datetime.now() + timedelta(
+                hours=-MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
+            )
+            if timestamp >= oldest_allowed_timestamp:
+                return False if migration.blocking else True
+
         return False
 
 

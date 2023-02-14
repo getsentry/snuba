@@ -6,6 +6,7 @@ from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
@@ -58,6 +59,7 @@ def run_migrations() -> Iterator[None]:
     from snuba.migrations.runner import Runner
 
     try:
+        reset_dataset_factory()
         Runner().run_all(force=True)
         yield
     finally:

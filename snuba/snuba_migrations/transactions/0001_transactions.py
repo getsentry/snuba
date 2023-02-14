@@ -37,6 +37,8 @@ columns: List[Column[Modifiers]] = [
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
+    Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
     Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
     Column("ip_address_v6", IPv6(Modifiers(nullable=True))),
     Column("user", String(Modifiers(default="''"))),
@@ -44,8 +46,6 @@ columns: List[Column[Modifiers]] = [
     Column("user_id", String(Modifiers(nullable=True))),
     Column("user_name", String(Modifiers(nullable=True))),
     Column("user_email", String(Modifiers(nullable=True))),
-    Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
-    Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column("_tags_flattened", String()),
     Column("contexts", Nested([("key", String()), ("value", String())])),
@@ -58,7 +58,7 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:

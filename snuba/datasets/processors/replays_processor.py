@@ -67,6 +67,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["environment"] = maybe(to_string, replay_event.get("environment"))
         processed["dist"] = maybe(to_string, replay_event.get("dist"))
         processed["platform"] = maybe(to_string, replay_event["platform"])
+        processed["replay_type"] = maybe(
+            to_enum(["session", "error"]), replay_event.get("replay_type")
+        )
 
         # Archived can only be 1 or null.
         processed["is_archived"] = (
@@ -135,6 +138,12 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["device_brand"] = maybe(to_string, device_context.get("brand"))
         processed["device_family"] = maybe(to_string, device_context.get("family"))
         processed["device_model"] = maybe(to_string, device_context.get("model"))
+
+        replay = contexts.get("replay", {})
+        processed["error_sample_rate"] = maybe(float, replay.get("error_sample_rate"))
+        processed["session_sample_rate"] = maybe(
+            float, replay.get("session_sample_rate")
+        )
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -240,6 +249,16 @@ def to_string(value: Any) -> str:
         return ""
     else:
         return _encode_utf8(str(value))
+
+
+def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
+    def inline(value: Any) -> str | None:
+        for enum in enumeration:
+            if value == enum:
+                return enum
+        return None
+
+    return inline
 
 
 def to_capped_list(metric_name: str, value: Any) -> list[Any]:

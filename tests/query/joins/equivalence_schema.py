@@ -76,9 +76,10 @@ class Events(FakeEntity):
                     equivalences=[],
                 ),
             },
-            writable_storage=None,
             validators=None,
             required_time_column=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
 
@@ -102,9 +103,10 @@ class GroupedMessage(FakeEntity):
                     equivalences=[],
                 ),
             },
-            writable_storage=None,
             validators=None,
             required_time_column=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )
 
 
@@ -128,7 +130,8 @@ class GroupAssignee(FakeEntity):
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
             },
-            writable_storage=None,
             validators=None,
             required_time_column=None,
+            subscription_processors=None,
+            subscription_validators=None,
         )

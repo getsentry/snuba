@@ -145,17 +145,11 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             return self._alias(f"({self.__visit_params(exp.parameters)})", exp.alias)
 
         elif exp.function_name == BooleanFunctions.AND:
-            current_level = get_first_level_and_conditions(exp)
-            if self._parsing_context.sort_fields and isinstance(current_level, list):
-                current_level.sort()
-            formatted = (c.accept(self) for c in current_level)
+            formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
             return " AND ".join(formatted)
 
         elif exp.function_name == BooleanFunctions.OR:
-            current_level = get_first_level_or_conditions(exp)
-            if self._parsing_context.sort_fields and isinstance(current_level, list):
-                current_level.sort()
-            formatted = (c.accept(self) for c in current_level)
+            formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"

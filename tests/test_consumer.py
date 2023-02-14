@@ -8,10 +8,8 @@ from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -22,10 +20,14 @@ from snuba.consumers.consumer import (
     ReplacementBatchWriter,
     process_message,
 )
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_cdc_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -34,10 +36,12 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 def test_streaming_consumer_strategy() -> None:
     messages = (
         Message(
-            Partition(Topic("events"), 0),
-            i,
-            KafkaPayload(None, b"{}", []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"{}", []),
+                Partition(Topic("events"), 0),
+                i,
+                datetime.now(),
+            )
         )
         for i in itertools.count()
     )
@@ -67,7 +71,9 @@ def test_streaming_consumer_strategy() -> None:
 
     factory = KafkaConsumerStrategyFactory(
         None,
-        functools.partial(process_message, processor, "consumer_group"),
+        functools.partial(
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS, False
+        ),
         write_step,
         max_batch_size=10,
         max_batch_time=60,
@@ -149,20 +155,21 @@ def test_multistorage_strategy(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
 ) -> None:
-    from snuba.datasets.storages import groupassignees, groupedmessages
     from tests.datasets.cdc.test_groupassignee import TestGroupassignee
     from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
+
+    groupassignees_storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
+    groupedmessages_storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
 
     commit = Mock()
     partitions = Mock()
 
-    storages = [groupassignees.storage, groupedmessages.storage]
+    storages = [groupassignees_storage, groupedmessages_storage]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
         storages,
         10,
         10,
-        False,
         processes,
         input_block_size,
         output_block_size,
@@ -176,25 +183,25 @@ def test_multistorage_strategy(
         KafkaPayload(
             None,
             json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
-            [("table", groupassignees.storage.get_postgres_table().encode("utf8"))],
+            [("table", groupassignees_storage.get_postgres_table().encode("utf8"))],
         ),
         KafkaPayload(
             None,
             json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
-            [("table", groupedmessages.storage.get_postgres_table().encode("utf8"))],
+            [("table", groupedmessages_storage.get_postgres_table().encode("utf8"))],
         ),
     ]
 
     now = datetime.now()
 
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now)
+        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
         for offset, payload in enumerate(payloads)
     ]
 
     with assert_changes(
-        lambda: get_row_count(groupassignees.storage), 0, 1
-    ), assert_changes(lambda: get_row_count(groupedmessages.storage), 0, 1):
+        lambda: get_row_count(groupedmessages_storage), 0, 1
+    ), assert_changes(lambda: get_row_count(groupedmessages_storage), 0, 1):
 
         for message in messages:
             strategy.submit(message)
@@ -202,18 +209,18 @@ def test_multistorage_strategy(
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): Position(3, now)})],
+            [
+                call({Partition(topic=Topic(name="topic"), index=0): 3}),
+                call({}, force=True),
+            ],
         ):
             strategy.close()
             strategy.join()
 
 
 def test_metrics_writing_e2e() -> None:
-    from snuba.datasets.storages.metrics import (
-        distributions_storage,
-        polymorphic_bucket,
-    )
-
+    distributions_storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS)
+    polymorphic_bucket = get_writable_storage(StorageKey.METRICS_RAW)
     dist_message = json.dumps(
         {
             "org_id": 1,
@@ -235,13 +242,13 @@ def test_metrics_writing_e2e() -> None:
     storages = [polymorphic_bucket]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages, 10, 10, False, None, None, None, TestingMetricsBackend(), None, None
+        storages, 10, 10, None, None, None, TestingMetricsBackend(), None, None
     ).create_with_partitions(commit, partitions)
 
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
     now = datetime.now()
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now)
+        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
         for offset, payload in enumerate(payloads)
     ]
 
@@ -255,7 +262,10 @@ def test_metrics_writing_e2e() -> None:
         with assert_changes(
             lambda: commit.call_args_list,
             [],
-            [call({Partition(Topic("topic"), 0): Position(1, now)})],
+            [
+                call({Partition(Topic("topic"), 0): 1}),
+                call({}, force=True),
+            ],
         ):
             strategy.close()
             strategy.join()

@@ -28,8 +28,8 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
@@ -48,9 +48,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    InvalidSubscriptionError,
-)
+from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -172,7 +170,13 @@ def check_clickhouse(
 
     except UndefinedClickhouseCluster as err:
         if metric_tags is not None and isinstance(err.extra_data, dict):
-            metric_tags.update(err.extra_data)
+            # Be a little defensive here, since it's not always obvious this extra data
+            # is being passed to metrics, and we might want non-string values in the
+            # exception data.
+            for k, v in err.extra_data.items():
+                if isinstance(v, str):
+                    metric_tags[k] = v
+
         logger.error(err)
         return False
 
@@ -386,9 +390,33 @@ def config_changes() -> RespTuple:
     )
 
 
+@application.route("/health_envoy")
+def health_envoy() -> Response:
+    """K8s can decide to shut down the pod, at which point it will write the down file.
+    This down file signals that we have to drain the pod, and not accept any new traffic.
+    In SaaS, envoy is the thing that will decided to route traffic to this node or not. It
+    uses this endpoint to make that decision.
+
+    This differs from the generic health endpoint because the pod can still be healthy
+    but just not accepting traffic. That way k8s will not restart it until it is drained
+    """
+
+    down_file_exists = check_down_file_exists()
+
+    body: Mapping[str, Union[str, bool]]
+    if not down_file_exists:
+        status = 200
+    else:
+        status = 503
+
+    if status != 200:
+        metrics.increment("healthcheck_envoy_failed")
+    return Response(json.dumps({}), status, {"Content-Type": "application/json"})
+
+
 @application.route("/health")
 def health() -> Response:
-
+    start = time.time()
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
 
@@ -405,8 +433,8 @@ def health() -> Response:
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
-    if not down_file_exists and clickhouse_health:
-        body = {"status": "ok"}
+    if clickhouse_health:
+        body = {"status": "ok", "down_file_exists": down_file_exists}
         status = 200
     else:
         body = {
@@ -418,7 +446,9 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-
+    metrics.timing(
+        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+    )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
@@ -655,10 +685,12 @@ if application.debug or application.testing:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, http_request.data, []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, http_request.data, []),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
         type_ = record[1]
@@ -666,38 +698,55 @@ if application.debug or application.testing:
         storage = entity.get_writable_storage()
         assert storage is not None
 
-        if type_ == "insert":
-            from arroyo.processing.strategies.factory import (
-                KafkaConsumerStrategyFactory,
-            )
+        try:
+            if type_ == "insert":
+                from snuba.consumers.consumer import build_batch_writer, process_message
+                from snuba.consumers.strategy_factory import (
+                    KafkaConsumerStrategyFactory,
+                )
 
-            from snuba.consumers.consumer import build_batch_writer, process_message
+                table_writer = storage.get_table_writer()
+                stream_loader = table_writer.get_stream_loader()
 
-            table_writer = storage.get_table_writer()
-            stream_loader = table_writer.get_stream_loader()
-            strategy = KafkaConsumerStrategyFactory(
-                stream_loader.get_pre_filter(),
-                functools.partial(
-                    process_message, stream_loader.get_processor(), "consumer_grouup"
-                ),
-                build_batch_writer(table_writer, metrics=metrics),
-                max_batch_size=1,
-                max_batch_time=1.0,
-                processes=None,
-                input_block_size=None,
-                output_block_size=None,
-            ).create_with_partitions(lambda offsets: None, {})
-            strategy.submit(message)
-            strategy.close()
-            strategy.join()
-        else:
-            from snuba.replacer import ReplacerWorker
+                def commit(
+                    offsets: Mapping[Partition, int], force: bool = False
+                ) -> None:
+                    pass
 
-            worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
-            processed = worker.process_message(message)
-            if processed is not None:
-                batch = [processed]
-                worker.flush_batch(batch)
+                validate_schema = True
+
+                strategy = KafkaConsumerStrategyFactory(
+                    stream_loader.get_pre_filter(),
+                    functools.partial(
+                        process_message,
+                        stream_loader.get_processor(),
+                        "consumer_grouup",
+                        stream_loader.get_default_topic_spec().topic,
+                        validate_schema,
+                    ),
+                    build_batch_writer(table_writer, metrics=metrics),
+                    max_batch_size=1,
+                    max_batch_time=1.0,
+                    processes=None,
+                    input_block_size=None,
+                    output_block_size=None,
+                ).create_with_partitions(commit, {})
+                strategy.submit(message)
+                strategy.close()
+                strategy.join()
+            else:
+                from snuba.replacer import ReplacerWorker
+
+                worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
+                processed = worker.process_message(message)
+                if processed is not None:
+                    batch = [processed]
+                    worker.flush_batch(batch)
+        except Exception as e:
+            # TODO: This is a temporary workaround so that we return a more useful error when
+            # attempting to write to a dataset where the migration hasn't been run. This should be
+            # no longer necessary once we have more advanced dataset management in place.
+            raise InternalServerError(str(e), original_exception=e)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 

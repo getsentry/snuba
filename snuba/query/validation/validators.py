@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Sequence, Set, Type, cast
+from typing import Optional, Sequence, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
@@ -71,8 +71,8 @@ class EntityRequiredColumnValidator(QueryValidator):
     This validator checks if the Query contains filters by all of the required columns.
     """
 
-    def __init__(self, required_filter_columns: Set[str]) -> None:
-        self.required_columns = required_filter_columns
+    def __init__(self, required_filter_columns: Sequence[str]) -> None:
+        self.required_columns = set(required_filter_columns)
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()

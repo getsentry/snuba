@@ -15,7 +15,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "TRANSACTIONS": "transactions",
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
-    "REPLAYS": "replays",
+    "SEARCH_ISSUES": "search_issues",
 }
 
 

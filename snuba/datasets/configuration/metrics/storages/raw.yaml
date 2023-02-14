@@ -1,0 +1,56 @@
+version: v1
+kind: writable_storage
+name: metrics_raw
+storage:
+  key: metrics_raw
+  set_key: metrics
+schema:
+  columns:
+    [
+      { name: use_case_id, type: String },
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: value, type: UInt, args: { size: 64 } },
+              ],
+          },
+      },
+      { name: count_value, type: Float, args: { size: 64 } },
+      {
+        name: set_values,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 64 } } },
+      },
+      {
+        name: distribution_values,
+        type: Array,
+        args: { inner_type: { type: Float, args: { size: 64 } } },
+      },
+      { name: materialization_version, type: UInt, args: { size: 8 } },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: metrics_raw_v2_local
+  dist_table_name: metrics_raw_v2_dist
+stream_loader:
+  processor:
+    name: PolymorphicMetricsProcessor
+  default_topic: snuba-metrics
+  commit_log_topic: snuba-metrics-commit-log
+  subscription_scheduler_mode: global
+  subscription_scheduled_topic: scheduled-subscriptions-metrics
+  subscription_result_topic: metrics-subscription-results
+  dlq_policy:
+    type: produce
+    args:
+      - snuba-dead-letter-metrics

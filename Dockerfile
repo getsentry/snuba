@@ -1,5 +1,6 @@
 ARG PYTHON_VERSION=3.8.13
-FROM python:${PYTHON_VERSION}-slim-bullseye AS application
+ARG BUILD_BASE=build_admin_ui
+FROM python:${PYTHON_VERSION}-slim-bullseye AS base
 
 WORKDIR /usr/src/snuba
 
@@ -35,8 +36,29 @@ RUN set -ex; \
     apt-get purge -y --auto-remove $buildDeps; \
     rm -rf /var/lib/apt/lists/*;
 
+# Install nodejs and yarn and build the admin UI
+FROM base AS build_admin_ui
+ENV NODE_VERSION=19
+COPY ./snuba/admin ./snuba/admin
+RUN set -ex; \
+    apt-get update && \
+    apt-get install -y curl gnupg --no-install-recommends && \
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - &&\
+    apt-get update && \
+    apt-get install -y yarn nodejs --no-install-recommends && \
+    cd snuba/admin && \
+    yarn install && \
+    yarn run build && \
+    yarn cache clean && \
+    rm -rf node_modules && \
+    apt-get purge -y --auto-remove yarn curl nodejs gnupg && \
+    rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/yarn.list
+
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
+FROM $BUILD_BASE AS application
 COPY . ./
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \

@@ -4,6 +4,7 @@ from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
+import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
@@ -91,11 +92,6 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option(
-    "--parallel-collect",
-    is_flag=True,
-    default=True,
-)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
@@ -109,15 +105,9 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
+@click.option("--validate-schema", is_flag=True, default=False)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
-)
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
 )
 def consumer(
     *,
@@ -134,22 +124,22 @@ def consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    validate_schema: bool,
     profile_path: Optional[str] = None,
-    cooperative_rebalancing: bool = False,
 ) -> None:
 
     setup_logging(log_level)
     setup_sentry()
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
+    sentry_sdk.set_tag("storage", storage_name)
 
     metrics_tags = {
-        "group": consumer_group,
+        "consumer_group": consumer_group,
         "storage": storage_key.value,
     }
 
@@ -186,9 +176,8 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
-        parallel_collect=parallel_collect,
+        validate_schema=validate_schema,
         slice_id=slice_id,
-        cooperative_rebalancing=cooperative_rebalancing,
     )
 
     consumer = consumer_builder.build_base_consumer(slice_id)
@@ -200,3 +189,4 @@ def consumer(
     signal.signal(signal.SIGTERM, handler)
 
     consumer.run()
+    consumer_builder.flush()

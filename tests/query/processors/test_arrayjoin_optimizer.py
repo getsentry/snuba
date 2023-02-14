@@ -9,10 +9,13 @@ from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entities.transactions import transaction_translator
+from snuba.datasets.entities.storage_selectors.selector import (
+    DefaultQueryStorageSelector,
+)
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.transactions import storage as transactions_storage
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -432,9 +435,9 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
 
     ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
 
-    query_plan = SingleStorageQueryPlanBuilder(
-        storage=storage,
-        mappers=transaction_translator,
+    query_plan = StorageQueryPlanBuilder(
+        storages=entity.get_all_storage_connections(),
+        selector=DefaultQueryStorageSelector(),
     ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query
@@ -507,7 +510,10 @@ def test_aliasing() -> None:
     )
     sql = format_query(processed).get_sql()
     transactions_table_name = (
-        transactions_storage.get_table_writer().get_schema().get_table_name()
+        get_writable_storage(StorageKey.TRANSACTIONS)
+        .get_table_writer()
+        .get_schema()
+        .get_table_name()
     )
 
     assert sql == (

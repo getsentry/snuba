@@ -1,26 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import { MigrationData, MigrationGroupResult, GroupOptions, RunMigrationRequest, RunMigrationResult, Action } from "./types";
-
-const SQLforwards =
-  "Local operations:\
-\n\n\
-CREATE TABLE IF NOT EXISTS replays_local (replay_id UUID, event_hash UUID, segment_id Nullable(UInt16), trace_ids Array(UUID), _trace_ids_hashed Array(UInt64) MATERIALIZED arrayMap(t -> cityHash64(t), trace_ids), title String, project_id UInt64, timestamp DateTime, platform LowCardinality(String), environment LowCardinality(Nullable(String)), release Nullable(String), dist Nullable(String), ip_address_v4 Nullable(IPv4), ip_address_v6 Nullable(IPv6), user String, user_id Nullable(String), user_name Nullable(String), user_email Nullable(String), sdk_name String, sdk_version String, tags Nested(key String, value String), retention_days UInt16, partition UInt16, offset UInt64) ENGINE ReplacingMergeTree() ORDER BY (project_id, toStartOfDay(timestamp), cityHash64(replay_id), event_hash) PARTITION BY (retention_days, toMonday(timestamp)) TTL timestamp + toIntervalDay(retention_days) SETTINGS index_granularity=8192;\
-ALTER TABLE replays_local ADD INDEX IF NOT EXISTS bf_trace_ids_hashed _trace_ids_hashed TYPE bloom_filter() GRANULARITY 1;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
-
-const SQLbackwards =
-  "Local operations:\
-\n\n\
-DROP TABLE IF EXISTS replays_local;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
+import {
+  MigrationData,
+  MigrationGroupResult,
+  GroupOptions,
+  RunMigrationRequest,
+  RunMigrationResult,
+  Action,
+} from "./types";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});
@@ -28,6 +16,15 @@ function ClickhouseMigrations(props: { api: Client }) {
     useState<MigrationGroupResult | null>(null);
   const [migrationId, setMigrationId] = useState<string | null>(null);
   const [SQLText, setSQLText] = useState<string | null>(null);
+
+  const [header, setHeader] = useState<string | null>(null);
+  const [show_action, setShowAction] = useState<boolean | null>(false);
+
+  const dry_run_header = "Dry run SQL output"
+  const real_run_header = "Run log output"
+
+  const [forwards_dry_run, setFowardsDryRun] = useState<string | null>(null);
+  const [backwards_dry_run, setBackwardsDryRun] = useState<string | null>(null);
 
   useEffect(() => {
     props.api.getAllMigrationGroups().then((res) => {
@@ -39,48 +36,142 @@ function ClickhouseMigrations(props: { api: Client }) {
     });
   }, []);
 
+  function clearBtnState() {
+    setBackwardsDryRun(() => null)
+    setFowardsDryRun(() => null)
+    setSQLText(() => null);
+  }
+
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
+    clearBtnState()
+    setMigrationId(() => null);
+    setShowAction(()=> false)
+    refreshStatus(migrationGroup.group);
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
+    clearBtnState()
+    setShowAction(()=> false)
+  }
+
+  function selectForwards(dry_run_sql: string) {
+    setBackwardsDryRun(() => null)
+    setFowardsDryRun(() => dry_run_sql)
+  }
+
+  function selectBackwards(dry_run_sql: string) {
+    setFowardsDryRun(() => null)
+    setBackwardsDryRun(() => dry_run_sql)
   }
 
   function execute(action: Action) {
+    let force = false;
     const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
-    if (data?.blocking) {
-      window.confirm(
-        `Migration ${migrationId} is blocking, are you sure you want to execute?`
-      );
+    if (action == Action.Run && !forwards_dry_run) {
+      return alert("Please run a forwards dry run first")
     }
-    console.log("executing !", action);
+    if (action == Action.Reverse && !backwards_dry_run) {
+
+      return alert("Please run a backwards dry run first: ")
+    }
+    if (data?.blocking) {
+      if (
+        window.confirm(
+          `Migration ${migrationId} is blocking, are you sure you want to execute?`
+        )
+      ) {
+        force = true;
+      }
+    }
+    if (data?.status !== "not_started" && action === Action.Reverse) {
+      if (
+        window.confirm(
+          `Migration ${migrationId} is ${data?.status}, are you sure you want to reverse?`
+        )
+      ) {
+        force = true;
+      }
+    }
+    executeRealRun(action, force);
   }
 
-  function executeDryRun(action: Action) {
-      let req = {
-        action: action,
-        migration_id: migrationId,
-        group: migrationGroup?.group,
-        dry_run: true
-      }
-      console.log("executing dry run !", migrationId, action);
-      console.assert(req.dry_run, "dry_run must be set")
-      props.api
+  function executeRun(action: Action, dry_run: boolean, force: boolean,
+    cb?: (stdout: string, err?: string) => void ) {
+    let req = {
+      action: action,
+      migration_id: migrationId,
+      group: migrationGroup?.group,
+      dry_run: dry_run,
+      force: force,
+    };
+    props.api
       .runMigration(req as RunMigrationRequest)
       .then((res) => {
-        console.log(res)
+        console.log(res);
+        if (action == Action.Run && dry_run) {
+          selectForwards(res.stdout)
+        }
+        if (action == Action.Reverse && dry_run) {
+          selectBackwards(res.stdout)
+        }
         setSQLText(() => res.stdout);
+        if (cb) {
+          cb(res.stdout)
+        }
       })
       .catch((err) => {
-        console.log(err)
+        console.error(err);
         setSQLText(() => JSON.stringify(err));
+        if (cb) {
+          cb("", JSON.stringify(err))
+        }
       });
   }
 
+  function executeDryRun(action: Action) {
+    console.log("executing dry run !", migrationId, action);
+    setHeader(()=> dry_run_header)
+    executeRun(action, true, false)
+    setShowAction(()=> true)
+  }
+
+  function executeRealRun(action: Action, force: boolean) {
+    console.log("executing real run !", migrationId, action, force);
+    clearBtnState()
+    setHeader(()=> real_run_header)
+    executeRun(action, false, force, (stdout: string, err?: string) => {
+      if (stdout.indexOf("migration.completed") > -1) {
+        alert(`Migration ${migrationId} ${action} completed successfully`)
+      } else {
+        alert(`Migration ${migrationId} ${action} didn't complete.` +
+              `See run log output. \n\n ${err||""} \n ${stdout}`)
+      }
+      if (migrationGroup){
+        refreshStatus(migrationGroup.group)
+      }
+    })
+
+    if (migrationGroup){
+      refreshStatus(migrationGroup.group)
+    }
+  }
+
+
+  function refreshStatus(group: string) {
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
+      setAllGroups(options);
+      setMigrationGroup(options[group]);
+    });
+  }
 
   function rowData() {
     if (migrationGroup) {
@@ -133,7 +224,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   }
 
   function renderActions() {
-    if (!(migrationGroup && migrationId)) {
+    if (!(migrationGroup && migrationId) || !show_action) {
       return null;
     }
     const data = migrationGroup?.migration_ids.find(
@@ -142,7 +233,7 @@ function ClickhouseMigrations(props: { api: Client }) {
 
     return (
       <div>
-        <input
+        {forwards_dry_run && <input
           key="run"
           type="button"
           disabled={!data?.can_run}
@@ -151,8 +242,8 @@ function ClickhouseMigrations(props: { api: Client }) {
           defaultValue="EXECUTE run"
           onClick={() => execute(Action.Run)}
           style={buttonStyle}
-        />
-        <input
+        />}
+        {backwards_dry_run && <input
           key="reverse"
           type="button"
           disabled={!data?.can_reverse}
@@ -161,15 +252,15 @@ function ClickhouseMigrations(props: { api: Client }) {
           defaultValue="EXECUTE reverse"
           onClick={() => execute(Action.Reverse)}
           style={buttonStyle}
-        />
+        />}
         <div>
-          {!data?.can_reverse && data?.reverse_reason && (
+          {!data?.can_reverse && data?.reverse_reason && backwards_dry_run && (
             <p style={textStyle}>
               ❌ <strong>You cannot reverse this migration: </strong>
               {data?.reverse_reason}
             </p>
           )}
-          {!data?.can_run && data?.run_reason && (
+          {!data?.can_run && data?.run_reason && forwards_dry_run && (
             <p style={textStyle}>
               ❌ <strong>You cannot run this migration: </strong>
               {data?.run_reason}
@@ -179,6 +270,7 @@ function ClickhouseMigrations(props: { api: Client }) {
       </div>
     );
   }
+
   return (
     <div style={{ display: "flex" }}>
       <form>
@@ -207,27 +299,32 @@ function ClickhouseMigrations(props: { api: Client }) {
         <div>
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
-            <div style={{ display: "inline-block" }}>
+            <div style={{ display: "block" }}>
+              <br />
               <button type="button"
                 onClick={() => executeDryRun(Action.Run)}
-                style={buttonStyle}
+                style={forwards_dry_run? selectedButtonStyle : buttonStyle}
               >
-                forwards
+                DRY RUN forwards
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => executeDryRun(Action.Reverse)}
-                style={buttonStyle}
+                style={backwards_dry_run ? selectedButtonStyle : buttonStyle}
               >
-                backwards
+                DRY RUN backwards
               </button>
             </div>
           )}
         </div>
+        <p>
+        Before executing a migration, do a dry run first. This will generate the raw SQL for running a migration (forwards) or reversing (backwards) a migration so that you can verify it's contents.
+        </p>
+
         {migrationGroup && migrationId && SQLText && (
           <div style={sqlBox}>
             <p style={textStyle}>
-              Raw SQL for running a migration (forwards) or reversing
-              (backwards). Good to do before executing a migration for real.
+              {header}
             </p>
             <textarea style={textareaStyle} readOnly value={SQLText} />
           </div>
@@ -268,6 +365,12 @@ const buttonStyle = {
   padding: "2px 5px",
   marginRight: "10px",
 };
+
+const selectedButtonStyle = {
+  color: "red",
+  padding: "2px 5px",
+  marginRight: "10px",
+}
 
 const textStyle = {
   fontSize: 14,

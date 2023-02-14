@@ -8,7 +8,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 UNKNOWN_SPAN_STATUS = 2
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     The second of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.
@@ -31,7 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column(
                     "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
                 ),
-                after="user_email",
+                after="dist",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

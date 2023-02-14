@@ -1,27 +1,32 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
+from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.plans.sliced_storage import (
-    ColumnBasedStorageSliceSelector,
-    SlicedStorageQueryPlanBuilder,
+from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.storage import (
+    EntityStorageConnection,
+    Storage,
+    WritableTableStorage,
 )
-from snuba.datasets.slicing import is_storage_sliced
-from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    QueryValidator,
+)
 from snuba.utils.schemas import SchemaModifiers
 
 
@@ -39,13 +44,13 @@ class PluggableEntity(Entity):
     """
 
     entity_key: EntityKey
+    storages: List[EntityStorageConnection]
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
-    readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
-    translation_mappers: TranslationMappers
-    required_time_column: str
-    writeable_storage: Optional[WritableTableStorage] = None
+    required_time_column: Optional[str]
+    storage_selector: QueryStorageSelector
+    validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -53,6 +58,15 @@ class PluggableEntity(Entity):
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
+    subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
+    subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
+
+    def _get_builtin_validators(self) -> Sequence[QueryValidator]:
+        return [
+            EntityContainsColumnsValidator(
+                EntityColumnSet(self.columns), self.validate_data_model
+            )
+        ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -69,44 +83,46 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_sliced(self.readable_storage.get_storage_key()):
-            assert (
-                self.partition_key_column_name is not None
-            ), "partition key column name must be defined for a sliced storage"
-            query_plan_builder: ClickhouseQueryPlanBuilder = (
-                SlicedStorageQueryPlanBuilder(
-                    storage=self.readable_storage,
-                    mappers=self.translation_mappers,
-                    storage_cluster_selector=ColumnBasedStorageSliceSelector(
-                        storage=self.readable_storage.get_storage_key(),
-                        storage_set=self.readable_storage.get_storage_set_key(),
-                        partition_key_column_name=self.partition_key_column_name,
-                    ),
-                )
-            )
-        else:
-            query_plan_builder = SingleStorageQueryPlanBuilder(
-                storage=self.readable_storage, mappers=self.translation_mappers
-            )
+        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+            storages=self.storages,
+            selector=self.storage_selector,
+            partition_key_column_name=self.partition_key_column_name,
+        )
 
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:
-        return (
-            [self.readable_storage]
-            if not self.writeable_storage
-            or self.writeable_storage == self.readable_storage
-            else [self.readable_storage, self.writeable_storage]
-        )
+        return [storage_connection.storage for storage_connection in self.storages]
+
+    def get_all_storage_connections(self) -> Sequence[EntityStorageConnection]:
+        return self.storages
+
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+        for storage_connection in self.storages:
+            if storage_connection.is_writable and isinstance(
+                storage_connection.storage, WritableTableStorage
+            ):
+                return storage_connection.storage
+        return None
+
+    def get_storage_selector(self) -> Optional[QueryStorageSelector]:
+        return self.storage_selector
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         return self.function_call_validators
 
     def get_validators(self) -> Sequence[QueryValidator]:
-        return self.validators
+        return [*self.validators, *self._get_builtin_validators()]
 
-    def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        return self.writeable_storage
+    def get_subscription_processors(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
+        return self.subscription_processors
+
+    def get_subscription_validators(
+        self,
+    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+        return self.subscription_validators
 
     def __eq__(self, other: Any) -> bool:
         return (

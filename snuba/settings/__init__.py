@@ -7,6 +7,7 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -27,24 +28,34 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
-ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 ADMIN_AUTH_JWT_AUDIENCE = ""
 
+# file path to the IAM policy file which contains the roles
+ADMIN_IAM_POLICY_FILE = os.environ.get(
+    "ADMIN_IAM_POLICY_FILE",
+    f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
+)
+
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system": "NonBlockingMigrationsPolicy",
-    "generic_metrics": "NonBlockingMigrationsPolicy",
-    "profiles": "NonBlockingMigrationsPolicy",
-    "functions": "NonBlockingMigrationsPolicy",
-    "replays": "NonBlockingMigrationsPolicy",
+    "system",
+    "generic_metrics",
+    "profiles",
+    "functions",
+    "replays",
+    "search_issues",
+    "test_migration",
 }
+MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
+DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
@@ -52,7 +63,7 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -74,6 +85,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "search_issues",
+            "generic_metrics_counters",
         },
         "single_node": True,
     },
@@ -113,7 +126,7 @@ class RedisClusterConfig(TypedDict):
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
 REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
@@ -125,9 +138,7 @@ T = TypeVar("T")
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None
-    cache_v2: RedisClusterConfig | None
     rate_limiter: RedisClusterConfig | None
-    rate_limiter_v2: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
     config: RedisClusterConfig | None
@@ -137,9 +148,7 @@ class RedisClusters(TypedDict):
 
 REDIS_CLUSTERS: RedisClusters = {
     "cache": None,
-    "cache_v2": None,
     "rate_limiter": None,
-    "rate_limiter_v2": None,
     "subscription_store": None,
     "replacements_store": None,
     "config": None,
@@ -152,6 +161,7 @@ RECORD_QUERIES = False
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
+CONFIG_STATE: Mapping[str, Optional[Any]] = {}
 
 # Sentry Options
 SENTRY_DSN: str | None = None
@@ -165,7 +175,6 @@ SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 
 SNAPSHOT_LOAD_PRODUCT = "snuba"
 
-SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
@@ -174,11 +183,14 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
-    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "127.0.0.1:9092"),
     "security.protocol": os.environ.get("KAFKA_SECURITY_PROTOCOL", "plaintext"),
     "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
     "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
     "ssl.key.location": os.environ.get("KAFKA_SSL_KEY_PATH", ""),
+    "sasl.mechanism": os.environ.get("KAFKA_SASL_MECHANISM", None),
+    "sasl.username": os.environ.get("KAFKA_SASL_USERNAME", None),
+    "sasl.password": os.environ.get("KAFKA_SASL_PASSWORD", None),
 }
 
 # Mapping of default Kafka topic name to custom names
@@ -199,7 +211,6 @@ HTTP_WRITER_BUFFER_SIZE = 1
 ENFORCE_RETENTION: bool = False
 LOWER_RETENTION_DAYS = 30
 DEFAULT_RETENTION_DAYS = 90
-RETENTION_OVERRIDES: Mapping[int, int] = {}
 
 MAX_PREWHERE_CONDITIONS = 1
 
@@ -223,14 +234,25 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
-# Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
+# The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
+# Migrations for skipped groups will not be run.
+SKIPPED_MIGRATION_GROUPS: Set[str] = {
+    "querylog",
+    "profiles",
+    "functions",
+    "test_migration",
+    "search_issues",
+}
+
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
+    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
+
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -256,8 +278,6 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
-TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
-
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
@@ -268,6 +288,12 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
+
+# Enable issue occurrence ingestion
+ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
+    "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
+)
+
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
@@ -309,32 +335,35 @@ COUNTER_WINDOW_SIZE = timedelta(minutes=10)
 
 # Slicing Configuration
 
-# Mapping of storage key to slice count
-# This is only for sliced storages
-SLICED_STORAGES: Mapping[str, int] = {}
+# Mapping of storage set key to slice count
+# This is only for sliced storage sets
+SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
-# Mapping storage key to a mapping of logical partition
+# Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
-# The slice configs below are the "SLICED" versions to
-# the equivalent default settings above. For example,
-# "SLICED_KAFKA_TOPIC_MAP" is the "SLICED" version of
-# "KAFKA_TOPIC_MAP". These should be filled out
-# for any corresponding sliced storages defined above,
-# with the applicable number of slices in mind.
+# The slice configs below are the "SLICED" versions to the equivalent default
+# settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
+# version of "KAFKA_TOPIC_MAP". These should be filled out for any
+# corresponding sliced storages defined above, with the applicable number of
+# slices in mind.
 
-# Storage set keys should be defined either in CLUSTERS
-# or SLICED_CLUSTERS. CLUSTERS will define clusters
-# which are not sliced, i.e. are associated with
-# only the default slice_id (0). CLUSTERS is defined in
-# the default way, without adding slice id in
-# the storage_sets field. We define sliced clusters,
-# i.e. clusters that reside on multiple slices
-# in SLICED_CLUSTERS. We define all associated
-# (storage set, slice id) pairs in SLICED_CLUSTERS
-# in the storage_sets field. Other fields are defined
-# in the same way as they are in CLUSTERS.
+# Cluster access can happen in one of the following ways:
+# 1. The storage set is not sliced. In this case, the storage set key should
+#    be defined in CLUSTERS only.
+# 2. The storage set is sliced and there is no mega-cluster needed. In this
+#    case, the storage set key should be defined in SLICED_CLUSTERS only.
+# 3. The storage set is sliced and there is a mega-cluster needed. In this
+#    case, the storage set key should be defined in both CLUSTERS and
+#    SLICED_CLUSTERS. SLICED_CLUSTERS would contain the cluster information
+#    of the sliced cluster. CLUSTERS would contain the cluster information of
+#    the mega-cluster.
+#
+# We define sliced clusters, i.e. clusters that reside on multiple slices
+# in SLICED_CLUSTERS. We define all associated(storage set, slice id) pairs in
+# SLICED_CLUSTERS in the storage_sets field. Other fields are defined in the
+# same way as they are in CLUSTERS.
 SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Mapping of (logical topic names, slice id) pairs to custom physical topic names

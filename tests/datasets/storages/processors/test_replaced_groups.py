@@ -6,10 +6,6 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.errors_replacer import (
-    set_project_exclude_groups,
-    set_project_needs_final,
-)
 from snuba.processor import ReplacementType
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
@@ -19,6 +15,7 @@ from snuba.query.processors.physical.replaced_groups import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
 
 
@@ -132,7 +129,7 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
 
 
 def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
-    set_project_needs_final(
+    ProjectsQueryFlags.set_project_needs_final(
         2,
         ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
@@ -157,7 +154,7 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
 
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 5)
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -192,7 +189,7 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
 
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 2)
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -221,7 +218,7 @@ def test_query_overlaps_replacements_processor(
 
     # overlaps replacement and should be final due to too many groups to exclude
     state.set_config("max_group_ids_exclude", 2)
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -249,7 +246,7 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [105, 106, 107],
         ReplacerState.ERRORS,
@@ -273,7 +270,7 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -300,7 +297,7 @@ def test_single_not_too_many_exclude(
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -327,7 +324,7 @@ def test_multiple_disjoint_replaced(
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [110, 120, 130],
         ReplacerState.ERRORS,
@@ -353,7 +350,7 @@ def test_multiple_fewer_exclude_than_queried(
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [101],
         ReplacerState.ERRORS,
@@ -380,7 +377,7 @@ def test_multiple_too_many_excludes(
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -408,7 +405,7 @@ def test_multiple_not_too_many_excludes(
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -432,7 +429,7 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,
@@ -456,7 +453,7 @@ def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
-    set_project_exclude_groups(
+    ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.ERRORS,

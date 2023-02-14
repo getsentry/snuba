@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 import rapidjson
-from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
@@ -11,7 +10,7 @@ from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Commit, Partition, Topic
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -122,18 +121,18 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
-        message = self.__consumer.poll(timeout)
-        if message is None:
+    def poll(self, timeout: Optional[float] = None) -> Optional[BrokerValue[Tick]]:
+        value = self.__consumer.poll(timeout)
+        if value is None:
             return None
 
         try:
-            commit = commit_codec.decode(message.payload)
+            commit = commit_codec.decode(value.payload)
             assert commit.orig_message_ts is not None
         except Exception:
             logger.error(
                 f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
-                extra={"payload": str(message.payload), "offset": message.offset},
+                extra={"payload": str(value.payload), "offset": value.offset},
                 exc_info=True,
             )
             return None
@@ -143,31 +142,33 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         previous_message = self.__previous_messages.get(commit.partition)
 
-        result: Optional[Message[Tick]]
+        result: Optional[BrokerValue[Tick]]
         if previous_message is not None:
             try:
                 time_interval = Interval(
                     previous_message.orig_message_ts, commit.orig_message_ts
                 )
+                offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
                 logger.warning(
-                    "Could not construct valid time interval between %r and %r!",
+                    "Could not construct valid interval between %r and %r!",
                     previous_message,
                     MessageDetails(commit.offset, commit.orig_message_ts),
                     exc_info=True,
                 )
                 return None
             else:
-                result = Message(
-                    message.partition,
-                    message.offset,
+                result = BrokerValue(
                     Tick(
                         commit.partition.index,
-                        Interval(previous_message.offset, commit.offset),
+                        offset_interval,
                         time_interval,
                     ).time_shift(self.__time_shift),
-                    message.timestamp,
+                    value.partition,
+                    value.offset,
+                    value.timestamp,
                 )
+
         else:
             result = None
 
@@ -194,11 +195,11 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         self.__consumer.seek(offsets)
 
-    def stage_positions(self, positions: Mapping[Partition, Position]) -> None:
-        return self.__consumer.stage_positions(positions)
+    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        return self.__consumer.stage_offsets(offsets)
 
-    def commit_positions(self) -> Mapping[Partition, Position]:
-        return self.__consumer.commit_positions()
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        return self.__consumer.commit_offsets()
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
@@ -221,6 +222,7 @@ class SchedulerBuilder:
         delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -256,11 +258,14 @@ class SchedulerBuilder:
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
-            Topic(self.__commit_log_topic_spec.topic_name),
+            Topic(
+                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
+            ),
             self.__build_strategy_factory(),
             IMMEDIATE,
         )
@@ -275,12 +280,14 @@ class SchedulerBuilder:
             self.__producer,
             self.__scheduled_topic_spec,
             self.__metrics,
+            self.__slice_id,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         consumer_configuration = build_kafka_consumer_configuration(
             self.__commit_log_topic_spec.topic,
             self.__consumer_group,
+            self.__slice_id,
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
         )
@@ -329,6 +336,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -336,6 +344,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__producer = producer
         self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
         self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
             entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
@@ -350,13 +359,14 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
                 partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,
+                slice_id=self.__slice_id,
             )
             for index in range(self.__partitions)
         }
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         schedule_step = ProduceScheduledSubscriptionMessage(
@@ -366,6 +376,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             commit,
             self.__stale_threshold_seconds,
             self.__metrics,
+            self.__slice_id,
         )
 
         return TickBuffer(

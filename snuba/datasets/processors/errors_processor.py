@@ -9,12 +9,12 @@ from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
+    enforce_retention,
     extract_extra_contexts,
     extract_extra_tags,
     extract_http,
     extract_project_id,
     extract_user,
-    override_and_enforce_retention,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
@@ -81,8 +81,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         processed: MutableMapping[str, Any] = {"deleted": 0}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
-        processed["retention_days"] = override_and_enforce_retention(
-            event["project_id"],
+        processed["retention_days"] = enforce_retention(
             event.get("retention_days"),
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT),
         )

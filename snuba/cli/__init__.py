@@ -61,9 +61,9 @@ class SnubaCLI(click.MultiCommand):
                 code = compile(f.read(), fn, "exec")
                 eval(code, ns, ns)
             init_time = time.perf_counter() - start
-            metrics.gauge("snuba_init", init_time)
+            metrics.timing("snuba_init_time", init_time)
             logger.info(f"Snuba initialization took {init_time}s")
-            return ns[actual_command_name]
+        return ns[actual_command_name]
 
 
 @click.command(cls=SnubaCLI)

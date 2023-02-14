@@ -6,18 +6,18 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.optimize.optimize import run_optimize
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets import errors_replacer
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.replacers import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -72,10 +72,12 @@ class TestReplacer:
 
     def _wrap(self, msg: Tuple[Any, ...]) -> Message[KafkaPayload]:
         return Message(
-            Partition(Topic("replacements"), 0),
-            0,
-            KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
+                Partition(Topic("replacements"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
     def _clear_redis_and_force_merge(self) -> None:
@@ -492,24 +494,26 @@ class TestReplacer:
         project_id = self.project_id
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_DELETE_GROUPS,
-                        {
-                            "project_id": project_id,
-                            "group_ids": [1],
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_DELETE_GROUPS,
+                            {
+                                "project_id": project_id,
+                                "group_ids": [1],
+                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)
@@ -534,21 +538,23 @@ class TestReplacer:
 
         project_id = self.project_id
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            41,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.TOMBSTONE_EVENTS,
-                        {"project_id": project_id, "event_ids": [event_id]},
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+        message = Message(
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.TOMBSTONE_EVENTS,
+                            {"project_id": project_id, "event_ids": [event_id]},
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                41,
+                datetime.now(),
+            )
         )
 
         # The user chooses to reprocess a subset of the group and throw away
@@ -566,21 +572,23 @@ class TestReplacer:
         self.event["group_id"] = 2
         write_unprocessed_events(self.storage, [self.event])
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.EXCLUDE_GROUPS,
-                        {"project_id": project_id, "group_ids": [1]},
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+        message = Message(
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.EXCLUDE_GROUPS,
+                            {"project_id": project_id, "group_ids": [1]},
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         # Group 1 is excluded from queries. At this point we have almost a
@@ -607,26 +615,28 @@ class TestReplacer:
 
         project_id = self.project_id
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_MERGE,
-                        {
-                            "project_id": project_id,
-                            "new_group_id": 2,
-                            "previous_group_ids": [1],
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+        message = Message(
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_MERGE,
+                            {
+                                "project_id": project_id,
+                                "new_group_id": 2,
+                                "previous_group_ids": [1],
+                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)
@@ -646,27 +656,29 @@ class TestReplacer:
 
         project_id = self.project_id
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE,
-                        {
-                            "project_id": project_id,
-                            "previous_group_id": 1,
-                            "new_group_id": 2,
-                            "hashes": ["a" * 32],
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+        message = Message(
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE,
+                            {
+                                "project_id": project_id,
+                                "previous_group_id": 1,
+                                "new_group_id": 2,
+                                "hashes": ["a" * 32],
+                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)
@@ -681,29 +693,31 @@ class TestReplacer:
         self.event["primary_hash"] = "a" * 32
         write_unprocessed_events(self.storage, [self.event])
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE,
-                        {
-                            "project_id": self.project_id,
-                            "previous_group_id": 1,
-                            "new_group_id": 2,
-                            "hashes": ["a" * 32],
-                            "datetime": datetime.utcnow().strftime(
-                                PAYLOAD_DATETIME_FORMAT
-                            ),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+        message = Message(
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE,
+                            {
+                                "project_id": self.project_id,
+                                "previous_group_id": 1,
+                                "new_group_id": 2,
+                                "hashes": ["a" * 32],
+                                "datetime": datetime.utcnow().strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                ),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)
@@ -726,37 +740,41 @@ class TestReplacer:
         redis_client.set(key, 42)
 
         old_offset: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            41,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE,
-                        {},
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE,
+                            {},
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                41,
+                datetime.now(),
+            )
         )
 
         same_offset: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE,
-                        {},
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE,
+                            {},
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         assert self.replacer.process_message(old_offset) is None
@@ -792,17 +810,21 @@ class TestReplacer:
         offset = 42
         timestamp = datetime.now()
 
-        partition_one: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            offset,
-            payload,
-            timestamp,
+        partition_one = Message(
+            BrokerValue(
+                payload,
+                Partition(Topic("replacements"), 1),
+                offset,
+                timestamp,
+            )
         )
         partition_two: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 2),
-            offset,
-            payload,
-            timestamp,
+            BrokerValue(
+                payload,
+                Partition(Topic("replacements"), 2),
+                offset,
+                timestamp,
+            )
         )
 
         processed = self.replacer.process_message(partition_one)
@@ -818,28 +840,30 @@ class TestReplacer:
         write_unprocessed_events(self.storage, [self.event])
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE,
-                        {
-                            "project_id": self.project_id,
-                            "previous_group_id": 1,
-                            "new_group_id": 2,
-                            "hashes": ["a" * 32],
-                            "datetime": datetime.utcnow().strftime(
-                                PAYLOAD_DATETIME_FORMAT
-                            ),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE,
+                            {
+                                "project_id": self.project_id,
+                                "previous_group_id": 1,
+                                "new_group_id": 2,
+                                "hashes": ["a" * 32],
+                                "datetime": datetime.utcnow().strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                ),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         self.replacer.flush_batch([self.replacer.process_message(message)])

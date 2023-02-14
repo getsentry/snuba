@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Adds quantity and category columns to outcomes. updates hourly table to support
     category as a new dimension and quantity as a new measure.
@@ -71,25 +71,25 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
                 column=Column("quantity", UInt(32)),
-                after=None,
+                after="reason",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
                 column=Column("category", UInt(8)),
-                after=None,
+                after="timestamp",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
                 column=Column("quantity", UInt(64)),
-                after=None,
+                after="reason",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
                 column=Column("category", UInt(8)),
-                after=None,
+                after="timestamp",
             ),
         ]
 

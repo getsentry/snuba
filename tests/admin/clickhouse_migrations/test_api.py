@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 from unittest.mock import patch
@@ -7,9 +8,14 @@ from unittest.mock import patch
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
+from structlog.testing import CapturingLogger
 
-from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
+from snuba.admin.auth import _set_roles
+from snuba.admin.auth_roles import ROLES, generate_test_role
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
+from snuba.admin.user import AdminUser
 from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -23,44 +29,54 @@ def admin_api() -> FlaskClient:
 
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
-    with patch("snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", dict()):
+    with patch("snuba.admin.auth.DEFAULT_ROLES", []):
         response = admin_api.get("/migrations/groups")
 
     assert response.status_code == 200
     assert json.loads(response.data) == []
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {"system": "AllMigrationsPolicy", "generic_metrics": "NoMigrationsPolicy"},
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [
+            generate_test_role("system", "all"),
+            generate_test_role("generic_metrics", "non_blocking"),
+        ],
     ):
         response = admin_api.get("/migrations/groups")
 
         def get_migration_ids(
-            group: MigrationGroup,
+            group: MigrationGroup, policy_name: str
         ) -> Sequence[Mapping[str, str | bool]]:
-            _, migrations = run_migration_checks_for_groups([group], runner)[0]
+
+            _, migrations = run_migration_checks_and_policies(
+                {group.value: {MigrationPolicy.class_from_name(policy_name)()}}, runner
+            )[0]
             return [asdict(m) for m in migrations]
 
         assert response.status_code == 200
         assert json.loads(response.data) == [
             {
                 "group": "system",
-                "migration_ids": get_migration_ids(MigrationGroup.SYSTEM),
+                "migration_ids": get_migration_ids(
+                    MigrationGroup.SYSTEM, "AllMigrationsPolicy"
+                ),
             },
             {
                 "group": "generic_metrics",
-                "migration_ids": get_migration_ids(MigrationGroup.GENERIC_METRICS),
+                "migration_ids": get_migration_ids(
+                    MigrationGroup.GENERIC_METRICS, "NonBlockingMigrationsPolicy"
+                ),
             },
         ]
 
 
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {
-            "system": "NonBlockingMigrationsPolicy",
-            "generic_metrics": "NoMigrationsPolicy",
-        },
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [
+            generate_test_role("system", "non_blocking"),
+            generate_test_role("generic_metrics", "none"),
+        ],
     ):
         response = admin_api.get("/migrations/system/list")
         assert response.status_code == 200
@@ -82,27 +98,25 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         assert response.status_code == 403
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {
-            "sessions": "NonBlockingMigrationsPolicy",
-            "generic_metrics": "NoMigrationsPolicy",
-        },
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [
+            generate_test_role("test_migration", "non_blocking"),
+            generate_test_role("generic_metrics", "none"),
+        ],
     ):
-        response = admin_api.get("/migrations/sessions/list")
+        response = admin_api.get("/migrations/test_migration/list")
     assert response.status_code == 200
     expected_json = [
-        {"blocking": False, "migration_id": "0001_sessions", "status": "completed"},
         {
             "blocking": False,
-            "migration_id": "0002_sessions_aggregates",
+            "migration_id": "0001_create_test_table",
             "status": "completed",
         },
         {
             "blocking": False,
-            "migration_id": "0003_sessions_matview",
+            "migration_id": "0002_add_test_col",
             "status": "completed",
         },
-        {"blocking": False, "migration_id": "0004_sessions_ttl", "status": "completed"},
     ]
 
     def sort_by_migration_id(migration: Any) -> Any:
@@ -115,18 +129,25 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.parametrize("action", ["run", "reverse"])
+@patch(
+    "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+    {
+        "system",
+        "generic_metrics",
+        "events",
+    },
+)
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
     method = "run_migration" if action == "run" else "reverse_migration"
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-        {
-            "system": "AllMigrationsPolicy",
-            "invalid_but_allowed_group": "AllMigrationsPolicy",
-            "generic_metrics": "NoMigrationsPolicy",
-            "events": "NonBlockingMigrationsPolicy",
-        },
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [
+            generate_test_role("system", "all"),
+            generate_test_role("generic_metrics", "none"),
+            generate_test_role("events", "non_blocking", True),
+        ],
     ):
         # invalid action
         response = admin_api.post("/migrations/system/invalid_action/0001_migrations/")
@@ -136,7 +157,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         response = admin_api.post(
             f"/migrations/invalid_but_allowed_group/{action}/0001_migrations"
         )
-        assert response.status_code == 500
+        assert response.status_code == 403
 
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
@@ -255,3 +276,75 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}
             assert mock_run_migration.call_count == 1
+
+
+def test_get_iam_roles(caplog: Any) -> None:
+    system_role = generate_test_role("system", "all")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(
+            json.dumps(
+                {
+                    "bindings": [
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/NonBlockingMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/TestMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                                "user:test_user3@sentry.io",
+                            ],
+                            "role": "roles/owner",
+                        },
+                    ]
+                }
+            ).encode("utf-8")
+        )
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                system_role,
+            ]
+
+            user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
+            _set_roles(user2)
+
+            assert user2.roles == [
+                ROLES["TestMigrationsExecutor"],
+                system_role,
+            ]
+
+        with patch(
+            "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
+        ):
+            log = CapturingLogger()
+            with patch("snuba.admin.auth.logger", log):
+                user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
+                _set_roles(user3)
+                assert "IAM policy file not found file_not_exists.json" in str(
+                    log.calls
+                )

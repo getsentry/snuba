@@ -13,5 +13,8 @@ _OG_CLUSTER_MAP = _get_storage_set_cluster_map()
     return_value={StorageSetKey.EVENTS: _OG_CLUSTER_MAP[StorageSetKey.EVENTS]},
 )
 def test_get_local_nodes(map_mock: mock.MagicMock) -> None:
-    assert _get_local_nodes(StorageKey.EVENTS) == []
+    """
+    This test is checking that requesting a storage key not in the map doesn't cause any errors.
+    """
+    assert len(_get_local_nodes(StorageKey.ERRORS)) == 1
     assert _get_local_nodes(StorageKey.TRANSACTIONS) == []
