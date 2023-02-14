@@ -1,0 +1,2052 @@
+{
+  "title": "Snuba API New",
+  "description": "",
+  "widgets": [
+    {
+      "id": 125555962498598,
+      "definition": {
+        "title": "Queries by status (this scale is not linear)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "qps"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.count{status:success} by {status}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "qps"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.count{!status:success} by {status}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 403393393,
+      "definition": {
+        "title": "Queries by Referrer",
+        "show_legend": false,
+        "legend_size": "0",
+        "legend_layout": "vertical",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.count{$customer} by {referrer}.as_rate().fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 127200317983366,
+      "definition": {
+        "title": "Errors by Referrer",
+        "show_legend": false,
+        "legend_layout": "vertical",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.count{status:error OR status:timeout} by {referrer}.as_count().fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 300963359,
+      "definition": {
+        "title": "Average Response Time (final:false)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.avg{$customer,final:false} by {referrer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        }
+      }
+    },
+    {
+      "id": 8987851363136975,
+      "definition": {
+        "title": "Rate limited queries by referrer",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.count{status:rate-limited} by {referrer}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear",
+          "label": "",
+          "min": "auto",
+          "max": "auto"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 5791249552591208,
+      "definition": {
+        "title": "Rate limited by scope (table limits)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:snuba.api.rate_limited{*} by {scope,table}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear",
+          "label": "",
+          "min": "auto",
+          "max": "auto"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 7149879202235974,
+      "definition": {
+        "title": "Snuba API query response time",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "alias": "50th percentile",
+                "formula": "query1"
+              },
+              {
+                "alias": "75th percentile",
+                "formula": "query2"
+              },
+              {
+                "alias": "99th percentile",
+                "formula": "query3"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:snuba.api.query.75percentile{$customer}",
+                "data_source": "metrics",
+                "name": "query2"
+              },
+              {
+                "query": "avg:snuba.api.query.99percentile{$customer}",
+                "data_source": "metrics",
+                "name": "query3"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 6588524311379894,
+      "definition": {
+        "title": "Query Time Stack",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "alias": "clickhouse",
+                "formula": "query1"
+              },
+              {
+                "formula": "query2"
+              },
+              {
+                "alias": "rate limit",
+                "formula": "query11"
+              },
+              {
+                "alias": "query cache",
+                "formula": "query3 + query10 + query12"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.execute.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:snuba.api.query.prepare_query.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query2"
+              },
+              {
+                "query": "avg:snuba.api.query.rate_limit.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query11"
+              },
+              {
+                "query": "avg:snuba.api.query.dedupe_wait.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query3"
+              },
+              {
+                "query": "avg:snuba.api.query.cache_set.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query10"
+              },
+              {
+                "query": "avg:snuba.api.query.cache_get.avg{$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query12"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "area"
+          }
+        ],
+        "yaxis": {
+          "min": "0"
+        }
+      }
+    },
+    {
+      "id": 8714751779171766,
+      "definition": {
+        "title": "Average Response Time Comparison (final:false)",
+        "type": "change",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "day_before(query1)"
+              },
+              {
+                "formula": "query1"
+              }
+            ],
+            "change_type": "absolute",
+            "order_dir": "desc",
+            "response_format": "scalar",
+            "show_present": true,
+            "increase_good": false,
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.avg{$customer,final:false} by {referrer}",
+                "data_source": "metrics",
+                "name": "query1",
+                "aggregator": "avg"
+              }
+            ],
+            "order_by": "present"
+          }
+        ]
+      }
+    },
+    {
+      "id": 6663710910958254,
+      "definition": {
+        "title": "FINAL Queries by Referrer",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:snuba.processors.replaced_groups.final{*} by {referrer}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear",
+          "label": "",
+          "min": "auto",
+          "max": "auto"
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 376270083307832,
+      "definition": {
+        "title": "Queries by App ID",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.count{$customer} by {app_id}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 300963397,
+      "definition": {
+        "title": "Memory Usage (% of Request)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "(query1 / query2) * 100"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:kubernetes.memory.usage{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "sum:kubernetes.memory.requests{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "ewma_20(query1 / query2) * 100"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:kubernetes.memory.usage{kube_deployment:snuba-api-production,$customer}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:kubernetes.memory.requests{kube_deployment:snuba-api-production,$customer}",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "thick"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false
+        },
+        "markers": [
+          {
+            "label": " gun sounds ",
+            "value": "y = 100",
+            "display_type": "error dashed"
+          }
+        ]
+      }
+    },
+    {
+      "id": 300964613,
+      "definition": {
+        "title": "Network IO to Snuba API (per role)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "rcvd"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:envoy.tcp.downstream_cx_rx_bytes_total{$customer,envoy.tcp_prefix:snuba-api} by {role}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "purple",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "-query1",
+                "alias": "sent"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:envoy.tcp.downstream_cx_tx_bytes_total{$customer,envoy.tcp_prefix:snuba-api} by {role}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "scale": "sqrt"
+        }
+      }
+    },
+    {
+      "id": 301277806,
+      "definition": {
+        "title": "Total Network IO",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:kubernetes.network.rx_bytes{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "-query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:kubernetes.network.tx_bytes{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "purple",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 303716330,
+      "definition": {
+        "title": "Average and Maximum Execute Times (final:false)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.execute.avg{final:false,$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          },
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "max:snuba.api.query.execute.max{final:false,$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "dotted",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        }
+      }
+    },
+    {
+      "id": 1021259166733350,
+      "definition": {
+        "title": "CPU Usage (% of Request)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "(query1 / query2)"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:kubernetes.cpu.usage.total{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "sum:kubernetes.cpu.requests{kube_deployment:snuba-api-production,$customer} by {pod_name}",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "ewma_20(query1 / query2)"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:kubernetes.cpu.usage.total{kube_deployment:snuba-api-production,$customer}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:kubernetes.cpu.requests{kube_deployment:snuba-api-production,$customer}",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "thick"
+            },
+            "display_type": "line"
+          }
+        ],
+        "markers": [
+          {
+            "value": "y = 1000M",
+            "display_type": "error dashed"
+          }
+        ]
+      }
+    },
+    {
+      "id": 311569294,
+      "definition": {
+        "title": "Query Time Stack (final:false)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              },
+              {
+                "formula": "query2"
+              },
+              {
+                "formula": "query3"
+              },
+              {
+                "formula": "(1000 * query4) - query5"
+              },
+              {
+                "formula": "1000 * (query6 + query7 + query8 + query9)"
+              },
+              {
+                "formula": "query10 + query11 + query12 + query13"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.execute.avg{final:false,$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:snuba.api.query.prepare_query.avg{final:false,$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query2"
+              },
+              {
+                "query": "avg:snuba.api.query.dedupe_wait.avg{final:false,$customer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query3"
+              },
+              {
+                "query": "avg:sentry.snuba.client.snuba_query.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query4"
+              },
+              {
+                "query": "avg:snuba.api.query.avg{final:false,$customer}",
+                "data_source": "metrics",
+                "name": "query5"
+              },
+              {
+                "query": "avg:sentry.snuba.client.process_result.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query6"
+              },
+              {
+                "query": "avg:sentry.snuba.client.get_project_issues.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query7"
+              },
+              {
+                "query": "avg:sentry.snuba.client.get_related_project_ids.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query8"
+              },
+              {
+                "query": "avg:sentry.snuba.client.get_snuba_map.avg{$customer}",
+                "data_source": "metrics",
+                "name": "query9"
+              },
+              {
+                "query": "avg:snuba.api.query.cache_set.avg{final:false,$customer}",
+                "data_source": "metrics",
+                "name": "query10"
+              },
+              {
+                "query": "avg:snuba.api.query.rate_limit.avg{final:false,$customer}",
+                "data_source": "metrics",
+                "name": "query11"
+              },
+              {
+                "query": "avg:snuba.api.query.cache_get.avg{final:false,$customer}",
+                "data_source": "metrics",
+                "name": "query12"
+              },
+              {
+                "query": "avg:snuba.api.query.get_configs.avg{final:false,$customer}",
+                "data_source": "metrics",
+                "name": "query13"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "area"
+          }
+        ],
+        "yaxis": {
+          "min": "0"
+        }
+      }
+    },
+    {
+      "id": 7660734073662828,
+      "definition": {
+        "title": "Cumulative Time by Referrer (w/o subscriptions & subscriptions_executor)",
+        "show_legend": false,
+        "legend_layout": "vertical",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.sum{$customer,!referrer:subscription,!referrer:subscriptions_executor} by {referrer}",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 403399195,
+      "definition": {
+        "title": "Slowest Response Times (With FINAL Boolean)",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1",
+                "limit": {
+                  "count": 100,
+                  "order": "desc"
+                }
+              }
+            ],
+            "style": {
+              "palette": "cool"
+            },
+            "response_format": "scalar",
+            "queries": [
+              {
+                "query": "max:snuba.api.query.max{$customer} by {referrer,final}",
+                "data_source": "metrics",
+                "name": "query1",
+                "aggregator": "max"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 5627455646884032,
+      "definition": {
+        "title": "Maximum Response Time (final:false)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "max:snuba.api.query.max{$customer,final:false} by {referrer}.fill(zero)",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "scale": "sqrt"
+        }
+      }
+    },
+    {
+      "id": 5666273196997298,
+      "definition": {
+        "title": "Avg uWSGI Business (%)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "100 * (query1 / (query2 + query1))"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:uwsgi.core.busy_workers{$customer,service:snuba}",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "sum:uwsgi.core.idle_workers{$customer,service:snuba}",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "thin"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false,
+          "max": "110"
+        }
+      }
+    },
+    {
+      "id": 1966695216423716,
+      "definition": {
+        "title": "Successful Healthchecks",
+        "show_legend": false,
+        "legend_layout": "vertical",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              },
+              {
+                "formula": "query2"
+              },
+              {
+                "formula": "query3"
+              }
+            ],
+            "response_format": "timeseries",
+            "on_right_yaxis": false,
+            "queries": [
+              {
+                "query": "sum:envoy.cluster.health_check.success{envoy.cluster_name:snuba-api}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "sum:envoy.cluster.health_check.success{envoy.cluster_name:snuba-query-tcp}.as_rate()",
+                "data_source": "metrics",
+                "name": "query2"
+              },
+              {
+                "query": "sum:envoy.cluster.health_check.success{envoy.cluster_name:snuba-query-http}.as_rate()",
+                "data_source": "metrics",
+                "name": "query3"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 1995662167278348,
+      "definition": {
+        "title": "Failed Healthchecks",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              },
+              {
+                "formula": "query2"
+              },
+              {
+                "formula": "query3"
+              },
+              {
+                "formula": "query4"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:envoy.cluster.health_check.degraded{envoy.cluster_name:snuba-api} by {role}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "sum:envoy.cluster.health_check.network_failure{envoy.cluster_name:snuba-api} by {role}.as_rate()",
+                "data_source": "metrics",
+                "name": "query2"
+              },
+              {
+                "query": "sum:envoy.cluster.health_check.network_failure{envoy.cluster_name:snuba-query*} by {role}.as_rate()",
+                "data_source": "metrics",
+                "name": "query3"
+              },
+              {
+                "query": "sum:envoy.cluster.health_check.degraded{envoy.cluster_name:snuba-query*} by {role}",
+                "data_source": "metrics",
+                "name": "query4"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "area"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear",
+          "label": "",
+          "min": "auto",
+          "max": "auto"
+        }
+      }
+    },
+    {
+      "id": 7829806354631288,
+      "definition": {
+        "title": "Cache Hit (%)",
+        "show_legend": true,
+        "legend_size": "0",
+        "legend_layout": "auto",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "((query1 - query2) / query1) * 100"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.query.cache_get.count{$customer}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              },
+              {
+                "query": "avg:snuba.api.query.cache_set.count{$customer}.as_count()",
+                "data_source": "metrics",
+                "name": "query2"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false
+        }
+      }
+    },
+    {
+      "id": 6902891976008568,
+      "definition": {
+        "title": "Cache Hit (count)",
+        "show_legend": false,
+        "legend_size": "0",
+        "legend_layout": "vertical",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "sum:snuba.api.query.cache_get.count{$customer}.as_rate()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": false
+        },
+        "markers": []
+      }
+    },
+    {
+      "id": 4865466556266180,
+      "definition": {
+        "title": "Shallow Healthcheck Endpoint Non-200 responses",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.healthcheck_failed{thorough:false} by {clickhouse_ok,down_file_exists}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 7561584676676724,
+      "definition": {
+        "title": "Thorough (checks Clickhouse) Healthcheck Endpoint Non-200 responses",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.healthcheck_failed{thorough:true} by {clickhouse_ok,down_file_exists}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "orange",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 1839086208114009,
+      "definition": {
+        "title": "Healthcheck Latency (p99)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:snuba.api.healthcheck.latency.99percentile{*} by {thorough}",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 8556475221420498,
+      "definition": {
+        "title": "Clickhouse request",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 3588553195629260,
+            "definition": {
+              "title": "Clickhouse writes (rows by storage)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "sum:snuba.consumer.insertions.latency_ms.count{$customer} by {storage}.as_rate()",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {
+                "include_zero": false,
+                "scale": "sqrt"
+              },
+              "markers": []
+            }
+          },
+          {
+            "id": 320059000,
+            "definition": {
+              "title": "Concurrent Queries (from Snuba)",
+              "show_legend": false,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "on_right_yaxis": false,
+                  "queries": [
+                    {
+                      "query": "max:snuba.db_query.table_concurrent{*} by {table}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                },
+                {
+                  "formulas": [
+                    {
+                      "formula": "week_before(query1)"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "max:snuba.db_query.table_concurrent{*} by {table}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "gray",
+                    "line_type": "dotted",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {
+                "include_zero": true,
+                "scale": "linear",
+                "label": "",
+                "min": "auto",
+                "max": "auto"
+              },
+              "markers": []
+            }
+          },
+          {
+            "id": 7442682240040428,
+            "definition": {
+              "title": "Concurrent Queries (from Snuba) [new]",
+              "show_legend": false,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "on_right_yaxis": false,
+                  "queries": [
+                    {
+                      "query": "max:snuba.db_query.table_concurrent_hist.max{*} by {table}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                },
+                {
+                  "formulas": [
+                    {
+                      "formula": "week_before(query1)"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "max:snuba.db_query.table_concurrent_hist.max{*} by {table}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "gray",
+                    "line_type": "dotted",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {
+                "include_zero": true,
+                "scale": "linear",
+                "label": "",
+                "min": "auto",
+                "max": "auto"
+              },
+              "markers": []
+            }
+          },
+          {
+            "id": 3689324971856360,
+            "definition": {
+              "title": "Concurrent snuba connections to clickhouse",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "sum:snuba.clickhouse.native.connections{*}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "bars"
+                }
+              ],
+              "yaxis": {
+                "include_zero": true,
+                "scale": "linear",
+                "label": "",
+                "min": "auto",
+                "max": "auto"
+              },
+              "markers": []
+            }
+          },
+          {
+            "id": 1193077452380964,
+            "definition": {
+              "title": "Querylog recorded queries",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "avg:snuba.snuba.state.record_query.delivery_callback{*} by {status}.as_count()",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "bars"
+                }
+              ],
+              "yaxis": {
+                "include_zero": false
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 7122696458535364,
+      "definition": {
+        "title": "Deduplication",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 4321801810836502,
+            "definition": {
+              "title": "Duplicates (% of All Queries)",
+              "show_legend": true,
+              "legend_size": "0",
+              "legend_layout": "auto",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "(query1 / query2) * 100"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "sum:snuba.api.query.dedupe_wait.count{*}.as_count()",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    },
+                    {
+                      "query": "sum:snuba.api.query.cache_get.count{*}.as_count()",
+                      "data_source": "metrics",
+                      "name": "query2"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {
+                "include_zero": false
+              }
+            }
+          },
+          {
+            "id": 3219302326806430,
+            "definition": {
+              "title": "Dedupe Wait (avg and max)",
+              "show_legend": true,
+              "legend_size": "0",
+              "legend_layout": "auto",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "avg:snuba.api.query.dedupe_wait.avg{*}.rollup(avg)",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    },
+                    {
+                      "query": "max:snuba.api.query.dedupe_wait.max{*}.rollup(max)",
+                      "data_source": "metrics",
+                      "name": "query2"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {
+                "include_zero": false,
+                "scale": "sqrt"
+              }
+            }
+          },
+          {
+            "id": 4793282116730490,
+            "definition": {
+              "title": "Dedupe Wait Cumulative Time (ClickHouse CPU Time Saved)",
+              "show_legend": true,
+              "legend_size": "0",
+              "legend_layout": "auto",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "sum:snuba.api.query.dedupe_wait.sum{$customer}.rollup(sum)",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "bars"
+                }
+              ],
+              "yaxis": {
+                "include_zero": true,
+                "scale": "linear",
+                "label": "",
+                "min": "auto",
+                "max": "auto"
+              }
+            }
+          },
+          {
+            "id": 6001183530015666,
+            "definition": {
+              "title": "Cache partitions usage by partition id",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "avg:snuba.db_query.cache_partition_loaded{*} by {partition_id}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 993506471403298,
+      "definition": {
+        "title": "Rate limits",
+        "show_title": true,
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 6481612243924576,
+            "definition": {
+              "title": "Table concurrent",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "autosmooth(query1)"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "avg:snuba.db_query.table_concurrent{*} by {table,cache_partition}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "id": 1660701890321722,
+            "definition": {
+              "title": "Table per second",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "legend_columns": [
+                "avg",
+                "min",
+                "max",
+                "value",
+                "sum"
+              ],
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {
+                      "formula": "query1"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "query": "avg:snuba.db_query.table_per_second{*} by {table,cache_partition}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ],
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "display_type": "line"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 5684703620338028,
+      "definition": {
+        "title": "New Referrers",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "query": "avg:sentry.snql.sdk.api.new_referrers{*} by {referrer}.as_count()",
+                "data_source": "metrics",
+                "name": "query1"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "customer",
+      "prefix": "customer",
+      "available_values": [],
+      "default": "*"
+    }
+  ],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "template_variable_presets": [
+    {
+      "name": "Subscriptions",
+      "template_variables": [
+        {
+          "name": "customer",
+          "value": "referrer:subscription"
+        }
+      ]
+    }
+  ],
+  "reflow_type": "auto",
+  "id": "nh3-zjj-xrf"
+}

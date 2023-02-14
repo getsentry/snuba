@@ -1,0 +1,9 @@
+- uwsgi is up but the python process is not up
+    - runs the http request in a separate process
+
+- return a non-502 response
+- k8s shutting down the pod for valid reasons vs a healthcheck failure is not perceptible and creates the down file either
+- FP: are we conflating the the signal to tell k8s to restart the pod with the signal to envoy to not send traffic to the pod
+    - if we are draining the node
+    - would it be logical to add a different healthcheck for envoy?
+        - https://github.com/getsentry/ops/blob/master/k8s/services/xds/templates/snuba.yaml#L49
