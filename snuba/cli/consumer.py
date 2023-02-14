@@ -139,7 +139,7 @@ def consumer(
     sentry_sdk.set_tag("storage", storage_name)
 
     metrics_tags = {
-        "group": consumer_group,
+        "consumer_group": consumer_group,
         "storage": storage_key.value,
     }
 

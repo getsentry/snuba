@@ -189,7 +189,7 @@ def reverse(
     "--host-name",
     type=str,
     required=True,
-    default=os.environ.get("CLICKHOUSE_HOST", "localhost"),
+    default=os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
 )
 @click.option(
     "--port",

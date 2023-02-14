@@ -45,6 +45,8 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
         name: metrics-counters-subscriptions-scheduler
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: metrics-sets-subscriptions-scheduler
@@ -55,9 +57,13 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-subscriptions-scheduler
       - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-subscriptions-scheduler
+      - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-sets-subscriptions-executor
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-subscriptions-executor
+      - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-subscriptions-executor
   - kind: KubernetesCronJob
     selector:
       label_selector: service=snuba
