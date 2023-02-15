@@ -318,6 +318,8 @@ validators:
     args:
       required_filter_columns:
         - project_id
+  - validator: TagConditionValidator
+    args: {}
 
 subscription_validators:
   [

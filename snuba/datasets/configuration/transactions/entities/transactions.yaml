@@ -351,6 +351,10 @@ validators:
       validator: EntityRequiredColumnValidator,
       args: { required_filter_columns: [project_id] },
     },
+    {
+      validator: TagConditionValidator,
+      args: {}
+    },
   ]
 
 required_time_column: finish_ts

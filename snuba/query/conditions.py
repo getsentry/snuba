@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Mapping, Optional, Sequence, Set, Union
 
 from snuba.query.dsl import literals_tuple
@@ -313,40 +315,67 @@ def is_condition(exp: Expression) -> bool:
 
 
 def build_match(
-    col: str,
-    ops: Sequence[str],
-    param_type: Any,
+    col: Optional[str] = None,
+    subscriptable: Optional[str] = None,
+    ops: Optional[Sequence[str]] = None,
+    array_ops: Optional[Sequence[str]] = None,
+    param_type: Optional[Any] = None,
     alias: Optional[str] = None,
     key: Optional[str] = None,
 ) -> Or[Expression]:
-    # The IN condition has to be checked separately since each parameter
-    # has to be checked individually.
+    """
+    There is a common use case of matching a specific condition in our code base.
+    This function provides a simplified interface to creating those types of patterns.
+    The specific pattern is <column/subscriptable> <op> <literal(s)>. The column/subscriptable
+    name is provided, along with the specific ops to check and optional parameter type, alias
+    and subscriptable key.
+    If ops/array_ops are not provided, they default to EQ and IN respectively. If param_type
+    is not provided, the matcher will match a Literal with any type.
+    The returned matcher will also tag the left and right expressions with `column` and `rhs`
+    on a successful match.
+    """
     alias_match = AnyOptionalString() if alias is None else String(alias)
     pattern: Union[ColumnPattern, SubscriptableReferencePattern]
-    if key is not None:
+
+    assert subscriptable is not None or col is not None
+    if subscriptable is not None:
+        key_pattern: Pattern[str]
+        if key is not None:
+            key_pattern = String(key)
+        else:
+            key_pattern = AnyPattern(str)
+
         pattern = SubscriptableReferencePattern(
-            table_name=alias_match, column_name=String(col), key=String(key)
+            table_name=alias_match, column_name=String(subscriptable), key=key_pattern
         )
-    else:
+    elif col is not None:
         pattern = ColumnPattern(table_name=alias_match, column_name=String(col))
 
     column_match = Param("column", pattern)
+    if ops is None:
+        ops = [ConditionFunctions.EQ]
+    if array_ops is None:
+        array_ops = [ConditionFunctions.IN]
+
+    rhs_param = None
+    if param_type is not None:
+        rhs_param = AnyPattern(param_type)
 
     return Or(
         [
             FunctionCallPattern(
                 Or([String(op) for op in ops]),
-                (column_match, Param("rhs", LiteralPattern(AnyPattern(param_type)))),
+                (column_match, Param("rhs", LiteralPattern(rhs_param))),
             ),
             FunctionCallPattern(
-                String(ConditionFunctions.IN),
+                Or([String(op) for op in array_ops]),
                 (
                     column_match,
                     Param(
                         "rhs",
                         FunctionCallPattern(
                             Or([String("array"), String("tuple")]),
-                            all_parameters=LiteralPattern(AnyPattern(param_type)),
+                            all_parameters=LiteralPattern(rhs_param),
                         ),
                     ),
                 ),

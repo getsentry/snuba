@@ -12,7 +12,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
-from snuba.query.expressions import Column
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.utils.registered_class import RegisteredClass
 
@@ -187,24 +187,27 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
         for exp in query.get_groupby():
-            key: Optional[str] = None
             if isinstance(exp, SubscriptableReferenceExpr):
-                column_name = str(exp.column.column_name)
-                key = str(exp.key.value)
+                match = build_match(
+                    subscriptable=str(exp.column.column_name),
+                    ops=[ConditionFunctions.EQ],
+                    param_type=int,
+                    alias=alias,
+                    key=str(exp.key.value),
+                )
             elif isinstance(exp, Column):
-                column_name = exp.column_name
+                match = build_match(
+                    col=exp.column_name,
+                    ops=[ConditionFunctions.EQ],
+                    param_type=int,
+                    alias=alias,
+                    key=None,
+                )
             else:
                 raise InvalidQueryException(
                     "Unhandled column type in group by validation"
                 )
 
-            match = build_match(
-                col=column_name,
-                ops=[ConditionFunctions.EQ],
-                param_type=int,
-                alias=alias,
-                key=key,
-            )
             found = any(match.match(cond) for cond in top_level)
 
             if not found:
@@ -255,3 +258,58 @@ class GranularityValidator(QueryValidator):
             raise InvalidQueryException(
                 f"granularity must be multiple of {self.minimum}"
             )
+
+
+class TagConditionValidator(QueryValidator):
+    """
+    Sometimes a query will have a condition that compares a tag value to a
+    non-string literal. This will always fail (tags are always strings) so
+    catch this specific case and reject it.
+    """
+
+    def __init__(self) -> None:
+        self.condition_matcher = build_match(
+            subscriptable="tags",
+            ops=[
+                ConditionFunctions.EQ,
+                ConditionFunctions.NEQ,
+                ConditionFunctions.LTE,
+                ConditionFunctions.GTE,
+                ConditionFunctions.LT,
+                ConditionFunctions.GT,
+                ConditionFunctions.LIKE,
+                ConditionFunctions.NOT_LIKE,
+            ],
+            array_ops=[ConditionFunctions.IN, ConditionFunctions.NOT_IN],
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        condition = query.get_condition()
+        if not condition:
+            return
+        for cond in condition:
+            match = self.condition_matcher.match(cond)
+            if match:
+                column = match.expression("column")
+                col_str: str
+                if not isinstance(column, SubscriptableReferenceExpr):
+                    return  # only fail things on the tags[] column
+
+                col_str = f"{column.column.column_name}[{column.key.value}]"
+                error_prefix = f"invalid tag condition on '{col_str}':"
+
+                rhs = match.expression("rhs")
+                if isinstance(rhs, Literal):
+                    if not isinstance(rhs.value, str):
+                        raise InvalidQueryException(
+                            f"{error_prefix} {rhs.value} must be a string"
+                        )
+                elif isinstance(rhs, FunctionCall):
+                    # The rhs is guaranteed to be an array function because of the match
+                    for param in rhs.parameters:
+                        if isinstance(param, Literal) and not isinstance(
+                            param.value, str
+                        ):
+                            raise InvalidQueryException(
+                                f"{error_prefix} array literal {param.value} must be a string"
+                            )
