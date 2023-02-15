@@ -1,9 +1,16 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
 
+from clickhouse_driver.errors import ErrorCodes
+
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.request import Request
+from snuba.state.cache.abstract import ExecutionTimeoutError
+from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
 
 
@@ -13,6 +20,107 @@ class QueryStatus(Enum):
     RATE_LIMITED = "rate-limited"
     INVALID_REQUEST = "invalid-request"
     TIMEOUT = "timeout"
+
+
+QUERY_ERROR_MAPPINGS = {
+    ErrorCodes.TOO_SLOW: QueryStatus.TIMEOUT,
+    ErrorCodes.TIMEOUT_EXCEEDED: QueryStatus.TIMEOUT,
+    ErrorCodes.SOCKET_TIMEOUT: QueryStatus.TIMEOUT,
+    ErrorCodes.NETWORK_ERROR: QueryStatus.TIMEOUT,
+}
+
+
+def get_query_status_from_error_codes(code: ErrorCodes) -> QueryStatus | None:
+    return QUERY_ERROR_MAPPINGS.get(code)
+
+
+class SLOStatus(Enum):
+    """
+    The different statuses we return for a request.
+
+    TODO: This will replace QueryStatus, but both exist as we cut over.
+    """
+
+    # Successfully returned a response
+    SUCCESS = "success"
+    # Failed validation
+    INVALID_REQUEST = "invalid-request"
+    # A type mismatch between arguments, ILLEGAL_TYPE_OF_ARGUMENT/TYPE_MISMATCH
+    INVALID_TYPING = "invalid-typing"
+    # Rejected because of one of the product based rate limiters
+    RATE_LIMITED = "rate-limited"
+    # Rejected by a table rate limiter
+    TABLE_RATE_LIMITED = "table-rate-limited"
+    # If the thread responsible for executing a query and writing it to the cache times out
+    CACHE_SET_TIMEOUT = "cache-set-timeout"
+    # The thread waiting for a cache result to be written times out
+    CACHE_WAIT_TIMEOUT = "cache-wait-timeout"
+    # Clickhouse predicted the query would time out. TOO_SLOW
+    PREDICTED_TIMEOUT = "predicted-timeout"
+    # Clickhouse timeout, TIMEOUT_EXCEEDED
+    CLICKHOUSE_TIMEOUT = "clickhouse-timeout"
+    # Network isssues, SOCKET_TIMEOUT NETWORK_ERROR
+    NETWORK_TIMEOUT = "network-timeout"
+    # Query used too much memory, MEMORY_LIMIT_EXCEEDED
+    MEMORY_EXCEEDED = "memory-exceeded"
+    # Any other error
+    ERROR = "error"
+
+
+class SLO(Enum):
+    FOR = "for"  # These are not counted against our SLO
+    AGAINST = "against"  # These are counted against our SLO
+
+
+@dataclass(frozen=True)
+class NewStatus:
+    status: SLOStatus
+    slo: SLO
+
+
+# Statuses that don't impact the SLO
+SLO_FOR = {
+    SLOStatus.SUCCESS,
+    SLOStatus.INVALID_REQUEST,
+    SLOStatus.INVALID_TYPING,
+    SLOStatus.RATE_LIMITED,
+    SLOStatus.PREDICTED_TIMEOUT,
+    SLOStatus.MEMORY_EXCEEDED,
+}
+
+
+ERROR_CODE_MAPPINGS = {
+    ErrorCodes.TOO_SLOW: SLOStatus.PREDICTED_TIMEOUT,
+    ErrorCodes.TIMEOUT_EXCEEDED: SLOStatus.CLICKHOUSE_TIMEOUT,
+    ErrorCodes.SOCKET_TIMEOUT: SLOStatus.NETWORK_TIMEOUT,
+    ErrorCodes.NETWORK_ERROR: SLOStatus.NETWORK_TIMEOUT,
+    ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: SLOStatus.INVALID_TYPING,
+    ErrorCodes.TYPE_MISMATCH: SLOStatus.INVALID_TYPING,
+    ErrorCodes.MEMORY_LIMIT_EXCEEDED: SLOStatus.MEMORY_EXCEEDED,
+}
+
+
+def get_new_status(cause: Exception | None = None) -> NewStatus:
+    slo_status: SLOStatus
+    if cause is None:
+        slo_status = SLOStatus.SUCCESS
+    elif isinstance(cause, RateLimitExceeded):
+        trigger_rate_limiter = cause.extra_data.get("scope", "")
+        if trigger_rate_limiter == TABLE_RATE_LIMIT_NAME:
+            slo_status = SLOStatus.TABLE_RATE_LIMITED
+        else:
+            slo_status = SLOStatus.RATE_LIMITED
+    elif isinstance(cause, ClickhouseError):
+        slo_status = ERROR_CODE_MAPPINGS.get(cause.code, SLOStatus.ERROR)
+    elif isinstance(cause, TimeoutError):
+        slo_status = SLOStatus.CACHE_SET_TIMEOUT
+    elif isinstance(cause, ExecutionTimeoutError):
+        slo_status = SLOStatus.CACHE_WAIT_TIMEOUT
+    else:
+        slo_status = SLOStatus.ERROR
+
+    slo = SLO.FOR if slo_status in SLO_FOR else SLO.AGAINST
+    return NewStatus(slo_status, slo)
 
 
 Columnset = Set[str]
@@ -72,6 +180,7 @@ class ClickhouseQueryMetadata:
     end_timestamp: Optional[datetime]
     stats: Mapping[str, Any]
     status: QueryStatus
+    new_status: NewStatus
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
     result_profile: Optional[Mapping[str, Any]] = None
@@ -86,6 +195,8 @@ class ClickhouseQueryMetadata:
             "end_timestamp": end,
             "stats": self.stats,
             "status": self.status.value,
+            "new_status": self.new_status.status.value,
+            "slo": self.new_status.slo.value,
             "trace_id": self.trace_id,
             "profile": self.profile.to_dict(),
             "result_profile": self.result_profile,
@@ -126,6 +237,8 @@ class SnubaQueryMetadata:
             "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
+            "new_status": self.new_status.value,
+            "slo": self.slo.value,
             "timing": self.timer.for_json(),
             "projects": list(self.projects),
             "snql_anonymized": self.snql_anonymized,
@@ -136,3 +249,27 @@ class SnubaQueryMetadata:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
         return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
+
+    @property
+    def new_status(self) -> SLOStatus:
+        # If we do not have any recorded query and we did not specifically log
+        # invalid_query, we assume there was an error somewhere.
+        if not self.query_list:
+            return SLOStatus.ERROR
+
+        for query in self.query_list:
+            if query.new_status.status != SLOStatus.SUCCESS:
+                return query.new_status.status  # always return the worst case
+
+        return SLOStatus.SUCCESS
+
+    @property
+    def slo(self) -> SLO:
+        # If we do not have any recorded query and we did not specifically log
+        # invalid_query, we assume there was an error and log it against.
+        if not self.query_list:
+            return SLO.AGAINST
+
+        # even one error counts the request against
+        failure = any(q.new_status.slo != SLO.FOR for q in self.query_list)
+        return SLO.AGAINST if failure else SLO.FOR

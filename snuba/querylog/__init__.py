@@ -9,7 +9,7 @@ from snuba.attribution.log import (
     QueryAttributionData,
     record_attribution,
 )
-from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
+from snuba.querylog.query_metadata import NewStatus, QueryStatus, SnubaQueryMetadata
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -30,6 +30,8 @@ def _record_timer_metrics(
         metrics,
         tags={
             "status": query_metadata.status.value,
+            "new_status": query_metadata.new_status.value,
+            "slo": query_metadata.slo.value,
             "referrer": referrer,
             "parent_api": parent_api,
             "final": final,
@@ -115,32 +117,43 @@ def _add_tags(
                     break
 
 
-def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
+def record_invalid_request(
+    timer: Timer, new_status: NewStatus, referrer: Optional[str]
+) -> None:
     """
     Records a failed request before the request object is created, so
     it records failures during parsing/validation.
     This is for client errors.
     """
-    _record_failure_building_request(QueryStatus.INVALID_REQUEST, timer, referrer)
+    _record_failure_building_request(
+        QueryStatus.INVALID_REQUEST, new_status, timer, referrer
+    )
 
 
-def record_error_building_request(timer: Timer, referrer: Optional[str]) -> None:
+def record_error_building_request(
+    timer: Timer, new_status: NewStatus, referrer: Optional[str]
+) -> None:
     """
     Records a failed request before the request object is created, so
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(QueryStatus.ERROR, timer, referrer)
+    _record_failure_building_request(QueryStatus.ERROR, new_status, timer, referrer)
 
 
 def _record_failure_building_request(
-    status: QueryStatus, timer: Timer, referrer: Optional[str]
+    status: QueryStatus, new_status: NewStatus, timer: Timer, referrer: Optional[str]
 ) -> None:
     # TODO: Revisit if recording some data for these queries in the querylog
     # table would be useful.
     if settings.RECORD_QUERIES:
         timer.send_metrics_to(
             metrics,
-            tags={"status": status.value, "referrer": referrer or "none"},
+            tags={
+                "status": status.value,
+                "referrer": referrer or "none",
+                "new_status": new_status.status.value,
+                "slo": new_status.slo.value,
+            },
         )
         _add_tags(timer)
