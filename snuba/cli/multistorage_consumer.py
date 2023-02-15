@@ -1,6 +1,7 @@
 import logging
 import signal
-from typing import Any, Callable, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Sequence
 
 import click
 import rapidjson
@@ -144,17 +145,12 @@ def multistorage_consumer(
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
 
-    (
-        logical_raw_topic,
-        logical_commit_topic,
-        _,
-        dead_letter_policy,
-    ) = get_logical_topics([*storages.values()])
+    consumer_config = get_consumer_config([*storages.values()])
 
     if raw_events_topic:
         topic = Topic(raw_events_topic)
     else:
-        topic = logical_raw_topic
+        topic = consumer_config.logical_raw_topic
 
     commit_log: Optional[Topic]
     if commit_log_topic:
@@ -163,7 +159,7 @@ def multistorage_consumer(
         # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
         # time. (It is less easily modified.) This also assumes the commit log
         # topic is on the same Kafka cluster as the input topic.
-        commit_log = logical_commit_topic
+        commit_log = consumer_config.logical_commit_log_topic
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -176,7 +172,7 @@ def multistorage_consumer(
     storage_keys = [*storages.keys()]
 
     consumer_configuration = build_kafka_consumer_configuration(
-        SnubaTopic(logical_raw_topic.name),
+        SnubaTopic(consumer_config.logical_raw_topic.name),
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=not no_strict_offset_reset,
@@ -221,10 +217,12 @@ def multistorage_consumer(
         # XXX: This relies on the assumptions that a.) all storages are
         # located on the same Kafka cluster (validated above.)
 
-        assert logical_commit_topic is not None
+        assert consumer_config.logical_commit_log_topic is not None
 
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(SnubaTopic(logical_commit_topic.name))
+            build_kafka_producer_configuration(
+                SnubaTopic(consumer_config.logical_commit_log_topic.name)
+            )
         )
 
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
@@ -238,7 +236,7 @@ def multistorage_consumer(
         output_block_size,
         metrics,
         commit_log_config,
-        dead_letter_policy,
+        consumer_config.dead_letter_policy,
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -257,17 +255,17 @@ def multistorage_consumer(
     processor.run()
 
 
-LogicalTopicTuple = Tuple[
-    Topic,
-    Optional[Topic],
-    Optional[Topic],
-    Optional[Callable[[], DeadLetterQueuePolicy]],
-]
+@dataclass
+class ConsumerConfig:
+    logical_raw_topic: Topic
+    logical_commit_log_topic: Optional[Topic]
+    logical_replacements_topic: Optional[Topic]
+    dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]]
 
 
-def get_logical_topics(
+def get_consumer_config(
     storages: Sequence[WritableTableStorage],
-) -> LogicalTopicTuple:
+) -> ConsumerConfig:
     stream_loaders = {
         storage.get_table_writer().get_stream_loader() for storage in storages
     }
@@ -327,7 +325,9 @@ def get_logical_topics(
     if dead_letter_policies:
         raise ValueError("only one dead letter policy is supported")
 
-    return (topic, commit_log_topic, replacement_topic, dead_letter_policy_creator)
+    return ConsumerConfig(
+        topic, commit_log_topic, replacement_topic, dead_letter_policy_creator
+    )
 
 
 def build_multistorage_streaming_strategy_factory(
