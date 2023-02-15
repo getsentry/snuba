@@ -109,6 +109,9 @@ def build_request(
                 request_parts.attribution_info["app_id"]
             )
             attribution_info["referrer"] = referrer
+            attribution_info["tenant_ids"] = request_parts.attribution_info[
+                "tenant_ids"
+            ]
 
             request_id = uuid.uuid4().hex
             request = Request(
