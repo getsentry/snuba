@@ -173,9 +173,6 @@ class InsertBatchWriter:
             self.__writer,
         )
 
-    def terminate(self) -> None:
-        self.__closed = True
-
     def join(self, timeout: Optional[float] = None) -> None:
         pass
 
@@ -216,9 +213,6 @@ class ReplacementBatchWriter:
                     value=rapidjson.dumps(value).encode("utf-8"),
                     on_delivery=self.__delivery_callback,
                 )
-
-    def terminate(self) -> None:
-        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
@@ -308,14 +302,6 @@ class ProcessedMessageBatchWriter:
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        self.__insert_batch_writer.terminate()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -443,12 +429,6 @@ class MultistorageCollector:
 
         for storage_key, step in self.__steps.items():
             step.close()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        for step in self.__steps.values():
-            step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
