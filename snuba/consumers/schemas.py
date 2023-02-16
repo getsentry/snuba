@@ -6,7 +6,7 @@ from snuba.utils.streams.topics import Topic
 
 _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     Topic.GENERIC_METRICS: {
-        "$schema": "http://json-schema.org/draft-06/schema#",
+        "$schema": "http://json-schema.org/draft-2020-12/schema#",
         "$ref": "#/definitions/Main",
         "definitions": {
             "Main": {
