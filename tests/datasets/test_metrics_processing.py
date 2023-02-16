@@ -244,7 +244,9 @@ def test_metrics_processing(
         query=query,
         snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer=""),
-        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
+        attribution_info=AttributionInfo(
+            get_app_id("blah"), {"blah": "blah"}, "blah", None, None, None
+        ),
     )
 
     def query_runner(
