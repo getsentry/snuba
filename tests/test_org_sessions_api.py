@@ -112,7 +112,12 @@ class TestOrgSessionsApi(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="sessions", app_id="default", query=query)
+        request = Request(
+            dataset="sessions",
+            app_id="default",
+            tenant_ids={"default": "default"},
+            query=query,
+        )
         response = self.app.post(
             "/sessions/snql",
             data=json.dumps(request.to_dict()),
@@ -144,7 +149,12 @@ class TestOrgSessionsApi(BaseApiTest):
             orderby=[OrderBy(Column("org_id"), Direction.ASC)],
         )
 
-        request = Request(dataset="sessions", app_id="default", query=query)
+        request = Request(
+            dataset="sessions",
+            app_id="default",
+            tenant_ids={"default": "default"},
+            query=query,
+        )
         response = self.app.post(
             "/sessions/snql",
             data=json.dumps(request.to_dict()),
@@ -163,7 +173,12 @@ class TestOrgSessionsApi(BaseApiTest):
             [OrderBy(Column("org_id"), Direction.DESC)],
         )
 
-        request = Request(dataset="sessions", app_id="default", query=query)
+        request = Request(
+            dataset="sessions",
+            app_id="default",
+            tenant_ids={"default": "default"},
+            query=query,
+        )
         response = self.app.post(
             "/sessions/snql",
             data=json.dumps(request.to_dict()),
