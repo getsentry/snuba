@@ -12,10 +12,12 @@ def test_split_request() -> None:
         "team": "sns",
         "feature": "attribution",
         "app_id": "foobar",
+        "tenant_ids": {"referrer": "test"},
         "query": """MATCH (something) dontcare""",
     }
     schema = RequestSchema.build(HTTPQuerySettings)
     parts = schema.validate(payload)
+    print(parts.attribution_info)
     assert set(parts.query_settings.keys()) == {
         "turbo",
         "consistent",
@@ -28,6 +30,7 @@ def test_split_request() -> None:
         "team",
         "feature",
         "app_id",
+        "tenant_ids",
         "parent_api",
         "referrer",
     }
