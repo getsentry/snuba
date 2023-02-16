@@ -1,6 +1,6 @@
 from typing import Any, Mapping, MutableMapping, Optional
 
-from arroyo.processing.strategies.decoder import JsonCodec
+from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
 
