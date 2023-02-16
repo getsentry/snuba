@@ -58,6 +58,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
+from snuba import environment
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
@@ -76,6 +77,8 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.writer import BatchWriter
+
+metrics = MetricsWrapper(environment.metrics, "consumer")
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -552,15 +555,23 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
-    validate: float,
+    validate_sample_rate: float,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
-        decoded = codec.decode(
-            message.payload.value, validate=random.random() < validate
-        )
+        should_validate = random.random() < validate_sample_rate
+        start = time.time()
+
+        decoded = codec.decode(message.payload.value, validate=should_validate)
+
+        if should_validate:
+            # TODO: this is not the most efficient place to emit a metric, but
+            # as long as should_validate is behind a sample rate it should be
+            # OK.
+            metrics.timing("codec_decode_and_validate", (time.time() - start) * 1000)
+
         result = processor.process_message(
             decoded,
             KafkaMessageMetadata(
