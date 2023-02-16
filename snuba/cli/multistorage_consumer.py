@@ -255,7 +255,7 @@ def multistorage_consumer(
     processor.run()
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConsumerConfig:
     logical_raw_topic: Topic
     logical_commit_log_topic: Optional[Topic]
