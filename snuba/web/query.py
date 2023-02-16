@@ -201,11 +201,17 @@ def _run_query_pipeline(
             concurrent_queries_gauge,
         )
 
+    _request_tenant_ids_placeholder(request)
+
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
         .execute()
     )
+
+
+def _request_tenant_ids_placeholder(request: Request) -> None:
+    pass
 
 
 def _dry_run_query_runner(
