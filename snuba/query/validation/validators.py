@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -5,6 +7,7 @@ from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
@@ -12,11 +15,16 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
+from snuba.query.logical import Query as LogicalQuery
+from snuba.query.matchers import Or
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
+from snuba.utils.schemas import ColumnSet, Date, DateTime
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment_metrics, "query.validators")
 
 
 class ColumnValidationMode(Enum):
@@ -313,3 +321,76 @@ class TagConditionValidator(QueryValidator):
                             raise InvalidQueryException(
                                 f"{error_prefix} array literal {param.value} must be a string"
                             )
+
+
+class DatetimeConditionValidator(QueryValidator):
+    def __init__(self) -> None:
+        self.matchers: list[Or[Expression]] = []
+
+    def initialize(self, schema: ColumnSet) -> None:
+        for column in schema.columns:
+            if isinstance(column.type, (DateTime, Date)):
+                matcher = build_match(
+                    col=column.name,
+                    ops=[
+                        ConditionFunctions.EQ,
+                        ConditionFunctions.LT,
+                        ConditionFunctions.LTE,
+                        ConditionFunctions.GT,
+                        ConditionFunctions.GTE,
+                    ],
+                )
+                self.matchers.append(matcher)
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        if not isinstance(query, LogicalQuery):
+            return  # TODO: This doesn't work for queries with multiple entities.
+
+        # We can safely initialize this once and store the value, since these validators are
+        # created for each entity that uses them and are always used by the same entity.
+        # Also since this doesn't run on composite queries, the alias will always be None
+        # and doesn't affect the underlying matcher.
+        if not self.matchers:
+            self.initialize(query.get_from_clause().get_columns())
+
+        condition = query.get_condition()
+        if condition:
+            for cond in condition:
+                for matcher in self.matchers:
+                    match = matcher.match(cond)
+                    if match:
+                        rhs = match.expression("rhs")
+                        if isinstance(rhs, Literal):
+                            if not isinstance(rhs.value, datetime):
+                                lhs = match.expression("column")
+                                # TODO: change this to a proper exception after ensuring the product isn't
+                                # passing bad queries
+                                metrics.increment(
+                                    "datetime_condition_error",
+                                    tags={
+                                        "column": str(lhs),
+                                        "entity": query.get_from_clause().key.value,
+                                    },
+                                )
+                                logger.warning(
+                                    f"{lhs} requires datetime conditions: '{rhs.value}' is not a valid datetime"
+                                )
+                        elif isinstance(rhs, FunctionCall):
+                            # The matcher only matches array/tuples of literals
+                            for param in rhs.parameters:
+                                if isinstance(param, Literal) and not isinstance(
+                                    param.value, datetime
+                                ):
+                                    lhs = match.expression("column")
+                                    # TODO: change this to a proper exception after ensuring the product isn't
+                                    # passing bad queries
+                                    metrics.increment(
+                                        "datetime_condition_error",
+                                        tags={
+                                            "column": str(lhs),
+                                            "entity": query.get_from_clause().key.value,
+                                        },
+                                    )
+                                    logger.warning(
+                                        f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
+                                    )
