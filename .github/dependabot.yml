@@ -15,3 +15,10 @@ updates:
     open-pull-requests-limit: 50
     ignore:
       - dependency-name: "parsimonious"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "sentry-arroyo"
