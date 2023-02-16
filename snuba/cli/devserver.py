@@ -35,6 +35,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         os.execvp(daemons[0][1][0], daemons[0][1])
 
     daemons += [
+        (("admin", ["snuba", "admin"])),
         (
             "transaction-consumer",
             [
