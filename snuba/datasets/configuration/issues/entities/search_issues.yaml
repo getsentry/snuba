@@ -142,6 +142,12 @@ storages:
             from_column_name: contexts
             to_nested_col_table:
             to_nested_col_name: contexts
+      functions:
+        - mapper: DefaultNoneFunctionMapper
+          args:
+            function_names:
+              - isHandled
+              - notHandled
 
 storage_selector:
   selector: DefaultQueryStorageSelector

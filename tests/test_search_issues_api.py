@@ -33,6 +33,29 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         self.events_storage = get_entity(EntityKey.SEARCH_ISSUES).get_writable_storage()
         assert self.events_storage is not None
 
+        self.now = datetime.now().replace(minute=0, second=0, microsecond=0)
+
+        self.evt: MutableMapping[str, Any] = dict(
+            organization_id=1,
+            project_id=2,
+            event_id=str(uuid.uuid4().hex),
+            group_id=3,
+            primary_hash=str(uuid.uuid4().hex),
+            datetime=datetime.utcnow().isoformat() + "Z",
+            platform="other",
+            data={"received": self.now.timestamp()},
+            occurrence_data=dict(
+                id=str(uuid.uuid4().hex),
+                type=1,
+                issue_title="search me",
+                fingerprint=["one", "two"],
+                detection_time=self.now.timestamp(),
+            ),
+            retention_days=90,
+        )
+
+        write_unprocessed_events(self.events_storage, [self.evt])
+
     def post_query(
         self,
         query: str,
@@ -54,37 +77,13 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
 
     def test_simple_search_query(self) -> None:
-        now = datetime.now().replace(minute=0, second=0, microsecond=0)
-
-        evt: MutableMapping[str, Any] = dict(
-            organization_id=1,
-            project_id=2,
-            event_id=str(uuid.uuid4().hex),
-            group_id=3,
-            primary_hash=str(uuid.uuid4().hex),
-            datetime=datetime.utcnow().isoformat() + "Z",
-            platform="other",
-            data={"received": now.timestamp()},
-            occurrence_data=dict(
-                id=str(uuid.uuid4().hex),
-                type=1,
-                issue_title="search me",
-                fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
-            ),
-            retention_days=90,
-        )
-
-        assert self.events_storage
-        write_unprocessed_events(self.events_storage, [evt])
-
-        from_date = (now - timedelta(days=1)).isoformat()
-        to_date = (now + timedelta(days=1)).isoformat()
+        from_date = (self.now - timedelta(days=1)).isoformat()
+        to_date = (self.now + timedelta(days=1)).isoformat()
 
         response = self.post_query(
             f"""MATCH (search_issues)
                                     SELECT count() AS count BY project_id
-                                    WHERE project_id = {evt["project_id"]}
+                                    WHERE project_id = {self.evt["project_id"]}
                                     AND timestamp >= toDateTime('{from_date}')
                                     AND timestamp < toDateTime('{to_date}')
                                     LIMIT 1000
@@ -101,6 +100,44 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                 "count": 1,
             }
         ]
+
+    def test_not_handled(self) -> None:
+        from_date = (self.now - timedelta(days=1)).isoformat()
+        to_date = (self.now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                                            SELECT count() AS count BY project_id
+                                            WHERE project_id = {self.evt["project_id"]}
+                                            AND timestamp >= toDateTime('{from_date}')
+                                            AND timestamp < toDateTime('{to_date}')
+                                            AND notHandled() = 0
+                                            LIMIT 1000
+                                            """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["data"] == []
+
+    def test_is_handled(self) -> None:
+        from_date = (self.now - timedelta(days=1)).isoformat()
+        to_date = (self.now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                                            SELECT count() AS count BY project_id
+                                            WHERE project_id = {self.evt["project_id"]}
+                                            AND timestamp >= toDateTime('{from_date}')
+                                            AND timestamp < toDateTime('{to_date}')
+                                            AND isHandled() = 0
+                                            LIMIT 1000
+                                            """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["data"] == []
 
     def test_eventstream_endpoint(self) -> None:
         now = datetime.now()
