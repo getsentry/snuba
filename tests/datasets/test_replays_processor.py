@@ -390,17 +390,17 @@ class TestReplaysProcessor:
         message = ReplayEvent.empty_set()
 
         processed_batch = ReplaysProcessor().process_message(message.serialize(), meta)
-        assert isinstance(processed_batch, InsertBatch)
+        assert isinstance(processed_batch, InsertBatch)  # required for type checker
         received = processed_batch.rows[0]
-        assert isinstance(received, dict)
+        assert isinstance(received, dict)  # required for type checker
         received_event_hash = received.pop("event_hash")
 
         expected = message.build_result(meta)
-        assert isinstance(expected, dict)
+        assert isinstance(expected, dict)  # required for type checker
         expected_event_hash = expected.pop("event_hash")
 
-        assert received == expected
-        assert received_event_hash != expected_event_hash
+        assert received == expected  # all fields are identical except event_hash
+        assert received_event_hash != expected_event_hash  # hash is random
 
     def test_process_message_invalid_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
