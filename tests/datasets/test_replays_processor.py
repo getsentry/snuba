@@ -4,7 +4,6 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import md5
 from typing import Any, Mapping
 
 import pytest
@@ -15,6 +14,7 @@ from snuba.datasets.processors.replays_processor import (
     maybe,
     normalize_tags,
     process_tags_object,
+    segment_id_to_event_hash,
     to_capped_list,
     to_datetime,
     to_enum,
@@ -24,7 +24,6 @@ from snuba.datasets.processors.replays_processor import (
     to_uuid,
 )
 from snuba.processor import InsertBatch
-from snuba.util import force_bytes
 
 
 @dataclass
@@ -179,10 +178,7 @@ class ReplayEvent:
         return None
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
-
-        segment_id_bytes = force_bytes(str((self.segment_id)))
-        segment_hash = md5(segment_id_bytes).hexdigest()
-        event_hash = str(uuid.UUID(segment_hash))
+        event_hash = segment_id_to_event_hash(self.segment_id)
 
         ret = {
             "project_id": 1,
@@ -393,9 +389,18 @@ class TestReplaysProcessor:
 
         message = ReplayEvent.empty_set()
 
-        assert ReplaysProcessor().process_message(
-            message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        processed_batch = ReplaysProcessor().process_message(message.serialize(), meta)
+        assert isinstance(processed_batch, InsertBatch)
+        received = processed_batch.rows[0]
+        assert isinstance(received, dict)
+        received_event_hash = received.pop("event_hash")
+
+        expected = message.build_result(meta)
+        assert isinstance(expected, dict)
+        expected_event_hash = expected.pop("event_hash")
+
+        assert received == expected
+        assert received_event_hash != expected_event_hash
 
     def test_process_message_invalid_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
