@@ -576,7 +576,6 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         request = Request(
             dataset="generic_metrics",
             app_id="default",
-            tenant_ids={"default": "default"},
             query=query,
         )
         response = self.app.post(

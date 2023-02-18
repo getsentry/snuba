@@ -75,7 +75,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="discover",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         request.flags.consistent = True
         request.flags.debug = True
@@ -120,7 +119,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="sessions",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -156,7 +154,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="discover",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -196,7 +193,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="discover",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -238,7 +234,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="events",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -280,7 +275,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="events",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -317,7 +311,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="discover",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         request.flags.debug = True
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
@@ -344,7 +337,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="events",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
 
@@ -435,7 +427,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="discover",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
 
@@ -462,7 +453,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="events",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
 
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
@@ -491,7 +481,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="events",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
@@ -515,7 +504,6 @@ class TestSDKSnQLApi(BaseApiTest):
             dataset="generic_metrics",
             query=query,
             app_id="default",
-            tenant_ids={"referrer": "some_referrer"},
         )
         response = self.post(
             "/generic_metrics/snql", data=json.dumps(request.to_dict())

@@ -45,7 +45,7 @@ def run_query() -> None:
             snql_anonymized="",
             query_settings=query_settings,
             attribution_info=AttributionInfo(
-                get_app_id("blah"), {"blah": "blah"}, "blah", None, None, None
+                get_app_id("blah"), "blah", None, None, None
             ),
         ),
         timer,

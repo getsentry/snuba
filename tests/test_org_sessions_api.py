@@ -115,7 +115,6 @@ class TestOrgSessionsApi(BaseApiTest):
         request = Request(
             dataset="sessions",
             app_id="default",
-            tenant_ids={"default": "default"},
             query=query,
         )
         response = self.app.post(
@@ -152,7 +151,6 @@ class TestOrgSessionsApi(BaseApiTest):
         request = Request(
             dataset="sessions",
             app_id="default",
-            tenant_ids={"default": "default"},
             query=query,
         )
         response = self.app.post(
@@ -176,7 +174,6 @@ class TestOrgSessionsApi(BaseApiTest):
         request = Request(
             dataset="sessions",
             app_id="default",
-            tenant_ids={"default": "default"},
             query=query,
         )
         response = self.app.post(
