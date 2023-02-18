@@ -201,7 +201,7 @@ def _run_query_pipeline(
             concurrent_queries_gauge,
         )
 
-    _request_tenant_ids_placeholder(request)
+    record_missing_tenant_ids(request)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -210,8 +210,24 @@ def _run_query_pipeline(
     )
 
 
-def _request_tenant_ids_placeholder(request: Request) -> None:
-    pass
+def record_missing_tenant_ids(request: Request) -> None:
+    """
+    Used to track how often the new `tenant_ids` field is not included in
+    a Snuba Request. Ideally, all requests contain this information and this
+    metric will be removed once all API calls from Sentry do include this info.
+    """
+    if tenant_ids := request.attribution_info.tenant_ids:
+        if "referrer" not in tenant_ids or "organization_id" not in tenant_ids:
+            metrics.increment(
+                "request_without_tenant_ids",
+                tags={
+                    "referrer": request.referrer,
+                    "parent_api": request.attribution_info.parent_api or "None",
+                    "team": request.attribution_info.team or "None",
+                    "feature": request.attribution_info.feature or "None",
+                    "app_id": request.attribution_info.app_id.key,
+                },
+            )
 
 
 def _dry_run_query_runner(
