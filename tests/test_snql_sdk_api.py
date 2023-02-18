@@ -71,11 +71,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="discover", query=query, app_id="default")
         request.flags.consistent = True
         request.flags.debug = True
 
@@ -115,11 +111,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(100)
         )
 
-        request = Request(
-            dataset="sessions",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="sessions", query=query, app_id="default")
         response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
@@ -150,11 +142,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="discover", query=query, app_id="default")
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
@@ -189,11 +177,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="discover", query=query, app_id="default")
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -230,11 +214,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="events", query=query, app_id="default")
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -271,11 +251,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="events", query=query, app_id="default")
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -307,11 +283,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="discover", query=query, app_id="default")
         request.flags.debug = True
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -333,11 +305,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="events", query=query, app_id="default")
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
 
         data = json.loads(response.data)
@@ -423,11 +391,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(10)
         )
 
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="discover", query=query, app_id="default")
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
 
         resp = json.loads(response.data)
@@ -449,11 +413,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="events", query=query, app_id="default")
 
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
@@ -477,11 +437,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="events", query=query, app_id="default")
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
@@ -500,11 +456,7 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
         )
-        request = Request(
-            dataset="generic_metrics",
-            query=query,
-            app_id="default",
-        )
+        request = Request(dataset="generic_metrics", query=query, app_id="default")
         response = self.post(
             "/generic_metrics/snql", data=json.dumps(request.to_dict())
         )
