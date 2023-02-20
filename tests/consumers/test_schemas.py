@@ -4,7 +4,7 @@ from snuba.consumers.schemas import get_json_codec
 from snuba.utils.streams.topics import Topic
 
 
-def test_metrics():
+def test_metrics() -> None:
     codec = get_json_codec(Topic.GENERIC_METRICS)
     payload = {
         "use_case_id": "release-health",
