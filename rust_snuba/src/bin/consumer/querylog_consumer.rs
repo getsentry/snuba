@@ -1,4 +1,4 @@
-use rust_snuba::consumer::querylog_consumer::QueryLogConsumer;
+use rust_snuba::consumers::querylog_consumer::QueryLogConsumer;
 use rust_arroyo::{backends::kafka::config::KafkaConfig, types::Topic, utils::clickhouse_client::ClickhouseClient};
 
 const TABLE_NAME: &str = "default.querylog_local";

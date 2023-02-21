@@ -18,3 +18,5 @@ tokio = { version = "1.19.2", features = ["full"] }
 rdkafka = { version = "0.28", features = ["cmake-build"] }
 futures = "0.3.21"
 serde_json = "1.0.81"
+serde = {version = "1.0.137", features = ["derive"] }
+serde_yaml = "0.9"
