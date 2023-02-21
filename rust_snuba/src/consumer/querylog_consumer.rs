@@ -1,6 +1,3 @@
-// extern crate rust_snuba;
-
-use futures::executor::block_on;
 use rdkafka::Offset;
 use rdkafka::TopicPartitionList;
 use rdkafka::consumer::CommitMode;
@@ -9,16 +6,16 @@ use rdkafka::consumer::StreamConsumer;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::backends::AssignmentCallbacks;
-use crate::backends::Consumer as ConsumerTrait;
-use crate::backends::kafka::CustomContext;
-use crate::backends::kafka::KafkaConsumer;
-use crate::backends::kafka::config::KafkaConfig;
-use crate::processing::querylog_processor;
-use crate::processing::querylog_processor::RawQueryLogKafkaJson;
-use crate::types::Partition;
-use crate::types::Topic;
-use crate::utils::clickhouse_client::ClickhouseClient;
+use rust_arroyo::backends::AssignmentCallbacks;
+use rust_arroyo::backends::Consumer as ConsumerTrait;
+use rust_arroyo::backends::kafka::CustomContext;
+use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::processing::querylog_processor;
+use rust_arroyo::processing::querylog_processor::RawQueryLogKafkaJson;
+use rust_arroyo::types::Partition;
+use rust_arroyo::types::Topic;
+use rust_arroyo::utils::clickhouse_client::ClickhouseClient;
 
 
 const TIMEOUT_MS: Duration = Duration::from_millis(2000);

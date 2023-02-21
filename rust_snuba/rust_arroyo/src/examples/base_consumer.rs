@@ -1,10 +1,10 @@
-extern crate rust_snuba;
+extern crate rust_arroyo;
 
-use rust_snuba::backends::kafka::config::KafkaConfig;
-use rust_snuba::backends::kafka::KafkaConsumer;
-use rust_snuba::backends::AssignmentCallbacks;
-use rust_snuba::backends::Consumer;
-use rust_snuba::types::{Partition, Topic};
+use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::backends::AssignmentCallbacks;
+use rust_arroyo::backends::Consumer;
+use rust_arroyo::types::{Partition, Topic};
 use std::collections::HashMap;
 
 struct EmptyCallbacks {}

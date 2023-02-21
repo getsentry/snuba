@@ -1,10 +1,5 @@
-extern crate rust_snuba;
-
-use rust_snuba::backends::kafka::config::KafkaConfig;
 use rust_snuba::consumer::querylog_consumer::QueryLogConsumer;
-use rust_snuba::types::{Topic};
-use rust_snuba::utils::clickhouse_client::ClickhouseClient;
-
+use rust_arroyo::{backends::kafka::config::KafkaConfig, types::Topic, utils::clickhouse_client::ClickhouseClient};
 
 const TABLE_NAME: &str = "default.querylog_local";
 
