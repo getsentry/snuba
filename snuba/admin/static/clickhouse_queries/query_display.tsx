@@ -36,6 +36,10 @@ function QueryDisplay(props: {
 
   function selectStorage(storage: string) {
     setQuery((prevQuery) => {
+      // clear old host port
+      delete prevQuery.host
+      delete prevQuery.port
+      
       return {
         ...prevQuery,
         storage: storage,
