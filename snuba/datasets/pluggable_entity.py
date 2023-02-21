@@ -50,7 +50,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     required_time_column: Optional[str]
     storage_selector: QueryStorageSelector
-    validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING
+    validate_data_model: ColumnValidationMode = ColumnValidationMode.WARN
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
