@@ -426,7 +426,7 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer="r"),
         attribution_info=AttributionInfo(
-            get_app_id("blah"), {"blah": "blah"}, "blah", None, None, None
+            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
     entity = get_entity(query.get_from_clause().key)

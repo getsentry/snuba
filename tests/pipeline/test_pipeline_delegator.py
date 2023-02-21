@@ -128,7 +128,12 @@ def test() -> None:
                 snql_anonymized="",
                 query_settings=query_settings,
                 attribution_info=AttributionInfo(
-                    get_app_id("ref"), {"ref": "ref"}, "ref", None, None, None
+                    get_app_id("ref"),
+                    {"tenant_type": "tenant_id"},
+                    "ref",
+                    None,
+                    None,
+                    None,
                 ),
             ),
             query_runner,

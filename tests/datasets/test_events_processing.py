@@ -36,7 +36,7 @@ def test_events_processing() -> None:
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
-            get_app_id("blah"), {"blah": "blah"}, "blah", None, None, None
+            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
 

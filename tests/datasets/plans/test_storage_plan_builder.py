@@ -121,7 +121,7 @@ def test_storage_query_plan_builder(
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer="r"),
         attribution_info=AttributionInfo(
-            get_app_id("blah"), {"blah": "blah"}, "blah", None, None, None
+            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
     plan: ClickhouseQueryPlan = query_plan_builder.build_and_rank_plans(

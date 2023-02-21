@@ -12,7 +12,7 @@ def test_split_request() -> None:
         "team": "sns",
         "feature": "attribution",
         "app_id": "foobar",
-        "tenant_ids": {"referrer": "test"},
+        "tenant_ids": {"tenant_type": "tenant_id"},
         "query": """MATCH (something) dontcare""",
     }
     schema = RequestSchema.build(HTTPQuerySettings)

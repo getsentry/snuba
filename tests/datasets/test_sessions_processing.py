@@ -54,7 +54,7 @@ def test_sessions_processing() -> None:
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
-            get_app_id("default"), {"default": "default"}, "", None, None, None
+            get_app_id("default"), {"tenant_type": "tenant_id"}, "", None, None, None
         ),
     )
 
@@ -223,7 +223,12 @@ def test_select_storage(
         snql_anonymized=snql_anonymized,
         query_settings=subscription_settings(referrer=""),
         attribution_info=AttributionInfo(
-            get_app_id("default"), {"default": "default"}, "blah", None, None, None
+            get_app_id("default"),
+            {"tenant_type": "tenant_id"},
+            "blah",
+            None,
+            None,
+            None,
         ),
     )
 

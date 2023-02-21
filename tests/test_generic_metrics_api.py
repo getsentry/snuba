@@ -573,11 +573,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(
-            dataset="generic_metrics",
-            app_id="default",
-            query=query,
-        )
+        request = Request(dataset="generic_metrics", app_id="default", query=query)
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
