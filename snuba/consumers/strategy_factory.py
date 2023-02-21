@@ -14,7 +14,7 @@ from arroyo.processing.strategies.filter import FilterStep
 from arroyo.processing.strategies.reduce import Reduce
 from arroyo.processing.strategies.run_task import RunTaskInThreads
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
-from arroyo.types import BaseValue, Commit, Message, Partition
+from arroyo.types import BaseValue, Commit, Message, Partition, FilteredPayload
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
 from snuba.processor import ReplacementBatch
@@ -121,7 +121,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
-        collect = Reduce(
+        collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
             self.__max_batch_size,
             self.__max_batch_time,
             accumulator,
@@ -138,7 +138,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         transform_function = self.__process_message
 
-        strategy: ProcessingStrategy[KafkaPayload]
+        strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
         if self.__processes is None:
             strategy = TransformStep(transform_function, collect)
         else:

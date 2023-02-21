@@ -7,7 +7,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, TypeVar
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, TypeVar, Any
 
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
@@ -289,7 +289,7 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             batch = [] if processed is None else [processed]
             return self.__worker.flush_batch(batch)
 
-        commit_offsets: ProcessingStrategy[None] = CommitOffsets(commit)
+        commit_offsets: ProcessingStrategy[Any] = CommitOffsets(commit)
 
         return RunTask(processing_func, commit_offsets)
 

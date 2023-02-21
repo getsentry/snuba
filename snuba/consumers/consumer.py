@@ -49,7 +49,15 @@ from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import BaseValue, BrokerValue, Commit, Message, Partition, Topic
+from arroyo.types import (
+    BaseValue,
+    BrokerValue,
+    Commit,
+    FilteredPayload,
+    Message,
+    Partition,
+    Topic,
+)
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
@@ -781,7 +789,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             message.payload.join()
             return message
 
-        collect = Reduce(
+        collect = Reduce[MultistorageProcessedMessage, MultistorageCollector](
             self.__max_batch_size,
             self.__max_batch_time,
             accumulator,
@@ -791,7 +799,9 @@ class MultistorageConsumerProcessingStrategyFactory(
 
         transform_function = self.__process_message_fn
 
-        inner_strategy: ProcessingStrategy[MultistorageKafkaPayload]
+        inner_strategy: ProcessingStrategy[
+            Union[FilteredPayload, MultistorageKafkaPayload]
+        ]
 
         if self.__processes is None:
             inner_strategy = TransformStep(transform_function, collect)
