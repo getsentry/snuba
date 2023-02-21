@@ -219,14 +219,7 @@ def record_missing_tenant_ids(request: Request) -> None:
     if tenant_ids := request.attribution_info.tenant_ids:
         if "referrer" not in tenant_ids or "organization_id" not in tenant_ids:
             metrics.increment(
-                "request_without_tenant_ids",
-                tags={
-                    "referrer": request.referrer,
-                    "parent_api": request.attribution_info.parent_api or "None",
-                    "team": request.attribution_info.team or "None",
-                    "feature": request.attribution_info.feature or "None",
-                    "app_id": request.attribution_info.app_id.key,
-                },
+                "request_without_tenant_ids", tags={"referrer": request.referrer}
             )
 
 
