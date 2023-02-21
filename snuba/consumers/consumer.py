@@ -55,7 +55,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
-from snuba import environment
+from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
@@ -516,18 +516,26 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
-    validate_sample_rate: float,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    validate_sample_rate = float(
+        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
+    )
+
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
         should_validate = random.random() < validate_sample_rate
         start = time.time()
 
-        decoded = codec.decode(message.payload.value, validate=should_validate)
-
+        decoded = codec.decode(message.payload.value, validate=False)
         if should_validate:
+            try:
+                codec.validate(decoded)
+            except Exception as err:
+                sentry_sdk.set_tag("invalid_message_schema", "true")
+                logger.warning(err, exc_info=True)
+
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
             # OK.
