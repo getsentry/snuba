@@ -10,7 +10,7 @@ def test_limitby() -> None:
     body = {
         "query": """
             MATCH (transactions)
-            SELECT tags.key, tags.value, event_id, group_id
+            SELECT arrayJoin(group_ids) AS `group_id`, tags.key, tags.value, event_id, group_id
             WHERE finish_ts >= toDateTime('2022-11-16T20:30:56.381367')
             AND finish_ts < toDateTime('2022-11-16T21:35:57.381367')
             AND project_id IN tuple(4550918988890113)
