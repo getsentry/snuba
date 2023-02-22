@@ -1,5 +1,6 @@
+from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 from unittest.mock import ANY, patch
 
 import pytest
@@ -22,6 +23,7 @@ from snuba.datasets.processors.metrics_aggregate_processor import (
 from snuba.datasets.processors.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
+    MetricsBucketProcessor,
     PolymorphicMetricsProcessor,
     SetsMetricsProcessor,
 )
@@ -565,3 +567,75 @@ def test_generic_metrics_sets_processor(
         GenericSetsMetricsProcessor().process_message(message, meta)
         == expected_polymorphic_result
     )
+
+
+@pytest.fixture
+def processor() -> MetricsBucketProcessor:
+    return SetsMetricsProcessor()
+
+
+def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
+    tags = message["tags"]
+    return sorted(tags.items())
+
+
+def assert_invariant_timeseries_id(
+    processor: MetricsBucketProcessor,
+    m1: Mapping[str, Any],
+    m2: Mapping[str, Any],
+) -> None:
+    token = processor._timeseries_id_token(m1, sorted_tag_items(m1))
+    token2 = processor._timeseries_id_token(m2, sorted_tag_items(m2))
+    assert token == token2
+
+
+def assert_variant_timeseries_id(
+    processor: MetricsBucketProcessor,
+    m1: Mapping[str, Any],
+    m2: Mapping[str, Any],
+) -> None:
+    token = processor._timeseries_id_token(m1, sorted_tag_items(m1))
+    token2 = processor._timeseries_id_token(m2, sorted_tag_items(m2))
+    assert token != token2
+
+
+def test_timeseries_id_token_is_deterministic(
+    processor: MetricsBucketProcessor,
+) -> None:
+    assert_invariant_timeseries_id(processor, SET_MESSAGE_SHARED, SET_MESSAGE_SHARED)
+
+
+def test_timeseries_id_token_varies_with_org_id(
+    processor: MetricsBucketProcessor,
+) -> None:
+    message_2 = deepcopy(SET_MESSAGE_SHARED)
+    message_2["org_id"] = 2
+
+    assert_variant_timeseries_id(processor, SET_MESSAGE_SHARED, message_2)
+
+
+def test_timeseries_id_token_varies_with_metric_id(
+    processor: MetricsBucketProcessor,
+) -> None:
+    message_2 = deepcopy(SET_MESSAGE_SHARED)
+    message_2["metric_id"] = 5
+
+    assert_variant_timeseries_id(processor, SET_MESSAGE_SHARED, message_2)
+
+
+def test_timeseries_id_token_varies_with_indexed_tag_values(
+    processor: MetricsBucketProcessor,
+) -> None:
+    message_2 = deepcopy(SET_MESSAGE_SHARED)
+    message_2["tags"]["10"] = 666
+
+    assert_variant_timeseries_id(processor, SET_MESSAGE_SHARED, message_2)
+
+
+def test_timeseries_id_token_invariant_to_raw_tag_values(
+    processor: MetricsBucketProcessor,
+) -> None:
+    message_2 = deepcopy(SET_MESSAGE_SHARED)
+    message_2["mapping_meta"]["c"]["10"] = "a-new-tag-value"
+
+    assert_invariant_timeseries_id(processor, SET_MESSAGE_SHARED, message_2)
