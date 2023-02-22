@@ -409,6 +409,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
                     "--storage=search_issues",
+                    "--consumer-group=generic_events_group",
                 ],
             ),
         ]
