@@ -17,7 +17,6 @@ def test_split_request() -> None:
     }
     schema = RequestSchema.build(HTTPQuerySettings)
     parts = schema.validate(payload)
-    print(parts.attribution_info)
     assert set(parts.query_settings.keys()) == {
         "turbo",
         "consistent",
