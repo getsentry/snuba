@@ -36,7 +36,11 @@ pipelines:
                                     ${GO_REVISION_SNUBA_REPO} \
                                     "Tests and code coverage (test)" \
                                     "Tests and code coverage (test_distributed)" \
-                                    "pre-commit hooks"
+                                    "Tests and code coverage (test_distributed_migrations)" \
+                                    "Dataset Config Validation" \
+                                    "sentry (0)" \
+                                    "sentry (1)" \
+                                    "self-hosted-end-to-end"
                               - script: |
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
                                     ${GO_REVISION_SNUBA_REPO} \
@@ -59,24 +63,12 @@ pipelines:
                                     sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e release
                                     sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
                       deploy:
-                          timeout: 1800 # 30 mins
+                          timeout: 1200
                           elastic_profile_id: snuba
                           tasks:
                               - script: |
-                                    USE_GKE_GCLOUD_AUTH_PLUGIN=True \
-                                        gcloud --project "$GCP_PROJECT" \
-                                        container clusters get-credentials "$GKE_CLUSTER" \
-                                        --zone "${GKE_REGION}-${GKE_CLUSTER_ZONE}" \
-                                    && tmpdir=$(mktemp -d) \
-                                    && ssh-keygen -q -t ed25519 -N '' -f "${tmpdir}/google_compute_engine" \
-                                    && gcloud compute ssh "dicd-gkehop-${GKE_CLUSTER}" \
-                                      --ssh-key-file="${tmpdir}/google_compute_engine" \
-                                      --tunnel-through-iap \
-                                      "--project=${GCP_PROJECT}" \
-                                      "--zone=${GKE_REGION}-${GKE_BASTION_ZONE}" \
-                                      -- -4 -L8888:127.0.0.1:8888 -N -q -f
-                              - script: |
-                                    /devinfra/scripts/k8s/k8sdeploy.py \
+                                    /devinfra/scripts/k8s/k8stunnel \
+                                    && /devinfra/scripts/k8s/k8sdeploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
@@ -115,10 +107,8 @@ pipelines:
                                     --container-name="snuba-admin" \
                                     --container-name="transactions-consumer-new" \
                                     --container-name="transactions-subscriptions-executor" \
-                                    --container-name="transactions-subscriptions-scheduler"
-                              - script: |
-                                    /devinfra/scripts/k8s/k8sdeploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                                    --container-name="transactions-subscriptions-scheduler" \
+                                    && /devinfra/scripts/k8s/k8sdeploy.py \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
