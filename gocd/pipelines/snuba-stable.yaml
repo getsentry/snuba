@@ -86,6 +86,9 @@ pipelines:
                                     --container-name="errors-replacer" \
                                     --container-name="events-subscriptions-executor" \
                                     --container-name="events-subscriptions-scheduler" \
+                                    --container-name="generic-metrics-counters-consumer" \
+                                    --container-name="generic-metrics-counters-subscriptions-executor" \
+                                    --container-name="generic-metrics-counters-subscriptions-scheduler" \
                                     --container-name="generic-metrics-distributions-consumer" \
                                     --container-name="generic-metrics-distributions-subscriptions-executor" \
                                     --container-name="generic-metrics-distributions-subscriptions-scheduler" \
@@ -105,7 +108,6 @@ pipelines:
                                     --container-name="transactions-consumer-new" \
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler"
-
                               - script: |
                                     /devinfra/scripts/k8s/k8sdeploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
