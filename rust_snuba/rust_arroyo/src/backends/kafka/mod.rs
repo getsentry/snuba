@@ -176,6 +176,7 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
         let topic_str: Vec<&str> = topics.iter().map(|t| t.name.as_ref()).collect();
+        println!("Subscribing to topic: {:?}", topic_str);
         consumer.subscribe(&topic_str)?;
         self.consumer = Some(consumer);
         self.state = KafkaConsumerState::Consuming;

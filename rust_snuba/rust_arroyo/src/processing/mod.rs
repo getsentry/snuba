@@ -95,7 +95,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> =
             Box::new(Callbacks::new(self.strategies.clone()));
-        let _ = self.consumer.subscribe(&[topic], callbacks);
+        let res = self.consumer.subscribe(&[topic], callbacks);
+        assert!(res.is_ok());
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
