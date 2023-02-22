@@ -262,7 +262,6 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
-                float(get_config(f"validate_schema_{logical_topic.name}", 0) or 0.0),
             ),
             collector=build_batch_writer(
                 table_writer,
