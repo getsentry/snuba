@@ -3,7 +3,7 @@ from typing import Any, Mapping, MutableMapping
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
 
-class InvalidTopicError(ValueError):
+class InvalidConfigError(ValueError):
     pass
 
 
@@ -28,58 +28,11 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
             "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
         )
 
-    topic_names = {
-        "events",
-        "event-replacements",
-        "transactions",
-        "snuba-commit-log",
-        "snuba-transactions-commit-log",
-        "snuba-sessions-commit-log",
-        "snuba-metrics-commit-log",
-        "cdc",
-        "snuba-metrics",
-        "outcomes",
-        "ingest-sessions",
-        "snuba-queries",
-        "scheduled-subscriptions-events",
-        "scheduled-subscriptions-transactions",
-        "scheduled-subscriptions-sessions",
-        "scheduled-subscriptions-metrics",
-        "scheduled-subscriptions-generic-metrics-sets",
-        "scheduled-subscriptions-generic-metrics-distributions",
-        "scheduled-subscriptions-generic-metrics-counters",
-        "events-subscription-results",
-        "transactions-subscription-results",
-        "sessions-subscription-results",
-        "metrics-subscription-results",
-        "generic-metrics-sets-subscription-results",
-        "generic-metrics-distributions-subscription-results",
-        "generic-metrics-counters-subscription-results",
-        "processed-profiles",
-        "snuba-attribution",
-        "profiles-call-tree",
-        "ingest-replay-events",
-        "generic-events",
-        "snuba-replay-events",
-        "snuba-dead-letter-replays",
-        "snuba-generic-metrics",
-        "snuba-generic-metrics-sets-commit-log",
-        "snuba-generic-metrics-distributions-commit-log",
-        "snuba-generic-metrics-counters-commit-log",
-        "snuba-dead-letter-generic-metrics",
-        "snuba-dead-letter-sessions",
-        "snuba-dead-letter-metrics",
-        "snuba-dead-letter-generic-events",
-        "snuba-generic-events-commit-log",
-    }
+    if not list(locals["KAFKA_TOPIC_MAP"].keys()):
+        raise InvalidConfigError("No KAFKA_TOPIC_MAP specified")
 
-    for key in locals["KAFKA_TOPIC_MAP"].keys():
-        if key not in topic_names:
-            raise InvalidTopicError(f"Invalid topic value: {key}")
-
-    for key in locals["KAFKA_BROKER_CONFIG"].keys():
-        if key not in topic_names:
-            raise ValueError(f"Invalid topic value {key}")
+    if not list(locals["KAFKA_BROKER_CONFIG"].keys()):
+        raise InvalidConfigError("No KAFKA_BROKER_CONFIG specified")
 
     # Validate cluster configuration
     from snuba.clusters.storage_sets import StorageSetKey
