@@ -4,12 +4,13 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use std::time::Duration;
 
-pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
+pub struct Produce<TPayload: Clone + Send + Sync> {
     pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
+    pub producer: Producer,
     pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
+impl ProcessingStrategy<TPayload>
     for Transform<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Option<CommitRequest> {

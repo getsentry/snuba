@@ -4,6 +4,7 @@ use std::time::Duration;
 
 pub mod noop;
 pub mod transform;
+pub mod produce;
 
 #[derive(Debug, Clone)]
 pub struct MessageRejected;
