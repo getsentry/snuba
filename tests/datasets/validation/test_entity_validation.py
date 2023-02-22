@@ -87,7 +87,7 @@ def test_entity_required_column_validation(
         condition=condition,
     )
 
-    validator = EntityRequiredColumnValidator({"project_id"})
+    validator = EntityRequiredColumnValidator(["project_id"])
     validator.validate(query)
 
 
@@ -121,7 +121,7 @@ def test_entity_required_column_validation_failure(
         condition=condition,
     )
 
-    validator = EntityRequiredColumnValidator({"project_id"})
+    validator = EntityRequiredColumnValidator(["project_id"])
     with pytest.raises(InvalidQueryException):
         validator.validate(query)
 

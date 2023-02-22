@@ -1,5 +1,6 @@
 import itertools
 import logging
+import random
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -24,29 +25,39 @@ from typing import (
 )
 
 import rapidjson
+import sentry_sdk
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
-from arroyo.processing.strategies import FilterStep
-from arroyo.processing.strategies import ProcessingStrategy
-from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
-from arroyo.processing.strategies import ProcessingStrategyFactory, TransformStep
+from arroyo.processing.strategies import (
+    CommitOffsets,
+    FilterStep,
+    ParallelTransformStep,
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+    Reduce,
+    RunTaskInThreads,
+    TransformStep,
+)
 from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
 )
+from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
+    DeadLetterQueue,
+)
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.processing.strategies.decoder import JsonCodec
-from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
+from arroyo.types import BaseValue, BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
+from snuba import environment
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.strategy_factory import ConsumerStrategyFactory
+from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -61,7 +72,10 @@ from snuba.processor import (
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.writer import BatchWriter
+
+metrics = MetricsWrapper(environment.metrics, "consumer")
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -90,16 +104,13 @@ class BytesInsertBatch(NamedTuple):
             return type(self), (self.rows, self.origin_timestamp)
 
 
-class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
+class InsertBatchWriter:
     def __init__(self, writer: BatchWriter[JSONRow], metrics: MetricsBackend) -> None:
         self.__writer = writer
         self.__metrics = metrics
 
         self.__messages: MutableSequence[Message[BytesInsertBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
@@ -166,23 +177,17 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
             self.__writer,
         )
 
-    def terminate(self) -> None:
-        self.__closed = True
-
     def join(self, timeout: Optional[float] = None) -> None:
         pass
 
 
-class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
+class ReplacementBatchWriter:
     def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
         self.__producer = producer
         self.__topic = topic
 
         self.__messages: MutableSequence[Message[ReplacementBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[ReplacementBatch]) -> None:
         assert not self.__closed
@@ -213,9 +218,6 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     on_delivery=self.__delivery_callback,
                 )
 
-    def terminate(self) -> None:
-        self.__closed = True
-
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
         if timeout is not None:
@@ -232,13 +234,11 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         )
 
 
-class ProcessedMessageBatchWriter(
-    ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
-):
+class ProcessedMessageBatchWriter:
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
-        replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
+        replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
@@ -249,12 +249,6 @@ class ProcessedMessageBatchWriter(
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
-
-    def poll(self) -> None:
-        self.__insert_batch_writer.poll()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.poll()
 
     def submit(
         self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]
@@ -312,14 +306,6 @@ class ProcessedMessageBatchWriter(
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        self.__insert_batch_writer.terminate()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -395,17 +381,10 @@ def build_batch_writer(
     return build_writer
 
 
-class MultistorageCollector(
-    ProcessingStep[
-        Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
-    ]
-):
+class MultistorageCollector:
     def __init__(
         self,
-        steps: Mapping[
-            StorageKey,
-            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
-        ],
+        steps: Mapping[StorageKey, ProcessedMessageBatchWriter],
         # If passed, produces to the commit log after each batch is closed
         commit_log_config: Optional[CommitLogConfig],
         ignore_errors: Optional[Set[StorageKey]] = None,
@@ -423,10 +402,6 @@ class MultistorageCollector(
             ],
         ] = defaultdict(list)
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-
-    def poll(self) -> None:
-        for step in self.__steps.values():
-            step.poll()
 
     def submit(
         self,
@@ -458,12 +433,6 @@ class MultistorageCollector(
 
         for storage_key, step in self.__steps.items():
             step.close()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        for step in self.__steps.values():
-            step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -546,13 +515,24 @@ def __invalid_kafka_message(
 def process_message(
     processor: MessageProcessor,
     consumer_group: str,
-    codec: JsonCodec,
-    validate: bool,
+    snuba_logical_topic: SnubaTopic,
+    validate_sample_rate: float,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     assert isinstance(message.value, BrokerValue)
     try:
-        decoded = codec.decode(message.payload.value, validate=validate)
+        codec = get_json_codec(snuba_logical_topic)
+        should_validate = random.random() < validate_sample_rate
+        start = time.time()
+
+        decoded = codec.decode(message.payload.value, validate=should_validate)
+
+        if should_validate:
+            # TODO: this is not the most efficient place to emit a metric, but
+            # as long as should_validate is behind a sample rate it should be
+            # OK.
+            metrics.timing("codec_decode_and_validate", (time.time() - start) * 1000)
+
         result = processor.process_message(
             decoded,
             KafkaMessageMetadata(
@@ -562,10 +542,12 @@ def process_message(
             ),
         )
     except Exception as err:
-        logger.error(err, exc_info=True)
-        raise InvalidMessages(
-            [__invalid_kafka_message(message.value, consumer_group, err)]
-        ) from err
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("invalid_message", "true")
+            logger.warning(err, exc_info=True)
+            raise InvalidMessages(
+                [__invalid_kafka_message(message.value, consumer_group, err)]
+            ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
@@ -683,7 +665,7 @@ def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
     commit_log_config: Optional[CommitLogConfig],
-) -> ProcessingStep[MultistorageProcessedMessage]:
+) -> MultistorageCollector:
     return MultistorageCollector(
         {
             storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
@@ -706,7 +688,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
-        parallel_collect: bool,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
@@ -714,6 +695,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         commit_log_config: Optional[CommitLogConfig] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        parallel_collect_timeout: float = 10.0,
     ) -> None:
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -726,26 +708,22 @@ class MultistorageConsumerProcessingStrategyFactory(
                 output_block_size is None
             ), "output block size cannot be used without processes"
 
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
+        self.__initialize_parallel_transform = initialize_parallel_transform
+
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__processes = processes
+
         self.__storages = storages
         self.__metrics = metrics
         self.__dead_letter_policy_creator = dead_letter_policy_creator
 
         self.__process_message_fn = process_message_multistorage
 
-        self.__inner_factory = ConsumerStrategyFactory(
-            prefilter=None,
-            process_message=self.__process_message_fn,
-            collector=partial(
-                build_collector, self.__metrics, self.__storages, commit_log_config
-            ),
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            initialize_parallel_transform=initialize_parallel_transform,
-            parallel_collect=parallel_collect,
-            dead_letter_queue_policy_creator=self.__dead_letter_policy_creator,
+        self.__collector = partial(
+            build_collector, self.__metrics, self.__storages, commit_log_config
         )
 
     def create_with_partitions(
@@ -753,10 +731,57 @@ class MultistorageConsumerProcessingStrategyFactory(
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+        def accumulator(
+            batch_writer: MultistorageCollector,
+            message: BaseValue[MultistorageProcessedMessage],
+        ) -> MultistorageCollector:
+            batch_writer.submit(Message(message))
+            return batch_writer
+
+        def flush_batch(
+            message: Message[MultistorageCollector],
+        ) -> Message[MultistorageCollector]:
+            message.payload.close()
+            message.payload.join()
+            return message
+
+        collect = Reduce(
+            self.__max_batch_size,
+            self.__max_batch_time,
+            accumulator,
+            self.__collector,
+            RunTaskInThreads(flush_batch, 1, 1, CommitOffsets(commit)),
+        )
+
+        transform_function = self.__process_message_fn
+
+        inner_strategy: ProcessingStrategy[MultistorageKafkaPayload]
+
+        if self.__processes is None:
+            inner_strategy = TransformStep(transform_function, collect)
+        else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
+            inner_strategy = ParallelTransformStep(
+                transform_function,
+                collect,
+                self.__processes,
+                max_batch_size=self.__max_batch_size,
+                max_batch_time=self.__max_batch_time,
+                input_block_size=self.__input_block_size,
+                output_block_size=self.__output_block_size,
+                initializer=self.__initialize_parallel_transform,
+            )
+
+        if self.__dead_letter_policy_creator is not None:
+            inner_strategy = DeadLetterQueue(
+                inner_strategy, self.__dead_letter_policy_creator()
+            )
+
         return TransformStep(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,
-                self.__inner_factory.create_with_partitions(commit, partitions),
+                inner_strategy,
             ),
         )

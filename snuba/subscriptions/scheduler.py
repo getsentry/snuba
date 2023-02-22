@@ -7,6 +7,7 @@ from typing import (
     List,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Sequence,
     Tuple,
@@ -15,6 +16,11 @@ from typing import (
 
 from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.slicing import (
+    map_logical_partition_to_slice,
+    map_org_id_to_logical_partition,
+)
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -278,6 +284,43 @@ class DelegateTaskBuilder(TaskBuilder):
         ]
 
 
+def filter_subscriptions(
+    subscriptions: MutableSequence[Subscription],
+    entity_key: EntityKey,
+    metrics: MetricsBackend,
+    slice_id: Optional[int] = None,
+) -> MutableSequence[Subscription]:
+    filtered_subscriptions: MutableSequence[Subscription] = []
+
+    # only for storage sets that are currently sliced
+    entity = get_entity(entity_key)
+    storage = entity.get_writable_storage()
+    if storage is not None:
+        storage_set_key = storage.get_storage_set_key()
+
+        if storage_set_key.value in settings.SLICED_STORAGE_SETS:
+            for subscription in subscriptions:
+                # get the metadata and org_id from the Subscription
+                sub_data = subscription.data
+                sub_metadata = sub_data.metadata
+                org_id = sub_metadata["organization"]
+
+                if org_id is not None:
+                    # map the org_id to the slice ID
+                    logical_part = map_org_id_to_logical_partition(org_id)
+                    part_slice_id = map_logical_partition_to_slice(
+                        storage.get_storage_set_key(), logical_part
+                    )
+                    if part_slice_id == slice_id:
+                        filtered_subscriptions.append(subscription)
+                else:
+                    metrics.increment("subscription_with_empty_org_id")
+
+            return filtered_subscriptions
+
+    return subscriptions
+
+
 class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __init__(
         self,
@@ -286,8 +329,10 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__entity_key = entity_key
+        self.__slice_id = slice_id
         self.__store = store
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
@@ -321,7 +366,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             # We are transitioning between jittered and immediate mode. We must use the delegate builder.
             self.__builder = self.__delegate_builder
 
-    def __get_subscriptions(self) -> List[Subscription]:
+    def __get_subscriptions(self) -> MutableSequence[Subscription]:
         current_time = datetime.now()
 
         if (
@@ -344,7 +389,13 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-        return self.__subscriptions
+
+        if self.__slice_id is not None:
+            return filter_subscriptions(
+                self.__subscriptions, self.__entity_key, self.__metrics, self.__slice_id
+            )
+        else:
+            return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()

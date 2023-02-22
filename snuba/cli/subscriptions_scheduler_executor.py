@@ -10,11 +10,11 @@ from snuba import environment, state
 from snuba.attribution.log import flush_attribution_producer
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.combined_scheduler_executor import (
     build_scheduler_executor_consumer,
 )
-from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -25,7 +25,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "metrics"]),
+    type=click.Choice(get_enabled_dataset_names()),
     help="The dataset to target.",
 )
 @click.option(
@@ -33,7 +33,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(["events", "transactions", "metrics_counters", "metrics_sets"]),
+    type=click.Choice([entity_key.value for entity_key in EntityKey]),
     help="The entity to target.",
 )
 @click.option(
@@ -71,11 +71,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
 )
 @click.option("--log-level", help="Logging level to use.")
-@click.option(
-    "--scheduling-mode",
-    type=click.Choice(["partition", "global"]),
-    help="Overrides the partition scheduling mode associated with the dataset.",
-)
 def subscriptions_scheduler_executor(
     *,
     dataset_name: str,
@@ -89,10 +84,6 @@ def subscriptions_scheduler_executor(
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     log_level: Optional[str],
-    # TODO: Temporarily overrides the scheduling mode.
-    # Required for single tenant since some partitions may be empty.
-    # To be removed once transactions is no longer semantically partitioned.
-    scheduling_mode: Optional[str],
 ) -> None:
     """
     Combined subscriptions scheduler and executor. Alternative to the separate scheduler and executor processes.
@@ -138,9 +129,6 @@ def subscriptions_scheduler_executor(
         stale_threshold_seconds,
         total_concurrent_queries,
         metrics,
-        SchedulingWatermarkMode(scheduling_mode)
-        if scheduling_mode is not None
-        else None,
     )
 
     def handler(signum: int, frame: Any) -> None:

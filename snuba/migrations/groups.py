@@ -108,6 +108,9 @@ class EventsLoader(DirectoryLoader):
             "0014_backfill_errors",
             "0015_truncate_events",
             "0016_drop_legacy_events",
+            "0017_errors_add_indexes",
+            "0018_errors_ro_add_tags_hash_map",
+            "0019_add_replay_id_column",
         ]
 
 
@@ -134,6 +137,10 @@ class TransactionsLoader(DirectoryLoader):
             "0015_transactions_add_source_column",
             "0016_transactions_add_group_ids_column",
             "0017_transactions_add_app_start_type_column",
+            "0018_transactions_add_profile_id",
+            "0019_transactions_add_indexes_and_context_hash",
+            "0020_transactions_add_codecs",
+            "0021_transactions_add_replay_id",
         ]
 
 
@@ -167,6 +174,10 @@ class OutcomesLoader(DirectoryLoader):
             "0002_outcomes_remove_size_and_bytes",
             "0003_outcomes_add_category_and_quantity",
             "0004_outcomes_matview_additions",
+            "0005_outcomes_ttl",
+            "0006_outcomes_add_size_col",
+            "0007_outcomes_add_event_id_ttl_codec",
+            "0008_outcomes_add_indexes",
         ]
 
 
@@ -183,6 +194,7 @@ class ReplaysLoader(DirectoryLoader):
             "0005_add_urls_user_agent_replay_start_timestamp",
             "0006_add_is_archived_column",
             "0007_add_replay_type_column",
+            "0008_add_sample_rate",
         ]
 
 
@@ -226,6 +238,7 @@ class MetricsLoader(DirectoryLoader):
             "0032_redo_0030_and_0031_without_timestamps",
             "0033_metrics_cleanup_old_views",
             "0034_metrics_cleanup_old_tables",
+            "0035_metrics_raw_timeseries_id",
         ]
 
 
@@ -252,6 +265,8 @@ class QuerylogLoader(DirectoryLoader):
             "0002_status_type_change",
             "0003_add_profile_fields",
             "0004_add_bytes_scanned",
+            "0005_add_codec_update_settings",
+            "0006_sorting_key_change",
         ]
 
 
@@ -299,6 +314,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0007_distributions_aggregate_table",
             "0008_distributions_raw_table",
             "0009_distributions_mv",
+            "0010_counters_aggregate_table",
+            "0011_counters_raw_table",
+            "0012_counters_mv",
         ]
 
 
@@ -310,6 +328,8 @@ class SearchIssuesLoader(DirectoryLoader):
         return [
             "0001_search_issues",
             "0002_search_issues_add_tags_hash_map",
+            "0003_search_issues_modify_occurrence_type_id_size",
+            "0004_rebuild_search_issues_with_version",
         ]
 
 

@@ -139,6 +139,12 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["device_family"] = maybe(to_string, device_context.get("family"))
         processed["device_model"] = maybe(to_string, device_context.get("model"))
 
+        replay = contexts.get("replay", {})
+        processed["error_sample_rate"] = maybe(float, replay.get("error_sample_rate"))
+        processed["session_sample_rate"] = maybe(
+            float, replay.get("session_sample_rate")
+        )
+
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:

@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Sequence, Set, Type, cast
+from typing import Optional, Sequence, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
@@ -12,11 +15,16 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
-from snuba.query.expressions import Column
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
+from snuba.query.logical import Query as LogicalQuery
+from snuba.query.matchers import Or
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
+from snuba.utils.schemas import ColumnSet, Date, DateTime
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment_metrics, "query.validators")
 
 
 class ColumnValidationMode(Enum):
@@ -71,8 +79,8 @@ class EntityRequiredColumnValidator(QueryValidator):
     This validator checks if the Query contains filters by all of the required columns.
     """
 
-    def __init__(self, required_filter_columns: Set[str]) -> None:
-        self.required_columns = required_filter_columns
+    def __init__(self, required_filter_columns: Sequence[str]) -> None:
+        self.required_columns = set(required_filter_columns)
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()
@@ -187,24 +195,27 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
         for exp in query.get_groupby():
-            key: Optional[str] = None
             if isinstance(exp, SubscriptableReferenceExpr):
-                column_name = str(exp.column.column_name)
-                key = str(exp.key.value)
+                match = build_match(
+                    subscriptable=str(exp.column.column_name),
+                    ops=[ConditionFunctions.EQ],
+                    param_type=int,
+                    alias=alias,
+                    key=str(exp.key.value),
+                )
             elif isinstance(exp, Column):
-                column_name = exp.column_name
+                match = build_match(
+                    col=exp.column_name,
+                    ops=[ConditionFunctions.EQ],
+                    param_type=int,
+                    alias=alias,
+                    key=None,
+                )
             else:
                 raise InvalidQueryException(
                     "Unhandled column type in group by validation"
                 )
 
-            match = build_match(
-                col=column_name,
-                ops=[ConditionFunctions.EQ],
-                param_type=int,
-                alias=alias,
-                key=key,
-            )
             found = any(match.match(cond) for cond in top_level)
 
             if not found:
@@ -255,3 +266,131 @@ class GranularityValidator(QueryValidator):
             raise InvalidQueryException(
                 f"granularity must be multiple of {self.minimum}"
             )
+
+
+class TagConditionValidator(QueryValidator):
+    """
+    Sometimes a query will have a condition that compares a tag value to a
+    non-string literal. This will always fail (tags are always strings) so
+    catch this specific case and reject it.
+    """
+
+    def __init__(self) -> None:
+        self.condition_matcher = build_match(
+            subscriptable="tags",
+            ops=[
+                ConditionFunctions.EQ,
+                ConditionFunctions.NEQ,
+                ConditionFunctions.LTE,
+                ConditionFunctions.GTE,
+                ConditionFunctions.LT,
+                ConditionFunctions.GT,
+                ConditionFunctions.LIKE,
+                ConditionFunctions.NOT_LIKE,
+            ],
+            array_ops=[ConditionFunctions.IN, ConditionFunctions.NOT_IN],
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        condition = query.get_condition()
+        if not condition:
+            return
+        for cond in condition:
+            match = self.condition_matcher.match(cond)
+            if match:
+                column = match.expression("column")
+                col_str: str
+                if not isinstance(column, SubscriptableReferenceExpr):
+                    return  # only fail things on the tags[] column
+
+                col_str = f"{column.column.column_name}[{column.key.value}]"
+                error_prefix = f"invalid tag condition on '{col_str}':"
+
+                rhs = match.expression("rhs")
+                if isinstance(rhs, Literal):
+                    if not isinstance(rhs.value, str):
+                        raise InvalidQueryException(
+                            f"{error_prefix} {rhs.value} must be a string"
+                        )
+                elif isinstance(rhs, FunctionCall):
+                    # The rhs is guaranteed to be an array function because of the match
+                    for param in rhs.parameters:
+                        if isinstance(param, Literal) and not isinstance(
+                            param.value, str
+                        ):
+                            raise InvalidQueryException(
+                                f"{error_prefix} array literal {param.value} must be a string"
+                            )
+
+
+class DatetimeConditionValidator(QueryValidator):
+    def __init__(self) -> None:
+        self.matchers: list[Or[Expression]] = []
+
+    def initialize(self, schema: ColumnSet) -> None:
+        for column in schema.columns:
+            if isinstance(column.type, (DateTime, Date)):
+                matcher = build_match(
+                    col=column.name,
+                    ops=[
+                        ConditionFunctions.EQ,
+                        ConditionFunctions.LT,
+                        ConditionFunctions.LTE,
+                        ConditionFunctions.GT,
+                        ConditionFunctions.GTE,
+                    ],
+                )
+                self.matchers.append(matcher)
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        if not isinstance(query, LogicalQuery):
+            return  # TODO: This doesn't work for queries with multiple entities.
+
+        # We can safely initialize this once and store the value, since these validators are
+        # created for each entity that uses them and are always used by the same entity.
+        # Also since this doesn't run on composite queries, the alias will always be None
+        # and doesn't affect the underlying matcher.
+        if not self.matchers:
+            self.initialize(query.get_from_clause().get_columns())
+
+        condition = query.get_condition()
+        if condition:
+            for cond in condition:
+                for matcher in self.matchers:
+                    match = matcher.match(cond)
+                    if match:
+                        rhs = match.expression("rhs")
+                        if isinstance(rhs, Literal):
+                            if not isinstance(rhs.value, datetime):
+                                lhs = match.expression("column")
+                                # TODO: change this to a proper exception after ensuring the product isn't
+                                # passing bad queries
+                                metrics.increment(
+                                    "datetime_condition_error",
+                                    tags={
+                                        "column": str(lhs),
+                                        "entity": query.get_from_clause().key.value,
+                                    },
+                                )
+                                logger.warning(
+                                    f"{lhs} requires datetime conditions: '{rhs.value}' is not a valid datetime"
+                                )
+                        elif isinstance(rhs, FunctionCall):
+                            # The matcher only matches array/tuples of literals
+                            for param in rhs.parameters:
+                                if isinstance(param, Literal) and not isinstance(
+                                    param.value, datetime
+                                ):
+                                    lhs = match.expression("column")
+                                    # TODO: change this to a proper exception after ensuring the product isn't
+                                    # passing bad queries
+                                    metrics.increment(
+                                        "datetime_condition_error",
+                                        tags={
+                                            "column": str(lhs),
+                                            "entity": query.get_from_clause().key.value,
+                                        },
+                                    )
+                                    logger.warning(
+                                        f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
+                                    )

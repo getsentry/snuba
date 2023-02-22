@@ -1,9 +1,8 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, TypeVar
+from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy, ProcessingStrategyFactory
-from arroyo.processing.strategies.collect import CollectStep, ParallelCollectStep
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
     DeadLetterQueue,
@@ -12,25 +11,29 @@ from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
 from arroyo.processing.strategies.filter import FilterStep
+from arroyo.processing.strategies.reduce import Reduce
+from arroyo.processing.strategies.run_task import RunTaskInThreads
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
-from arroyo.types import Commit, Message, Partition
+from arroyo.types import BaseValue, Commit, Message, Partition
 
-TPayload = TypeVar("TPayload")
-TProcessed = TypeVar("TProcessed")
+from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
+from snuba.processor import ReplacementBatch
+
+ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
 
 
-class StreamMessageFilter(Protocol[TPayload]):
+class StreamMessageFilter(Protocol):
     """
     A filter over messages coming from a stream. Can be used to pre filter
     messages during consumption but potentially for other use cases as well.
     """
 
     @abstractmethod
-    def should_drop(self, message: Message[TPayload]) -> bool:
+    def should_drop(self, message: Message[KafkaPayload]) -> bool:
         raise NotImplementedError
 
 
-class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
+class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     """
     Do not use for new consumers.
     This is deprecated and will be removed in a future version.
@@ -58,9 +61,9 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
 
     def __init__(
         self,
-        prefilter: Optional[StreamMessageFilter[TPayload]],
-        process_message: Callable[[Message[TPayload]], TProcessed],
-        collector: Callable[[], ProcessingStrategy[TProcessed]],
+        prefilter: Optional[StreamMessageFilter],
+        process_message: Callable[[Message[KafkaPayload]], ProcessedMessage],
+        collector: Callable[[], ProcessedMessageBatchWriter],
         max_batch_size: int,
         max_batch_time: float,
         processes: Optional[int],
@@ -70,8 +73,6 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
         dead_letter_queue_policy_creator: Optional[
             Callable[[], DeadLetterQueuePolicy]
         ] = None,
-        parallel_collect: bool = False,
-        parallel_collect_timeout: float = 10.0,
     ) -> None:
         self.__prefilter = prefilter
         self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
@@ -96,10 +97,8 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__initialize_parallel_transform = initialize_parallel_transform
-        self.__parallel_collect = parallel_collect
-        self.__parallel_collect_timeout = parallel_collect_timeout
 
-    def __should_accept(self, message: Message[TPayload]) -> bool:
+    def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
         return not self.__prefilter.should_drop(message)
 
@@ -107,27 +106,39 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
         self,
         commit: Commit,
         partitions: Mapping[Partition, int],
-    ) -> ProcessingStrategy[TPayload]:
-        collect = (
-            ParallelCollectStep(
-                self.__collector,
+    ) -> ProcessingStrategy[KafkaPayload]:
+        def accumulator(
+            batch_writer: ProcessedMessageBatchWriter,
+            message: BaseValue[ProcessedMessage],
+        ) -> ProcessedMessageBatchWriter:
+            batch_writer.submit(Message(message))
+            return batch_writer
+
+        def flush_batch(
+            message: Message[ProcessedMessageBatchWriter],
+        ) -> Message[ProcessedMessageBatchWriter]:
+            message.payload.close()
+            message.payload.join()
+            return message
+
+        collect = Reduce(
+            self.__max_batch_size,
+            self.__max_batch_time,
+            accumulator,
+            self.__collector,
+            RunTaskInThreads(
+                flush_batch,
+                # The threadpool has 1 worker since we want to ensure batches are processed
+                # sequentially and passed to the next step in order.
+                1,
+                1,
                 CommitOffsets(commit),
-                self.__max_batch_size,
-                self.__max_batch_time,
-                self.__parallel_collect_timeout,
-            )
-            if self.__parallel_collect
-            else CollectStep(
-                self.__collector,
-                CommitOffsets(commit),
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
+            ),
         )
 
         transform_function = self.__process_message
 
-        strategy: ProcessingStrategy[TPayload]
+        strategy: ProcessingStrategy[KafkaPayload]
         if self.__processes is None:
             strategy = TransformStep(transform_function, collect)
         else:
@@ -156,12 +167,3 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
             )
 
         return strategy
-
-
-class KafkaConsumerStrategyFactory(ConsumerStrategyFactory[KafkaPayload]):
-    """
-    Do not use for new consumers.
-    This is deprecated and will be removed in a future version.
-    """
-
-    pass

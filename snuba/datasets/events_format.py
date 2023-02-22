@@ -100,19 +100,6 @@ def extract_extra_contexts(
     return (context_keys, context_values)
 
 
-def override_and_enforce_retention(
-    project_id: int, retention_days: Optional[int], timestamp: Optional[datetime]
-) -> int:
-    """
-    Overriding retention with RETENTION_OVERRIDES is only
-    used for events/transactions datasets.
-    """
-    if project_id:
-        retention_days = settings.RETENTION_OVERRIDES.get(project_id) or retention_days
-
-    return enforce_retention(retention_days, timestamp)
-
-
 def enforce_retention(
     retention_days: Optional[int], timestamp: Optional[datetime]
 ) -> int:
@@ -120,11 +107,12 @@ def enforce_retention(
         retention_days = settings.DEFAULT_RETENTION_DAYS
 
     if settings.ENFORCE_RETENTION:
-        retention_days = (
-            settings.LOWER_RETENTION_DAYS
-            if retention_days <= settings.LOWER_RETENTION_DAYS
-            else settings.DEFAULT_RETENTION_DAYS
-        )
+        if retention_days not in settings.VALID_RETENTION_DAYS:
+            retention_days = (
+                settings.LOWER_RETENTION_DAYS
+                if retention_days <= settings.LOWER_RETENTION_DAYS
+                else settings.DEFAULT_RETENTION_DAYS
+            )
 
     # This is not ideal but it should never happen anyways
     timestamp = _ensure_valid_date(timestamp)

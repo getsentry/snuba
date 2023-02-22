@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -29,6 +30,8 @@ from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
+
+logger = logging.getLogger(__name__)
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -324,6 +327,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return []
+        if self.__distributed_cluster_name is None:
+            logger.warning(
+                "distributed_cluster_name is not set, but is_single_node is False."
+                "This is likely a configuration error. Returning empty list."
+            )
+            return []
         assert (
             self.__distributed_cluster_name is not None
         ), "distributed_cluster_name must be set"
@@ -469,10 +478,8 @@ def get_cluster(
         if res is None:
             raise UndefinedClickhouseCluster(
                 f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment",
-                extra_data={
-                    "storage_set_key_not_defined": storage_set_key,
-                    "slice_id": slice_id,
-                },
+                storage_set_key_not_defined=storage_set_key.value,
+                slice_id=slice_id,
             )
 
     else:
@@ -481,6 +488,6 @@ def get_cluster(
         if res is None:
             raise UndefinedClickhouseCluster(
                 f"{storage_set_key} is not defined in the CLUSTERS setting for this environment",
-                extra_data={"storage_set_key_not_defined": storage_set_key},
+                storage_set_key_not_defined=storage_set_key.value,
             )
     return res

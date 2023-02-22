@@ -28,25 +28,34 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
-ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 ADMIN_AUTH_JWT_AUDIENCE = ""
 
+# file path to the IAM policy file which contains the roles
+ADMIN_IAM_POLICY_FILE = os.environ.get(
+    "ADMIN_IAM_POLICY_FILE",
+    f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
+)
+
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system": "NonBlockingMigrationsPolicy",
-    "generic_metrics": "NonBlockingMigrationsPolicy",
-    "profiles": "NonBlockingMigrationsPolicy",
-    "functions": "NonBlockingMigrationsPolicy",
-    "replays": "NonBlockingMigrationsPolicy",
-    "test_migration": "AllMigrationsPolicy",
+    "system",
+    "generic_metrics",
+    "profiles",
+    "functions",
+    "replays",
+    "search_issues",
+    "test_migration",
 }
+MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
+DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
@@ -54,7 +63,7 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -77,6 +86,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_sets",
             "generic_metrics_distributions",
             "search_issues",
+            "generic_metrics_counters",
         },
         "single_node": True,
     },
@@ -116,7 +126,7 @@ class RedisClusterConfig(TypedDict):
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
 REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
@@ -175,11 +185,14 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
-    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "127.0.0.1:9092"),
     "security.protocol": os.environ.get("KAFKA_SECURITY_PROTOCOL", "plaintext"),
     "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
     "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
     "ssl.key.location": os.environ.get("KAFKA_SSL_KEY_PATH", ""),
+    "sasl.mechanism": os.environ.get("KAFKA_SASL_MECHANISM", None),
+    "sasl.username": os.environ.get("KAFKA_SASL_USERNAME", None),
+    "sasl.password": os.environ.get("KAFKA_SASL_PASSWORD", None),
 }
 
 # Mapping of default Kafka topic name to custom names
@@ -200,7 +213,7 @@ HTTP_WRITER_BUFFER_SIZE = 1
 ENFORCE_RETENTION: bool = False
 LOWER_RETENTION_DAYS = 30
 DEFAULT_RETENTION_DAYS = 90
-RETENTION_OVERRIDES: Mapping[int, int] = {}
+VALID_RETENTION_DAYS = set([30, 90])
 
 MAX_PREWHERE_CONDITIONS = 1
 
@@ -224,7 +237,7 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000

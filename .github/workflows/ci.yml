@@ -84,7 +84,7 @@ jobs:
   config-validation:
     name: "Dataset Config Validation"
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
@@ -169,15 +169,28 @@ jobs:
       # support the image on Docker Hub
       # NOTE: This image has only been tested for local development
       SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
+      NODE_VERSION: 19.x
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
-
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{env.NODE_VERSION}}
       - name: Get branch name
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
+      # for Arm64, we build the bundle.js outside of docker because inside it is extremely
+      # slow due to emulation.
+      - name: build admin UI
+        run: |
+          # allow copying the bundle to docker image
+          sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
+          # build bundle
+          cd snuba/admin
+          yarn install
+          yarn run build
 
       - name: enable arm64 building
         run: docker run --rm --privileged tonistiigi/binfmt --install arm64
@@ -196,6 +209,7 @@ jobs:
           docker buildx create --name arm64-builder --use
           docker buildx build --platform linux/arm64 \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg BUILD_BASE=base \
             --cache-from ${SNUBA_IMAGE}:latest \
             --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:latest \
@@ -347,6 +361,7 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
+            -e ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES=1 \
             --name sentry_snuba \
             --network sentry \
             snuba-test
@@ -366,7 +381,7 @@ jobs:
       - name: Checkout Snuba
         uses: actions/checkout@v3
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@697a3ca95a72f93e3a1ebdb8f967be38d1f029f6
+        uses: getsentry/action-self-hosted-e2e-tests@627c9b50cb168c546ed6e2c461dae76d5d0c7cdb
         with:
           project_name: snuba
           docker_repo: getsentry/snuba

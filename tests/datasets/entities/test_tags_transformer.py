@@ -1,10 +1,10 @@
 import pytest
 
-from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.query import SelectedExpression
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.logical import Query
+from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.query_settings import HTTPQuerySettings
 
 

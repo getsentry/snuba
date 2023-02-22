@@ -18,10 +18,12 @@ from snuba.migrations.operations import (
     DropTable,
     InsertIntoSelect,
     ModifyColumn,
+    ModifyTableSettings,
     ModifyTableTTL,
     OperationTarget,
     RemoveTableTTL,
     RenameTable,
+    ResetTableSettings,
     SqlOperation,
     TruncateTable,
 )
@@ -394,3 +396,31 @@ def test_refactored_migration() -> None:
     order.clear()
     test_migration.backwards(context, False)
     assert order == [drop_dist_op, drop_local_op]
+
+
+def test_modify_settings() -> None:
+    assert (
+        ModifyTableSettings(
+            StorageSetKey.EVENTS,
+            "test_table",
+            {
+                "test_key": "test_val",
+                "test_int_key": 0,
+            },
+        ).format_sql()
+        == "ALTER TABLE test_table MODIFY SETTING test_key = test_val, test_int_key = 0;"
+    )
+
+
+def test_reset_settings() -> None:
+    assert (
+        ResetTableSettings(
+            StorageSetKey.EVENTS,
+            "test_table",
+            [
+                "setting_a",
+                "setting_b",
+            ],
+        ).format_sql()
+        == "ALTER TABLE test_table RESET SETTING setting_a, setting_b;"
+    )

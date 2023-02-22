@@ -17,6 +17,7 @@ class OutputType(Enum):
 ILLEGAL_VALUE_IN_SET = "Illegal value in set."
 INT_EXPECTED = "Int expected"
 ILLEGAL_VALUE_IN_DIST = "Illegal value in distribution."
+ILLEGAL_VALUE_IN_COUNTER = "Illegal value in counter."
 INT_FLOAT_EXPECTED = "Int or Float expected"
 
 
@@ -28,6 +29,10 @@ def is_distribution_message(message: Mapping[str, Any]) -> bool:
     return (
         message["type"] is not None and message["type"] == InputType.DISTRIBUTION.value
     )
+
+
+def is_counter_message(message: Mapping[str, Any]) -> bool:
+    return message["type"] is not None and message["type"] == InputType.COUNTER.value
 
 
 def values_for_set_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -47,3 +52,12 @@ def values_for_distribution_message(message: Mapping[str, Any]) -> Mapping[str, 
         ), f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
 
     return {"metric_type": OutputType.DIST.value, "distribution_values": values}
+
+
+def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = message["value"]
+    assert isinstance(
+        value, (int, float)
+    ), f"{ILLEGAL_VALUE_IN_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
+
+    return {"metric_type": OutputType.COUNTER.value, "count_value": value}
