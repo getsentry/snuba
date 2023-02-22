@@ -24,7 +24,13 @@ def _should_use_readonly_storage(need_consistent: bool) -> bool:
     if need_consistent:
         return False
 
-    if random.random() < state.get_config("errors_force_consistent_sample_rate", 0.0):
+    force_consistent_sample_rate = state.get_config(
+        "errors_force_consistent_sample_rate", 0.0
+    )
+    if (
+        force_consistent_sample_rate is not None
+        and random.random() < force_consistent_sample_rate
+    ):
         return False
 
     return True
