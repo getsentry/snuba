@@ -1,21 +1,5 @@
 # Rust impl of consumers (Experimental)
 
-## Running
+Rust consumers are an experimental project in Snuba. Most users should not be running this code!
 
-First build the binaries
-```
-make build-rust
-```
-or
-```
-cd rust_snuba
-cargo build --all-targets
-```
-
-Run the consumer
-
-`cargo run --bin querylog_consumer`
-or
-`./target/debug/querylog_consumer`
-or
-`snuba rust_consumer --storage querylog`
+The goal of this project is to provide a feature complete Rust equivalent to the `snuba consumer` and `snuba multistorage-consumer` functionality that is currently written in Python code.

@@ -59,6 +59,3 @@ validate-configs:
 generate-config-docs:
 	pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
-
-build-rust:
-	cd rust_snuba/ && cargo build --all-targets
