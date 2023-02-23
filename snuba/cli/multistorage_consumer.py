@@ -52,6 +52,10 @@ logger = logging.getLogger(__name__)
 )
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
+    "--replacements-topic",
+    help="Topic to produce replacement messages info.",
+)
+@click.option(
     "--commit-log-topic",
     help="Topic for committed offsets to be written to, triggering post-processing task(s)",
 )
@@ -112,6 +116,7 @@ logger = logging.getLogger(__name__)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
+    replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
@@ -160,6 +165,12 @@ def multistorage_consumer(
         # time. (It is less easily modified.) This also assumes the commit log
         # topic is on the same Kafka cluster as the input topic.
         commit_log = consumer_config.logical_commit_log_topic
+
+    replacements: Optional[Topic]
+    if replacements_topic:
+        replacements = Topic(replacements_topic)
+    else:
+        replacements = consumer_config.logical_replacements_topic
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -236,6 +247,7 @@ def multistorage_consumer(
         output_block_size,
         metrics,
         commit_log_config,
+        replacements,
         consumer_config.dead_letter_policy,
     )
 
@@ -339,6 +351,7 @@ def build_multistorage_streaming_strategy_factory(
     output_block_size: Optional[int],
     metrics: MetricsBackend,
     commit_log_config: Optional[CommitLogConfig],
+    replacements: Optional[Topic],
     dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]],
 ) -> ProcessingStrategyFactory[KafkaPayload]:
 
@@ -352,6 +365,7 @@ def build_multistorage_streaming_strategy_factory(
         metrics=metrics,
         dead_letter_policy_creator=dead_letter_policy,
         commit_log_config=commit_log_config,
+        replacements=replacements,
     )
 
     return strategy_factory

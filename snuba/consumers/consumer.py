@@ -630,12 +630,15 @@ def find_destination_storages(
 
 
 def build_multistorage_batch_writer(
-    metrics: MetricsBackend, storage: WritableTableStorage
+    metrics: MetricsBackend,
+    storage: WritableTableStorage,
+    replacements: Optional[Topic],
 ) -> ProcessedMessageBatchWriter:
     replacement_batch_writer: Optional[ReplacementBatchWriter]
     stream_loader = storage.get_table_writer().get_stream_loader()
     replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-    if replacement_topic_spec is not None:
+    if replacements is not None:
+        assert replacement_topic_spec is not None
         # XXX: The producer is flushed when closed on strategy teardown
         # after an assignment is revoked, but never explicitly closed.
         replacement_batch_writer = ReplacementBatchWriter(
@@ -648,7 +651,7 @@ def build_multistorage_batch_writer(
                     },
                 )
             ),
-            Topic(replacement_topic_spec.topic_name),
+            replacements,
         )
     else:
         replacement_batch_writer = None
@@ -673,10 +676,13 @@ def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
     commit_log_config: Optional[CommitLogConfig],
+    replacements: Optional[Topic],
 ) -> MultistorageCollector:
     return MultistorageCollector(
         {
-            storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
+            storage.get_storage_key(): build_multistorage_batch_writer(
+                metrics, storage, replacements
+            )
             for storage in storages
         },
         commit_log_config,
@@ -702,6 +708,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         commit_log_config: Optional[CommitLogConfig] = None,
+        replacements: Optional[Topic] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
         parallel_collect_timeout: float = 10.0,
     ) -> None:
@@ -731,7 +738,11 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__process_message_fn = process_message_multistorage
 
         self.__collector = partial(
-            build_collector, self.__metrics, self.__storages, commit_log_config
+            build_collector,
+            self.__metrics,
+            self.__storages,
+            commit_log_config,
+            replacements,
         )
 
     def create_with_partitions(
