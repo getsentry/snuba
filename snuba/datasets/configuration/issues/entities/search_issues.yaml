@@ -161,6 +161,7 @@ query_processors:
     args:
       project_field: project_id
   - processor: TagsExpanderProcessor
+  - processor: BasicFunctionsProcessor
 
 validators:
   - validator: EntityRequiredColumnValidator

@@ -8,6 +8,7 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
+    Enum,
     Float,
     Nested,
     SchemaModifiers,
@@ -101,6 +102,14 @@ query_processors:
                     "schema_modifiers": ["readonly"],
                 },
             },
+            {
+                "name": "enum_col",
+                "type": "Enum",
+                "args": {
+                    "values": [("success", 0), ("error", 1), ("pending", 2)],
+                    "schema_modifiers": ["nullable"],
+                },
+            },
         ]
 
         expected_python_columns = [
@@ -117,6 +126,13 @@ query_processors:
             Column(
                 "double_array_col",
                 Array(Array(UInt(64)), SchemaModifiers(nullable=False, readonly=True)),
+            ),
+            Column(
+                "enum_col",
+                Enum(
+                    [("success", 0), ("error", 1), ("pending", 2)],
+                    SchemaModifiers(nullable=True, readonly=False),
+                ),
             ),
         ]
 

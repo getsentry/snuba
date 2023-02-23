@@ -36,6 +36,10 @@ function QueryDisplay(props: {
 
   function selectStorage(storage: string) {
     setQuery((prevQuery) => {
+      // clear old host port
+      delete prevQuery.host
+      delete prevQuery.port
+
       return {
         ...prevQuery,
         storage: storage,
@@ -97,7 +101,7 @@ function QueryDisplay(props: {
           .filter((node)=>!node_info.local_nodes.includes(node))
           .map((node) => (
               <option
-                key={`${node.host}:${node.port}`}
+                key={`${node.host}:${node.port} dist`}
                 value={`${node.host}:${node.port}`}
               >
                 {node.host}:{node.port} (distributed)
@@ -108,7 +112,7 @@ function QueryDisplay(props: {
       if (query_node){
         hosts.push(
           (<option
-            key={`${query_node.host}:${query_node.port}`}
+            key={`${query_node.host}:${query_node.port} query`}
             value={`${query_node.host}:${query_node.port}`}
           >
             {query_node.host}:{query_node.port} (query node)
