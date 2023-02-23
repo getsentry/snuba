@@ -105,6 +105,8 @@ validators:
   - validator: GranularityValidator
     args:
       minimum: 10
+  - validator: TagConditionValidator
+    args: {}
 
 subscription_processors:
   - processor: AddColumnCondition
