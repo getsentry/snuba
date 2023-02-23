@@ -39,6 +39,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "cdc",
         "snuba-metrics",
         "outcomes",
+        "loadbalancer-outcomes",
         "ingest-sessions",
         "snuba-queries",
         "scheduled-subscriptions-events",
