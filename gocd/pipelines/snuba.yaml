@@ -53,6 +53,8 @@ pipelines:
                   jobs:
                       create-sentry-release:
                           environment_variables:
+                              SENTRY_ORG: sentry
+                              SENTRY_PROJECT: snuba
                               SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
                           timeout: 300
                           elastic_profile_id: snuba
