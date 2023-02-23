@@ -60,7 +60,7 @@ pipelines:
                               - script: |
                                     sentry-cli releases new "${GO_REVISION_SNUBA_REPO}"
                                     sentry-cli releases set-commits "${GO_REVISION_SNUBA_REPO}" --commit "getsentry/snuba@${GO_REVISION_SNUBA_REPO}"
-                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e release
+                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
                                     sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
                       deploy:
                           timeout: 1200
