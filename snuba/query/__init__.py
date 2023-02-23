@@ -377,6 +377,11 @@ class Query(DataSource, ABC):
                 self.__order_by,
             )
         )
+        if self.__limitby is not None:
+            self.__limitby = LimitBy(
+                self.__limitby.limit,
+                [expression.accept(visitor) for expression in self.__limitby.columns],
+            )
         self._transform_impl(visitor)
 
     def __get_all_ast_referenced_expressions(
