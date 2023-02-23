@@ -13,6 +13,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
+from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
@@ -120,6 +121,9 @@ logger = logging.getLogger(__name__)
     type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
@@ -138,6 +142,7 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    profile_path: Optional[str] = None,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -268,6 +273,7 @@ def multistorage_consumer(
         replacements,
         consumer_config.dead_letter_policy,
         slice_id,
+        profile_path,
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -373,9 +379,12 @@ def build_multistorage_streaming_strategy_factory(
     replacements: Optional[Topic],
     dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]],
     slice_id: Optional[int],
+    profile_path: Optional[str],
 ) -> ProcessingStrategyFactory[KafkaPayload]:
 
-    strategy_factory = MultistorageConsumerProcessingStrategyFactory(
+    strategy_factory: ProcessingStrategyFactory[
+        KafkaPayload
+    ] = MultistorageConsumerProcessingStrategyFactory(
         storages,
         max_batch_size,
         max_batch_time_ms / 1000.0,
@@ -388,5 +397,11 @@ def build_multistorage_streaming_strategy_factory(
         commit_log_config=commit_log_config,
         replacements=replacements,
     )
+
+    if profile_path is not None:
+        strategy_factory = ProcessingStrategyProfilerWrapperFactory(
+            strategy_factory,
+            profile_path,
+        )
 
     return strategy_factory
