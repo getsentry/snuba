@@ -633,6 +633,7 @@ def build_multistorage_batch_writer(
     metrics: MetricsBackend,
     storage: WritableTableStorage,
     replacements: Optional[Topic],
+    slice_id: Optional[int],
 ) -> ProcessedMessageBatchWriter:
     replacement_batch_writer: Optional[ReplacementBatchWriter]
     stream_loader = storage.get_table_writer().get_stream_loader()
@@ -661,6 +662,7 @@ def build_multistorage_batch_writer(
             storage.get_table_writer().get_batch_writer(
                 metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                slice_id=slice_id,
             ),
             MetricsWrapper(
                 metrics,
@@ -677,11 +679,12 @@ def build_collector(
     storages: Sequence[WritableTableStorage],
     commit_log_config: Optional[CommitLogConfig],
     replacements: Optional[Topic],
+    slice_id: Optional[int],
 ) -> MultistorageCollector:
     return MultistorageCollector(
         {
             storage.get_storage_key(): build_multistorage_batch_writer(
-                metrics, storage, replacements
+                metrics, storage, replacements, slice_id
             )
             for storage in storages
         },
@@ -707,6 +710,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         output_block_size: Optional[int],
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
+        slice_id: Optional[int],
         commit_log_config: Optional[CommitLogConfig] = None,
         replacements: Optional[Topic] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
@@ -743,6 +747,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             self.__storages,
             commit_log_config,
             replacements,
+            slice_id,
         )
 
     def create_with_partitions(
