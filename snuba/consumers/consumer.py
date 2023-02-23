@@ -518,6 +518,8 @@ def process_message(
     snuba_logical_topic: SnubaTopic,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    sentry_sdk.set_tag("snuba_logical_topic", snuba_logical_topic.name)
+
     validate_sample_rate = float(
         state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
     )
@@ -539,7 +541,11 @@ def process_message(
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
             # OK.
-            metrics.timing("codec_decode_and_validate", (time.time() - start) * 1000)
+            metrics.timing(
+                "codec_decode_and_validate",
+                (time.time() - start) * 1000,
+                tags={"snuba_logical_topic": snuba_logical_topic.name},
+            )
 
         result = processor.process_message(
             decoded,

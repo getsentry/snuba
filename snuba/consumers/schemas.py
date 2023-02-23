@@ -1,63 +1,25 @@
+import json
+import os
 from typing import Any, Mapping, MutableMapping, Optional
 
 from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
 
+
+def load_file(filename):
+    with open(os.path.join(__file__, "../schema_files/", filename)) as f:
+        return json.load(f)
+
+
 _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
-    Topic.METRICS: {
-        "$schema": "http://json-schema.org/draft-2020-12/schema#",
-        "$ref": "#/definitions/Main",
-        "definitions": {
-            "Main": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "use_case_id": {"type": "string"},
-                    "org_id": {"type": "integer"},
-                    "project_id": {"type": "integer"},
-                    "metric_id": {"type": "integer"},
-                    "type": {"type": "string"},
-                    "timestamp": {"type": "integer"},
-                    "tags": {"$ref": "#/definitions/IntToInt"},
-                    "value": {"type": "array", "items": {"type": "number"}},
-                    "retention_days": {"type": "integer"},
-                    "mapping_meta": {"$ref": "#/definitions/MappingMeta"},
-                },
-                "required": [
-                    "mapping_meta",
-                    "metric_id",
-                    "org_id",
-                    "project_id",
-                    "retention_days",
-                    "tags",
-                    "timestamp",
-                    "type",
-                    "use_case_id",
-                    "value",
-                ],
-                "title": "Main",
-            },
-            "MappingMeta": {
-                "type": "object",
-                "additionalProperties": False,
-                "patternProperties": {
-                    "^[chdfr]$": {"$ref": "#/definitions/IntToString"}
-                },
-                "title": "MappingMeta",
-            },
-            "IntToInt": {
-                "type": "object",
-                "patternProperties": {"^[0-9]$": {"type": "integer"}},
-                "title": "IntToInt",
-            },
-            "IntToString": {
-                "type": "object",
-                "patternProperties": {"^[0-9]$": {"type": "string"}},
-                "title": "IntToString",
-            },
-        },
-    }
+    # Querylog JSON
+    Topic.QUERYLOG: load_file("querylog.json"),
+    # Release health metrics
+    Topic.METRICS: load_file("metrics.json"),
+    # XXX(markus): This is copypasted from Relay, need to consolidate at some
+    # point
+    Topic.EVENTS: load_file("event.json"),
 }
 
 
