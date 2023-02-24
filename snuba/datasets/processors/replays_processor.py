@@ -161,7 +161,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
     def _process_event_hash(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        processed["event_hash"] = segment_id_to_event_hash(replay_event["segment_id"])
+        event_hash = replay_event.get("event_hash")
+        if event_hash is None:
+            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
+
+        processed["event_hash"] = event_hash
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata

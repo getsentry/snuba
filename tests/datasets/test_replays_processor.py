@@ -30,6 +30,7 @@ from snuba.processor import InsertBatch
 class ReplayEvent:
     replay_id: str
     replay_type: str
+    event_hash: str | None
     error_sample_rate: float | None
     session_sample_rate: float | None
     segment_id: Any
@@ -65,6 +66,7 @@ class ReplayEvent:
         return cls(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
+            event_hash=None,
             error_sample_rate=0,
             session_sample_rate=0,
             title=None,
@@ -102,6 +104,7 @@ class ReplayEvent:
             "replay_id": self.replay_id,
             "replay_type": self.replay_type,
             "segment_id": self.segment_id,
+            "event_hash": self.event_hash,
             "tags": {"customtag": "is_set", "transaction": self.title},
             "urls": self.urls,
             "is_archived": self.is_archived,
@@ -186,7 +189,7 @@ class ReplayEvent:
             "replay_type": self.replay_type,
             "error_sample_rate": self.error_sample_rate,
             "session_sample_rate": self.session_sample_rate,
-            "event_hash": event_hash,
+            "event_hash": self.event_hash or event_hash,
             "segment_id": self.segment_id,
             "trace_ids": list(
                 map(to_uuid, to_capped_list("trace_ids", self.trace_ids))
@@ -243,6 +246,7 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
+            event_hash=None,
             error_sample_rate=0.5,
             session_sample_rate=0.5,
             title="/organizations/:orgId/issues/",
@@ -290,6 +294,7 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="other",
+            event_hash=None,
             error_sample_rate=None,
             session_sample_rate=None,
             title="/organizations/:orgId/issues/",
@@ -352,7 +357,7 @@ class TestReplaysProcessor:
         assert processed_message.rows[0]["timestamp"] == now
         assert processed_message.rows[0]["replay_start_timestamp"] == now
 
-    def test_process_message_minimal_payload(self) -> None:
+    def test_process_message_minimal_payload_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
@@ -369,7 +374,7 @@ class TestReplaysProcessor:
                         {
                             "type": "replay_event",
                             "replay_id": str(uuid.uuid4()),
-                            "segment_id": None,
+                            "segment_id": 0,
                             "platform": "internal",
                         }
                     ).encode()
@@ -381,6 +386,39 @@ class TestReplaysProcessor:
         result = ReplaysProcessor().process_message(minimal_payload, meta)
         assert isinstance(result, InsertBatch)
         assert len(result.rows) == 1
+        assert len(result.rows[0]["event_hash"]) == 36
+
+    def test_process_message_minimal_payload_event_hash(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        event_hash = uuid.uuid4().hex
+        minimal_payload = {
+            "type": "replay_event",
+            "start_time": datetime.now().timestamp(),
+            "replay_id": str(uuid.uuid4()),
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_event",
+                            "replay_id": str(uuid.uuid4()),
+                            "event_hash": event_hash,
+                            "platform": "internal",
+                        }
+                    ).encode()
+                )
+            ),
+        }
+
+        # Asserting that the minimal payload was successfully processed.
+        result = ReplaysProcessor().process_message(minimal_payload, meta)
+        assert isinstance(result, InsertBatch)
+        assert len(result.rows) == 1
+        assert result.rows[0]["event_hash"] == event_hash
 
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
