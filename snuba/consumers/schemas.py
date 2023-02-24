@@ -7,7 +7,7 @@ from arroyo.processing.strategies.decoder.json import JsonCodec
 from snuba.utils.streams.topics import Topic
 
 
-def load_file(filename):
+def load_file(filename: str) -> Any:
     with open(os.path.join(os.path.dirname(__file__), "schema_files/", filename)) as f:
         return json.load(f)
 

@@ -320,8 +320,7 @@
             "integer",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0
         },
         "timestamp": {
           "description": " Timestamp when the event was created.\n\n Indicates when the event was created in the Sentry SDK. The format is either a string as\n defined in [RFC 3339](https://tools.ietf.org/html/rfc3339) or a numeric (integer or float)\n value representing the number of seconds that have elapsed since the [Unix\n epoch](https://en.wikipedia.org/wiki/Unix_time).\n\n Timezone is assumed to be UTC if missing.\n\n Sub-microsecond precision is not preserved with numeric values due to precision\n limitations with floats (at least in our systems). With that caveat in mind, just send\n whatever is easiest to produce.\n\n All timestamps in the event protocol are formatted this way.\n\n # Example\n\n All of these are the same date:\n\n ```json\n { \"timestamp\": \"2011-05-02T17:41:36Z\" }\n { \"timestamp\": \"2011-05-02T17:41:36\" }\n { \"timestamp\": \"2011-05-02T17:41:36.000\" }\n { \"timestamp\": 1304358096.0 }\n ```",
@@ -424,8 +423,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "app_name": {
               "description": " Application name as it appears on the platform.",
@@ -507,8 +505,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "cpu_type": {
               "description": " MachO CPU type identifier.",
@@ -517,8 +514,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "image_addr": {
               "description": " Starting memory address of the image (required).",
@@ -537,8 +533,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "image_vmaddr": {
               "description": " Loading address in virtual memory.",
@@ -564,8 +559,7 @@
               "type": [
                 "string",
                 "null"
-              ],
-              "format": "uuid"
+              ]
             }
           },
           "additionalProperties": false
@@ -699,8 +693,7 @@
               "type": [
                 "integer",
                 "null"
-              ],
-              "format": "int64"
+              ]
             }
           },
           "additionalProperties": false
@@ -1078,8 +1071,7 @@
               "type": [
                 "number",
                 "null"
-              ],
-              "format": "double"
+              ]
             },
             "battery_status": {
               "description": " Status of the device's battery.\n\n For example, `Unknown`, `Charging`, `Discharging`, `NotCharging`, `Full`.",
@@ -1144,8 +1136,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "external_storage_size": {
               "description": " Total size of the attached external storage in bytes (eg: android SDK card).",
@@ -1154,8 +1145,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "family": {
               "description": " Family of the device model.\n\n This is usually the common part of model names across generations. For instance, `iPhone`\n would be a reasonable family, so would be `Samsung Galaxy`.",
@@ -1172,8 +1162,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "free_storage": {
               "description": " How much storage is free in bytes.",
@@ -1182,8 +1171,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "low_memory": {
               "description": " Whether the device was low on memory.",
@@ -1208,8 +1196,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "model": {
               "description": " Device model.\n\n This, for example, can be `Samsung Galaxy S3`.",
@@ -1258,8 +1245,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "processor_frequency": {
               "description": " Processor frequency in MHz.\n\n Note that the actual CPU frequency might vary depending on current load and\n power conditions, especially on low-powered devices like phones and laptops.",
@@ -1268,8 +1254,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "screen_density": {
               "description": " Device screen density.",
@@ -1277,8 +1262,7 @@
               "type": [
                 "number",
                 "null"
-              ],
-              "format": "double"
+              ]
             },
             "screen_dpi": {
               "description": " Screen density as dots-per-inch.",
@@ -1287,8 +1271,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "screen_resolution": {
               "description": " Device screen resolution.\n\n (e.g.: 800x600, 3040x1444)",
@@ -1313,8 +1296,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "supports_accelerometer": {
               "description": " Whether the accelerometer is available on the device.",
@@ -1371,8 +1353,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -1383,8 +1364,7 @@
       "description": " Wrapper around a UUID with slightly different formatting.",
       "anyOf": [
         {
-          "type": "string",
-          "format": "uuid"
+          "type": "string"
         }
       ]
     },
@@ -1553,8 +1533,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "context_line": {
               "description": " Source code of the current line (`lineno`).",
@@ -1635,8 +1614,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "module": {
               "description": " Name of the module the frame is contained in.\n\n Note that this might also include a class name if that is something the\n language natively considers to be part of the stack (for instance in Java).",
@@ -1820,8 +1798,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "memory_size": {
               "description": " The total GPU memory available in Megabytes.",
@@ -1830,8 +1807,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "multi_threaded_rendering": {
               "description": " Whether the GPU has multi-threaded rendering or not.",
@@ -2070,8 +2046,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "exception": {
               "description": " The mach exception type.",
@@ -2079,8 +2054,7 @@
               "type": [
                 "integer",
                 "null"
-              ],
-              "format": "int64"
+              ]
             },
             "name": {
               "description": " Optional name of the mach exception.",
@@ -2097,8 +2071,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -2345,8 +2318,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "image_vmaddr": {
               "description": " Loading address in virtual memory.\n\n Preferred load address of the image in virtual memory, as declared in the headers of the\n image. When loading an image, the operating system may still choose to place it at a\n different address.\n\n Symbols and addresses in the native image are always relative to the start of the image and do not consider the preferred load address. It is merely a hint to the loader.\n\n - `elf`/`macho`: If this value is non-zero, all symbols and addresses declared in the native image start at this address, rather than 0. By contrast, Sentry deals with addresses relative to the start of the image. For example, with `image_vmaddr: 0x40000`, a symbol located at `0x401000` has a relative address of `0x1000`.\n\n   Relative addresses used in Apple Crash Reports and `addr2line` are usually in the preferred address space, and not relative address space.",
@@ -2385,8 +2357,7 @@
               "type": [
                 "integer",
                 "null"
-              ],
-              "format": "int64"
+              ]
             },
             "domain": {
               "description": " A string containing the error domain.",
@@ -2501,8 +2472,7 @@
               "type": [
                 "integer",
                 "null"
-              ],
-              "format": "int64"
+              ]
             },
             "code_name": {
               "description": " Optional name of the errno constant.",
@@ -2526,8 +2496,7 @@
               "type": [
                 "integer",
                 "null"
-              ],
-              "format": "int64"
+              ]
             }
           },
           "additionalProperties": false
@@ -2573,8 +2542,7 @@
               "type": [
                 "string",
                 "null"
-              ],
-              "format": "uuid"
+              ]
             }
           },
           "additionalProperties": false
@@ -2674,8 +2642,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "cookies": {
               "description": " The cookie values.\n\n Can be given unparsed as string, as dictionary, or as a list of tuples.",
@@ -2818,8 +2785,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "cookies": {
               "description": " The cookie values.\n\n Can be given unparsed as string, as dictionary, or as a list of tuples.",
@@ -2852,8 +2818,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -3006,8 +2971,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "version_minor": {
               "description": " The minor version of the SDK as integer or 0.",
@@ -3016,8 +2980,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "version_patchlevel": {
               "description": " The patch version of the SDK as integer or 0.",
@@ -3026,8 +2989,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -3160,8 +3122,7 @@
       "anyOf": [
         {
           "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0
         },
         {
           "type": "string"
@@ -3172,8 +3133,7 @@
       "description": "Can be a ISO-8601 formatted string or a unix timestamp in seconds (floating point values allowed).\n\nMust be UTC.",
       "anyOf": [
         {
-          "type": "number",
-          "format": "double"
+          "type": "number"
         },
         {
           "type": "string"
@@ -3196,8 +3156,7 @@
               "type": [
                 "number",
                 "null"
-              ],
-              "format": "double"
+              ]
             },
             "exclusive_time": {
               "description": " The amount of time in milliseconds spent in this transaction span,\n excluding its immediate child spans.",
@@ -3205,8 +3164,7 @@
               "type": [
                 "number",
                 "null"
-              ],
-              "format": "double"
+              ]
             },
             "op": {
               "description": " Span type (see `OperationType` docs).",
@@ -3314,8 +3272,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "source": {
               "description": " Describes how the name of the transaction was determined.\n\n This will be used by the server to decide whether or not to scrub identifiers from the\n transaction name, or replace the entire name with a placeholder.",
@@ -3346,8 +3303,7 @@
                 "integer",
                 "null"
               ],
-              "format": "uint64",
-              "minimum": 0.0
+              "minimum": 0
             },
             "source": {
               "description": " Describes how the previous transaction name was determined.",
