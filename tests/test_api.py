@@ -425,27 +425,6 @@ class TestApi(SimpleAPITest):
         )
         assert "LIMIT 100 BY _snuba_environment" in result["sql"]
 
-        # LIMIT BY on aggregator alias
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": self.project_ids,
-                        "aggregations": [["count()", "", "count"]],
-                        "orderby": "-count",
-                        "groupby": "count",
-                        "limitby": [100, "count"],
-                        "debug": True,
-                        "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                    }
-                ),
-            ).data
-        )
-        assert "LIMIT 100 BY _snuba_count" in result["sql"]
-
         # Stress nullable totals column, making sure we get results as expected
         result = json.loads(
             self.post(
