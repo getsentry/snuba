@@ -58,7 +58,7 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
 
         let producer = self.producer.as_ref().expect("Not closed");
 
-        producer.send(base_record).expect("Something went wrong");
+        return producer.send(base_record).expect("Something went wrong");
     }
     fn close(&mut self) {
         self.producer = None;

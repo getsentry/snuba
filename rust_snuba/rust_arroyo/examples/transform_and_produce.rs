@@ -3,6 +3,7 @@ extern crate rust_arroyo;
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::transform::Transform;
 use rust_arroyo::processing::strategies::{
     CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, InvalidMessage,
@@ -89,7 +90,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for HashPasswordAndProduceStrategyF
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let mut hashPasswordAndProduceStrategy = Transform {
             function: identity,
-            next_step: Box::new(Noop {}),
+            next_step: Box::new(Produce::new(producer, next_step, topic));
         };
         Box::new(hashPasswordAndProduceStrategy)
     }

@@ -1,82 +1,147 @@
+use chrono::Utc;
+use log::warn;
+
+use crate::backends::Producer;
+use crate::backends::kafka::producer::KafkaProducer;
+use crate::backends::kafka::types::KafkaPayload;
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
-use crate::types::Message;
-use std::time::Duration;
+use crate::types::{Message, Topic, TopicOrPartition};
+use core::time;
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 pub struct Produce<TPayload: Clone + Send + Sync> {
-    pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
-    pub producer: Producer,
-    pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
+    pub producer: KafkaProducer,
+    pub next_step: Box<dyn ProcessingStrategy<TPayload>>,
+    queue: VecDeque<Message<TPayload>>,
+    topic: TopicOrPartition,
+    closed: bool,
+    max_queue_size: usize,
 }
 
-impl ProcessingStrategy<TPayload>
-    for Transform<TPayload, TTransformed>
+// TODO: make the queue store futures
+impl Produce<KafkaPayload> {
+    pub fn new(producer: KafkaProducer, next_step: Box<dyn ProcessingStrategy<KafkaPayload>>, topic: TopicOrPartition) -> Self {
+        Produce {
+            producer,
+            next_step,
+            queue: VecDeque::new(),
+            topic,
+            closed: false,
+            max_queue_size: 1000,
+        }
+    }
+}
+
+impl ProcessingStrategy<KafkaPayload>
+    for Produce<KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
-        self.next_step.poll()
+
+        // while self.__queue:
+        //     committable, future = self.__queue[0]
+
+        //     if not future.done():
+        //         break
+
+        //     message = Message(Value(future.result().payload, committable))
+
+        //     self.__queue.popleft()
+        //     self.__next_step.poll()
+        //     self.__next_step.submit(message)
+        while !self.queue.is_empty(){
+            let message = self.queue.pop_front();
+            self.next_step.poll();
+            self.next_step.submit(message.unwrap());
+        }
+        return None
     }
 
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected> {
-        // TODO: Handle InvalidMessage
-        let transformed = (self.function)(message.payload).unwrap();
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+        // if len(self.__queue) >= self.__max_buffer_size:
+        //     raise MessageRejected
 
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: transformed,
-            timestamp: message.timestamp,
-        })
+        // self.__queue.append(
+        //     (
+        //         message.committable,
+        //         self.__producer.produce(self.__topic, message.payload),
+        //     )
+        // )
+        if self.queue.len() >= self.max_queue_size {
+            return Err(MessageRejected)
+        }
+        print!("Producing message: {:?}", &message.payload.payload);
+        self.producer.produce(&self.topic, &message.payload);
+        self.producer.flush();
+        self.queue.push_back(message);
+
+        return Ok(());
+
+
+
     }
 
     fn close(&mut self) {
-        self.next_step.close()
+        self.closed = true;
     }
 
     fn terminate(&mut self) {
+        self.closed = true;
         self.next_step.terminate()
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
+        let start = Instant::now();
+        let mut remaining: Option<Duration> = None;
+
+        while !self.queue.is_empty(){
+            if let Some(timeout) = timeout {
+                remaining = Some(timeout - start.elapsed());
+                if remaining.unwrap() <= Duration::from_secs(0) {
+                    warn!("Timeout reached while waiting for the queue to be empty");
+                    break;
+                }
+            }
+            let message = self.queue.pop_front();
+            self.next_step.poll();
+            self.next_step.submit(message.unwrap());
+
+        }
+
+        self.next_step.close();
+        self.next_step.join(remaining);
+        return None;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Transform;
+    use super::Produce;
+    use crate::backends::kafka::config::KafkaConfig;
+    use crate::backends::kafka::producer::KafkaProducer;
+    use crate::backends::kafka::types::KafkaPayload;
     use crate::processing::strategies::{
         CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     };
-    use crate::types::{Message, Partition, Topic};
+    use crate::types::{Message, Partition, Topic, TopicOrPartition};
     use chrono::Utc;
+    use std::collections::VecDeque;
     use std::time::Duration;
 
     #[test]
-    fn test_transform() {
+    fn test_produce() {
         fn identity(value: String) -> Result<String, InvalidMessage> {
             Ok(value)
         }
-
-        struct Noop {}
-        impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
-                None
-            }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected> {
-                Ok(())
-            }
-            fn close(&mut self) {}
-            fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-                None
-            }
-        }
-
-        let mut strategy = Transform {
-            function: identity,
-            next_step: Box::new(Noop {}),
-        };
+        let config = KafkaConfig::new_consumer_config(
+            vec!["localhost:9092".to_string()],
+            "my_group".to_string(),
+            "latest".to_string(),
+            false,
+            None,
+        );
 
         let partition = Partition {
             topic: Topic {
@@ -85,81 +150,12 @@ mod tests {
             index: 0,
         };
 
-        strategy
-            .submit(Message::new(
-                partition,
-                0,
-                "Hello world".to_string(),
-                Utc::now(),
-            ))
-            .unwrap();
-    }
-}
-use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-};
-use crate::types::Message;
-use std::time::Duration;
-
-pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
-    pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
-    pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
-}
-
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
-    for Transform<TPayload, TTransformed>
-{
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.next_step.poll()
-    }
-
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected> {
-        // TODO: Handle InvalidMessage
-        let transformed = (self.function)(message.payload).unwrap();
-
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: transformed,
-            timestamp: message.timestamp,
-        })
-    }
-
-    fn close(&mut self) {
-        self.next_step.close()
-    }
-
-    fn terminate(&mut self) {
-        self.next_step.terminate()
-    }
-
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Transform;
-    use crate::processing::strategies::{
-        CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    };
-    use crate::types::{Message, Partition, Topic};
-    use chrono::Utc;
-    use std::time::Duration;
-
-    #[test]
-    fn test_transform() {
-        fn identity(value: String) -> Result<String, InvalidMessage> {
-            Ok(value)
-        }
-
         struct Noop {}
-        impl ProcessingStrategy<String> for Noop {
+        impl ProcessingStrategy<KafkaPayload> for Noop {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected> {
+            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
                 Ok(())
             }
             fn close(&mut self) {}
@@ -168,24 +164,23 @@ mod tests {
                 None
             }
         }
+        let producer: KafkaProducer = KafkaProducer::new(config);
 
-        let mut strategy = Transform {
-            function: identity,
+        let mut strategy: Produce<KafkaPayload> = Produce {
             next_step: Box::new(Noop {}),
+            producer: producer,
+            queue: VecDeque::new(),
+            topic: TopicOrPartition::Topic(partition.topic.clone()),
+            closed: false,
+            max_queue_size: 1000,
         };
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
-
+        let payload_str = "hello world".to_string().as_bytes().to_vec();
         strategy
             .submit(Message::new(
                 partition,
                 0,
-                "Hello world".to_string(),
+                KafkaPayload { key: None, headers: None, payload: Some(payload_str) },
                 Utc::now(),
             ))
             .unwrap();
