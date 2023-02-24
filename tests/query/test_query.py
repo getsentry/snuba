@@ -1,3 +1,6 @@
+import itertools
+from unittest.mock import MagicMock, patch
+
 from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.query import LimitBy, SelectedExpression
@@ -77,3 +80,37 @@ def test_query_experiments() -> None:
 
     query.set_experiments({"optimization3": 0.5})
     assert query.get_experiments() == {"optimization3": 0.5}
+
+
+@patch("snuba.query.replace")
+def test_query_transformation(mock_replace: MagicMock) -> None:
+    mock_replace.return_value = None
+    mock_visitor = MagicMock()
+
+    mock_selected_columns = [MagicMock()]
+    mock_array_join = [MagicMock()]
+    mock_condition = MagicMock()
+    mock_groupby = [MagicMock()]
+    mock_having = MagicMock()
+    mock_order_by = [MagicMock()]
+    mock_limitby = MagicMock()
+    query = Query(
+        Table("my_table", ColumnSet([])),
+        selected_columns=mock_selected_columns,
+        array_join=mock_array_join,
+        condition=mock_condition,
+        groupby=mock_groupby,
+        having=mock_having,
+        order_by=mock_order_by,
+        limitby=mock_limitby,
+    )
+
+    query.transform(mock_visitor)
+
+    for mock_expr in itertools.chain(mock_selected_columns, mock_order_by):
+        mock_expr.expression.accept.assert_called_once_with(mock_visitor)
+
+    for mock_expr in itertools.chain(
+        mock_array_join, [mock_condition], mock_groupby, [mock_having], mock_limitby
+    ):
+        mock_expr.accept.assert_called_once_with(mock_visitor)
