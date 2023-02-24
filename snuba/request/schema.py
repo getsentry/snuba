@@ -150,6 +150,7 @@ ATTRIBUTION_INFO_SCHEMA = {
         "team": {"type": "string", "default": "<unknown>"},
         "feature": {"type": "string", "default": "<unknown>"},
         "app_id": {"type": "string", "default": "default"},
+        "tenant_ids": {"type": "object", "default": {"<unknown>": "<unknown>"}},
         "parent_api": {"type": "string", "default": "<unknown>"},
         "referrer": {"type": "string", "default": "<unknown>"},
     },

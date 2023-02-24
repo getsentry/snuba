@@ -72,10 +72,8 @@ class ExecuteNoneAction(MigrationAction):
     pass
 
 
-# todo, shoudln't need .keys() once ADMIN_ALLOWED_MIGRATION_GROUPS is a set not dict
 MIGRATIONS_RESOURCES = {
-    group: MigrationResource(group)
-    for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.keys()
+    group: MigrationResource(group) for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
 }
 
 
@@ -121,9 +119,14 @@ ROLES = {
         name="TestMigrationsExecutor",
         actions={ExecuteAllAction([MIGRATIONS_RESOURCES["test_migration"]])},
     ),
+    "SearchIssuesExecutor": Role(
+        name="SearchIssuesExecutor",
+        actions={ExecuteNonBlockingAction([MIGRATIONS_RESOURCES["search_issues"]])},
+    ),
 }
 
 DEFAULT_ROLES = [
     ROLES["MigrationsReader"],
     ROLES["TestMigrationsExecutor"],
+    ROLES["SearchIssuesExecutor"],
 ]

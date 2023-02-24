@@ -49,6 +49,7 @@ class Topic(Enum):
     )
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
     GENERIC_EVENTS = "generic-events"
+    GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"

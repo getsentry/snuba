@@ -78,7 +78,7 @@ ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
 USER snuba
-EXPOSE 1218
+EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 

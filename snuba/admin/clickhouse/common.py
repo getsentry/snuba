@@ -25,7 +25,11 @@ class InvalidStorageError(SerializableException):
 
 
 def is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
-    nodes = [*cluster.get_local_nodes(), cluster.get_query_node()]
+    nodes = [
+        *cluster.get_local_nodes(),
+        cluster.get_query_node(),
+        *cluster.get_distributed_nodes(),
+    ]
 
     return any(node.host_name == host and node.port == port for node in nodes)
 

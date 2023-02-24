@@ -76,4 +76,3 @@ validators:
     args:
       required_filter_columns:
         - project_id
-validate_data_model: warn

@@ -1,7 +1,8 @@
 import logging
+import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -35,6 +36,39 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
+    def _timeseries_id_token(
+        self,
+        message: Mapping[str, Any],
+        sorted_tag_items: Iterable[Tuple[str, Union[int, str]]],
+    ) -> bytearray:
+        org_id: int = message["org_id"]
+        project_id: int = message["project_id"]
+        metric_id: int = message["metric_id"]
+
+        buffer = bytearray()
+        for field in [org_id, project_id, metric_id]:
+            buffer.extend(field.to_bytes(length=8, byteorder="little"))
+        for (key, value) in sorted_tag_items:
+            buffer.extend(bytes(key, "utf-8"))
+            if isinstance(value, int):
+                buffer.extend(value.to_bytes(length=8, byteorder="little"))
+            elif isinstance(value, str):
+                buffer.extend(bytes(value, "utf-8"))
+
+        return buffer
+
+    def _hash_timeseries_id(
+        self, message: Mapping[str, Any], sorted_tag_items: Iterable[Tuple[str, int]]
+    ) -> int:
+        """
+        _hash_timeseries_id should return a UInt32 whose distribution should shard
+        as evenly as possible while ensuring that an average query will not have to
+        cross shards to read a results (so for the same org, project, metric, and tags
+        ClickHouse should not have to aggregate results from multiple nodes).
+        """
+        token = self._timeseries_id_token(message, sorted_tag_items)
+        return zlib.adler32(token)
+
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -50,7 +84,9 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
         values = []
         tags = message["tags"]
         assert isinstance(tags, Mapping), "Invalid tags type"
-        for key, value in sorted(tags.items()):
+
+        sorted_tag_items = sorted(tags.items())
+        for key, value in sorted_tag_items:
             assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
             values.append(value)
@@ -76,6 +112,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             **self._process_values(message),
             "materialization_version": mat_version,
             "retention_days": retention_days,
+            "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
             "partition": metadata.partition,
             "offset": metadata.offset,
         }

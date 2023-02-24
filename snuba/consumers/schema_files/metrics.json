@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema#",
+  "$ref": "#/definitions/Main",
+  "definitions": {
+    "Main": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "use_case_id": {
+          "type": "string"
+        },
+        "org_id": {
+          "type": "integer"
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "metric_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "integer"
+        },
+        "tags": {
+          "$ref": "#/definitions/IntToInt"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "retention_days": {
+          "type": "integer"
+        },
+        "mapping_meta": {
+          "$ref": "#/definitions/MappingMeta"
+        }
+      },
+      "required": [
+        "mapping_meta",
+        "metric_id",
+        "org_id",
+        "project_id",
+        "retention_days",
+        "tags",
+        "timestamp",
+        "type",
+        "use_case_id",
+        "value"
+      ],
+      "title": "Main"
+    },
+    "MappingMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[chdfr]$": {
+          "$ref": "#/definitions/IntToString"
+        }
+      },
+      "title": "MappingMeta"
+    },
+    "IntToInt": {
+      "type": "object",
+      "patternProperties": {
+        "^[0-9]$": {
+          "type": "integer"
+        }
+      },
+      "title": "IntToInt"
+    },
+    "IntToString": {
+      "type": "object",
+      "patternProperties": {
+        "^[0-9]$": {
+          "type": "string"
+        }
+      },
+      "title": "IntToString"
+    }
+  }
+}

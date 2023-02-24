@@ -151,6 +151,9 @@ function ClickhouseMigrations(props: { api: Client }) {
         alert(`Migration ${migrationId} ${action} didn't complete.` +
               `See run log output. \n\n ${err||""} \n ${stdout}`)
       }
+      if (migrationGroup){
+        refreshStatus(migrationGroup.group)
+      }
     })
 
     if (migrationGroup){

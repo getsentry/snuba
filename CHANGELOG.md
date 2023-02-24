@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.2.0
+
+### Various fixes & improvements
+
+- fix: Reject improperly typed tag conditions as invalid queries (#3727) by @evanh
+- ref(batch-writer): Remove unused terminate() method (#3744) by @lynnagara
+- allow strings in select statements on system queries (#3745) by @volokluev
+- ref: InsertBatchWriter and ReplacementBatchWriter don't subclass ProcessingStrategy (#3743) by @lynnagara
+- add support for enum column type (#3729) by @enochtangg
+- change search_issues migrations to non-blocking (#3739) by @barkbarkimashark
+- fix: Rename consumer group tag (#3740) by @lynnagara
+- fix ui bug where we dont properly refresh table after running (#3733) by @dbanda
+- change log error to warn (#3734) by @dbanda
+- ref: bump timeout slightly (#3738) by @asottile-sentry
+- ref: force ipv4 localhost (#3736) by @asottile-sentry
+- add generic metric consumers to freight (#3737) by @enochtangg
+- fix(admin): allow querying dist nodes too (#3731) by @dbanda
+- Revert "feat(admin): allow querylog to be queried by more threads (#3718)" (#3732) by @volokluev
+- migrations: add custom search issues role (#3724) by @dbanda
+- docs(clickhouse): describe basic Sentry CH usage (#3701) by @onewland
+- ref(migrations): Make ADMIN_ALLOWED_MIGRATION_GROUPS a set (#3720) by @MeredithAnya
+- feat(admin): allow querylog to be queried by more threads (#3718) by @volokluev
+- feat(replays): add replay_id to transactions table (#3721) by @JoshFerge
+- feat(replays): add replay_id to errors table (#3722) by @JoshFerge
+- Remove experimental flag from replays (#3726) by @cmanallen
+- fix: Fix typing of multistorage consumer (#3719) by @lynnagara
+- ref(consumer): Build strategy factory function in multistorage consumer (#3714) by @ayirr7
+- fix(cli): Allow more options for datasets and entities (#3715) by @nikhars
+
+_Plus 64 more_
+
 ## 23.1.1
 
 ### Various fixes & improvements

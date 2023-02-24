@@ -186,16 +186,16 @@ def test_get_local_nodes() -> None:
 
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
-        "localhost", 8000, "default", "", "default", 8001, {"events"}, True
+        "127.0.0.1", 8000, "default", "", "default", 8001, {"events"}, True
     )
 
     cluster_2 = cluster.ClickhouseCluster(
-        "localhost", 8000, "default", "", "default", 8001, {"transactions"}, True
+        "127.0.0.1", 8000, "default", "", "default", 8001, {"transactions"}, True
     )
 
     # Same node but different user
     cluster_3 = cluster.ClickhouseCluster(
-        "localhost", 8000, "readonly", "", "default", 8001, {"metrics"}, True
+        "127.0.0.1", 8000, "readonly", "", "default", 8001, {"metrics"}, True
     )
 
     assert cluster_1.get_query_connection(
@@ -204,10 +204,10 @@ def test_cache_connections() -> None:
 
     assert cluster_1.get_node_connection(
         cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("localhost", 8002),
+        cluster.ClickhouseNode("127.0.0.1", 8002),
     ) == cluster_1.get_node_connection(
         cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("localhost", 8002),
+        cluster.ClickhouseNode("127.0.0.1", 8002),
     )
 
     assert cluster_1.get_query_connection(

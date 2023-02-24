@@ -105,7 +105,6 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--validate-schema", is_flag=True, default=False)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
@@ -128,7 +127,6 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    validate_schema: bool,
     profile_path: Optional[str] = None,
 ) -> None:
 
@@ -139,7 +137,7 @@ def consumer(
     sentry_sdk.set_tag("storage", storage_name)
 
     metrics_tags = {
-        "group": consumer_group,
+        "consumer_group": consumer_group,
         "storage": storage_key.value,
     }
 
@@ -176,7 +174,6 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
-        validate_schema=validate_schema,
         slice_id=slice_id,
     )
 

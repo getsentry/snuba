@@ -1067,3 +1067,94 @@ class TestSnQLApi(BaseApiTest):
 
         assert b"DB::Exception: Illegal type" in response.data
         assert response.status_code == 400
+
+    def test_invalid_tag_queries(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS `count`
+                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                    WHERE ifNull(tags[user_flow], '') = 'buy'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'www.something.com'
+                    AND tags[error_code] = '2300'
+                    AND tags[count] = 419
+                    ORDER BY time ASC LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 400
+        data = response.json
+        assert data["error"]["type"] == "invalid_query"
+        assert (
+            data["error"]["message"]
+            == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+        )
+
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS `count`
+                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                    WHERE ifNull(tags[user_flow], '') = 'buy'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'www.something.com'
+                    AND tags[error_code] IN array('2300')
+                    AND tags[count] IN array(419, 70, 175, 181, 58)
+                    ORDER BY time ASC LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 400
+        data = response.json
+        assert data["error"]["type"] == "invalid_query"
+        assert (
+            data["error"]["message"]
+            == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+        )
+
+    def test_datetime_condition_types(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT uniq(user) AS `count_unique_user`, uniq(user) AS `count_unique_user`
+                    BY time, received AS `error.received`
+                    WHERE type != 'transaction'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'PROD'
+                    AND received IN array('2023-01-25T20:03:13+00:00', '2023-01-27T14:14:42+00:00')
+                    ORDER BY time ASC
+                    LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert (
+            response.status_code == 500
+        )  # TODO: This should be a 400, and will change once we can properly categorise these errors

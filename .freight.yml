@@ -51,13 +51,19 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-sets-subscriptions-scheduler
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-subscriptions-scheduler
       - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-subscriptions-scheduler
+      - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-sets-subscriptions-executor
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: generic-metrics-distributions-subscriptions-executor
+      - image: us.gcr.io/sentryio/snuba:{sha}
+        name: generic-metrics-counters-subscriptions-executor
       # Consumers below this line are considered experimental (ie not present in .freight.stable.yml)
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: loadtest-errors-consumer
@@ -73,6 +79,8 @@ steps:
         name: profiling-functions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: replays-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
+        name: search-issues-consumer
   - kind: KubernetesCronJob
     selector:
       label_selector: service=snuba
