@@ -24,13 +24,12 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.option(
-    "--storages",
-    "storage_names",
+    "--storage",
+    "storage_name",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
     ),
-    help="The storages to target",
-    multiple=True,
+    help="The storage to target",
     required=True,
 )
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
@@ -111,7 +110,7 @@ logger = logging.getLogger(__name__)
 )
 def consumer(
     *,
-    storage_names: Sequence[str],
+    storage_name: str,
     raw_events_topic: Optional[str],
     replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
@@ -135,7 +134,6 @@ def consumer(
     setup_sentry()
     logger.info("Consumer Starting")
 
-    storage_name = storage_names[0]
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
 
