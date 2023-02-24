@@ -107,8 +107,8 @@ def test_query_transformation(mock_replace: MagicMock) -> None:
 
     query.transform(mock_visitor)
 
-    for mock_expr in chain(mock_selected_columns, mock_order_by):
-        mock_expr.expression.accept.assert_called_once_with(mock_visitor)
+    for mock_clause in chain(mock_selected_columns, mock_order_by):
+        mock_clause.expression.accept.assert_called_once_with(mock_visitor)
 
     for mock_expr in chain(
         mock_array_join, [mock_condition], mock_groupby, [mock_having], mock_limitby
