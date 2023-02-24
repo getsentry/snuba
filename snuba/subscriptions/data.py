@@ -164,7 +164,7 @@ class SubscriptionData:
         custom_processing.append(partial(self.add_conditions, timestamp, offset))
 
         request = build_request(
-            {"query": self.query},
+            {"query": self.query, "tenant_ids": {"NO_LIMIT": 1}},
             parse_snql_query,
             SubscriptionQuerySettings,
             schema,

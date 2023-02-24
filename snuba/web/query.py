@@ -217,6 +217,8 @@ def record_missing_tenant_ids(request: Request) -> None:
     metric will be removed once all API calls from Sentry do include this info.
     """
     if tenant_ids := request.attribution_info.tenant_ids:
+        if "NO_LIMIT" in tenant_ids:
+            return
         if "referrer" not in tenant_ids or "organization_id" not in tenant_ids:
             metrics.increment(
                 "request_without_tenant_ids", tags={"referrer": request.referrer}
