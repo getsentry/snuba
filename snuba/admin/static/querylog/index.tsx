@@ -3,6 +3,7 @@ import Client from "../api_client";
 import { Table } from "../table";
 import QueryDisplay from "./query_display";
 import { QuerylogResult, PredefinedQuery } from "./types";
+import QueryEditor from "../query_editor";
 
 function QuerylogQueries(props: { api: Client }) {
   const [predefinedQuery, setPredefinedQuery] =
@@ -54,6 +55,26 @@ function QuerylogQueries(props: { api: Client }) {
 
   return (
     <div>
+      <QueryEditor
+        onQueryUpdate={function (query: string): void {}}
+        predefinedQueries={[
+          {
+            name: "a",
+            queryTemplate: `
+SELECT x as {{{alias}}}
+FROM {{{table}}}
+WHERE {{{alias}}} < {{{value}}}`,
+            description: "Description for a, what does a do?",
+          },
+          {
+            name: "b",
+            queryTemplate: `
+I'm too lazy to come up with more queries {{{alias}}} {{{hello}}}
+{{{alias}}} {{{qwert}}}`,
+            description: "Description for b, same as a",
+          },
+        ]}
+      ></QueryEditor>
       <div>
         <form>
           <select
@@ -72,11 +93,6 @@ function QuerylogQueries(props: { api: Client }) {
           </select>
         </form>
       </div>
-      {QueryDisplay({
-        api: props.api,
-        resultDataPopulator: tablePopulator,
-        predefinedQuery: predefinedQuery,
-      })}
     </div>
   );
 }
