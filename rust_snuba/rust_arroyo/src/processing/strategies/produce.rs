@@ -1,14 +1,12 @@
-use chrono::Utc;
-use log::warn;
 
+use log::warn;
 use crate::backends::Producer;
 use crate::backends::kafka::producer::KafkaProducer;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    CommitRequest, MessageRejected, ProcessingStrategy,
 };
-use crate::types::{Message, Topic, TopicOrPartition};
-use core::time;
+use crate::types::{Message, TopicOrPartition};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -22,8 +20,9 @@ pub struct Produce<TPayload: Clone + Send + Sync> {
 }
 
 // TODO: make the queue store futures
+// TODO: make this generic
 impl Produce<KafkaPayload> {
-    pub fn new(producer: KafkaProducer, next_step: Box<dyn ProcessingStrategy<KafkaPayload>>, topic: TopicOrPartition) -> Self {
+    pub fn new(producer: KafkaProducer, next_step: Box<dyn ProcessingStrategy<KafkaPayload>>, topic:TopicOrPartition) -> Self {
         Produce {
             producer,
             next_step,
@@ -39,36 +38,15 @@ impl ProcessingStrategy<KafkaPayload>
     for Produce<KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
-
-        // while self.__queue:
-        //     committable, future = self.__queue[0]
-
-        //     if not future.done():
-        //         break
-
-        //     message = Message(Value(future.result().payload, committable))
-
-        //     self.__queue.popleft()
-        //     self.__next_step.poll()
-        //     self.__next_step.submit(message)
         while !self.queue.is_empty(){
             let message = self.queue.pop_front();
             self.next_step.poll();
-            self.next_step.submit(message.unwrap());
+            self.next_step.submit(message.unwrap()).unwrap()
         }
         return None
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
-        // if len(self.__queue) >= self.__max_buffer_size:
-        //     raise MessageRejected
-
-        // self.__queue.append(
-        //     (
-        //         message.committable,
-        //         self.__producer.produce(self.__topic, message.payload),
-        //     )
-        // )
         if self.queue.len() >= self.max_queue_size {
             return Err(MessageRejected)
         }
@@ -76,11 +54,7 @@ impl ProcessingStrategy<KafkaPayload>
         self.producer.produce(&self.topic, &message.payload);
         self.producer.flush();
         self.queue.push_back(message);
-
         return Ok(());
-
-
-
     }
 
     fn close(&mut self) {
@@ -106,7 +80,7 @@ impl ProcessingStrategy<KafkaPayload>
             }
             let message = self.queue.pop_front();
             self.next_step.poll();
-            self.next_step.submit(message.unwrap());
+            self.next_step.submit(message.unwrap()).unwrap();
 
         }
 
@@ -123,7 +97,7 @@ mod tests {
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::types::KafkaPayload;
     use crate::processing::strategies::{
-        CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+        CommitRequest, MessageRejected, ProcessingStrategy,
     };
     use crate::types::{Message, Partition, Topic, TopicOrPartition};
     use chrono::Utc;
@@ -132,9 +106,6 @@ mod tests {
 
     #[test]
     fn test_produce() {
-        fn identity(value: String) -> Result<String, InvalidMessage> {
-            Ok(value)
-        }
         let config = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
             "my_group".to_string(),
@@ -164,6 +135,7 @@ mod tests {
                 None
             }
         }
+
         let producer: KafkaProducer = KafkaProducer::new(config);
 
         let mut strategy: Produce<KafkaPayload> = Produce {
