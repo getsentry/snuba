@@ -668,14 +668,8 @@ def raw_query(
         trace_id,
     )
 
-    execute_query_strategy = (
-        execute_query_with_query_id
-        if state.get_config("use_readthrough_query_cache", 1)
-        else execute_query_with_caching
-    )
-
     try:
-        result = execute_query_strategy(
+        result = execute_query_with_query_id(
             clickhouse_query,
             query_settings,
             formatted_query,
