@@ -13,6 +13,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
+from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
@@ -20,6 +21,7 @@ from snuba.consumers.consumer import (
     CommitLogConfig,
     MultistorageConsumerProcessingStrategyFactory,
 )
+from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
     get_writable_storage,
@@ -52,6 +54,10 @@ logger = logging.getLogger(__name__)
 )
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
+    "--replacements-topic",
+    help="Topic to produce replacement messages info.",
+)
+@click.option(
     "--commit-log-topic",
     help="Topic for committed offsets to be written to, triggering post-processing task(s)",
 )
@@ -63,6 +69,12 @@ logger = logging.getLogger(__name__)
     "--bootstrap-server",
     multiple=True,
     help="Kafka bootstrap server to use.",
+)
+@click.option(
+    "--slice-id",
+    "slice_id",
+    type=int,
+    help="The slice id for the storage",
 )
 @click.option(
     "--max-batch-size",
@@ -109,12 +121,17 @@ logger = logging.getLogger(__name__)
     type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     raw_events_topic: Optional[str],
+    replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
+    slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -125,6 +142,7 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    profile_path: Optional[str] = None,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -144,8 +162,12 @@ def multistorage_consumer(
         key: get_writable_storage(key)
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
+    writable_storages = [*storages.values()]
 
-    consumer_config = get_consumer_config([*storages.values()])
+    for storage in writable_storages:
+        validate_passed_slice(storage.get_storage_set_key(), slice_id)
+
+    consumer_config = get_consumer_config(writable_storages, slice_id)
 
     if raw_events_topic:
         topic = Topic(raw_events_topic)
@@ -161,6 +183,12 @@ def multistorage_consumer(
         # topic is on the same Kafka cluster as the input topic.
         commit_log = consumer_config.logical_commit_log_topic
 
+    replacements: Optional[Topic]
+    if replacements_topic:
+        replacements = Topic(replacements_topic)
+    else:
+        replacements = consumer_config.logical_replacements_topic
+
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
     # Unfortunately, we don't have the concept of independently configurable
@@ -174,6 +202,7 @@ def multistorage_consumer(
     consumer_configuration = build_kafka_consumer_configuration(
         SnubaTopic(consumer_config.logical_raw_topic.name),
         consumer_group,
+        slice_id,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=not no_strict_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
@@ -181,13 +210,18 @@ def multistorage_consumer(
         bootstrap_servers=bootstrap_server,
     )
 
+    metrics_tags = {
+        "group": consumer_group,
+        "storage": "_".join([storage_keys[0].value, "m"]),
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
-        tags={
-            "group": consumer_group,
-            "storage": "_".join([storage_keys[0].value, "m"]),
-        },
+        tags=metrics_tags,
     )
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
     # for the consumer group, or use the default.
@@ -228,7 +262,7 @@ def multistorage_consumer(
         commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
 
     strategy_factory = build_multistorage_streaming_strategy_factory(
-        [*storages.values()],
+        writable_storages,
         max_batch_size,
         max_batch_time_ms,
         processes,
@@ -236,7 +270,10 @@ def multistorage_consumer(
         output_block_size,
         metrics,
         commit_log_config,
+        replacements,
         consumer_config.dead_letter_policy,
+        slice_id,
+        profile_path,
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -264,19 +301,19 @@ class ConsumerConfig:
 
 
 def get_consumer_config(
-    storages: Sequence[WritableTableStorage],
+    storages: Sequence[WritableTableStorage], slice_id: Optional[int]
 ) -> ConsumerConfig:
     stream_loaders = {
         storage.get_table_writer().get_stream_loader() for storage in storages
     }
 
     default_topics = {
-        stream_loader.get_default_topic_spec().topic_name
+        stream_loader.get_default_topic_spec().get_physical_topic_name(slice_id)
         for stream_loader in stream_loaders
     }
 
     commit_log_topics = {
-        spec.topic_name
+        spec.get_physical_topic_name(slice_id)
         for spec in (
             stream_loader.get_commit_log_topic_spec()
             for stream_loader in stream_loaders
@@ -285,7 +322,7 @@ def get_consumer_config(
     }
 
     replacement_topics = {
-        spec.topic_name
+        spec.get_physical_topic_name(slice_id)
         for spec in (
             stream_loader.get_replacement_topic_spec()
             for stream_loader in stream_loaders
@@ -339,10 +376,15 @@ def build_multistorage_streaming_strategy_factory(
     output_block_size: Optional[int],
     metrics: MetricsBackend,
     commit_log_config: Optional[CommitLogConfig],
+    replacements: Optional[Topic],
     dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]],
+    slice_id: Optional[int],
+    profile_path: Optional[str],
 ) -> ProcessingStrategyFactory[KafkaPayload]:
 
-    strategy_factory = MultistorageConsumerProcessingStrategyFactory(
+    strategy_factory: ProcessingStrategyFactory[
+        KafkaPayload
+    ] = MultistorageConsumerProcessingStrategyFactory(
         storages,
         max_batch_size,
         max_batch_time_ms / 1000.0,
@@ -351,7 +393,15 @@ def build_multistorage_streaming_strategy_factory(
         output_block_size=output_block_size,
         metrics=metrics,
         dead_letter_policy_creator=dead_letter_policy,
+        slice_id=slice_id,
         commit_log_config=commit_log_config,
+        replacements=replacements,
     )
+
+    if profile_path is not None:
+        strategy_factory = ProcessingStrategyProfilerWrapperFactory(
+            strategy_factory,
+            profile_path,
+        )
 
     return strategy_factory
