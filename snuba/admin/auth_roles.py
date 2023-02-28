@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Generic, Optional, Sequence, Set, Type, TypeVar
@@ -14,13 +14,15 @@ class Resource(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
 
-    @abstractproperty
-    def category(self) -> Category:
+    @abstractmethod
+    @staticmethod
+    def category() -> Category:
         raise NotImplementedError
 
 
 class MigrationResource(Resource):
-    def category(self) -> Category:
+    @staticmethod
+    def category() -> Category:
         return Category.MIGRATIONS
 
 
