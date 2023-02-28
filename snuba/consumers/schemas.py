@@ -17,6 +17,8 @@ _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     Topic.QUERYLOG: load_file("querylog.json"),
     # Release health metrics
     Topic.METRICS: load_file("metrics.json"),
+    # Performance metrics
+    Topic.GENERIC_METRICS: load_file("generic_metrics.json"),
     # XXX(markus): This is copypasted from Relay, need to consolidate at some
     # point
     Topic.EVENTS: load_file("event.json"),
