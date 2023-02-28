@@ -12,6 +12,7 @@ import pytest
 import rapidjson
 
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
+from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -68,6 +69,23 @@ def backend() -> Cache[bytes]:
 
 def noop(value: int) -> None:
     return None
+
+
+def test_short_circuit(backend: Cache[bytes]) -> None:
+    set_config("read_through_cache.short_circuit", 1)
+    key = "key"
+    value = b"value"
+    function = mock.MagicMock(return_value=value)
+
+    assert backend.get(key) is None
+
+    with assert_changes(lambda: function.call_count, 0, 1):
+        backend.get_readthrough(key, function, noop, 5) == value
+
+    assert backend.get(key) is None
+
+    with assert_changes(lambda: function.call_count, 1, 2):
+        backend.get_readthrough(key, function, noop, 5) == value
 
 
 def test_get_readthrough(backend: Cache[bytes]) -> None:

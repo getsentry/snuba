@@ -81,6 +81,11 @@ class RedisCache(Cache[TValue]):
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
+        # in case something is wrong with redis, we want to be able to
+        # disable the read_through_cache but still serve traffic.
+        if get_config("read_through_cache.short_circuit", 0):
+            return function()
+
         # This method is designed with the following goals in mind:
         # 1. The value generation function is only executed when no value
         # already exists for the key.
