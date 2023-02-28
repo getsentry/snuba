@@ -6,7 +6,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "version": {"const": 1},
+        "version": {"const": 2},
         "use_case_id": {
           "type": "string"
         },
@@ -26,7 +26,7 @@
           "type": "integer"
         },
         "tags": {
-          "$ref": "#/definitions/IntToInt"
+          "$ref": "#/definitions/StringToString"
         },
         "value": {
           "anyOf": [
@@ -72,19 +72,21 @@
       },
       "title": "MappingMeta"
     },
-    "IntToInt": {
-      "type": "object",
-      "patternProperties": {
-        "^[0-9]$": {
-          "type": "integer"
-        }
-      },
-      "title": "IntToInt"
-    },
     "IntToString": {
       "type": "object",
+      "additionalProperties": false,
       "patternProperties": {
         "^[0-9]$": {
+          "type": "string"
+        }
+      },
+      "title": "IntToString"
+    },
+    "StringToString": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^.*$": {
           "type": "string"
         }
       },
