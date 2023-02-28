@@ -3,11 +3,8 @@ import Client from "../api_client";
 import { Table } from "../table";
 import QueryDisplay from "./query_display";
 import { QuerylogResult, PredefinedQuery } from "./types";
-import QueryEditor from "../query_editor";
 
 function QuerylogQueries(props: { api: Client }) {
-  const [predefinedQuery, setPredefinedQuery] =
-    useState<PredefinedQuery | null>(null);
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
   >([]);
@@ -32,19 +29,6 @@ function QuerylogQueries(props: { api: Client }) {
     );
   }
 
-  function updatePredefinedQuery(queryName: string) {
-    const selectedQuery = predefinedQueryOptions.find(
-      (query) => query.name === queryName
-    );
-    if (selectedQuery) {
-      setPredefinedQuery(() => {
-        return {
-          ...selectedQuery,
-        };
-      });
-    }
-  }
-
   function formatSQL(sql: string) {
     const formatted = sql
       .split("\n")
@@ -55,44 +39,11 @@ function QuerylogQueries(props: { api: Client }) {
 
   return (
     <div>
-      <QueryEditor
-        onQueryUpdate={function (query: string): void {}}
-        predefinedQueries={[
-          {
-            name: "a",
-            queryTemplate: `
-SELECT x as {{{alias}}}
-FROM {{{table}}}
-WHERE {{{alias}}} < {{{value}}}`,
-            description: "Description for a, what does a do?",
-          },
-          {
-            name: "b",
-            queryTemplate: `
-I'm too lazy to come up with more queries {{{alias}}} {{{hello}}}
-{{{alias}}} {{{qwert}}}`,
-            description: "Description for b, same as a",
-          },
-        ]}
-      ></QueryEditor>
-      <div>
-        <form>
-          <select
-            value={predefinedQuery?.name || ""}
-            onChange={(evt) => updatePredefinedQuery(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a predefined query
-            </option>
-            {predefinedQueryOptions.map((option: PredefinedQuery) => (
-              <option key={option.name} value={option.name}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </form>
-      </div>
+      {QueryDisplay({
+        api: props.api,
+        resultDataPopulator: tablePopulator,
+        predefinedQueryOptions: predefinedQueryOptions,
+      })}
     </div>
   );
 }

@@ -2,102 +2,85 @@ import React, { useEffect, useState, ReactElement } from "react";
 
 type PredefinedQuery = {
   name: string;
-  queryTemplate: string;
-  description?: string;
+  sql: string;
+  description: string;
 };
 
 function QueryEditor(props: {
   onQueryUpdate: (query: string) => void;
-  predefinedQueries?: Array<PredefinedQuery>;
+  predefinedQueryOptions?: Array<PredefinedQuery>;
 }) {
-  const [queryTemplate, setQueryTemplate] = useState<string>("");
-  const [queryParams, setQueryParams] = useState<Map<string, string>>(
-    new Map<string, string>()
-  );
   const [query, setQuery] = useState<string>("");
-  const [predefinedQuery, setPredefinedQuery] = useState<
+  const [queryTemplate, setQueryTemplate] = useState<string>("");
+  const [queryParamValues, setQueryParamValues] = useState<{
+    [key: string]: string;
+  }>({});
+  const [selectedPredefinedQuery, setSelectedPredefinedQuery] = useState<
     PredefinedQuery | undefined
   >(undefined);
 
+  const variableRegex = /<([a-zA-Z0-9_]+)>/;
+  const textAreaStyle = { width: "100%", height: 140 };
+
   useEffect(() => {
-    applyQueryTemplate();
-  }, [queryTemplate, queryParams]);
+    generateQuery();
+  }, [queryTemplate, queryParamValues]);
 
-  function updateQueryTemplate(template: string) {
-    setQueryTemplate((_) => template);
-    let paramNames = new Set(template.match(/{{{([a-zA-Z0-9_]+)}}}/g));
-    setQueryParams((queryParams) => {
-      queryParams.forEach((_, key: string) => {
-        if (!paramNames.has(key)) {
-          queryParams.delete(key);
-        }
-      });
-      paramNames.forEach((paramName) => {
-        if (!queryParams.has(paramName)) {
-          queryParams.set(paramName, "");
-        }
-      });
-      return queryParams;
-    });
-  }
+  useEffect(() => {
+    onQueryTemplateUpdate();
+  }, [queryTemplate]);
 
-  function updateQueryParameter(key: string, value: string) {
-    setQueryParams((queryParams) => {
-      return new Map(queryParams.set(key, value));
-    });
-  }
-
-  function applyQueryTemplate() {
+  function generateQuery() {
     let sql = queryTemplate;
-    queryParams.forEach((value, key) => {
-      if (value) {
-        sql = sql.replace(new RegExp(key, "g"), value);
+    Object.keys(queryParamValues).forEach((param) => {
+      if (queryParamValues[param]) {
+        sql = sql.split(param).join(queryParamValues[param]);
       }
     });
     setQuery(sql);
     props.onQueryUpdate(sql);
   }
 
-  function renderParameterSetters() {
-    let setters: Array<ReactElement> = [];
-    queryParams.forEach((value, key) => {
-      setters.push(
-        <div key={key}>
-          <div>
-            <label>{`Parameter: ${key.match(/{{{(.*?)}}}/)?.[1]}`}</label>
-          </div>
-          <div>
-            <label>{`Value:`}</label>
-          </div>
-          <textarea
-            value={value}
-            onChange={(evt) => {
-              updateQueryParameter(key, evt.target.value);
-            }}
-          />
-          <hr />
-        </div>
-      );
-    });
-    return setters;
+  function onQueryTemplateUpdate() {
+    let paramNames = new Set(
+      queryTemplate.match(
+        new RegExp(variableRegex.source, variableRegex.flags + "g")
+      )
+    );
+    setQueryParamValues((prevQueryParamValues) =>
+      Array.from(paramNames).reduce(
+        (o, paramName) => ({
+          ...o,
+          [paramName]:
+            paramName in prevQueryParamValues
+              ? prevQueryParamValues[paramName]
+              : "",
+        }),
+        {}
+      )
+    );
   }
 
-  function renderPredefinedQueriesSelector() {
+  function updateQueryParameter(name: string, value: string) {
+    setQueryParamValues((queryParams) => ({ ...queryParams, [name]: value }));
+  }
+
+  function renderPredefinedQueriesSelectors() {
     return (
       <div>
-        <label>Query template: </label>
+        <label>Predefined query: </label>
         <select
-          value={predefinedQuery?.name ?? "undefined"}
+          value={selectedPredefinedQuery?.name ?? "undefined"}
           onChange={(evt) => {
-            let selectedPredefinedQuery = props?.predefinedQueries?.find(
+            let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
               (predefinedQuery) => predefinedQuery.name == evt.target.value
             );
-            setPredefinedQuery(selectedPredefinedQuery);
-            updateQueryTemplate(selectedPredefinedQuery?.queryTemplate ?? "");
+            setSelectedPredefinedQuery(selectedPredefinedQuery);
+            setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
           }}
         >
-          <option value={"undefined"}>Custom query template</option>
-          {props.predefinedQueries?.map((predefinedQuery) => (
+          <option value={"undefined"}>Custom query</option>
+          {props.predefinedQueryOptions?.map((predefinedQuery) => (
             <option key={predefinedQuery.name} value={predefinedQuery.name}>
               {predefinedQuery.name}
             </option>
@@ -107,26 +90,52 @@ function QueryEditor(props: {
     );
   }
 
+  function renderParameterSetters() {
+    let setters: Array<ReactElement> = [];
+    Object.keys(queryParamValues).forEach((paramName) => {
+      setters.push(
+        <div key={paramName}>
+          <div>
+            <label>{`Parameter: ${paramName.match(variableRegex)?.[1]}`}</label>
+          </div>
+          <div>
+            <label>{`Value:`}</label>
+          </div>
+          <textarea
+            value={queryParamValues[paramName]}
+            onChange={(evt) => {
+              updateQueryParameter(paramName, evt.target.value);
+            }}
+          />
+          <hr />
+        </div>
+      );
+    });
+    return setters;
+  }
+
   return (
     <form>
-      {renderPredefinedQueriesSelector()}
-      {predefinedQuery?.description ? (
-        <p>{predefinedQuery?.description}</p>
+      {renderPredefinedQueriesSelectors()}
+      {selectedPredefinedQuery?.description ? (
+        <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
       <textarea
         value={queryTemplate || ""}
-        placeholder={"Edit your queries here"}
-        style={{ width: "100%", height: 140 }}
+        placeholder={
+          "Edit your queries here, add '<>' around substrings you wish to replace"
+        }
+        style={textAreaStyle}
         onChange={(evt) => {
-          setPredefinedQuery(undefined);
-          updateQueryTemplate(evt.target.value);
+          setSelectedPredefinedQuery(undefined);
+          setQueryTemplate(evt.target.value);
         }}
       />
       {renderParameterSetters()}
       <textarea
         disabled={true}
-        placeholder={"Edit your queries in the text fields above"}
-        style={{ width: "100%", height: 140 }}
+        placeholder={"The final query you send to snuba will be here"}
+        style={textAreaStyle}
         value={query}
       ></textarea>
     </form>

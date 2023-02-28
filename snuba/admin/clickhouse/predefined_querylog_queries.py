@@ -18,7 +18,7 @@ class QueryByID(QuerylogQuery):
     FROM querylog_local
     WHERE has(clickhouse_queries.query_id, '<UUID>')
     AND timestamp > (now() - 60)
-    AND timestamp < toDateTime('2022-11-18T19:20:00')
+    AND timestamp < toDateTime('<time>')
 
     """
 
@@ -47,7 +47,7 @@ class DurationForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(duration_ms) AS c
         FROM querylog_local
-        WHERE referrer = 'search'
+        WHERE referrer = '<referrer>'
         AND time > (now() - (1 * 3600))
         AND time < now()
         GROUP BY
@@ -73,8 +73,8 @@ class BytesScannedForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.bytes_scanned)) AS c
         FROM querylog_local
-        WHERE referrer = 'search'
-        AND time > (now() - (1 * 3600))
+        WHERE referrer = '<referrer>'
+        AND time > (now() - (<duration>))
         AND time < now()
         GROUP BY
             projects,
@@ -99,8 +99,8 @@ class QueryDurationForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.duration_ms)) AS c
         FROM querylog_local
-        WHERE referrer = 'search'
-        AND time > (now() - (1 * 3600))
+        WHERE referrer = '<referrer>'
+        AND time > (now() - (<duration>))
         AND time < now()
         GROUP BY
             projects,
@@ -115,7 +115,7 @@ class QueryDurationForReferrerByProject(QuerylogQuery):
 
 
 class BeforeAfterBytesScannedComparison(QuerylogQuery):
-    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in bytes_scanned. In the example, the abuse started on Dec 7. at 21:54:50."""
+    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in bytes_scanned."""
 
     sql = """
     SELECT referrer, before_scanned, after_scanned, (after_scanned - ifNull(before_scanned, 0)) as diff, (diff / if(equals(after_scanned, 0), 1, after_scanned))  * 100 as pct_diff
@@ -123,17 +123,17 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as after_scanned
         FROM querylog_local
-        WHERE timestamp >= toDateTime('2022-12-07T21:55:00')
-        AND timestamp <= toDateTime('2022-12-07T22:20:00')
-        AND dataset IN ('events', 'discover')
+        WHERE timestamp >= toDateTime('<after_scanned_duration_start>')
+        AND timestamp <= toDateTime('<after_scanned_duration_end>')
+        AND dataset IN (<dataset>)
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as before_scanned
         FROM querylog_local
-        WHERE timestamp >= toDateTime('2022-12-07T21:24:00')
-        AND timestamp <= toDateTime('2022-12-07T21:54:00')
-        AND dataset IN ('events', 'discover')
+        WHERE timestamp >= toDateTime('<before_scanned_duration_start>')
+        AND timestamp <= toDateTime('<before_scanned_duration_end>')
+        AND dataset IN (<dataset>)
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
@@ -142,7 +142,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
 
 
 class BeforeAfterDurationComparison(QuerylogQuery):
-    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in duration. In the example, the abuse started on Dec 7. at 21:54:50."""
+    """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in duration."""
 
     sql = """
     SELECT referrer, before_duration, after_duration, (after_duration - ifNull(before_duration, 0)) as diff, (diff / if(equals(after_duration, 0), 1, after_duration))  * 100 as pct_diff
@@ -150,17 +150,17 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as after_duration
         FROM querylog_local
-        WHERE timestamp >= toDateTime('2022-12-07T21:55:00')
-        AND timestamp <= toDateTime('2022-12-07T22:20:00')
-        AND dataset IN ('events', 'discover')
+        WHERE timestamp >= toDateTime('<after_duration_start>')
+        AND timestamp <= toDateTime('<after_duration_end>')
+        AND dataset IN (<dataset>)
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as before_duration
         FROM querylog_local
-        WHERE timestamp >= toDateTime('2022-12-07T21:24:00')
-        AND timestamp <= toDateTime('2022-12-07T21:54:00')
-        AND dataset IN ('events', 'discover')
+        WHERE timestamp >= toDateTime('<before_duartion_start>')
+        AND timestamp <= toDateTime('<before_duartion_end>')
+        AND dataset IN (<dataset>)
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
