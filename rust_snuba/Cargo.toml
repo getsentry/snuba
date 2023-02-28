@@ -14,4 +14,6 @@ path = "src/bin/consumer/querylog_consumer.rs"
 
 [dependencies]
 rust_arroyo = { path = "./rust_arroyo" }
+serde = { version = "1.0", features = ["derive"]}
+serde_yaml = "0.9"
 tokio = { version = "1.19.2", features = ["full"] }
