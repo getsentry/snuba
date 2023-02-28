@@ -3,8 +3,11 @@ from typing import Optional
 from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_configs
-from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitParameters
+from snuba.state.rate_limit import (
+    TABLE_RATE_LIMIT_NAME,
+    RateLimitParameters,
+    get_rate_limit_config,
+)
 
 
 class TableRateLimit(ClickhouseQueryProcessor):
@@ -18,11 +21,9 @@ class TableRateLimit(ClickhouseQueryProcessor):
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         table_name = query.get_from_clause().table_name
-        (per_second, concurr) = get_configs(
-            [
-                (f"table_per_second_limit_{table_name}{self.__suffix}", 5000),
-                (f"table_concurrent_limit_{table_name}{self.__suffix}", 1000),
-            ]
+        (per_second, concurr) = get_rate_limit_config(
+            (f"table_per_second_limit_{table_name}{self.__suffix}", 5000),
+            (f"table_concurrent_limit_{table_name}{self.__suffix}", 1000),
         )
 
         rate_limit = RateLimitParameters(

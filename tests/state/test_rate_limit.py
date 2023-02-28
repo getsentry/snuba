@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import time
 import uuid
-from typing import Tuple
+from typing import Any, Tuple
 from unittest.mock import patch
 
 import pytest
@@ -13,12 +15,14 @@ from snuba.state.rate_limit import (
     RateLimitParameters,
     RateLimitStats,
     RateLimitStatsContainer,
+    get_rate_limit_config,
     rate_limit,
+    set_rate_limit_config,
 )
 
 
 @pytest.fixture(params=[1, 20])
-def rate_limit_shards(request):
+def rate_limit_shards(request: Any) -> None:
     """
     Use this fixture to run the test automatically against both 1
     and 20 shards.
@@ -27,7 +31,7 @@ def rate_limit_shards(request):
 
 
 class TestRateLimit:
-    def test_concurrent_limit(self, rate_limit_shards) -> None:
+    def test_concurrent_limit(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         with rate_limit(rate_limit_params) as stats:
@@ -65,7 +69,7 @@ class TestRateLimit:
             with RateLimitAggregator([rate_limit_params2]):
                 pass
 
-    def test_per_second_limit(self, rate_limit_shards) -> None:
+    def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
         # Create 30 queries at time 0, should all be allowed
@@ -97,7 +101,7 @@ class TestRateLimit:
             with rate_limit(rate_limit_params) as stats:
                 assert stats is not None
 
-    def test_aggregator(self, rate_limit_shards) -> None:
+    def test_aggregator(self, rate_limit_shards: Any) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
@@ -151,8 +155,10 @@ class TestRateLimit:
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
 
         def count() -> int:
-            return get_redis_client(RedisClientKey.RATE_LIMITER).zcount(
-                bucket, "-inf", "+inf"
+            return int(
+                get_redis_client(RedisClientKey.RATE_LIMITER).zcount(
+                    bucket, "-inf", "+inf"
+                )
             )
 
         with rate_limit(params):
@@ -191,7 +197,9 @@ tests = [
     "vals",
     tests,
 )
-def test_rate_limit_failures(vals: Tuple[int, int, int], rate_limit_shards) -> None:
+def test_rate_limit_failures(
+    vals: Tuple[int, int, int], rate_limit_shards: Any
+) -> None:
     params = []
     for i, v in enumerate(vals):
         params.append(RateLimitParameters(f"foo{i}", f"bar{i}", None, v))
@@ -207,3 +215,59 @@ def test_rate_limit_failures(vals: Tuple[int, int, int], rate_limit_shards) -> N
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0
+
+
+dual_write_tests = [
+    pytest.param(None, None, None, None),
+    pytest.param(None, None, None, 2),
+    pytest.param(None, None, 2, None),
+    pytest.param(None, None, 2, 2),
+    pytest.param(None, 1, None, None),
+    pytest.param(None, 1, None, 2),
+    pytest.param(None, 1, 2, None),
+    pytest.param(None, 1, 2, 2),
+    pytest.param(1, None, None, None),
+    pytest.param(1, None, None, 2),
+    pytest.param(1, None, 2, None),
+    pytest.param(1, None, 2, 2),
+    pytest.param(1, 1, None, None),
+    pytest.param(1, 1, None, 2),
+    pytest.param(1, 1, 2, None),
+    pytest.param(1, 1, 2, 2),
+]
+
+
+@pytest.mark.parametrize("ps_in_new, ps_in_old, ct_in_new, ct_in_old", dual_write_tests)
+def test_rate_limit_dual_write(
+    ps_in_new: int | None, ps_in_old: int | None, ct_in_new: bool, ct_in_old: bool
+) -> None:
+    ps_key = "project_per_second_limit_36"
+    ct_key = "project_concurrent_limit_36"
+
+    if ps_in_new is not None:
+        set_rate_limit_config(ps_key, ps_in_new)
+    if ct_in_new is not None:
+        set_rate_limit_config(ct_key, ct_in_new)
+    if ps_in_old is not None:
+        state.set_config(ps_key, ps_in_old)
+    if ct_in_old is not None:
+        state.set_config(ct_key, ct_in_old)
+
+    ps_found, ct_found = get_rate_limit_config((ps_key, 76), (ct_key, 77))
+
+    expected_ps_saved = ps_in_old
+    expected_ps_found = ps_in_old or 76
+    expected_ct_saved = ct_in_old
+    expected_ct_found = ct_in_old or 77
+
+    assert ps_found == expected_ps_found
+    assert ct_found == expected_ct_found
+
+    assert (
+        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_hash)
+        == expected_ps_saved
+    )
+    assert (
+        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_hash)
+        == expected_ct_saved
+    )

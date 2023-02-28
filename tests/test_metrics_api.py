@@ -80,7 +80,6 @@ class TestMetricsApiCounters(BaseApiTest):
             WritableTableStorage,
             get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
         )
-        print(self.storage.get_storage_key())
         self.generate_counters()
 
     def teardown_method(self, test_method: Any) -> None:
