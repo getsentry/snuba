@@ -209,6 +209,56 @@ def test_reverse_all() -> None:
     ), "All tables should be deleted"
 
 
+def test_reverse_idempotency_all() -> None:
+    # This test is to ensure that reversing a migration twice does not cause any
+    # issues or unintended side effects. This is important because we may need to reverse
+    # a migration multiple times in the event of a rollback.
+    runner = Runner()
+    all_migrations = runner._get_pending_migrations()
+    runner.run_all(force=True)
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    for migration in reversed(all_migrations):
+        runner.reverse_migration(migration, force=True)
+        if migration.group != MigrationGroup.SYSTEM:
+
+            def reverse_twice() -> None:
+                # reverse again to ensure idempotency
+                runner.run_migration(migration, fake=True)
+                runner.reverse_migration(migration, force=True)
+                runner.run_migration(migration, fake=True)
+                runner.reverse_migration(migration, force=True)
+
+            group = migration.group.value
+
+            # for some reason this has to be here. it looks like
+            # there is another test modifying the Exception so it
+            # wont be caught if we import too early
+            from snuba.clusters.cluster import UndefinedClickhouseCluster
+
+            try:
+                cluster_connection = get_cluster(
+                    StorageSetKey(group)
+                ).get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+                before_state = cluster_connection.execute(
+                    "SELECT create_table_query FROM system.tables"
+                ).results
+                reverse_twice()
+                after_state = cluster_connection.execute(
+                    "SELECT create_table_query FROM system.tables"
+                ).results
+                assert before_state == after_state
+            except UndefinedClickhouseCluster:
+                # Some groups do not have a cluster defined (e.g. test_migration)
+                reverse_twice()
+
+    assert (
+        connection.execute("SHOW TABLES").results == []
+    ), "All tables should be deleted"
+
+
 def get_total_migration_count() -> int:
     count = 0
     for group in get_active_migration_groups():
