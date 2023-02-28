@@ -531,6 +531,8 @@ def process_message(
         start = time.time()
 
         decoded = codec.decode(message.payload.value, validate=False)
+        sentry_sdk.set_context("snuba_schema_validation", {"payload": decoded})
+
         if should_validate:
             try:
                 codec.validate(decoded)
