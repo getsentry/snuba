@@ -60,7 +60,7 @@ def test_generic_metrics() -> None:
     check_example(payload, Topic.GENERIC_METRICS)
 
 
-def test_errors_eventstream():
+def test_errors_eventstream() -> None:
     payload = [
         2,
         "insert",
