@@ -49,13 +49,6 @@ storages:
             to_nested_col_table:
             to_nested_col_name: tags
             value_subcolumn_name: raw_value
-        - mapper: SubscriptableMapper
-          args:
-            from_column_table:
-            from_column_name: tags
-            to_nested_col_table:
-            to_nested_col_name: tags
-            value_subcolumn_name: indexed_value
 
 storage_selector:
   selector: DefaultQueryStorageSelector
