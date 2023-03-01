@@ -3,6 +3,7 @@ import os
 from typing import Any, Mapping, MutableMapping, Optional
 
 from arroyo.processing.strategies.decoder.json import JsonCodec
+from sentry_kafka_schemas import get_schema
 
 from snuba.utils.streams.topics import Topic
 
@@ -14,7 +15,7 @@ def load_file(filename: str) -> Any:
 
 _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     # Querylog JSON
-    Topic.QUERYLOG: load_file("querylog.json"),
+    Topic.QUERYLOG: get_schema("querylog")["schema"],
     # Release health metrics
     Topic.METRICS: load_file("metrics.json"),
     # Performance metrics
