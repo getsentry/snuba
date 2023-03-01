@@ -125,7 +125,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
         FROM querylog_local
         WHERE timestamp >= toDateTime('<after_scanned_duration_start>')
         AND timestamp <= toDateTime('<after_scanned_duration_end>')
-        AND dataset IN (<dataset>)
+        AND dataset IN ('<dataset>')
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
@@ -133,7 +133,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
         FROM querylog_local
         WHERE timestamp >= toDateTime('<before_scanned_duration_start>')
         AND timestamp <= toDateTime('<before_scanned_duration_end>')
-        AND dataset IN (<dataset>)
+        AND dataset IN ('<dataset>')
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
@@ -152,7 +152,7 @@ class BeforeAfterDurationComparison(QuerylogQuery):
         FROM querylog_local
         WHERE timestamp >= toDateTime('<after_duration_start>')
         AND timestamp <= toDateTime('<after_duration_end>')
-        AND dataset IN (<dataset>)
+        AND dataset IN ('<dataset>')
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
@@ -160,7 +160,7 @@ class BeforeAfterDurationComparison(QuerylogQuery):
         FROM querylog_local
         WHERE timestamp >= toDateTime('<before_duartion_start>')
         AND timestamp <= toDateTime('<before_duartion_end>')
-        AND dataset IN (<dataset>)
+        AND dataset IN ('<dataset>')
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
