@@ -47,8 +47,6 @@ pipelines:
                                     sentryio \
                                     "us.gcr.io/sentryio/snuba"
             - deploy:
-                  approval:
-                      type: manual
                   fetch_materials: true
                   jobs:
                       create-sentry-release:
