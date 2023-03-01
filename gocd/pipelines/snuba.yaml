@@ -116,3 +116,9 @@ pipelines:
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"
+                      migrate:
+                          timeout: 600
+                          elastic_profile_id: snuba
+                          tasks:
+                              - script: |
+                                    sentry-kube kubctl exec snuba-admin snuba migrations migrate --group="test_migrations"
