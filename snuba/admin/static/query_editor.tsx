@@ -96,17 +96,17 @@ function QueryEditor(props: {
       setters.push(
         <div key={paramName}>
           <div>
-            <label>{`Parameter: ${paramName.match(variableRegex)?.[1]}`}</label>
+            <label>
+              {paramName.match(variableRegex)?.[1]}
+              <br />
+              <textarea
+                value={queryParamValues[paramName]}
+                onChange={(evt) => {
+                  updateQueryParameter(paramName, evt.target.value);
+                }}
+              />
+            </label>
           </div>
-          <div>
-            <label>{`Value:`}</label>
-          </div>
-          <textarea
-            value={queryParamValues[paramName]}
-            onChange={(evt) => {
-              updateQueryParameter(paramName, evt.target.value);
-            }}
-          />
           <hr />
         </div>
       );
