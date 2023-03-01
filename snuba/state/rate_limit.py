@@ -73,7 +73,7 @@ def get_rate_limit_config(
 def set_rate_limit_config(bucket: str, value: float | int | None) -> None:
     """
     This function to encapsulate how rate limit keys are set in Redis, since
-    that is conceptually a different process from fetching normal config keys.
+    that is conceptually a different process from writing normal config keys.
     """
     set_config(
         bucket,

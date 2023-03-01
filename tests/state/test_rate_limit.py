@@ -253,12 +253,15 @@ def test_rate_limit_dual_write(
     if ct_in_old is not None:
         state.set_config(ct_key, ct_in_old)
 
-    ps_found, ct_found = get_rate_limit_config((ps_key, 76), (ct_key, 77))
+    ps_default, ct_default = 76, 77
+    ps_found, ct_found = get_rate_limit_config(
+        (ps_key, ps_default), (ct_key, ct_default)
+    )
 
     expected_ps_saved = ps_in_old
-    expected_ps_found = ps_in_old or 76
+    expected_ps_found = ps_in_old or ps_default
     expected_ct_saved = ct_in_old
-    expected_ct_found = ct_in_old or 77
+    expected_ct_found = ct_in_old or ct_default
 
     assert ps_found == expected_ps_found
     assert ct_found == expected_ct_found
