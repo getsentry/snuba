@@ -123,12 +123,8 @@ def test_namespaced_rate_limit() -> None:
 
     OrganizationRateLimiterProcessor("org_id").process_query(query, settings)
 
-    ps_found = state.get_uncached_config(
-        ps_key, config_key=state.rate_limit_config_hash
-    )
-    ct_found = state.get_uncached_config(
-        ct_key, config_key=state.rate_limit_config_hash
-    )
+    ps_found = state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key)
+    ct_found = state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key)
 
     assert ps_found == 5
     assert ct_found == 10

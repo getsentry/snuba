@@ -267,10 +267,10 @@ def test_rate_limit_dual_write(
     assert ct_found == expected_ct_found
 
     assert (
-        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_hash)
+        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key)
         == expected_ps_saved
     )
     assert (
-        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_hash)
+        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key)
         == expected_ct_saved
     )

@@ -51,7 +51,7 @@ def get_rate_limit_config(
     # if the value in new doesn't match value from old, copy over
     old_per_second, old_concurrent = get_configs([(ps_name, None), (ct_name, None)])
     new_per_second, new_concurrent = get_configs(
-        [(ps_name, None), (ct_name, None)], config_key=state.rate_limit_config_hash
+        [(ps_name, None), (ct_name, None)], config_key=state.rate_limit_config_key
     )
 
     # This handles deletes as well, since writing None deletes the key
@@ -78,7 +78,7 @@ def set_rate_limit_config(bucket: str, value: float | int | None) -> None:
     set_config(
         bucket,
         value,
-        config_key=state.rate_limit_config_hash,
+        config_key=state.rate_limit_config_key,
     )
 
 
