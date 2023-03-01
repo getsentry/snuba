@@ -20,7 +20,8 @@ schema:
             subcolumns:
               [
                 { name: key, type: UInt, args: { size: 64 } },
-                { name: value, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
               ],
           },
       },
