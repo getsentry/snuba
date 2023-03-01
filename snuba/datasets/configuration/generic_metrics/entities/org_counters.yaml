@@ -42,6 +42,7 @@ storages:
             from_name: sumIf
             to_name: sumMergeIf
       subscriptables:
+        # (RaduW) only "tags_raw" exposed and not "tags" since tags.indexed_value is not used in production
         - mapper: SubscriptableMapper
           args:
             from_column_table:
