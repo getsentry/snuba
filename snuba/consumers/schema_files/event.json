@@ -98,363 +98,322 @@
     },
     "Event": {
       "description": "The sentry v7 event structure.",
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "breadcrumbs": {
-              "description": " List of breadcrumbs recorded before this event.",
-              "type": [
-                "object",
-                "null"
-              ],
-              "required": [
-                "values"
-              ],
-              "properties": {
-                "values": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/definitions/Breadcrumb"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                }
+      "type": "object",
+      "properties": {
+        "contexts": {
+          "description": " Contexts describing the environment (e.g. device, os or browser).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Contexts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "culprit": {
+          "description": " Custom culprit of the event.\n\n This field is deprecated and shall not be set by client SDKs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
+          "description": " Program's distribution identifier.\n\n The distribution of the application.\n\n Distributions are used to disambiguate build or deployment variants of the same release of\n an application. For example, the dist can be the build number of an XCode build or the\n version code of an Android build.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "environment": {
+          "description": " The environment name, such as `production` or `staging`.\n\n ```json\n { \"environment\": \"production\" }\n ```",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errors": {
+          "description": " Errors encountered during processing. Intended to be phased out in favor of\n annotation/metadata system.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/EventProcessingError"
+              },
+              {
+                "type": "null"
               }
+            ]
+          }
+        },
+        "event_id": {
+          "description": " Unique identifier of this event.\n\n Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes\n are not allowed. Has to be lowercase.\n\n Even though this field is backfilled on the server with a new uuid4, it is strongly\n recommended to generate that uuid4 clientside. There are some features like user feedback\n which are easier to implement that way, and debugging in case events get lost in your\n Sentry installation is also easier.\n\n Example:\n\n ```json\n {\n   \"event_id\": \"fc6d8c0c43fc4630ad850ee518f1b9d0\"\n }\n ```",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EventId"
             },
-            "contexts": {
-              "description": " Contexts describing the environment (e.g. device, os or browser).",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Contexts"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "culprit": {
-              "description": " Custom culprit of the event.\n\n This field is deprecated and shall not be set by client SDKs.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "debug_meta": {
-              "description": " Meta data for event processing and debugging.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/DebugMeta"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "dist": {
-              "description": " Program's distribution identifier.\n\n The distribution of the application.\n\n Distributions are used to disambiguate build or deployment variants of the same release of\n an application. For example, the dist can be the build number of an XCode build or the\n version code of an Android build.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "environment": {
-              "description": " The environment name, such as `production` or `staging`.\n\n ```json\n { \"environment\": \"production\" }\n ```",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "errors": {
-              "description": " Errors encountered during processing. Intended to be phased out in favor of\n annotation/metadata system.",
-              "type": [
-                "array",
-                "null"
-              ],
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exception": {
+          "description": " One or multiple chained (nested) exceptions.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "values"
+          ],
+          "properties": {
+            "values": {
+              "type": "array",
               "items": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/EventProcessingError"
+                    "$ref": "#/definitions/Exception"
                   },
                   {
                     "type": "null"
                   }
                 ]
               }
+            }
+          }
+        },
+        "extra": {
+          "description": " Arbitrary extra information set by the user.\n\n ```json\n {\n     \"extra\": {\n         \"my_key\": 1,\n         \"some_other_value\": \"foo bar\"\n     }\n }```",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "fingerprint": {
+          "description": " Manual fingerprint override.\n\n A list of strings used to dictate how this event is supposed to be grouped with other\n events into issues. For more information about overriding grouping see [Customize Grouping\n with Fingerprints](https://docs.sentry.io/data-management/event-grouping/).\n\n ```json\n {\n     \"fingerprint\": [\"myrpc\", \"POST\", \"/foo.bar\"]\n }",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Fingerprint"
             },
-            "event_id": {
-              "description": " Unique identifier of this event.\n\n Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes\n are not allowed. Has to be lowercase.\n\n Even though this field is backfilled on the server with a new uuid4, it is strongly\n recommended to generate that uuid4 clientside. There are some features like user feedback\n which are easier to implement that way, and debugging in case events get lost in your\n Sentry installation is also easier.\n\n Example:\n\n ```json\n {\n   \"event_id\": \"fc6d8c0c43fc4630ad850ee518f1b9d0\"\n }\n ```",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/EventId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "description": " Severity level of the event. Defaults to `error`.\n\n Example:\n\n ```json\n {\"level\": \"warning\"}\n ```",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Level"
             },
-            "exception": {
-              "description": " One or multiple chained (nested) exceptions.",
-              "type": [
-                "object",
-                "null"
-              ],
-              "required": [
-                "values"
-              ],
-              "properties": {
-                "values": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/definitions/Exception"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logentry": {
+          "description": " Custom parameterized message for this event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LogEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logger": {
+          "description": " Logger that created the event.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modules": {
+          "description": " Name and versions of all installed modules/packages/dependencies in the current\n environment/application.\n\n ```json\n { \"django\": \"3.0.0\", \"celery\": \"4.2.1\" }\n ```\n\n In Python this is a list of installed packages as reported by `pkg_resources` together with\n their reported version string.\n\n This is primarily used for suggesting to enable certain SDK integrations from within the UI\n and for making informed decisions on which frameworks to support in future development\n efforts.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "platform": {
+          "description": " Platform identifier of this event (defaults to \"other\").\n\n A string representing the platform the SDK is submitting from. This will be used by the\n Sentry interface to customize various components in the interface, but also to enter or\n skip stacktrace processing.\n\n Acceptable values are: `as3`, `c`, `cfml`, `cocoa`, `csharp`, `elixir`, `haskell`, `go`,\n `groovy`, `java`, `javascript`, `native`, `node`, `objc`, `other`, `perl`, `php`, `python`,\n `ruby`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "received": {
+          "description": " Timestamp when the event has been received by Sentry.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release": {
+          "description": " The release version of the application.\n\n **Release versions must be unique across all projects in your organization.** This value\n can be the git SHA for the given project, or a product identifier with a semantic version.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request": {
+          "description": " Information about a web request that occurred during the event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Request"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sdk": {
+          "description": " Information about the Sentry SDK that generated this event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ClientSdkInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "server_name": {
+          "description": " Server or device name the event was generated on.\n\n This is supposed to be a hostname.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stacktrace": {
+          "description": " Event stacktrace.\n\n DEPRECATED: Prefer `threads` or `exception` depending on which is more appropriate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Stacktrace"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "description": " Custom tags for this event.\n\n A map or list of tags for this event. Each tag must be less than 200 characters.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Tags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threads": {
+          "description": " Threads that were active when the event occurred.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "values"
+          ],
+          "properties": {
+            "values": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Thread"
+                  },
+                  {
+                    "type": "null"
                   }
-                }
-              }
-            },
-            "extra": {
-              "description": " Arbitrary extra information set by the user.\n\n ```json\n {\n     \"extra\": {\n         \"my_key\": 1,\n         \"some_other_value\": \"foo bar\"\n     }\n }```",
-              "type": [
-                "object",
-                "null"
-              ],
-              "additionalProperties": true
-            },
-            "fingerprint": {
-              "description": " Manual fingerprint override.\n\n A list of strings used to dictate how this event is supposed to be grouped with other\n events into issues. For more information about overriding grouping see [Customize Grouping\n with Fingerprints](https://docs.sentry.io/data-management/event-grouping/).\n\n ```json\n {\n     \"fingerprint\": [\"myrpc\", \"POST\", \"/foo.bar\"]\n }",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Fingerprint"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "level": {
-              "description": " Severity level of the event. Defaults to `error`.\n\n Example:\n\n ```json\n {\"level\": \"warning\"}\n ```",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Level"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "logentry": {
-              "description": " Custom parameterized message for this event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/LogEntry"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "logger": {
-              "description": " Logger that created the event.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "modules": {
-              "description": " Name and versions of all installed modules/packages/dependencies in the current\n environment/application.\n\n ```json\n { \"django\": \"3.0.0\", \"celery\": \"4.2.1\" }\n ```\n\n In Python this is a list of installed packages as reported by `pkg_resources` together with\n their reported version string.\n\n This is primarily used for suggesting to enable certain SDK integrations from within the UI\n and for making informed decisions on which frameworks to support in future development\n efforts.",
-              "type": [
-                "object",
-                "null"
-              ],
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "null"
                 ]
               }
-            },
-            "platform": {
-              "description": " Platform identifier of this event (defaults to \"other\").\n\n A string representing the platform the SDK is submitting from. This will be used by the\n Sentry interface to customize various components in the interface, but also to enter or\n skip stacktrace processing.\n\n Acceptable values are: `as3`, `c`, `cfml`, `cocoa`, `csharp`, `elixir`, `haskell`, `go`,\n `groovy`, `java`, `javascript`, `native`, `node`, `objc`, `other`, `perl`, `php`, `python`,\n `ruby`",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "received": {
-              "description": " Timestamp when the event has been received by Sentry.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Timestamp"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "release": {
-              "description": " The release version of the application.\n\n **Release versions must be unique across all projects in your organization.** This value\n can be the git SHA for the given project, or a product identifier with a semantic version.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "request": {
-              "description": " Information about a web request that occurred during the event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Request"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sdk": {
-              "description": " Information about the Sentry SDK that generated this event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ClientSdkInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "server_name": {
-              "description": " Server or device name the event was generated on.\n\n This is supposed to be a hostname.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "stacktrace": {
-              "description": " Event stacktrace.\n\n DEPRECATED: Prefer `threads` or `exception` depending on which is more appropriate.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Stacktrace"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "tags": {
-              "description": " Custom tags for this event.\n\n A map or list of tags for this event. Each tag must be less than 200 characters.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Tags"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "threads": {
-              "description": " Threads that were active when the event occurred.",
-              "type": [
-                "object",
-                "null"
-              ],
-              "required": [
-                "values"
-              ],
-              "properties": {
-                "values": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/definitions/Thread"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                }
-              }
-            },
-            "time_spent": {
-              "description": " Time since the start of the transaction until the error occurred.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "timestamp": {
-              "description": " Timestamp when the event was created.\n\n Indicates when the event was created in the Sentry SDK. The format is either a string as\n defined in [RFC 3339](https://tools.ietf.org/html/rfc3339) or a numeric (integer or float)\n value representing the number of seconds that have elapsed since the [Unix\n epoch](https://en.wikipedia.org/wiki/Unix_time).\n\n Timezone is assumed to be UTC if missing.\n\n Sub-microsecond precision is not preserved with numeric values due to precision\n limitations with floats (at least in our systems). With that caveat in mind, just send\n whatever is easiest to produce.\n\n All timestamps in the event protocol are formatted this way.\n\n # Example\n\n All of these are the same date:\n\n ```json\n { \"timestamp\": \"2011-05-02T17:41:36Z\" }\n { \"timestamp\": \"2011-05-02T17:41:36\" }\n { \"timestamp\": \"2011-05-02T17:41:36.000\" }\n { \"timestamp\": 1304358096.0 }\n ```",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Timestamp"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "transaction": {
-              "description": " Transaction name of the event.\n\n For example, in a web app, this might be the route name (`\"/users/<username>/\"` or\n `UserView`), in a task queue it might be the function + module name.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "transaction_info": {
-              "description": " Additional information about the name of the transaction.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/TransactionInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": {
-              "description": " Type of the event. Defaults to `default`.\n\n The event type determines how Sentry handles the event and has an impact on processing, rate\n limiting, and quotas. There are three fundamental classes of event types:\n\n  - **Error monitoring events**: Processed and grouped into unique issues based on their\n    exception stack traces and error messages.\n  - **Security events**: Derived from Browser security violation reports and grouped into\n    unique issues based on the endpoint and violation. SDKs do not send such events.\n  - **Transaction events** (`transaction`): Contain operation spans and collected into traces\n    for performance monitoring.\n\n Transactions must explicitly specify the `\"transaction\"` event type. In all other cases,\n Sentry infers the appropriate event type from the payload and overrides the stated type.\n SDKs should not send an event type other than for transactions.\n\n Example:\n\n ```json\n {\n   \"type\": \"transaction\",\n   \"spans\": []\n }\n ```",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/EventType"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "user": {
-              "description": " Information about the user who triggered this event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/User"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "version": {
-              "description": " Version",
-              "type": [
-                "string",
-                "null"
-              ]
             }
-          },
-          "additionalProperties": false
+          }
+        },
+        "time_spent": {
+          "description": " Time since the start of the transaction until the error occurred.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "timestamp": {
+          "description": " Timestamp when the event was created.\n\n Indicates when the event was created in the Sentry SDK. The format is either a string as\n defined in [RFC 3339](https://tools.ietf.org/html/rfc3339) or a numeric (integer or float)\n value representing the number of seconds that have elapsed since the [Unix\n epoch](https://en.wikipedia.org/wiki/Unix_time).\n\n Timezone is assumed to be UTC if missing.\n\n Sub-microsecond precision is not preserved with numeric values due to precision\n limitations with floats (at least in our systems). With that caveat in mind, just send\n whatever is easiest to produce.\n\n All timestamps in the event protocol are formatted this way.\n\n # Example\n\n All of these are the same date:\n\n ```json\n { \"timestamp\": \"2011-05-02T17:41:36Z\" }\n { \"timestamp\": \"2011-05-02T17:41:36\" }\n { \"timestamp\": \"2011-05-02T17:41:36.000\" }\n { \"timestamp\": 1304358096.0 }\n ```",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transaction": {
+          "description": " Transaction name of the event.\n\n For example, in a web app, this might be the route name (`\"/users/<username>/\"` or\n `UserView`), in a task queue it might be the function + module name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transaction_info": {
+          "description": " Additional information about the name of the transaction.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TransactionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "description": " Type of the event. Defaults to `default`.\n\n The event type determines how Sentry handles the event and has an impact on processing, rate\n limiting, and quotas. There are three fundamental classes of event types:\n\n  - **Error monitoring events**: Processed and grouped into unique issues based on their\n    exception stack traces and error messages.\n  - **Security events**: Derived from Browser security violation reports and grouped into\n    unique issues based on the endpoint and violation. SDKs do not send such events.\n  - **Transaction events** (`transaction`): Contain operation spans and collected into traces\n    for performance monitoring.\n\n Transactions must explicitly specify the `\"transaction\"` event type. In all other cases,\n Sentry infers the appropriate event type from the payload and overrides the stated type.\n SDKs should not send an event type other than for transactions.\n\n Example:\n\n ```json\n {\n   \"type\": \"transaction\",\n   \"spans\": []\n }\n ```",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EventType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user": {
+          "description": " Information about the user who triggered this event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/User"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": " Version",
+          "type": [
+            "string",
+            "null"
+          ]
         }
-      ]
+      },
     },
     "Addr": {
       "type": "string"
@@ -526,163 +485,6 @@
               "description": " A flag indicating whether the app is in foreground or not. An app is in foreground when it's visible to the user.",
               "type": [
                 "boolean",
-                "null"
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "AppleDebugImage": {
-      "description": " Legacy apple debug images (MachO).\n\n This was also used for non-apple platforms with similar debug setups.",
-      "anyOf": [
-        {
-          "type": "object",
-          "required": [
-            "image_addr",
-            "image_size",
-            "name",
-            "uuid"
-          ],
-          "properties": {
-            "arch": {
-              "description": " CPU architecture target.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "cpu_subtype": {
-              "description": " MachO CPU subtype identifier.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "cpu_type": {
-              "description": " MachO CPU type identifier.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "image_addr": {
-              "description": " Starting memory address of the image (required).",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "image_size": {
-              "description": " Size of the image in bytes (required).",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "image_vmaddr": {
-              "description": " Loading address in virtual memory.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "name": {
-              "description": " Path and name of the debug image (required).",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "uuid": {
-              "description": " The unique UUID of the image.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "Breadcrumb": {
-      "description": " The Breadcrumbs Interface specifies a series of application events, or \"breadcrumbs\", that\n occurred before an event.\n\n An event may contain one or more breadcrumbs in an attribute named `breadcrumbs`. The entries\n are ordered from oldest to newest. Consequently, the last entry in the list should be the last\n entry before the event occurred.\n\n While breadcrumb attributes are not strictly validated in Sentry, a breadcrumb is most useful\n when it includes at least a `timestamp` and `type`, `category` or `message`. The rendering of\n breadcrumbs in Sentry depends on what is provided.\n\n The following example illustrates the breadcrumbs part of the event payload and omits other\n attributes for simplicity.\n\n ```json\n {\n   \"breadcrumbs\": {\n     \"values\": [\n       {\n         \"timestamp\": \"2016-04-20T20:55:53.845Z\",\n         \"message\": \"Something happened\",\n         \"category\": \"log\",\n         \"data\": {\n           \"foo\": \"bar\",\n           \"blub\": \"blah\"\n         }\n       },\n       {\n         \"timestamp\": \"2016-04-20T20:55:53.847Z\",\n         \"type\": \"navigation\",\n         \"data\": {\n           \"from\": \"/login\",\n           \"to\": \"/dashboard\"\n         }\n       }\n     ]\n   }\n }\n ```",
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "category": {
-              "description": " A dotted string indicating what the crumb is or from where it comes. _Optional._\n\n Typically it is a module name or a descriptive string. For instance, _ui.click_ could be\n used to indicate that a click happened in the UI or _flask_ could be used to indicate that\n the event originated in the Flask framework.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "data": {
-              "description": " Arbitrary data associated with this breadcrumb.\n\n Contains a dictionary whose contents depend on the breadcrumb `type`. Additional parameters\n that are unsupported by the type are rendered as a key/value table.",
-              "type": [
-                "object",
-                "null"
-              ],
-              "additionalProperties": true
-            },
-            "event_id": {
-              "description": " Identifier of the event this breadcrumb belongs to.\n\n Sentry events can appear as breadcrumbs in other events as long as they have occurred in the\n same organization. This identifier links to the original event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/EventId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "level": {
-              "description": " Severity level of the breadcrumb. _Optional._\n\n Allowed values are, from highest to lowest: `fatal`, `error`, `warning`, `info`, and\n `debug`. Levels are used in the UI to emphasize and deemphasize the crumb. Defaults to\n `info`.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Level"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "message": {
-              "description": " Human readable message for the breadcrumb.\n\n If a message is provided, it is rendered as text with all whitespace preserved. Very long\n text might be truncated in the UI.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "timestamp": {
-              "description": " The timestamp of the breadcrumb. Recommended.\n\n A timestamp representing when the breadcrumb occurred. The format is either a string as\n defined in [RFC 3339](https://tools.ietf.org/html/rfc3339) or a numeric (integer or float)\n value representing the number of seconds that have elapsed since the [Unix\n epoch](https://en.wikipedia.org/wiki/Unix_time).\n\n Breadcrumbs are most useful when they include a timestamp, as it creates a timeline leading\n up to an event.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Timestamp"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": {
-              "description": " The type of the breadcrumb. _Optional_, defaults to `default`.\n\n - `default`: Describes a generic breadcrumb. This is typically a log message or\n   user-generated breadcrumb. The `data` field is entirely undefined and as such, completely\n   rendered as a key/value table.\n\n - `navigation`: Describes a navigation breadcrumb. A navigation event can be a URL change\n   in a web application, or a UI transition in a mobile or desktop application, etc.\n\n   Such a breadcrumb's `data` object has the required fields `from` and `to`, which\n   represent an application route/url each.\n\n - `http`: Describes an HTTP request breadcrumb. This represents an HTTP request transmitted\n   from your application. This could be an AJAX request from a web application, or a\n   server-to-server HTTP request to an API service provider, etc.\n\n   Such a breadcrumb's `data` property has the fields `url`, `method`, `status_code`\n   (integer) and `reason` (string).",
-              "type": [
-                "string",
                 "null"
               ]
             }
@@ -998,84 +800,6 @@
               }
             }
           ]
-        }
-      ]
-    },
-    "DebugId": {
-      "type": "string"
-    },
-    "DebugImage": {
-      "description": " A debug information file (debug image).",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/AppleDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/ProguardDebugImage"
-        },
-        {
-          "$ref": "#/definitions/NativeDebugImage"
-        },
-        {
-          "$ref": "#/definitions/SourceMapDebugImage"
-        },
-        {
-          "type": "object",
-          "additionalProperties": true
-        }
-      ]
-    },
-    "DebugMeta": {
-      "description": " Debugging and processing meta information.\n\n The debug meta interface carries debug information for processing errors and crash reports.\n Sentry amends the information in this interface.\n\n Example (look at field types to see more detail):\n\n ```json\n {\n   \"debug_meta\": {\n     \"images\": [],\n     \"sdk_info\": {\n       \"sdk_name\": \"iOS\",\n       \"version_major\": 10,\n       \"version_minor\": 3,\n       \"version_patchlevel\": 0\n     }\n   }\n }\n ```",
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "images": {
-              "description": " List of debug information files (debug images).",
-              "type": [
-                "array",
-                "null"
-              ],
-              "items": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/DebugImage"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "sdk_info": {
-              "description": " Information about the system SDK (e.g. iOS SDK).",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/SystemSdkInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "additionalProperties": false
         }
       ]
     },
@@ -2155,117 +1879,6 @@
         }
       ]
     },
-    "NativeDebugImage": {
-      "description": " A generic (new-style) native platform debug information file.\n\n The `type` key must be one of:\n\n - `macho`\n - `elf`: ELF images are used on Linux platforms. Their structure is identical to other native images.\n - `pe`\n\n Examples:\n\n ```json\n {\n   \"type\": \"elf\",\n   \"code_id\": \"68220ae2c65d65c1b6aaa12fa6765a6ec2f5f434\",\n   \"code_file\": \"/lib/x86_64-linux-gnu/libgcc_s.so.1\",\n   \"debug_id\": \"e20a2268-5dc6-c165-b6aa-a12fa6765a6e\",\n   \"image_addr\": \"0x7f5140527000\",\n   \"image_size\": 90112,\n   \"image_vmaddr\": \"0x40000\",\n   \"arch\": \"x86_64\"\n }\n ```\n\n ```json\n {\n   \"type\": \"pe\",\n   \"code_id\": \"57898e12145000\",\n   \"code_file\": \"C:\\\\Windows\\\\System32\\\\dbghelp.dll\",\n   \"debug_id\": \"9c2a902b-6fdf-40ad-8308-588a41d572a0-1\",\n   \"debug_file\": \"dbghelp.pdb\",\n   \"image_addr\": \"0x70850000\",\n   \"image_size\": \"1331200\",\n   \"image_vmaddr\": \"0x40000\",\n   \"arch\": \"x86\"\n }\n ```\n\n ```json\n {\n   \"type\": \"macho\",\n   \"debug_id\": \"84a04d24-0e60-3810-a8c0-90a65e2df61a\",\n   \"debug_file\": \"libDiagnosticMessagesClient.dylib\",\n   \"code_file\": \"/usr/lib/libDiagnosticMessagesClient.dylib\",\n   \"image_addr\": \"0x7fffe668e000\",\n   \"image_size\": 8192,\n   \"image_vmaddr\": \"0x40000\",\n   \"arch\": \"x86_64\",\n }\n ```",
-      "anyOf": [
-        {
-          "type": "object",
-          "required": [
-            "code_file",
-            "debug_id"
-          ],
-          "properties": {
-            "arch": {
-              "description": " CPU architecture target.\n\n Architecture of the module. If missing, this will be backfilled by Sentry.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "code_file": {
-              "description": " Path and name of the image file (required).\n\n The absolute path to the dynamic library or executable. This helps to locate the file if it is missing on Sentry.\n\n - `pe`: The code file should be provided to allow server-side stack walking of binary crash reports, such as Minidumps.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/NativeImagePath"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "code_id": {
-              "description": " Optional identifier of the code file.\n\n - `elf`: If the program was compiled with a relatively recent compiler, this should be the hex representation of the `NT_GNU_BUILD_ID` program header (type `PT_NOTE`), or the value of the `.note.gnu.build-id` note section (type `SHT_NOTE`). Otherwise, leave this value empty.\n\n   Certain symbol servers use the code identifier to locate debug information for ELF images, in which case this field should be included if possible.\n\n - `pe`: Identifier of the executable or DLL. It contains the values of the `time_date_stamp` from the COFF header and `size_of_image` from the optional header formatted together into a hex string using `%08x%X` (note that the second value is not padded):\n\n   ```text\n   time_date_stamp: 0x5ab38077\n   size_of_image:           0x9000\n   code_id:           5ab380779000\n   ```\n\n   The code identifier should be provided to allow server-side stack walking of binary crash reports, such as Minidumps.\n\n\n - `macho`: Identifier of the dynamic library or executable. It is the value of the `LC_UUID` load command in the Mach header, formatted as UUID. Can be empty for Mach images, as it is equivalent to the debug identifier.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/CodeId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "debug_checksum": {
-              "description": " The optional checksum of the debug companion file.\n\n - `pe_dotnet`: This is the hash algorithm and hex-formatted checksum of the associated PDB file.\n  This should have the format `$algorithm:$hash`, for example `SHA256:aabbccddeeff...`.\n\n   See: <https://github.com/dotnet/runtime/blob/main/docs/design/specs/PE-COFF.md#pdb-checksum-debug-directory-entry-type-19>",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "debug_file": {
-              "description": " Path and name of the debug companion file.\n\n - `elf`: Name or absolute path to the file containing stripped debug information for this image. This value might be _required_ to retrieve debug files from certain symbol servers.\n\n - `pe`: Name of the PDB file containing debug information for this image. This value is often required to retrieve debug files from specific symbol servers.\n\n - `macho`: Name or absolute path to the dSYM file containing debug information for this image. This value might be required to retrieve debug files from certain symbol servers.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/NativeImagePath"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "debug_id": {
-              "description": " Unique debug identifier of the image.\n\n - `elf`: Debug identifier of the dynamic library or executable. If a code identifier is available, the debug identifier is the little-endian UUID representation of the first 16-bytes of that\n identifier. Spaces are inserted for readability, note the byte order of the first fields:\n\n   ```text\n   code id:  f1c3bcc0 2798 65fe 3058 404b2831d9e6 4135386c\n   debug id: c0bcc3f1-9827-fe65-3058-404b2831d9e6\n   ```\n\n   If no code id is available, the debug id should be computed by XORing the first 4096 bytes of the `.text` section in 16-byte chunks, and representing it as a little-endian UUID (again swapping the byte order).\n\n - `pe`: `signature` and `age` of the PDB file. Both values can be read from the CodeView PDB70 debug information header in the PE. The value should be represented as little-endian UUID, with the age appended at the end. Note that the byte order of the UUID fields must be swapped (spaces inserted for readability):\n\n   ```text\n   signature: f1c3bcc0 2798 65fe 3058 404b2831d9e6\n   age:                                            1\n   debug_id:  c0bcc3f1-9827-fe65-3058-404b2831d9e6-1\n   ```\n\n - `macho`: Identifier of the dynamic library or executable. It is the value of the `LC_UUID` load command in the Mach header, formatted as UUID.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/DebugId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "image_addr": {
-              "description": " Starting memory address of the image (required).\n\n Memory address, at which the image is mounted in the virtual address space of the process. Should be a string in hex representation prefixed with `\"0x\"`.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "image_size": {
-              "description": " Size of the image in bytes (required).\n\n The size of the image in virtual memory. If missing, Sentry will assume that the image spans up to the next image, which might lead to invalid stack traces.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "image_vmaddr": {
-              "description": " Loading address in virtual memory.\n\n Preferred load address of the image in virtual memory, as declared in the headers of the\n image. When loading an image, the operating system may still choose to place it at a\n different address.\n\n Symbols and addresses in the native image are always relative to the start of the image and do not consider the preferred load address. It is merely a hint to the loader.\n\n - `elf`/`macho`: If this value is non-zero, all symbols and addresses declared in the native image start at this address, rather than 0. By contrast, Sentry deals with addresses relative to the start of the image. For example, with `image_vmaddr: 0x40000`, a symbol located at `0x401000` has a relative address of `0x1000`.\n\n   Relative addresses used in Apple Crash Reports and `addr2line` are usually in the preferred address space, and not relative address space.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "NativeImagePath": {
-      "description": " A type for strings that are generally paths, might contain system user names, but still cannot\n be stripped liberally because it would break processing for certain platforms.\n\n Those strings get special treatment in our PII processor to avoid stripping the basename.",
-      "anyOf": [
-        {
-          "type": "string"
-        }
-      ]
-    },
     "NsError": {
       "description": " NSError informaiton.",
       "anyOf": [
@@ -2428,27 +2041,6 @@
                 {
                   "type": "null"
                 }
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "ProguardDebugImage": {
-      "description": " Proguard mapping file.\n\n Proguard images refer to `mapping.txt` files generated when Proguard obfuscates function names. The Java SDK integrations assign this file a unique identifier, which has to be included in the list of images.",
-      "anyOf": [
-        {
-          "type": "object",
-          "required": [
-            "uuid"
-          ],
-          "properties": {
-            "uuid": {
-              "description": " UUID computed from the file contents, assigned by the Java SDK.",
-              "type": [
-                "string",
-                "null"
               ]
             }
           },
@@ -2746,46 +2338,6 @@
               "type": [
                 "string",
                 "null"
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "SourceMapDebugImage": {
-      "description": " A debug image pointing to a source map.\n\n Examples:\n\n ```json\n {\n   \"type\": \"sourcemap\",\n   \"code_file\": \"https://example.com/static/js/main.min.js\",\n   \"debug_id\": \"395835f4-03e0-4436-80d3-136f0749a893\"\n }\n ```\n\n **Note:** Stack frames and the correlating entries in the debug image here\n for `code_file`/`abs_path` are not PII stripped as they need to line up\n perfectly for source map processing.",
-      "anyOf": [
-        {
-          "type": "object",
-          "required": [
-            "code_file",
-            "debug_id"
-          ],
-          "properties": {
-            "code_file": {
-              "description": " Path and name of the image file as URL. (required).\n\n The absolute path to the minified JavaScript file.  This helps to correlate the file to the stack trace.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "debug_file": {
-              "description": " Path and name of the associated source map.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "debug_id": {
-              "description": " Unique debug identifier of the source map.",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/DebugId"
-                },
-                {
-                  "type": "null"
-                }
               ]
             }
           },
