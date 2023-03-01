@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 import pytest
 import pytz
 from pytest import approx
-from snuba_sdk import Function, Request
+from snuba_sdk import AliasedExpression, Function, Request
 from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.entity import Entity
@@ -583,6 +583,38 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 2
         assert data["data"][0] == {"org_id": 101, "project_id": 1, "value": 3600.0}
         assert data["data"][1] == {"org_id": 101, "project_id": 2, "value": 3600.0}
+
+    def test_raw_tags(self) -> None:
+        """
+        Tests that we can query raw tags
+        """
+        shared_key = 65546  # pick a key from shared_values
+        value_index = SHARED_TAGS[str(shared_key)]
+        expected_value = SHARED_MAPPING_META["c"][str(value_index)]
+        tag_column_name = f"tags_raw[{shared_key}]"
+        query = Query(
+            match=Entity("generic_org_metrics_counters"),
+            select=[
+                Function("sum", [Column("value")], "value"),
+                AliasedExpression(Column(tag_column_name), "tag_string"),
+            ],
+            groupby=[AliasedExpression(Column(tag_column_name), "tag_string")],
+            where=[
+                Condition(Column("metric_id"), Op.EQ, 1),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        first_row = data["data"][0]
+        assert first_row["tag_string"] == expected_value
 
 
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):

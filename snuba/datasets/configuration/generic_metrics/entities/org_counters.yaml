@@ -9,6 +9,18 @@ schema:
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
     {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: UInt, args: { size: 64 } },
+              { name: value, type: UInt, args: { size: 64 } },
+            ],
+        },
+    },
+    {
       name: value,
       type: AggregateFunction,
       args: { func: sum, arg_types: [ { type: Float, args: { size: 64 } } ] },
@@ -30,14 +42,14 @@ storages:
             from_name: sumIf
             to_name: sumMergeIf
       subscriptables:
+        # (RaduW) only "tags_raw" exposed and not "tags" since tags.indexed_value is not used in production
         - mapper: SubscriptableMapper
           args:
-            from_column_table: null
-            from_column_name: tags
-            to_nested_col_table: null
+            from_column_table:
+            from_column_name: tags_raw
+            to_nested_col_table:
             to_nested_col_name: tags
-            value_subcolumn_name: value
-            nullable: false
+            value_subcolumn_name: raw_value
 
 storage_selector:
   selector: DefaultQueryStorageSelector
