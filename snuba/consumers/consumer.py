@@ -518,7 +518,6 @@ def process_message(
     snuba_logical_topic: SnubaTopic,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
-    sentry_sdk.set_tag("snuba_logical_topic", snuba_logical_topic.name)
 
     validate_sample_rate = float(
         state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
@@ -531,14 +530,19 @@ def process_message(
         start = time.time()
 
         decoded = codec.decode(message.payload.value, validate=False)
-        sentry_sdk.set_context("snuba_schema_validation", {"payload": decoded})
 
         if should_validate:
-            try:
-                codec.validate(decoded)
-            except Exception as err:
-                sentry_sdk.set_tag("invalid_message_schema", "true")
-                logger.warning(err, exc_info=True)
+            with sentry_sdk.push_scope() as scope:
+                scope.add_attachment(
+                    bytes=message.payload.value, filename="message.txt"
+                )
+                scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
+
+                try:
+                    codec.validate(decoded)
+                except Exception as err:
+                    sentry_sdk.set_tag("invalid_message_schema", "true")
+                    logger.warning(err, exc_info=True)
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
