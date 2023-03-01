@@ -413,7 +413,7 @@
             "null"
           ]
         }
-      },
+      }
     },
     "Addr": {
       "type": "string"
@@ -1218,7 +1218,7 @@
               "description": " Absolute path to the source file.",
               "anyOf": [
                 {
-                  "$ref": "#/definitions/NativeImagePath"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -1251,7 +1251,7 @@
               "description": " The source file name (basename only).",
               "anyOf": [
                 {
-                  "$ref": "#/definitions/NativeImagePath"
+                    "type": "string"
                 },
                 {
                   "type": "null"
