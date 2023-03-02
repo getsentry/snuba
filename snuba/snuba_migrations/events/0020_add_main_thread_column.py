@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column
+from snuba.clickhouse.columns import UInt, Column
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -15,7 +15,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column("exception_main_thread", bool(Modifiers(nullable=True))),
+                column=Column("exception_main_thread", UInt(8, Modifiers(nullable=True))),
                 after="modules.version",
                 target=target,
             )
