@@ -56,9 +56,9 @@ def get_rate_limit_config(
 
     # This handles deletes as well, since writing None deletes the key
     if old_per_second != new_per_second:
-        set_rate_limit_config(ps_name, old_per_second)
+        set_rate_limit_config(ps_name, old_per_second, copy=False)
     if old_concurrent != new_concurrent:
-        set_rate_limit_config(ct_name, old_concurrent)
+        set_rate_limit_config(ct_name, old_concurrent, copy=False)
 
     found_per_second = (
         old_per_second if old_per_second is not None else per_second_default
@@ -70,16 +70,24 @@ def get_rate_limit_config(
     return (found_per_second, found_concurrent)
 
 
-def set_rate_limit_config(bucket: str, value: float | int | None) -> None:
+def set_rate_limit_config(
+    bucket: str, value: float | int | None, copy: bool = True
+) -> None:
     """
     This function to encapsulate how rate limit keys are set in Redis, since
     that is conceptually a different process from writing normal config keys.
+
+    Generally, if this function is called, data should be written to both the old
+    and new keys while the migration is happening. However, there are some instances
+    when only the new key needs to be written, so there is a flag for that case.
     """
     set_config(
         bucket,
         value,
         config_key=state.rate_limit_config_key,
     )
+    if copy:
+        set_config(bucket, value)
 
 
 @dataclass(frozen=True)

@@ -245,9 +245,9 @@ def test_rate_limit_dual_write(
     ct_key = "project_concurrent_limit_36"
 
     if ps_in_new is not None:
-        set_rate_limit_config(ps_key, ps_in_new)
+        set_rate_limit_config(ps_key, ps_in_new, copy=False)
     if ct_in_new is not None:
-        set_rate_limit_config(ct_key, ct_in_new)
+        set_rate_limit_config(ct_key, ct_in_new, copy=False)
     if ps_in_old is not None:
         state.set_config(ps_key, ps_in_old)
     if ct_in_old is not None:
@@ -274,3 +274,22 @@ def test_rate_limit_dual_write(
         state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key)
         == expected_ct_saved
     )
+
+
+def test_rate_limit_interface() -> None:
+    ps_key = "project_per_second_limit_36"
+    ct_key = "project_concurrent_limit_36"
+
+    set_rate_limit_config(ps_key, 23)
+    set_rate_limit_config(ct_key, 46)
+
+    # Check that the keys are in new and old
+    assert (
+        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key) == 23
+    )
+    assert (
+        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key) == 46
+    )
+
+    assert state.get_uncached_config(ps_key) == 23
+    assert state.get_uncached_config(ct_key) == 46
