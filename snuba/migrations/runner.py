@@ -283,6 +283,40 @@ class Runner:
         else:
             self._reverse_migration_impl(migration_key)
 
+    def reverse_in_progress(
+        self, fake: bool = False, group: Optional[MigrationGroup] = None
+    ) -> None:
+
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        if group:
+            migration_groups = [group]
+        else:
+            migration_groups = get_active_migration_groups()
+
+        def get_in_progress_migration(group: MigrationGroup) -> Optional[MigrationKey]:
+            group_migrations = get_group_loader(group).get_migrations()
+            for migration_id in group_migrations:
+                migration_key = MigrationKey(group, migration_id)
+                status = get_status(migration_key)
+                if status == Status.IN_PROGRESS:
+                    return migration_key
+            return
+
+        for group in migration_groups:
+            migration_key = get_in_progress_migration(group)
+            if migration_key:
+                if fake:
+                    self._update_migration_status(migration_key, Status.NOT_STARTED)
+                else:
+                    print(f"[{group}]: reversing {migration_key}")
+                    self._reverse_migration_impl(migration_key)
+            else:
+                print(f"[{group}]: no in progress migrations found")
+
     def _reverse_migration_impl(
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:
