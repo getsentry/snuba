@@ -2,8 +2,7 @@ import json
 import os
 from typing import Any, Mapping, MutableMapping, Optional
 
-# TODO: Remove type: ignore once next version sentry-kafka-schemas is published
-import sentry_kafka_schemas  # type: ignore
+import sentry_kafka_schemas
 from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic

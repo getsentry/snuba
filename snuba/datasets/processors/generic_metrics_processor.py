@@ -13,6 +13,8 @@ from typing import (
     Union,
 )
 
+from sentry_kafka_schemas.schema_types import Generic_Metrics_v1
+
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
@@ -68,7 +70,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         return buffer
 
     def _hash_timeseries_id(
-        self, message: Mapping[str, Any], sorted_tag_items: Iterable[Tuple[str, int]]
+        self, message: Generic_Metrics_v1, sorted_tag_items: Iterable[Tuple[str, int]]
     ) -> int:
         """
         _hash_timeseries_id should return a UInt32 whose distribution should shard
@@ -88,7 +90,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         return acc
 
     def process_message(
-        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+        self, message: Generic_Metrics_v1, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         if not self._should_process(message):
             return None
