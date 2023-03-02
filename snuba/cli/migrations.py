@@ -188,10 +188,11 @@ def reverse_in_progress(
     log_level: Optional[str] = None,
 ) -> None:
     """
-    Reverses a single migration.
+    Reverses any in progress migrations for all migration groups.
+    If group is specified, only reverse in progress migrations for
+    that group.
 
-    --force is required to reverse an already completed migration.
-    --fake marks a migration as reversed without doing anything.
+    --fake marks migrations as reversed without doing anything.
     """
     setup_logging(log_level)
     if not dry_run:
