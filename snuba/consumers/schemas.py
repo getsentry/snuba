@@ -1,5 +1,3 @@
-import json
-import os
 from typing import Any, Mapping, MutableMapping, Optional
 
 # TODO: Remove type: ignore once next version sentry-kafka-schemas is published
@@ -7,12 +5,6 @@ import sentry_kafka_schemas  # type: ignore
 from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
-
-
-def load_file(filename: str) -> Any:
-    with open(os.path.join(os.path.dirname(__file__), "schema_files/", filename)) as f:
-        return json.load(f)
-
 
 _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     # Querylog JSON
