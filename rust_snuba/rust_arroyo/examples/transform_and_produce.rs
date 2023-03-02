@@ -49,19 +49,19 @@ impl ProcessingStrategy<KafkaPayload> for Noop {
 
 
 fn main() {
-    struct HashPasswordAndProduceStrategyFactory {
+    struct ReverseStringAndProduceStrategyFactory {
         config: KafkaConfig,
         topic: Topic,
     }
-    impl ProcessingStrategyFactory<KafkaPayload> for HashPasswordAndProduceStrategyFactory {
+    impl ProcessingStrategyFactory<KafkaPayload> for ReverseStringAndProduceStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let producer = KafkaProducer::new(self.config.clone());
             let topic = TopicOrPartition::Topic(self.topic.clone());
-            let hash_password_and_produce_strategy = Transform {
+            let reverse_string_and_produce_strategy = Transform {
                 function: reverse_string,
                 next_step: Box::new(Produce::new(producer, Box::new(Noop {}), topic ))
             };
-            Box::new(hash_password_and_produce_strategy)
+            Box::new(reverse_string_and_produce_strategy)
         }
     }
 
@@ -76,7 +76,7 @@ fn main() {
 
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
     let mut processor = StreamProcessor::new(consumer,
-        Box::new(HashPasswordAndProduceStrategyFactory {
+        Box::new(ReverseStringAndProduceStrategyFactory {
                             config: config.clone(),
                             topic: Topic { name: "test_out".to_string() }
                          }));
