@@ -14,7 +14,7 @@ from arroyo.processing.strategies.filter import FilterStep
 from arroyo.processing.strategies.reduce import Reduce
 from arroyo.processing.strategies.run_task import RunTaskInThreads
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
-from arroyo.types import BaseValue, Commit, Message, Partition, FilteredPayload
+from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
 from snuba.processor import ReplacementBatch
