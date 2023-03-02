@@ -7,7 +7,16 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, TypeVar, Any
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
