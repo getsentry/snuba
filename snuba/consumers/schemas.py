@@ -18,12 +18,11 @@ _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     # Querylog JSON
     Topic.QUERYLOG: sentry_kafka_schemas.get_schema("querylog")["schema"],
     # Release health metrics
-    Topic.METRICS: load_file("metrics.json"),
+    Topic.METRICS: sentry_kafka_schemas.get_schema("metrics")["schema"],
     # Performance metrics
-    Topic.GENERIC_METRICS: load_file("generic_metrics.json"),
-    # XXX(markus): This is copypasted from Relay, need to consolidate at some
-    # point
-    Topic.EVENTS: load_file("event.json"),
+    Topic.GENERIC_METRICS: sentry_kafka_schemas.get_schema("generic_metrics")["schema"],
+    # Error events
+    Topic.EVENTS: sentry_kafka_schemas.get_schema("events")["schema"],
 }
 
 
