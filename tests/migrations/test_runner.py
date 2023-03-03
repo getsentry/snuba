@@ -216,6 +216,30 @@ def get_total_migration_count() -> int:
     return count
 
 
+def test_reverse_in_progress() -> None:
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    migration_key = MigrationKey(
+        MigrationGroup.TEST_MIGRATION, "0001_create_test_table"
+    )
+    runner.run_migration(migration_key)
+    runner._update_migration_status(migration_key, Status.IN_PROGRESS)
+
+    # reversing in progress migrations for system group shouldn't affect
+    # the test_migration group
+    runner.reverse_in_progress(group=MigrationGroup.SYSTEM)
+    assert runner.get_status(migration_key)[0] == Status.IN_PROGRESS
+
+    # reversing in progress with dry run shouldn't execute the reverse sql
+    runner.reverse_in_progress(group=MigrationGroup.TEST_MIGRATION, dry_run=True)
+    assert runner.get_status(migration_key)[0] == Status.IN_PROGRESS
+
+    # reversing in progress with no groups specified should reverse any in progress
+    # migration for any migration group
+    runner.reverse_in_progress()
+    assert runner.get_status(migration_key)[0] == Status.NOT_STARTED
+
+
 def test_version() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
