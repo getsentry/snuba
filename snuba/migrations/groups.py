@@ -278,7 +278,7 @@ class TestMigrationLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.test_migration")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_create_test_table", "0002_add_test_col"]
+        return ["0001_create_test_table", "0002_add_test_col", "0003_borked_migration"]
 
 
 class ProfilesLoader(DirectoryLoader):
