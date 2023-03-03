@@ -79,6 +79,8 @@ steps:
         name: profiling-functions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: replays-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
+        name: search-issues-consumer
   - kind: KubernetesCronJob
     selector:
       label_selector: service=snuba

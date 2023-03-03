@@ -1837,6 +1837,7 @@ class TestApi(SimpleAPITest):
 
     def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
+        state.set_config("read_through_cache.short_circuit", 1)
         query = json.dumps(
             {
                 "project": 2,

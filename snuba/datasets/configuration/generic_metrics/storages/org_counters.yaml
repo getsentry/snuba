@@ -12,6 +12,19 @@ schema:
       { name: metric_id, type: UInt, args: { size: 64 } },
       { name: granularity, type: UInt, args: { size: 8 } },
       { name: timestamp, type: DateTime },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+
     ]
   local_table_name: generic_metric_counters_aggregated_local
   dist_table_name: generic_metric_counters_aggregated_dist

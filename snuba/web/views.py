@@ -713,8 +713,6 @@ if application.debug or application.testing:
                 ) -> None:
                     pass
 
-                validate_schema = True
-
                 strategy = KafkaConsumerStrategyFactory(
                     stream_loader.get_pre_filter(),
                     functools.partial(
@@ -722,7 +720,6 @@ if application.debug or application.testing:
                         stream_loader.get_processor(),
                         "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
-                        validate_schema,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
                     max_batch_size=1,

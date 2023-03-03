@@ -1,5 +1,6 @@
 import itertools
 import logging
+import random
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -32,10 +33,7 @@ from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
     ParallelTransformStep,
-)
-from arroyo.processing.strategies import ProcessingStrategy
-from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
-from arroyo.processing.strategies import (
+    ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
     RunTaskInThreads,
@@ -51,12 +49,21 @@ from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import BaseValue, BrokerValue, Commit, Message, Partition, Topic
+from arroyo.types import (
+    BaseValue,
+    BrokerValue,
+    Commit,
+    FilteredPayload,
+    Message,
+    Partition,
+    Topic,
+)
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from confluent_kafka import Producer as ConfluentProducer
 
+from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.schemas import get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
@@ -75,6 +82,8 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.writer import BatchWriter
+
+metrics = MetricsWrapper(environment.metrics, "consumer")
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -103,16 +112,13 @@ class BytesInsertBatch(NamedTuple):
             return type(self), (self.rows, self.origin_timestamp)
 
 
-class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
+class InsertBatchWriter:
     def __init__(self, writer: BatchWriter[JSONRow], metrics: MetricsBackend) -> None:
         self.__writer = writer
         self.__metrics = metrics
 
         self.__messages: MutableSequence[Message[BytesInsertBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
@@ -179,23 +185,17 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
             self.__writer,
         )
 
-    def terminate(self) -> None:
-        self.__closed = True
-
     def join(self, timeout: Optional[float] = None) -> None:
         pass
 
 
-class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
+class ReplacementBatchWriter:
     def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
         self.__producer = producer
         self.__topic = topic
 
         self.__messages: MutableSequence[Message[ReplacementBatch]] = []
         self.__closed = False
-
-    def poll(self) -> None:
-        pass
 
     def submit(self, message: Message[ReplacementBatch]) -> None:
         assert not self.__closed
@@ -226,9 +226,6 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     on_delivery=self.__delivery_callback,
                 )
 
-    def terminate(self) -> None:
-        self.__closed = True
-
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
         if timeout is not None:
@@ -249,7 +246,7 @@ class ProcessedMessageBatchWriter:
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
-        replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
+        replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
@@ -260,12 +257,6 @@ class ProcessedMessageBatchWriter:
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
         self.__closed = False
-
-    def poll(self) -> None:
-        self.__insert_batch_writer.poll()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.poll()
 
     def submit(
         self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]
@@ -323,14 +314,6 @@ class ProcessedMessageBatchWriter:
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        self.__insert_batch_writer.terminate()
-
-        if self.__replacement_batch_writer is not None:
-            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -428,10 +411,6 @@ class MultistorageCollector:
         ] = defaultdict(list)
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
-    def poll(self) -> None:
-        for step in self.__steps.values():
-            step.poll()
-
     def submit(
         self,
         message: Message[
@@ -462,12 +441,6 @@ class MultistorageCollector:
 
         for storage_key, step in self.__steps.items():
             step.close()
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-        for step in self.__steps.values():
-            step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -551,13 +524,43 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
-    validate: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+
+    validate_sample_rate = float(
+        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
+    )
+
     assert isinstance(message.value, BrokerValue)
     try:
         codec = get_json_codec(snuba_logical_topic)
-        decoded = codec.decode(message.payload.value, validate=validate)
+        should_validate = random.random() < validate_sample_rate
+        start = time.time()
+
+        decoded = codec.decode(message.payload.value, validate=False)
+
+        if should_validate:
+            with sentry_sdk.push_scope() as scope:
+                scope.add_attachment(
+                    bytes=message.payload.value, filename="message.txt"
+                )
+                scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
+
+                try:
+                    codec.validate(decoded)
+                except Exception as err:
+                    sentry_sdk.set_tag("invalid_message_schema", "true")
+                    logger.warning(err, exc_info=True)
+
+            # TODO: this is not the most efficient place to emit a metric, but
+            # as long as should_validate is behind a sample rate it should be
+            # OK.
+            metrics.timing(
+                "codec_decode_and_validate",
+                (time.time() - start) * 1000,
+                tags={"snuba_logical_topic": snuba_logical_topic.name},
+            )
+
         result = processor.process_message(
             decoded,
             KafkaMessageMetadata(
@@ -647,12 +650,16 @@ def find_destination_storages(
 
 
 def build_multistorage_batch_writer(
-    metrics: MetricsBackend, storage: WritableTableStorage
+    metrics: MetricsBackend,
+    storage: WritableTableStorage,
+    replacements: Optional[Topic],
+    slice_id: Optional[int],
 ) -> ProcessedMessageBatchWriter:
     replacement_batch_writer: Optional[ReplacementBatchWriter]
     stream_loader = storage.get_table_writer().get_stream_loader()
     replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-    if replacement_topic_spec is not None:
+    if replacements is not None:
+        assert replacement_topic_spec is not None
         # XXX: The producer is flushed when closed on strategy teardown
         # after an assignment is revoked, but never explicitly closed.
         replacement_batch_writer = ReplacementBatchWriter(
@@ -665,7 +672,7 @@ def build_multistorage_batch_writer(
                     },
                 )
             ),
-            Topic(replacement_topic_spec.topic_name),
+            replacements,
         )
     else:
         replacement_batch_writer = None
@@ -675,6 +682,7 @@ def build_multistorage_batch_writer(
             storage.get_table_writer().get_batch_writer(
                 metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                slice_id=slice_id,
             ),
             MetricsWrapper(
                 metrics,
@@ -690,10 +698,14 @@ def build_collector(
     metrics: MetricsBackend,
     storages: Sequence[WritableTableStorage],
     commit_log_config: Optional[CommitLogConfig],
+    replacements: Optional[Topic],
+    slice_id: Optional[int],
 ) -> MultistorageCollector:
     return MultistorageCollector(
         {
-            storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
+            storage.get_storage_key(): build_multistorage_batch_writer(
+                metrics, storage, replacements, slice_id
+            )
             for storage in storages
         },
         commit_log_config,
@@ -718,7 +730,9 @@ class MultistorageConsumerProcessingStrategyFactory(
         output_block_size: Optional[int],
         metrics: MetricsBackend,
         dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
+        slice_id: Optional[int],
         commit_log_config: Optional[CommitLogConfig] = None,
+        replacements: Optional[Topic] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
         parallel_collect_timeout: float = 10.0,
     ) -> None:
@@ -748,7 +762,12 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__process_message_fn = process_message_multistorage
 
         self.__collector = partial(
-            build_collector, self.__metrics, self.__storages, commit_log_config
+            build_collector,
+            self.__metrics,
+            self.__storages,
+            commit_log_config,
+            replacements,
+            slice_id,
         )
 
     def create_with_partitions(
@@ -770,7 +789,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             message.payload.join()
             return message
 
-        collect = Reduce(
+        collect = Reduce[MultistorageProcessedMessage, MultistorageCollector](
             self.__max_batch_size,
             self.__max_batch_time,
             accumulator,
@@ -780,7 +799,9 @@ class MultistorageConsumerProcessingStrategyFactory(
 
         transform_function = self.__process_message_fn
 
-        inner_strategy: ProcessingStep[MultistorageKafkaPayload]
+        inner_strategy: ProcessingStrategy[
+            Union[FilteredPayload, MultistorageKafkaPayload]
+        ]
 
         if self.__processes is None:
             inner_strategy = TransformStep(transform_function, collect)

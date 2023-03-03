@@ -36,7 +36,7 @@ SYSTEM_QUERY_RE = re.compile(
         ^ # Start
         (SELECT|select)
         \s
-        (?P<select_statement>[\w\s,()*+\-\/]+|\*)
+        (?P<select_statement>[\w\s\',()*+\-\/]+|\*)
         \s
         (FROM|from)
         \s

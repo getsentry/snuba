@@ -40,7 +40,7 @@ class ProfilesMessageProcessor(DatasetMessageProcessor):
         except KeyError:
             metrics.increment("missing_field")
             return None
-        return InsertBatch([processed], None)
+        return InsertBatch([processed], received)
 
 
 def _normalize_legacy_format(
@@ -67,7 +67,7 @@ def _normalize_legacy_format(
         "platform": message["platform"],
         "profile_id": str(UUID(message["profile_id"])),
         "project_id": message["project_id"],
-        "received": datetime.utcfromtimestamp(message["received"]),
+        "received": received,
         "retention_days": retention_days,
         "trace_id": str(UUID(message["trace_id"])),
         "transaction_id": str(UUID(message["transaction_id"])),

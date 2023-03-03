@@ -72,7 +72,7 @@ def test_streaming_consumer_strategy() -> None:
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
-            process_message, processor, "consumer_group", SnubaTopic.EVENTS, False
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS
         ),
         write_step,
         max_batch_size=10,

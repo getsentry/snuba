@@ -72,7 +72,6 @@ class ConsumerBuilder:
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
-        validate_schema: bool = False,
         profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -178,7 +177,6 @@ class ConsumerBuilder:
             )
 
         self.__commit_retry_policy = commit_retry_policy
-        self.__validate_schema = validate_schema
 
     def __build_consumer(
         self,
@@ -264,7 +262,6 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
-                self.__validate_schema,
             ),
             collector=build_batch_writer(
                 table_writer,

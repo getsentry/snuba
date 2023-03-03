@@ -35,6 +35,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         os.execvp(daemons[0][1][0], daemons[0][1])
 
     daemons += [
+        (("admin", ["snuba", "admin"])),
         (
             "transaction-consumer",
             [
@@ -408,6 +409,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
                     "--storage=search_issues",
+                    "--consumer-group=generic_events_group",
                 ],
             ),
         ]

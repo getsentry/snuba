@@ -283,6 +283,49 @@ class Runner:
         else:
             self._reverse_migration_impl(migration_key)
 
+    def reverse_in_progress(
+        self,
+        fake: bool = False,
+        group: Optional[MigrationGroup] = None,
+        dry_run: bool = False,
+    ) -> None:
+        """
+        Reverse migrations that are stuck in progress. This can be done
+        for all migrations groups or for a select migration group. There
+        will be at most one in-progress migration per group since you
+        can't move forward if a migration is in-progress.
+        """
+
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        if group:
+            migration_groups: Sequence[MigrationGroup] = [group]
+        else:
+            migration_groups = get_active_migration_groups()
+
+        def get_in_progress_migration(group: MigrationGroup) -> Optional[MigrationKey]:
+            group_migrations = get_group_loader(group).get_migrations()
+            for migration_id in group_migrations:
+                migration_key = MigrationKey(group, migration_id)
+                status = get_status(migration_key)
+                if status == Status.IN_PROGRESS:
+                    return migration_key
+            return None
+
+        for group in migration_groups:
+            migration_key = get_in_progress_migration(group)
+            if migration_key:
+                if fake:
+                    self._update_migration_status(migration_key, Status.NOT_STARTED)
+                else:
+                    logger.info(f"[{group}]: reversing {migration_key}")
+                    self._reverse_migration_impl(migration_key, dry_run=dry_run)
+            else:
+                logger.info(f"[{group}]: no in progress migrations found")
+
     def _reverse_migration_impl(
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:

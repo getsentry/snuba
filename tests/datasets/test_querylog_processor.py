@@ -49,7 +49,12 @@ def test_simple() -> None:
         snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer="search"),
         attribution_info=AttributionInfo(
-            get_app_id("default"), "search", None, None, None
+            get_app_id("default"),
+            {"tenant_type": "tenant_id"},
+            "search",
+            None,
+            None,
+            None,
         ),
     )
 
@@ -171,7 +176,12 @@ def test_missing_fields() -> None:
         snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer="search"),
         attribution_info=AttributionInfo(
-            get_app_id("default"), "search", None, None, None
+            get_app_id("default"),
+            {"tenant_type": "tenant_id"},
+            "search",
+            None,
+            None,
+            None,
         ),
     )
 
@@ -294,7 +304,12 @@ def test_negative_project_id_fields() -> None:
         snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer="search"),
         attribution_info=AttributionInfo(
-            get_app_id("default"), "search", None, None, None
+            get_app_id("default"),
+            {"tenant_type": "tenant_id"},
+            "search",
+            None,
+            None,
+            None,
         ),
     )
 

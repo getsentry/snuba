@@ -403,6 +403,11 @@ validators:
     args:
       required_filter_columns:
         - project_id
+  - validator: TagConditionValidator
+    args: {}
+  - validator: DatetimeConditionValidator
+    args: {}
+
 subscription_validators:
   - validator: AggregationValidator
     args:

@@ -175,6 +175,50 @@ def reverse(
 
 
 @migrations.command()
+@click.option("--group", help="Migration group")
+@click.option("--fake", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def reverse_in_progress(
+    fake: bool,
+    dry_run: bool,
+    group: Optional[str] = None,
+    log_level: Optional[str] = None,
+) -> None:
+    """
+    Reverses any in progress migrations for all migration groups.
+    If group is specified, only reverse in progress migrations for
+    that group.
+
+    --fake marks migrations as reversed without doing anything.
+    """
+    setup_logging(log_level)
+    if not dry_run:
+        check_clickhouse_connections()
+    runner = Runner()
+
+    migration_group = MigrationGroup(group) if group else None
+
+    if dry_run:
+        runner.reverse_in_progress(group=migration_group, dry_run=True)
+        return
+
+    try:
+        if fake:
+            click.confirm(
+                "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
+                abort=True,
+            )
+        runner.reverse_in_progress(group=migration_group, fake=fake)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished reversing in progress migrations")
+
+
+@migrations.command()
 @click.option(
     "--type", "node_type", type=click.Choice(["local", "dist"]), required=True
 )

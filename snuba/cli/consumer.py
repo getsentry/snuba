@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
+@click.option(
+    "--storage",
+    "storage_name",
+    type=click.Choice(
+        [storage_key.value for storage_key in get_writable_storage_keys()]
+    ),
+    help="The storage to target",
+    required=True,
+)
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
     "--replacements-topic",
@@ -41,15 +50,6 @@ logger = logging.getLogger(__name__)
     "--bootstrap-server",
     multiple=True,
     help="Kafka bootstrap server to use.",
-)
-@click.option(
-    "--storage",
-    "storage_name",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
-    help="The storage to target",
-    required=True,
 )
 @click.option(
     "--slice-id",
@@ -105,18 +105,17 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--validate-schema", is_flag=True, default=False)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 def consumer(
     *,
+    storage_name: str,
     raw_events_topic: Optional[str],
     replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    storage_name: str,
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -128,13 +127,13 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    validate_schema: bool,
     profile_path: Optional[str] = None,
 ) -> None:
 
     setup_logging(log_level)
     setup_sentry()
     logger.info("Consumer Starting")
+
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
 
@@ -176,7 +175,6 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
-        validate_schema=validate_schema,
         slice_id=slice_id,
     )
 

@@ -193,11 +193,32 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     },
 )
 
+ENUM_SCHEMA = make_column_schema(
+    column_type={"const": "Enum"},
+    args={
+        "type": "object",
+        "properties": {
+            "values": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": [
+                        {"type": "string"},
+                        {"type": "integer"},
+                    ],
+                },
+            },
+        },
+        "additionalProperties": False,
+    },
+)
+
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
+    ENUM_SCHEMA,
 ]
 
 # Array inner types are the same as normal column types except they don't have a name

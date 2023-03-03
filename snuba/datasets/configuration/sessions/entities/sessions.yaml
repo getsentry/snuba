@@ -233,7 +233,6 @@ storages:
     - mapper: SessionsRawUsersErroredMapper
 storage_selector:
   selector: SessionsQueryStorageSelector
-validate_data_model: warn
 query_processors:
 - processor: BasicFunctionsProcessor
 - processor: TimeSeriesProcessor

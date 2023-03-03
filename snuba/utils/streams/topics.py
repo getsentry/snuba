@@ -13,9 +13,11 @@ class Topic(Enum):
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
+    SESSIONS_COMMIT_LOG = "snuba-sessions-commit-log"
     METRICS_COMMIT_LOG = "snuba-metrics-commit-log"
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
+    SUBSCRIPTION_SCHEDULED_SESSIONS = "scheduled-subscriptions-sessions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = (
         "scheduled-subscriptions-generic-metrics-sets"
@@ -28,6 +30,7 @@ class Topic(Enum):
     )
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
+    SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS = (
         "generic-metrics-sets-subscription-results"
@@ -49,6 +52,7 @@ class Topic(Enum):
     )
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
     GENERIC_EVENTS = "generic-events"
+    GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
