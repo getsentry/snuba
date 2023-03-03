@@ -1,5 +1,3 @@
-import json
-import os
 from typing import Any, Mapping, MutableMapping, Optional
 
 # TODO: Remove type: ignore once next version sentry-kafka-schemas is published
@@ -8,22 +6,15 @@ from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
 
-
-def load_file(filename: str) -> Any:
-    with open(os.path.join(os.path.dirname(__file__), "schema_files/", filename)) as f:
-        return json.load(f)
-
-
 _HARDCODED_SCHEMAS: Mapping[Topic, Mapping[str, Any]] = {
     # Querylog JSON
     Topic.QUERYLOG: sentry_kafka_schemas.get_schema("querylog")["schema"],
     # Release health metrics
-    Topic.METRICS: load_file("metrics.json"),
+    Topic.METRICS: sentry_kafka_schemas.get_schema("metrics")["schema"],
     # Performance metrics
-    Topic.GENERIC_METRICS: load_file("generic_metrics.json"),
-    # XXX(markus): This is copypasted from Relay, need to consolidate at some
-    # point
-    Topic.EVENTS: load_file("event.json"),
+    Topic.GENERIC_METRICS: sentry_kafka_schemas.get_schema("generic_metrics")["schema"],
+    # Error events
+    Topic.EVENTS: sentry_kafka_schemas.get_schema("events")["schema"],
 }
 
 
