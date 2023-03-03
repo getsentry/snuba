@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -74,10 +74,11 @@ class TestFunctionsProcessor:
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
 
+        now = datetime.now(timezone.utc)
         message = ProfileCallTreeEvent(
             project_id=22,
             profile_id="a" * 32,
-            timestamp=0,
+            timestamp=now.timestamp(),
             transaction_name="vroom-vroom",
             call_trees={
                 "259": [
@@ -147,7 +148,7 @@ class TestFunctionsProcessor:
             "profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "project_id": 22,
             "transaction_name": "vroom-vroom",
-            "timestamp": datetime(1970, 1, 1),
+            "timestamp": now.replace(tzinfo=None),
             "platform": "cocoa",
             "environment": "prod",
             "release": "7.14.0 (1)",
@@ -195,4 +196,4 @@ class TestFunctionsProcessor:
 
         assert FunctionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch(batch, None)
+        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.timestamp))
