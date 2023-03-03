@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "build": "webpack --config webpack.config.js --mode production",
-    "watch": "webpack --config webpack.config.js --mode development --watch"
+    "watch": "webpack --config webpack.config.js --mode development --watch",
+    "test": "jest"
   },
   "dependencies": {
     "@types/react": "^18.0.20",
@@ -14,6 +15,13 @@
     "typescript": "^4.8.3"
   },
   "devDependencies": {
+    "@types/enzyme": "^3",
+    "@types/enzyme-adapter-react-16": "^1",
+    "@types/jest": "^29.4.0",
+    "enzyme": "^3.11.0",
+    "enzyme-adapter-react-16": "^1.15.7",
+    "jest": "^29.4.3",
+    "ts-jest": "^29.0.5",
     "webpack": "^5.74.0",
     "webpack-cli": "^4.10.0"
   }
