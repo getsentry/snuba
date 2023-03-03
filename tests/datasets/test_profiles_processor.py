@@ -139,19 +139,15 @@ class TestProfilesProcessor:
         )
         assert ProfilesMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == InsertBatch([message.build_result(meta)], message.received)
 
     def test_missing_symbols(self) -> None:
         meta = KafkaMessageMetadata(
             offset=1, partition=0, timestamp=datetime(1970, 1, 1)
         )
         message = ProfileEvent(
-            organization_id=123456789,
-            project_id=987654321,
-            transaction_id=str(uuid.uuid4()),
-            received=datetime.utcnow().timestamp(),
-            profile_id=str(uuid.uuid4()),
             android_api_level=None,
+            architecture="aarch64",
             device_classification="high",
             device_locale="fr_FR",
             device_manufacturer="Pierre",
@@ -159,17 +155,21 @@ class TestProfilesProcessor:
             device_os_build_number="13",
             device_os_name="PierreOS",
             device_os_version="47",
-            architecture="aarch64",
             duration_ns=1234567890,
             environment="production",
-            platform="pierre",
-            trace_id=str(uuid.uuid4()),
-            transaction_name="lets-get-ready-to-party",
-            version_name="v42.0.0",
-            version_code="1337",
-            retention_days=30,
-            partition=meta.partition,
             offset=meta.offset,
+            organization_id=123456789,
+            partition=meta.partition,
+            platform="pierre",
+            profile_id=str(uuid.uuid4()),
+            project_id=987654321,
+            received=datetime.utcnow().timestamp(),
+            retention_days=30,
+            trace_id=str(uuid.uuid4()),
+            transaction_id=str(uuid.uuid4()),
+            transaction_name="lets-get-ready-to-party",
+            version_code="1337",
+            version_name="v42.0.0",
         )
         payload = message.serialize()
         del payload["profile_id"]
@@ -181,12 +181,8 @@ class TestProfilesProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
         message = ProfileEvent(
-            organization_id=123456789,
-            project_id=987654321,
-            transaction_id=str(uuid.uuid4()),
-            received=datetime.utcnow().timestamp(),
-            profile_id=str(uuid.uuid4()),
             android_api_level=None,
+            architecture="aarch64",
             device_classification="high",
             device_locale="fr_FR",
             device_manufacturer="Pierre",
@@ -194,18 +190,22 @@ class TestProfilesProcessor:
             device_os_build_number="13",
             device_os_name="PierreOS",
             device_os_version="47",
-            architecture="aarch64",
             duration_ns=1234567890,
             environment="production",
-            platform="pierre",
-            trace_id=str(uuid.uuid4()),
-            transaction_name="lets-get-ready-to-party",
-            version_name="v42.0.0",
-            version_code="1337",
-            retention_days=30,
-            partition=meta.partition,
             offset=meta.offset,
+            organization_id=123456789,
+            partition=meta.partition,
+            platform="pierre",
+            profile_id=str(uuid.uuid4()),
+            project_id=987654321,
+            received=datetime.utcnow().timestamp(),
+            retention_days=30,
+            trace_id=str(uuid.uuid4()),
+            transaction_id=str(uuid.uuid4()),
+            transaction_name="lets-get-ready-to-party",
+            version_code="1337",
+            version_name="v42.0.0",
         )
         assert ProfilesMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == InsertBatch([message.build_result(meta)], message.received)
