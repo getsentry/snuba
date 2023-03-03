@@ -139,7 +139,9 @@ class TestProfilesProcessor:
         )
         assert ProfilesMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], message.received)
+        ) == InsertBatch(
+            [message.build_result(meta)], datetime.utcfromtimestamp(message.received)
+        )
 
     def test_missing_symbols(self) -> None:
         meta = KafkaMessageMetadata(
@@ -208,4 +210,6 @@ class TestProfilesProcessor:
         )
         assert ProfilesMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], message.received)
+        ) == InsertBatch(
+            [message.build_result(meta)], datetime.utcfromtimestamp(message.received)
+        )
