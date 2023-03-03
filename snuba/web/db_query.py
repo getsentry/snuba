@@ -28,7 +28,7 @@ from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     NewStatus,
     QueryStatus,
-    SLOStatus,
+    RequestStatus,
     SnubaQueryMetadata,
     get_new_status,
     get_query_status_from_error_codes,
@@ -561,8 +561,8 @@ def raw_query(
 
         status = status or QueryStatus.ERROR
         if new_status.status not in (
-            SLOStatus.TABLE_RATE_LIMITED,
-            SLOStatus.RATE_LIMITED,
+            RequestStatus.TABLE_RATE_LIMITED,
+            RequestStatus.RATE_LIMITED,
         ):
             # Don't log rate limiting errors to avoid clutter
             logger.exception("Error running query: %s\n%s", sql, cause)

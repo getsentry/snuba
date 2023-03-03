@@ -14,13 +14,12 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import (
-    SLO,
     ClickhouseQueryMetadata,
     ClickhouseQueryProfile,
     FilterProfile,
     NewStatus,
     QueryStatus,
-    SLOStatus,
+    RequestStatus,
     SnubaQueryMetadata,
 )
 from snuba.request import Request
@@ -81,7 +80,7 @@ def test_simple() -> None:
                     "triggered_rate_limiter": "test_rate_limiter",
                 },
                 status=QueryStatus.SUCCESS,
-                new_status=NewStatus(SLOStatus.SUCCESS, SLO.FOR),
+                new_status=NewStatus(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
@@ -204,7 +203,7 @@ def test_missing_fields() -> None:
                 end_timestamp=None,
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
-                new_status=NewStatus(SLOStatus.SUCCESS, SLO.FOR),
+                new_status=NewStatus(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
@@ -332,7 +331,7 @@ def test_negative_project_id_fields() -> None:
                 end_timestamp=None,
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
-                new_status=NewStatus(SLOStatus.SUCCESS, SLO.FOR),
+                new_status=NewStatus(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",

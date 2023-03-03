@@ -22,7 +22,7 @@ class QueryStatus(Enum):
     TIMEOUT = "timeout"
 
 
-QUERY_ERROR_MAPPINGS = {
+CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS = {
     ErrorCodes.TOO_SLOW: QueryStatus.TIMEOUT,
     ErrorCodes.TIMEOUT_EXCEEDED: QueryStatus.TIMEOUT,
     ErrorCodes.SOCKET_TIMEOUT: QueryStatus.TIMEOUT,
@@ -31,10 +31,10 @@ QUERY_ERROR_MAPPINGS = {
 
 
 def get_query_status_from_error_codes(code: ErrorCodes) -> QueryStatus | None:
-    return QUERY_ERROR_MAPPINGS.get(code)
+    return CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS.get(code)
 
 
-class SLOStatus(Enum):
+class RequestStatus(Enum):
     """
     The different statuses we return for a request.
 
@@ -74,53 +74,55 @@ class SLO(Enum):
 
 @dataclass(frozen=True)
 class NewStatus:
-    status: SLOStatus
-    slo: SLO
+    status: RequestStatus
+
+    @property
+    def slo(self) -> SLO:
+        return SLO.FOR if self.status in SLO_FOR else SLO.AGAINST
 
 
 # Statuses that don't impact the SLO
 SLO_FOR = {
-    SLOStatus.SUCCESS,
-    SLOStatus.INVALID_REQUEST,
-    SLOStatus.INVALID_TYPING,
-    SLOStatus.RATE_LIMITED,
-    SLOStatus.PREDICTED_TIMEOUT,
-    SLOStatus.MEMORY_EXCEEDED,
+    RequestStatus.SUCCESS,
+    RequestStatus.INVALID_REQUEST,
+    RequestStatus.INVALID_TYPING,
+    RequestStatus.RATE_LIMITED,
+    RequestStatus.PREDICTED_TIMEOUT,
+    RequestStatus.MEMORY_EXCEEDED,
 }
 
 
 ERROR_CODE_MAPPINGS = {
-    ErrorCodes.TOO_SLOW: SLOStatus.PREDICTED_TIMEOUT,
-    ErrorCodes.TIMEOUT_EXCEEDED: SLOStatus.CLICKHOUSE_TIMEOUT,
-    ErrorCodes.SOCKET_TIMEOUT: SLOStatus.NETWORK_TIMEOUT,
-    ErrorCodes.NETWORK_ERROR: SLOStatus.NETWORK_TIMEOUT,
-    ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: SLOStatus.INVALID_TYPING,
-    ErrorCodes.TYPE_MISMATCH: SLOStatus.INVALID_TYPING,
-    ErrorCodes.MEMORY_LIMIT_EXCEEDED: SLOStatus.MEMORY_EXCEEDED,
+    ErrorCodes.TOO_SLOW: RequestStatus.PREDICTED_TIMEOUT,
+    ErrorCodes.TIMEOUT_EXCEEDED: RequestStatus.CLICKHOUSE_TIMEOUT,
+    ErrorCodes.SOCKET_TIMEOUT: RequestStatus.NETWORK_TIMEOUT,
+    ErrorCodes.NETWORK_ERROR: RequestStatus.NETWORK_TIMEOUT,
+    ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: RequestStatus.INVALID_TYPING,
+    ErrorCodes.TYPE_MISMATCH: RequestStatus.INVALID_TYPING,
+    ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
 }
 
 
 def get_new_status(cause: Exception | None = None) -> NewStatus:
-    slo_status: SLOStatus
+    slo_status: RequestStatus
     if cause is None:
-        slo_status = SLOStatus.SUCCESS
+        slo_status = RequestStatus.SUCCESS
     elif isinstance(cause, RateLimitExceeded):
         trigger_rate_limiter = cause.extra_data.get("scope", "")
         if trigger_rate_limiter == TABLE_RATE_LIMIT_NAME:
-            slo_status = SLOStatus.TABLE_RATE_LIMITED
+            slo_status = RequestStatus.TABLE_RATE_LIMITED
         else:
-            slo_status = SLOStatus.RATE_LIMITED
+            slo_status = RequestStatus.RATE_LIMITED
     elif isinstance(cause, ClickhouseError):
-        slo_status = ERROR_CODE_MAPPINGS.get(cause.code, SLOStatus.ERROR)
+        slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
     elif isinstance(cause, TimeoutError):
-        slo_status = SLOStatus.CACHE_SET_TIMEOUT
+        slo_status = RequestStatus.CACHE_SET_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
-        slo_status = SLOStatus.CACHE_WAIT_TIMEOUT
+        slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
     else:
-        slo_status = SLOStatus.ERROR
+        slo_status = RequestStatus.ERROR
 
-    slo = SLO.FOR if slo_status in SLO_FOR else SLO.AGAINST
-    return NewStatus(slo_status, slo)
+    return NewStatus(slo_status)
 
 
 Columnset = Set[str]
@@ -251,17 +253,17 @@ class SnubaQueryMetadata:
         return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
 
     @property
-    def new_status(self) -> SLOStatus:
+    def new_status(self) -> RequestStatus:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
         if not self.query_list:
-            return SLOStatus.ERROR
+            return RequestStatus.ERROR
 
         for query in self.query_list:
-            if query.new_status.status != SLOStatus.SUCCESS:
+            if query.new_status.status != RequestStatus.SUCCESS:
                 return query.new_status.status  # always return the worst case
 
-        return SLOStatus.SUCCESS
+        return RequestStatus.SUCCESS
 
     @property
     def slo(self) -> SLO:
