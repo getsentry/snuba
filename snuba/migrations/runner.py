@@ -302,7 +302,7 @@ class Runner:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
         if group:
-            migration_groups = [group]
+            migration_groups: Sequence[MigrationGroup] = [group]
         else:
             migration_groups = get_active_migration_groups()
 
@@ -313,7 +313,7 @@ class Runner:
                 status = get_status(migration_key)
                 if status == Status.IN_PROGRESS:
                     return migration_key
-            return
+            return None
 
         for group in migration_groups:
             migration_key = get_in_progress_migration(group)
