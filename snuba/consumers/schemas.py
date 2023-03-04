@@ -2,6 +2,7 @@ import logging
 from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_kafka_schemas
+import sentry_sdk
 from arroyo.processing.strategies.decoder.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
@@ -15,8 +16,10 @@ def get_schema(topic: Topic) -> Optional[Mapping[str, Any]]:
     """
     try:
         return sentry_kafka_schemas.get_schema(topic.value)
-    except Exception:
-        logger.warning("Unable to get schema for topic %s", topic, exc_info=True)
+    except Exception as err:
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("snuba_logical_topic", topic.name)
+            logger.warning(err, exc_info=True)
         return None
 
 
