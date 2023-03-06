@@ -30,6 +30,8 @@ consumer_builder = ConsumerBuilder(
         raw_topic=None,
         replacements_topic=None,
         bootstrap_servers=None,
+        commit_log_bootstrap_servers=None,
+        replacements_bootstrap_servers=None,
         group_id=consumer_group_name,
         commit_log_topic=None,
         auto_offset_reset="earliest",
@@ -56,6 +58,8 @@ optional_kafka_params = KafkaParameters(
     raw_topic="raw",
     replacements_topic="event-replacements",
     bootstrap_servers=["cli.server:9092", "cli2.server:9092"],
+    commit_log_bootstrap_servers=["cli.server:9092", "cli2.server:9092"],
+    replacements_bootstrap_servers=["cli.server:9092", "cli2.server:9092"],
     group_id=consumer_group_name,
     commit_log_topic="snuba-commit-log",
     auto_offset_reset="earliest",
@@ -100,8 +104,6 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
 
     assert isinstance(con_build.raw_topic, Topic)
 
-    assert con_build.broker_config is not None
-
     assert isinstance(con_build.metrics, MetricsBackend)
 
     assert con_build.max_batch_size == 3
@@ -126,7 +128,6 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     con_build.replacements_producer
     con_build.commit_log_producer
 
-    con_build.bootstrap_servers
     con_build.strict_offset_reset
     con_build.processes
     con_build.input_block_size
