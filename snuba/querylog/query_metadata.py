@@ -73,7 +73,7 @@ class SLO(Enum):
 
 
 @dataclass(frozen=True)
-class NewStatus:
+class Status:
     status: RequestStatus
 
     @property
@@ -103,7 +103,7 @@ ERROR_CODE_MAPPINGS = {
 }
 
 
-def get_new_status(cause: Exception | None = None) -> NewStatus:
+def get_request_status(cause: Exception | None = None) -> Status:
     slo_status: RequestStatus
     if cause is None:
         slo_status = RequestStatus.SUCCESS
@@ -122,7 +122,7 @@ def get_new_status(cause: Exception | None = None) -> NewStatus:
     else:
         slo_status = RequestStatus.ERROR
 
-    return NewStatus(slo_status)
+    return Status(slo_status)
 
 
 Columnset = Set[str]
@@ -182,7 +182,7 @@ class ClickhouseQueryMetadata:
     end_timestamp: Optional[datetime]
     stats: Mapping[str, Any]
     status: QueryStatus
-    new_status: NewStatus
+    request_status: Status
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
     result_profile: Optional[Mapping[str, Any]] = None
@@ -197,8 +197,8 @@ class ClickhouseQueryMetadata:
             "end_timestamp": end,
             "stats": self.stats,
             "status": self.status.value,
-            "new_status": self.new_status.status.value,
-            "slo": self.new_status.slo.value,
+            "request_status": self.request_status.status.value,
+            "slo": self.request_status.slo.value,
             "trace_id": self.trace_id,
             "profile": self.profile.to_dict(),
             "result_profile": self.result_profile,
@@ -239,7 +239,7 @@ class SnubaQueryMetadata:
             "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
-            "new_status": self.new_status.value,
+            "request_status": self.request_status.value,
             "slo": self.slo.value,
             "timing": self.timer.for_json(),
             "projects": list(self.projects),
@@ -253,15 +253,15 @@ class SnubaQueryMetadata:
         return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
 
     @property
-    def new_status(self) -> RequestStatus:
+    def request_status(self) -> RequestStatus:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
         if not self.query_list:
             return RequestStatus.ERROR
 
         for query in self.query_list:
-            if query.new_status.status != RequestStatus.SUCCESS:
-                return query.new_status.status  # always return the worst case
+            if query.request_status.status != RequestStatus.SUCCESS:
+                return query.request_status.status  # always return the worst case
 
         return RequestStatus.SUCCESS
 
@@ -273,5 +273,5 @@ class SnubaQueryMetadata:
             return SLO.AGAINST
 
         # even one error counts the request against
-        failure = any(q.new_status.slo != SLO.FOR for q in self.query_list)
+        failure = any(q.request_status.slo != SLO.FOR for q in self.query_list)
         return SLO.AGAINST if failure else SLO.FOR

@@ -9,7 +9,7 @@ from snuba.attribution.log import (
     QueryAttributionData,
     record_attribution,
 )
-from snuba.querylog.query_metadata import NewStatus, QueryStatus, SnubaQueryMetadata
+from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -30,7 +30,7 @@ def _record_timer_metrics(
         metrics,
         tags={
             "status": query_metadata.status.value,
-            "new_status": query_metadata.new_status.value,
+            "request_status": query_metadata.request_status.value,
             "slo": query_metadata.slo.value,
             "referrer": referrer,
             "parent_api": parent_api,
@@ -118,7 +118,7 @@ def _add_tags(
 
 
 def record_invalid_request(
-    timer: Timer, new_status: NewStatus, referrer: Optional[str]
+    timer: Timer, request_status: Status, referrer: Optional[str]
 ) -> None:
     """
     Records a failed request before the request object is created, so
@@ -126,23 +126,26 @@ def record_invalid_request(
     This is for client errors.
     """
     _record_failure_building_request(
-        QueryStatus.INVALID_REQUEST, new_status, timer, referrer
+        QueryStatus.INVALID_REQUEST, request_status, timer, referrer
     )
 
 
 def record_error_building_request(
-    timer: Timer, new_status: NewStatus, referrer: Optional[str]
+    timer: Timer, request_status: Status, referrer: Optional[str]
 ) -> None:
     """
     Records a failed request before the request object is created, so
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(QueryStatus.ERROR, new_status, timer, referrer)
+    _record_failure_building_request(QueryStatus.ERROR, request_status, timer, referrer)
 
 
 def _record_failure_building_request(
-    status: QueryStatus, new_status: NewStatus, timer: Timer, referrer: Optional[str]
+    status: QueryStatus,
+    request_status: Status,
+    timer: Timer,
+    referrer: Optional[str],
 ) -> None:
     # TODO: Revisit if recording some data for these queries in the querylog
     # table would be useful.
@@ -152,8 +155,8 @@ def _record_failure_building_request(
             tags={
                 "status": status.value,
                 "referrer": referrer or "none",
-                "new_status": new_status.status.value,
-                "slo": new_status.slo.value,
+                "request_status": request_status.status.value,
+                "slo": request_status.slo.value,
             },
         )
         _add_tags(timer)

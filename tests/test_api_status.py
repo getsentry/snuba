@@ -107,7 +107,7 @@ class TestApiCodes(BaseApiTest):
             self.post()
 
             metadata = record_query.call_args[0][0]
-            assert metadata["new_status"] == status, exception
+            assert metadata["request_status"] == status, exception
             assert metadata["slo"] == slo, exception
             execute_mock.reset_mock()
             record_query.reset_mock()

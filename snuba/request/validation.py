@@ -24,7 +24,7 @@ from snuba.query.query_settings import (
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
-from snuba.querylog.query_metadata import get_new_status
+from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
@@ -127,12 +127,12 @@ def build_request(
                 snql_anonymized=snql_anonymized,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
-            new_status = get_new_status(exception)
-            record_invalid_request(timer, new_status, referrer)
+            request_status = get_request_status(exception)
+            record_invalid_request(timer, request_status, referrer)
             raise exception
         except Exception as exception:
-            new_status = get_new_status(exception)
-            record_error_building_request(timer, new_status, referrer)
+            request_status = get_request_status(exception)
+            record_error_building_request(timer, request_status, referrer)
             raise exception
 
         span.set_data(

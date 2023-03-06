@@ -26,12 +26,12 @@ from snuba.query.data_source.simple import Table
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
-    NewStatus,
     QueryStatus,
     RequestStatus,
     SnubaQueryMetadata,
-    get_new_status,
+    Status,
     get_query_status_from_error_codes,
+    get_request_status,
 )
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
@@ -107,7 +107,7 @@ def update_query_metadata_and_stats(
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
-    new_status: NewStatus,
+    request_status: Status,
     profile_data: Optional[Mapping[str, Any]] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
@@ -133,7 +133,7 @@ def update_query_metadata_and_stats(
             end_timestamp=end,
             stats=stats,
             status=status,
-            new_status=new_status,
+            request_status=request_status,
             profile=generate_profile(query),
             trace_id=trace_id,
             result_profile=profile_data,
@@ -537,7 +537,7 @@ def raw_query(
         error_code = None
         trigger_rate_limiter = None
         status = None
-        new_status = get_new_status(cause)
+        request_status = get_request_status(cause)
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
@@ -560,7 +560,7 @@ def raw_query(
             status = QueryStatus.TIMEOUT
 
         status = status or QueryStatus.ERROR
-        if new_status.status not in (
+        if request_status.status not in (
             RequestStatus.TABLE_RATE_LIMITED,
             RequestStatus.RATE_LIMITED,
         ):
@@ -569,11 +569,11 @@ def raw_query(
 
         with configure_scope() as scope:
             if scope.span:
-                sentry_sdk.set_tag("slo_status", new_status.status.value)
+                sentry_sdk.set_tag("slo_status", request_status.status.value)
 
         stats = update_with_status(
             status,
-            new_status,
+            request_status,
             error_code=error_code,
             triggered_rate_limiter=trigger_rate_limiter,
         )
@@ -589,7 +589,7 @@ def raw_query(
         ) from cause
     else:
         stats = update_with_status(
-            QueryStatus.SUCCESS, get_new_status(), result["profile"]
+            QueryStatus.SUCCESS, get_request_status(), result["profile"]
         )
         return QueryResult(
             result,
