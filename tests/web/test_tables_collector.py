@@ -17,7 +17,6 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.web.db_query import ReferencedColumnsCounter
 
 ERRORS_SCHEMA = ColumnSet(
     [
@@ -66,7 +65,6 @@ SIMPLE_QUERY = ClickhouseQuery(
 TEST_CASES = [
     pytest.param(
         SIMPLE_QUERY,
-        3,
         {"errors_local"},
         True,
         0.1,
@@ -82,7 +80,6 @@ TEST_CASES = [
                 )
             ],
         ),
-        3,
         {"errors_local"},
         True,
         None,
@@ -115,7 +112,6 @@ TEST_CASES = [
                 SelectedExpression("message", Column("message", "groups", "message")),
             ],
         ),
-        5,  # 3 from errors and 2 from groups
         {"errors_local", "groups_local"},
         True,
         None,
@@ -125,19 +121,15 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "query, expected_cols, expected_tables, expected_final, expected_sampling",
+    "query, expected_tables, expected_final, expected_sampling",
     TEST_CASES,
 )
 def test_count_columns(
     query: Union[ClickhouseQuery, CompositeQuery[Table]],
-    expected_cols: int,
     expected_tables: Set[str],
     expected_final: bool,
     expected_sampling: Optional[float],
 ) -> None:
-    counter = ReferencedColumnsCounter()
-    counter.visit(query)
-    assert counter.count_columns() == expected_cols
 
     tables_collector = TablesCollector()
     tables_collector.visit(query)

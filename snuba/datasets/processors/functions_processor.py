@@ -73,4 +73,4 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
         if max_depth_reached:
             metrics.increment("max_depth_reached")
 
-        return InsertBatch(list(functions.values()), None)
+        return InsertBatch(list(functions.values()), timestamp)
