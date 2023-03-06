@@ -15,7 +15,7 @@ def get_schema(topic: Topic) -> Optional[Mapping[str, Any]]:
     This function returns either the schema if it is defined, or None if not.
     """
     try:
-        return sentry_kafka_schemas.get_schema(topic.value)
+        return sentry_kafka_schemas.get_schema(topic.value)["schema"]
     except Exception as err:
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("snuba_logical_topic", topic.name)
