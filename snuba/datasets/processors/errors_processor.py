@@ -1,9 +1,17 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
 
 import _strptime  # NOQA fixes _strptime deferred import issue
+from sentry_kafka_schemas.schema_types.events_v1 import (
+    ClientSdkInfo,
+    Event,
+    InsertEvent,
+    SentryExceptionChain,
+    SentryRequest,
+    SentryUser,
+)
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -20,7 +28,6 @@ from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     REPLACEMENT_EVENT_TYPES,
     InsertBatch,
-    InsertEvent,
     InvalidMessageType,
     InvalidMessageVersion,
     ProcessedMessage,
@@ -43,7 +50,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
 
     def process_message(
         self,
-        message: Tuple[int, str, InsertEvent, Any],
+        message: Event,
         metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         """\
@@ -94,16 +101,19 @@ class ErrorsProcessor(DatasetMessageProcessor):
             logger.error("No data for event: %s", event, exc_info=True)
             return None
         self.extract_common(processed, event, metadata)
-        self.extract_custom(processed, event, metadata)
+        contexts = self.extract_custom(processed, event, metadata)
 
-        sdk = data.get("sdk", None) or {}
+        sdk: ClientSdkInfo = data.get("sdk", None) or {
+            "name": "",
+            "version": "",
+        }
         self.extract_sdk(processed, sdk)
 
-        tags: Mapping[str, Any] = _as_dict_safe(data.get("tags", None))
+        # XXX(markus): tags should actually only be of the array form
+        tags = _as_dict_safe(data.get("tags", None))
         self.extract_promoted_tags(processed, tags)
         self.extract_tags_custom(processed, event, tags, metadata)
 
-        contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
@@ -111,8 +121,16 @@ class ErrorsProcessor(DatasetMessageProcessor):
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
-        exception = (
-            data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
+        exception: SentryExceptionChain = (
+            # XXX(markus): pretty sure there should be no
+            # sentry.interfaces.Exception in the pipeline
+            data.get(
+                "exception",
+                cast(
+                    SentryExceptionChain, data.get("sentry.interfaces.Exception", None)
+                ),
+            )
+            or {"values": []}
         )
         stacks = exception.get("values", None) or []
         self.extract_stacktraces(processed, stacks)
@@ -150,9 +168,15 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         metadata: KafkaMessageMetadata,
-    ) -> None:
+    ) -> Mapping[str, Any]:
         data = event.get("data", {})
-        user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+
+        # XXX(markus): pretty sure there should be no
+        # sentry.interfaces.User in the pipeline
+        user_dict = (
+            data.get("user", cast(SentryUser, data.get("sentry.interfaces.User", None)))
+            or {}
+        )
 
         user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
@@ -167,20 +191,21 @@ class ErrorsProcessor(DatasetMessageProcessor):
             elif ip_address.version == 6:
                 output["ip_address_v6"] = str(ip_address)
 
-        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
-        geo = user_dict.get("geo", {})
+        contexts: Mapping[str, Any] = _as_dict_safe(data.get("contexts", None))
+        geo = user_dict.get("geo", None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
-            contexts["geo"] = geo
+            contexts["geo"] = geo  # type: ignore
 
-        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        request = (
+            data.get(
+                "request", cast(SentryRequest, data.get("sentry.interfaces.Http", None))
+            )
+            or {}
+        )
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)
         output["http_method"] = http_data["http_method"]
         output["http_referer"] = http_data["http_referer"]
-
-        # _as_dict_safe may not return a reference to the entry in the data
-        # dictionary in some cases.
-        data["contexts"] = contexts
 
         output["message"] = _unicodify(event["message"])
 
@@ -192,6 +217,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["culprit"] = _unicodify(data.get("culprit", ""))
         output["type"] = _unicodify(data.get("type", ""))
         output["title"] = _unicodify(data.get("title", ""))
+
+        return contexts
 
     def extract_tags_custom(
         self,
