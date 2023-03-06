@@ -16,6 +16,8 @@ def get_schema(topic: Topic) -> Optional[Mapping[str, Any]]:
     """
     try:
         return sentry_kafka_schemas.get_schema(topic.value)["schema"]
+    except sentry_kafka_schemas.SchemaNotFound:
+        return None
     except Exception as err:
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("snuba_logical_topic", topic.name)
