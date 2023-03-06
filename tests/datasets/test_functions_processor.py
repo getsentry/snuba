@@ -49,7 +49,7 @@ class ProfileCallTreeEvent:
     os_name: str
     os_version: str
     retention_days: int
-    received: int
+    received: Optional[int]
 
     def serialize(self) -> Mapping[str, Any]:
         return {
