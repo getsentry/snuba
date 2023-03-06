@@ -49,6 +49,7 @@ class ProfileCallTreeEvent:
     os_name: str
     os_version: str
     retention_days: int
+    received: int
 
     def serialize(self) -> Mapping[str, Any]:
         return {
@@ -65,6 +66,7 @@ class ProfileCallTreeEvent:
             "os_name": self.os_name,
             "os_version": self.os_version,
             "retention_days": self.retention_days,
+            "received": self.received,
         }
 
 
@@ -79,6 +81,7 @@ class TestFunctionsProcessor:
             project_id=22,
             profile_id="a" * 32,
             timestamp=now.timestamp(),
+            received=now.timestamp(),
             transaction_name="vroom-vroom",
             call_trees={
                 "259": [
@@ -196,4 +199,66 @@ class TestFunctionsProcessor:
 
         assert FunctionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.timestamp))
+        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.received))
+
+    def test_process_message_without_received(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+
+        now = datetime.now(timezone.utc)
+        message = ProfileCallTreeEvent(
+            project_id=22,
+            profile_id="a" * 32,
+            timestamp=now.timestamp(),
+            transaction_name="vroom-vroom",
+            call_trees={
+                "259": [
+                    CallTree(
+                        depth=0,
+                        fingerprint="a" * 16,
+                        name="foo",
+                        package="",
+                        path="",
+                        is_application=True,
+                        duration=10,
+                        children=[],
+                    ),
+                ],
+            },
+            platform="cocoa",
+            environment="prod",
+            release="7.14.0 (1)",
+            os_name="iOS",
+            os_version="15.2",
+            retention_days=30,
+            received=None,
+        )
+
+        batch = [
+            {
+                "profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "project_id": 22,
+                "transaction_name": "vroom-vroom",
+                "timestamp": now.replace(tzinfo=None),
+                "platform": "cocoa",
+                "environment": "prod",
+                "release": "7.14.0 (1)",
+                "os_name": "iOS",
+                "os_version": "15.2",
+                "retention_days": 30,
+                "materialization_version": 0,
+                "depth": 0,
+                "parent_fingerprint": 0,
+                "fingerprint": int("a" * 16, 16),
+                "name": "foo",
+                "package": "",
+                "path": "",
+                "is_application": 1,
+                "durations": [10],
+            },
+        ]
+
+        assert FunctionsMessageProcessor().process_message(
+            message.serialize(), meta
+        ) == InsertBatch(batch, None)
