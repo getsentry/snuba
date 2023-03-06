@@ -22,6 +22,7 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
         index_expression="replay_id",
         index_type="bloom_filter()",
         granularity=1,
+        target=operations.OperationTarget.LOCAL,
     )
 
 

@@ -196,6 +196,7 @@ class ReplaysLoader(DirectoryLoader):
             "0006_add_is_archived_column",
             "0007_add_replay_type_column",
             "0008_add_sample_rate",
+            "0009_add_index_to_replay_id",
         ]
 
 
