@@ -19,7 +19,7 @@ function QueryEditor(props: {
     PredefinedQuery | undefined
   >(undefined);
 
-  const variableRegex = /<([a-zA-Z0-9_]+)>/;
+  const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
   const textAreaStyle = { width: "100%", height: 140 };
 
   useEffect(() => {
@@ -123,7 +123,7 @@ function QueryEditor(props: {
       <textarea
         value={queryTemplate || ""}
         placeholder={
-          "Edit your queries here, add '<>' around substrings you wish to replace"
+          "Edit your queries here, add '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
         }
         style={textAreaStyle}
         onChange={(evt) => {

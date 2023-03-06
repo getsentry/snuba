@@ -14,11 +14,11 @@ class QueryByID(QuerylogQuery):
     """Find a query by its ID"""
 
     sql = """
-    SELECT <fields>
+    SELECT {{fields}}
     FROM querylog_local
-    WHERE has(clickhouse_queries.query_id, '<UUID>')
+    WHERE has(clickhouse_queries.query_id, '{{UUID}}')
     AND timestamp > (now() - 60)
-    AND timestamp < toDateTime('<time>')
+    AND timestamp < toDateTime('{{time}}')
 
     """
 
@@ -29,7 +29,7 @@ class SQLQueriesForRequestID(QuerylogQuery):
     sql = """
     SELECT arrayJoin(clickhouse_queries.sql)
     FROM querylog_local
-    WHERE request_id = '<UUID>'
+    WHERE request_id = '{{UUID}}'
     AND timestamp > (now() - 60)
     AND timestamp < now()
     ORDER BY timestamp ASC
@@ -47,7 +47,7 @@ class DurationForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(duration_ms) AS c
         FROM querylog_local
-        WHERE referrer = '<referrer>'
+        WHERE referrer = '{{referrer}}'
         AND time > (now() - (1 * 3600))
         AND time < now()
         GROUP BY
@@ -73,8 +73,8 @@ class BytesScannedForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.bytes_scanned)) AS c
         FROM querylog_local
-        WHERE referrer = '<referrer>'
-        AND time > (now() - (<duration>))
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - ({{duration}}))
         AND time < now()
         GROUP BY
             projects,
@@ -99,8 +99,8 @@ class QueryDurationForReferrerByProject(QuerylogQuery):
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.duration_ms)) AS c
         FROM querylog_local
-        WHERE referrer = '<referrer>'
-        AND time > (now() - (<duration>))
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - ({{duration}}))
         AND time < now()
         GROUP BY
             projects,
@@ -123,17 +123,17 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as after_scanned
         FROM querylog_local
-        WHERE timestamp >= toDateTime('<after_scanned_duration_start>')
-        AND timestamp <= toDateTime('<after_scanned_duration_end>')
-        AND dataset IN ('<dataset>')
+        WHERE timestamp >= toDateTime('{{after_scanned_duration_start}}')
+        AND timestamp <= toDateTime('{{after_scanned_duration_end}}')
+        AND dataset IN ('{{dataset}}')
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as before_scanned
         FROM querylog_local
-        WHERE timestamp >= toDateTime('<before_scanned_duration_start>')
-        AND timestamp <= toDateTime('<before_scanned_duration_end>')
-        AND dataset IN ('<dataset>')
+        WHERE timestamp >= toDateTime('{{before_scanned_duration_start}}')
+        AND timestamp <= toDateTime('{{before_scanned_duration_end}}')
+        AND dataset IN ('{{dataset}}')
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
@@ -150,17 +150,17 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as after_duration
         FROM querylog_local
-        WHERE timestamp >= toDateTime('<after_duration_start>')
-        AND timestamp <= toDateTime('<after_duration_end>')
-        AND dataset IN ('<dataset>')
+        WHERE timestamp >= toDateTime('{{after_duration_start}}')
+        AND timestamp <= toDateTime('{{after_duration_end}}')
+        AND dataset IN ('{{dataset}}')
         GROUP BY referrer
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as before_duration
         FROM querylog_local
-        WHERE timestamp >= toDateTime('<before_duartion_start>')
-        AND timestamp <= toDateTime('<before_duartion_end>')
-        AND dataset IN ('<dataset>')
+        WHERE timestamp >= toDateTime('{{before_duartion_start}}')
+        AND timestamp <= toDateTime('{{before_duartion_end}}')
+        AND dataset IN ('{{dataset}}')
         GROUP BY referrer
     ) `before` USING referrer
     ORDER BY pct_diff DESC
