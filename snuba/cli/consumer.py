@@ -49,7 +49,17 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--bootstrap-server",
     multiple=True,
-    help="Kafka bootstrap server to use.",
+    help="Kafka bootstrap server to use for consuming.",
+)
+@click.option(
+    "--commit-log-bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use to produce the commit log.",
+)
+@click.option(
+    "--replacement-bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use to produce replacements.",
 )
 @click.option(
     "--slice-id",
@@ -116,6 +126,8 @@ def consumer(
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
+    commit_log_bootstrap_server: Sequence[str],
+    replacement_bootstrap_server: Sequence[str],
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -158,6 +170,8 @@ def consumer(
             raw_topic=raw_events_topic,
             replacements_topic=replacements_topic,
             bootstrap_servers=bootstrap_server,
+            commit_log_bootstrap_servers=commit_log_bootstrap_server,
+            replacements_bootstrap_servers=replacement_bootstrap_server,
             group_id=consumer_group,
             commit_log_topic=commit_log_topic,
             auto_offset_reset=auto_offset_reset,

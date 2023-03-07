@@ -39,6 +39,8 @@ class KafkaParameters:
     raw_topic: Optional[str]
     replacements_topic: Optional[str]
     bootstrap_servers: Optional[Sequence[str]]
+    commit_log_bootstrap_servers: Optional[Sequence[str]]
+    replacements_bootstrap_servers: Optional[Sequence[str]]
     group_id: str
     commit_log_topic: Optional[str]
     auto_offset_reset: str
@@ -75,7 +77,7 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
-        self.bootstrap_servers = kafka_params.bootstrap_servers
+        self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
         topic = (
             self.storage.get_table_writer()
@@ -87,10 +89,10 @@ class ConsumerBuilder:
         # Ensure that the slice, storage set combination is valid
         validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
 
-        self.broker_config = get_default_kafka_configuration(
+        broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
         )
-        logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
+        logger.info(f"librdkafka log level: {broker_config.get('log_level', 6)}")
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -117,7 +119,7 @@ class ConsumerBuilder:
             self.replacements_producer = Producer(
                 build_kafka_producer_configuration(
                     replacement_topic_spec.topic,
-                    bootstrap_servers=kafka_params.bootstrap_servers,
+                    bootstrap_servers=kafka_params.replacements_bootstrap_servers,
                     override_params={
                         "partitioner": "consistent",
                         "message.max.bytes": 50000000,  # 50MB, default is 1MB)
@@ -143,7 +145,7 @@ class ConsumerBuilder:
             self.commit_log_producer = Producer(
                 build_kafka_producer_configuration(
                     commit_log_topic_spec.topic,
-                    bootstrap_servers=kafka_params.bootstrap_servers,
+                    bootstrap_servers=kafka_params.commit_log_bootstrap_servers,
                 ),
             )
         else:
@@ -194,7 +196,7 @@ class ConsumerBuilder:
 
         configuration = build_kafka_consumer_configuration(
             topic,
-            bootstrap_servers=self.bootstrap_servers,
+            bootstrap_servers=self.__kafka_params.bootstrap_servers,
             group_id=self.group_id,
             slice_id=slice_id,
             auto_offset_reset=self.auto_offset_reset,

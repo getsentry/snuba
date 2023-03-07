@@ -73,4 +73,9 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
         if max_depth_reached:
             metrics.increment("max_depth_reached")
 
-        return InsertBatch(list(functions.values()), timestamp)
+        received = message.get("received")
+
+        return InsertBatch(
+            list(functions.values()),
+            datetime.utcfromtimestamp(received) if received else None,
+        )
