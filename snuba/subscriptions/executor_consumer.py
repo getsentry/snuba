@@ -74,6 +74,7 @@ def build_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    bootstrap_servers: Sequence[str],
     slice_id: Optional[int],
     producer: Producer[KafkaPayload],
     total_concurrent_queries: int,
@@ -128,6 +129,7 @@ def build_executor_consumer(
     consumer_configuration = build_kafka_consumer_configuration(
         SnubaTopic(physical_scheduled_topic),
         consumer_group,
+        bootstrap_servers=bootstrap_servers,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=strict_offset_reset,
     )

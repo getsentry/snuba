@@ -40,6 +40,16 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
 @click.option(
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use for consuming.",
+)
+@click.option(
+    "--result-bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use for producing subscription results.",
+)
+@click.option(
     "--slice-id",
     help="The slice to load scheduled queries from",
 )
@@ -71,6 +81,8 @@ def subscriptions_executor(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    bootstrap_server: Sequence[str],
+    result_bootstrap_server: Sequence[str],
     slice_id: Optional[int],
     total_concurrent_queries: int,
     auto_offset_reset: str,
@@ -112,6 +124,7 @@ def subscriptions_executor(
     producer = KafkaProducer(
         build_kafka_producer_configuration(
             result_topic_spec.topic,
+            bootstrap_servers=result_bootstrap_server,
             override_params={"partitioner": "consistent"},
         )
     )

@@ -215,6 +215,7 @@ class SchedulerBuilder:
         entity_name: str,
         consumer_group: str,
         followed_consumer_group: str,
+        bootstrap_servers: Sequence[str],
         producer: Producer[KafkaPayload],
         auto_offset_reset: str,
         strict_offset_reset: Optional[bool],
@@ -251,6 +252,7 @@ class SchedulerBuilder:
 
         self.__consumer_group = consumer_group
         self.__followed_consumer_group = followed_consumer_group
+        self.__bootstrap_servers = bootstrap_servers
         self.__producer = producer
         self.__auto_offset_reset = auto_offset_reset
         self.__strict_offset_reset = strict_offset_reset
@@ -288,6 +290,7 @@ class SchedulerBuilder:
             self.__commit_log_topic_spec.topic,
             self.__consumer_group,
             self.__slice_id,
+            bootstrap_servers=self.__bootstrap_servers,
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
         )
