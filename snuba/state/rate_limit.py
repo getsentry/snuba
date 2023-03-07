@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import sys
 import time
@@ -6,11 +8,13 @@ from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
+from typing import Any
 from typing import ChainMap as TypingChainMap
 from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state import get_configs, set_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -25,6 +29,65 @@ TABLE_RATE_LIMIT_NAME = "table"
 metrics = MetricsWrapper(environment.metrics, "api")
 
 rds = get_redis_client(RedisClientKey.RATE_LIMITER)
+
+
+def get_rate_limit_config(
+    per_second: tuple[str, float | None], concurrent: tuple[str, int | None]
+) -> tuple[Any, Any]:
+    """
+    This function to encapsulate how rate limit keys are fetched from Redis, since
+    that is conceptually a different process from fetching normal config keys.
+
+    It currently also contains logic to read from both the new namespace and the old one,
+    until everything is properly migrated.
+
+    First step: read from the old and new namespace. If the new namespace is different from
+    the old, copy the value from old to new. Return the values from the old namespace.
+    """
+    ps_name, per_second_default = per_second
+    ct_name, concurrent_default = concurrent
+
+    # Dual read
+    # if the value in new doesn't match value from old, copy over
+    old_per_second, old_concurrent = get_configs([(ps_name, None), (ct_name, None)])
+    new_per_second, new_concurrent = get_configs(
+        [(ps_name, None), (ct_name, None)], config_key=state.rate_limit_config_key
+    )
+
+    # This handles deletes as well, since writing None deletes the key
+    if old_per_second != new_per_second:
+        set_rate_limit_config(ps_name, old_per_second, copy=False)
+    if old_concurrent != new_concurrent:
+        set_rate_limit_config(ct_name, old_concurrent, copy=False)
+
+    found_per_second = (
+        old_per_second if old_per_second is not None else per_second_default
+    )
+    found_concurrent = (
+        old_concurrent if old_concurrent is not None else concurrent_default
+    )
+
+    return (found_per_second, found_concurrent)
+
+
+def set_rate_limit_config(
+    bucket: str, value: float | int | None, copy: bool = True
+) -> None:
+    """
+    This function to encapsulate how rate limit keys are set in Redis, since
+    that is conceptually a different process from writing normal config keys.
+
+    Generally, if this function is called, data should be written to both the old
+    and new keys while the migration is happening. However, there are some instances
+    when only the new key needs to be written, so there is a flag for that case.
+    """
+    set_config(
+        bucket,
+        value,
+        config_key=state.rate_limit_config_key,
+    )
+    if copy:
+        set_config(bucket, value)
 
 
 @dataclass(frozen=True)

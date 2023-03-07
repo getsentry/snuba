@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from functools import partial
 from typing import (
     Any,
-    Callable,
     Iterable,
     Mapping,
     Optional,
+    Protocol,
     Sequence,
     SupportsFloat,
     Tuple,
@@ -42,6 +42,7 @@ config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
 queries_list = "snuba-queries"
+rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
 
@@ -106,22 +107,31 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
 # Runtime Configuration
 
 
+class ConfigKeyCallable(Protocol):  # Necessary for typing the memoize
+    def __call__(self, config_key: str = config_hash) -> Any:
+        pass
+
+
 class memoize:
     """
-    Simple expiring memoizer for functions with no args.
+    Simple expiring memoizer for state functions that takes a config key.
     """
 
     def __init__(self, timeout: int = 1) -> None:
         self.timeout = timeout
-        self.saved = None
-        self.at = 0.0
+        self.saved: dict[str, Any] = {}
+        self.at: dict[str, float] = {}
 
-    def __call__(self, func: Callable[[], Any]) -> Callable[[], Any]:
-        def wrapper() -> Any:
+    def __call__(self, func: ConfigKeyCallable) -> ConfigKeyCallable:
+        def wrapper(config_key: str = config_hash) -> Any:
             now = time.time()
-            if now > self.at + self.timeout or self.saved is None:
-                self.saved, self.at = func(), now
-            return self.saved
+            at = self.at.get(config_key, 0.0)
+            if now > at + self.timeout or config_key not in self.saved:
+                self.saved[config_key], self.at[config_key] = (
+                    func(config_key=config_key),
+                    now,
+                )
+            return self.saved[config_key]
 
         return wrapper
 
@@ -147,12 +157,12 @@ def set_config(
     value: Optional[Any],
     user: Optional[str] = None,
     force: bool = False,
+    config_key: str = config_hash,
 ) -> None:
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
-
     try:
-        enc_original_value = rds.hget(config_hash, key)
+        enc_original_value = rds.hget(config_key, key)
         if enc_original_value is not None and value is not None:
             original_value = get_typed_value(enc_original_value.decode("utf-8"))
             if value == original_value and type(value) == type(original_value):
@@ -164,10 +174,10 @@ def set_config(
         change_record = (time.time(), user, enc_original_value, enc_value)
         p = rds.pipeline()
         if value is None:
-            p.hdel(config_hash, key)
+            p.hdel(config_key, key)
             p.hdel(config_history_hash, key)
         else:
-            p.hset(config_hash, key, enc_value)
+            p.hset(config_key, key, enc_value)
             p.hset(config_history_hash, key, json.dumps(change_record))
         p.lpush(config_changes_list, json.dumps((key, change_record)))
         p.ltrim(config_changes_list, 0, config_changes_list_limit)
@@ -183,31 +193,36 @@ def set_config(
 
 
 def set_configs(
-    values: Mapping[str, Optional[Any]], user: Optional[str] = None, force: bool = False
+    values: Mapping[str, Optional[Any]],
+    user: Optional[str] = None,
+    force: bool = False,
+    config_key: str = config_hash,
 ) -> None:
     for k, v in values.items():
-        set_config(k, v, user=user, force=force)
+        set_config(k, v, user=user, force=force, config_key=config_key)
 
 
-def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
-    return get_all_configs().get(key, default)
+def get_config(
+    key: str, default: Optional[Any] = None, config_key: str = config_hash
+) -> Optional[Any]:
+    return get_all_configs(config_key=config_key).get(key, default)
 
 
 def get_configs(
-    key_defaults: Iterable[Tuple[str, Optional[Any]]]
+    key_defaults: Iterable[Tuple[str, Optional[Any]]], config_key: str = config_hash
 ) -> Sequence[Optional[Any]]:
-    all_confs = get_all_configs()
+    all_confs = get_all_configs(config_key=config_key)
     return [all_confs.get(k, d) for k, d in key_defaults]
 
 
-def get_all_configs() -> Mapping[str, Optional[Any]]:
-    return {k: v for k, v in get_raw_configs().items()}
+def get_all_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]]:
+    return {k: v for k, v in get_raw_configs(config_key=config_key).items()}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_raw_configs() -> Mapping[str, Optional[Any]]:
+def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]]:
     try:
-        all_configs = rds.hgetall(config_hash)
+        all_configs = rds.hgetall(config_key)
         configs = {
             k.decode("utf-8"): get_typed_value(v.decode("utf-8"))
             for k, v in all_configs.items()
@@ -225,12 +240,14 @@ def get_raw_configs() -> Mapping[str, Optional[Any]]:
         return {}
 
 
-def delete_config(key: str, user: Optional[Any] = None) -> None:
-    set_config(key, None, user=user)
+def delete_config(
+    key: str, user: Optional[Any] = None, config_key: str = config_hash
+) -> None:
+    set_config(key, None, user=user, config_key=config_key)
 
 
-def get_uncached_config(key: str) -> Optional[Any]:
-    value = rds.hget(config_hash, key.encode("utf-8"))
+def get_uncached_config(key: str, config_key: str = config_hash) -> Optional[Any]:
+    value = rds.hget(config_key, key.encode("utf-8"))
     if value is not None:
         return get_typed_value(value.decode("utf-8"))
     return None

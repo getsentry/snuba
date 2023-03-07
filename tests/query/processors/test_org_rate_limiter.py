@@ -102,3 +102,37 @@ def test_org_rate_limit_processor_overridden(
     assert rate_limiter.bucket == str(org_id)
     assert rate_limiter.per_second_limit == 5
     assert rate_limiter.concurrent_limit == 10
+
+
+def test_namespaced_rate_limit() -> None:
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            Column("_snuba_org_id", None, "org_id"),
+            Literal(None, 1),
+        ),
+    )
+    org_id = 1
+    settings = HTTPQuerySettings()
+    ps_key = f"org_per_second_limit_{org_id}"
+    ct_key = f"org_concurrent_limit_{org_id}"
+    state.set_config(ps_key, 5)
+    state.set_config(ct_key, 10)
+
+    OrganizationRateLimiterProcessor("org_id").process_query(query, settings)
+
+    # Check that the rate limit parameters were copied to the new namespace
+    ps_found = state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key)
+    ct_found = state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key)
+
+    assert ps_found == 5
+    assert ct_found == 10
+
+    # Check that the correct values were found and used
+    rate_limiter = settings.get_rate_limit_params()[-1]
+    assert rate_limiter.rate_limit_name == ORGANIZATION_RATE_LIMIT_NAME
+    assert rate_limiter.bucket == str(org_id)
+    assert rate_limiter.per_second_limit == 5
+    assert rate_limiter.concurrent_limit == 10

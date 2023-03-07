@@ -10,12 +10,12 @@ from snuba.state import MismatchedTypeException, safe_dumps
 
 
 class TestState:
-    def setup_method(self):
+    def setup_method(self) -> None:
         from snuba.web.views import application
 
         assert application.testing == True
         self.app = application.test_client()
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
+        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore
 
     def test_config(self) -> None:
         state.set_config("foo", 1)
@@ -90,8 +90,8 @@ class TestState:
         assert state.get_config("some_key") == "some_value"
 
     def test_memoize(self) -> None:
-        @state.memoize(0.1)
-        def rand() -> float:
+        @state.memoize(0.1)  # type: ignore
+        def rand(config_key: str = "test") -> float:
             return random.random()
 
         assert rand() == rand()
@@ -100,8 +100,25 @@ class TestState:
         time.sleep(0.1)
         assert rand1 != rand()
 
+    def test_memoize_with_args(self) -> None:
+        @state.memoize(0.1)  # type: ignore
+        def rand(config_key: str = "test1") -> str:
+            return f"{random.random()}:{config_key}"
 
-def test_safe_dumps():
+        assert rand() == rand()
+        rand1 = rand()
+        assert rand1 == rand()
+        assert rand1 != rand("test2")
+        time.sleep(0.1)
+        assert rand1 != rand()
+
+        assert rand("test2") == rand("test2")
+        rand2 = rand("test2")
+        time.sleep(0.1)
+        assert rand2 != rand("test2")
+
+
+def test_safe_dumps() -> None:
     assert safe_dumps(ChainMap({"a": 1}, {"b": 2}), sort_keys=True,) == safe_dumps(
         {"a": 1, "b": 2},
         sort_keys=True,

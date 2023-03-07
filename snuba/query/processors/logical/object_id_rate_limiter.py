@@ -4,13 +4,13 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_configs
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
     PROJECT_REFERRER_RATE_LIMIT_NAME,
     REFERRER_RATE_LIMIT_NAME,
     RateLimitParameters,
+    get_rate_limit_config,
 )
 
 DEFAULT_LIMIT = 1000
@@ -74,21 +74,17 @@ class ObjectIDRateLimiterProcessor(LogicalQueryProcessor):
             return
         per_second_name = self.get_per_second_name(query, query_settings)
         concurrent_name = self.get_concurrent_name(query, query_settings)
-        object_rate_limit, object_concurrent_limit = get_configs(
-            [
-                (per_second_name, self.default_limit),
-                (concurrent_name, self.default_limit),
-            ]
+        object_rate_limit, object_concurrent_limit = get_rate_limit_config(
+            (per_second_name, self.default_limit),
+            (concurrent_name, self.default_limit),
         )
         obj_id = self.get_object_id(query, query_settings)
         if obj_id is None:
             return
         # Specific objects can have their rate limits overridden
-        (per_second, concurr) = get_configs(
-            [
-                (f"{per_second_name}_{obj_id}", object_rate_limit),
-                (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
-            ]
+        (per_second, concurr) = get_rate_limit_config(
+            (f"{per_second_name}_{obj_id}", object_rate_limit),
+            (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
         )
 
         rate_limit = RateLimitParameters(
@@ -109,18 +105,16 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
 
         if self._is_already_applied(query_settings):
             return
-        object_rate_limit, object_concurrent_limit = get_configs(
-            [(per_second_name, None), (concurrent_name, None)]
+        object_rate_limit, object_concurrent_limit = get_rate_limit_config(
+            (per_second_name, None), (concurrent_name, None)
         )
         obj_id = self.get_object_id(query, query_settings)
         if obj_id is None:
             return
         # don't enforce any limit that isn't specified
-        (per_second, concurr) = get_configs(
-            [
-                (f"{per_second_name}_{obj_id}", object_rate_limit),
-                (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
-            ]
+        (per_second, concurr) = get_rate_limit_config(
+            (f"{per_second_name}_{obj_id}", object_rate_limit),
+            (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
         )
 
         # Specific objects can have their rate limits overridden
