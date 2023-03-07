@@ -6,15 +6,48 @@ type PredefinedQuery = {
   description: string;
 };
 
+type QueryParamValues = {
+  [key: string]: string;
+};
+
+/** @private */
+export function generateQuery(
+  queryTemplate: string,
+  queryParamValues: QueryParamValues
+) {
+  let query = queryTemplate;
+  Object.keys(queryParamValues).forEach((param) => {
+    if (queryParamValues[param]) {
+      query = query.split(param).join(queryParamValues[param]);
+    }
+  });
+  return query;
+}
+
+/** @private */
+export function mergeQueryParamValues(
+  newQueryParams: Set<string>,
+  oldQueryParamValues: QueryParamValues
+) {
+  return Array.from(newQueryParams).reduce(
+    (o, paramName) => ({
+      ...o,
+      [paramName]:
+        paramName in oldQueryParamValues ? oldQueryParamValues[paramName] : "",
+    }),
+    {}
+  );
+}
+
 function QueryEditor(props: {
   onQueryUpdate: (query: string) => void;
   predefinedQueryOptions?: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<string>("");
   const [queryTemplate, setQueryTemplate] = useState<string>("");
-  const [queryParamValues, setQueryParamValues] = useState<{
-    [key: string]: string;
-  }>({});
+  const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(
+    {}
+  );
   const [selectedPredefinedQuery, setSelectedPredefinedQuery] = useState<
     PredefinedQuery | undefined
   >(undefined);
@@ -23,43 +56,21 @@ function QueryEditor(props: {
   const textAreaStyle = { width: "100%", height: 140 };
 
   useEffect(() => {
-    generateQuery();
-  }, [queryTemplate, queryParamValues]);
-
-  useEffect(() => {
-    onQueryTemplateUpdate();
-  }, [queryTemplate]);
-
-  function generateQuery() {
-    let sql = queryTemplate;
-    Object.keys(queryParamValues).forEach((param) => {
-      if (queryParamValues[param]) {
-        sql = sql.split(param).join(queryParamValues[param]);
-      }
-    });
-    setQuery(sql);
-    props.onQueryUpdate(sql);
-  }
-
-  function onQueryTemplateUpdate() {
-    let paramNames = new Set(
+    const newQueryParams = new Set(
       queryTemplate.match(
         new RegExp(variableRegex.source, variableRegex.flags + "g")
       )
     );
-    setQueryParamValues((prevQueryParamValues) =>
-      Array.from(paramNames).reduce(
-        (o, paramName) => ({
-          ...o,
-          [paramName]:
-            paramName in prevQueryParamValues
-              ? prevQueryParamValues[paramName]
-              : "",
-        }),
-        {}
-      )
+    setQueryParamValues((oldQueryParamValues) =>
+      mergeQueryParamValues(newQueryParams, oldQueryParamValues)
     );
-  }
+  }, [queryTemplate]);
+
+  useEffect(() => {
+    const newQuery = generateQuery(queryTemplate, queryParamValues);
+    setQuery(newQuery);
+    props.onQueryUpdate(newQuery);
+  }, [queryTemplate, queryParamValues]);
 
   function updateQueryParameter(name: string, value: string) {
     setQueryParamValues((queryParams) => ({ ...queryParams, [name]: value }));
