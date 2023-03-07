@@ -216,11 +216,14 @@ def record_missing_tenant_ids(request: Request) -> None:
     a Snuba Request. Ideally, all requests contain this information and this
     metric will be removed once all API calls from Sentry do include this info.
     """
-    if tenant_ids := request.attribution_info.tenant_ids:
-        if "referrer" not in tenant_ids or "organization_id" not in tenant_ids:
-            metrics.increment(
-                "request_without_tenant_ids", tags={"referrer": request.referrer}
-            )
+    if (
+        not (tenant_ids := request.attribution_info.tenant_ids)
+        or tenant_ids.get("referrer") is None
+        or tenant_ids.get("organization_id") is None
+    ):
+        metrics.increment(
+            "request_without_tenant_ids", tags={"referrer": request.referrer}
+        )
 
 
 def _dry_run_query_runner(
