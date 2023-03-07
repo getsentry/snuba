@@ -2,11 +2,11 @@ codecov:
   # do not notify until at least 3 builds
   # have been uploaded from the CI pipeline
   # we upload artifacts from 'test',
-  # 'test_distributed', 'test_distributed_migrations'
-  # until all of these are done, we don't want a faulty
-  # codecov report
+  # 'test_distributed', 'test_distributed_migrations',
+  # and 'admin-tests' until all of these are done,
+  # we don't want a faulty codecov report
   notify:
-      after_n_builds: 3
+      after_n_builds: 4
 coverage:
   status:
     project:

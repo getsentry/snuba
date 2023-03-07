@@ -286,6 +286,19 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
+  admin-tests:
+    needs: [linting]
+    name: Front end tests for snuba admin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+      - name: Set up and run tests through yarn
+        run: cd snuba/admin && yarn install && yarn run test --coverage
+      - name: Upload to codecov
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
+
   sentry:
     needs: [snuba-image]
     runs-on: ubuntu-latest

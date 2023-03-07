@@ -53,6 +53,10 @@ build-admin:
 watch-admin:
 	cd snuba/admin && yarn install && yarn run watch
 
+test-admin:
+	cd snuba/admin && yarn install && yarn run test
+	SNUBA_SETTINGS=test pytest -vv tests/admin/
+
 validate-configs:
 	python3 snuba/validate_configs.py
 
