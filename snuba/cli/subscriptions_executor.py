@@ -133,6 +133,7 @@ def subscriptions_executor(
         dataset_name,
         entity_names,
         consumer_group,
+        bootstrap_server,
         slice_id,
         producer,
         total_concurrent_queries,
