@@ -83,6 +83,7 @@ def test_scheduler_consumer() -> None:
         entity_name,
         str(uuid.uuid1().hex),
         "events",
+        [],
         mock_scheduler_producer,
         "latest",
         False,
