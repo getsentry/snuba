@@ -1,7 +1,7 @@
 import logging
 import signal
 from contextlib import closing
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import click
 from arroyo import configure_metrics
@@ -38,6 +38,16 @@ logger = logging.getLogger(__name__)
     help="Name of the consumer group to follow",
 )
 @click.option(
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use for consuming.",
+)
+@click.option(
+    "--scheduled-bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use for producing scheduled messages.",
+)
+@click.option(
     "--auto-offset-reset",
     default="error",
     type=click.Choice(["error", "earliest", "latest"]),
@@ -67,6 +77,8 @@ def subscriptions_scheduler(
     entity_name: str,
     consumer_group: str,
     followed_consumer_group: str,
+    bootstrap_server: Sequence[str],
+    scheduled_bootstrap_server: Sequence[str],
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
@@ -148,6 +160,7 @@ def subscriptions_scheduler(
         build_kafka_producer_configuration(
             scheduled_topic_spec.topic,
             slice_id,
+            bootstrap_servers=scheduled_bootstrap_server,
             override_params={"partitioner": "consistent"},
         )
     )
@@ -156,6 +169,7 @@ def subscriptions_scheduler(
         entity_name,
         consumer_group,
         followed_consumer_group,
+        bootstrap_server,
         producer,
         auto_offset_reset,
         not no_strict_offset_reset,
