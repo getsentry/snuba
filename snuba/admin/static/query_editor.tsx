@@ -89,10 +89,17 @@ function QueryEditor(props: {
             setSelectedPredefinedQuery(selectedPredefinedQuery);
             setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
           }}
+          data-testid="select"
         >
-          <option value={"undefined"}>Custom query</option>
+          <option value={"undefined"} data-testid="select-option">
+            Custom query
+          </option>
           {props.predefinedQueryOptions?.map((predefinedQuery) => (
-            <option key={predefinedQuery.name} value={predefinedQuery.name}>
+            <option
+              key={predefinedQuery.name}
+              value={predefinedQuery.name}
+              data-testid="select-option"
+            >
               {predefinedQuery.name}
             </option>
           ))}
@@ -115,6 +122,7 @@ function QueryEditor(props: {
                 onChange={(evt) => {
                   updateQueryParameter(paramName, evt.target.value);
                 }}
+                data-testid="parameter-value"
               />
             </label>
           </div>
@@ -141,6 +149,7 @@ function QueryEditor(props: {
           setSelectedPredefinedQuery(undefined);
           setQueryTemplate(evt.target.value);
         }}
+        data-testid="text-area-input"
       />
       {renderParameterSetters()}
       <textarea
@@ -148,6 +157,7 @@ function QueryEditor(props: {
         placeholder={"The final query you send to snuba will be here"}
         style={textAreaStyle}
         value={query}
+        data-testid="text-area-output"
       ></textarea>
     </form>
   );
