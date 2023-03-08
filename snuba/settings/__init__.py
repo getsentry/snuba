@@ -49,6 +49,8 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "replays",
     "search_issues",
     "test_migration",
+    "events",
+    "transactions",
 }
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
