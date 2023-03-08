@@ -1,7 +1,14 @@
 from datetime import date, datetime
 
+import pytest
+
 from snuba.clickhouse.escaping import escape_alias, escape_identifier
 from snuba.util import escape_literal
+
+
+@pytest.fixture
+def run_migrations():
+    pass
 
 
 def test_escape() -> None:

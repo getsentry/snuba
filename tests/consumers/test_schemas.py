@@ -1,107 +1,84 @@
-import json
-from typing import Any
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
 
-from snuba.consumers.schemas import get_json_codec, get_schema
-from snuba.utils.streams.topics import Topic
+import pytest
+import sentry_kafka_schemas
+from sentry_kafka_schemas.types import Example
 
-
-def check_example(payload: Any, topic: Topic) -> None:
-    assert get_schema(topic) is not None
-    codec = get_json_codec(topic)
-    assert codec.decode(json.dumps(payload).encode("utf8"), validate=True) == payload
-
-
-def test_metrics() -> None:
-    payload = {
-        "use_case_id": "release-health",
-        "org_id": 1,
-        "project_id": 2,
-        "metric_id": 1232341,
-        "type": "s",
-        "timestamp": 1676388965,
-        "tags": {"10": 11, "20": 22, "30": 33},
-        "value": [324234, 345345, 456456, 567567],
-        "retention_days": 22,
-        "mapping_meta": {
-            "c": {
-                "10": "tag-1",
-                "20": "tag-2",
-                "11": "value-1",
-                "22": "value-2",
-                "30": "tag-3",
-            },
-            "d": {"33": "value-3"},
-        },
-    }
-    check_example(payload, Topic.METRICS)
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.storages.factory import (
+    get_writable_storage,
+    get_writable_storage_keys,
+)
+from snuba.processor import MessageProcessor, ReplacementBatch
+from snuba.replacers.replacer_processor import (
+    ReplacementMessage,
+    ReplacementMessageMetadata,
+    ReplacerProcessor,
+)
 
 
-def test_generic_metrics() -> None:
-    payload = {
-        "version": 2,
-        "mapping_meta": {
-            "c": {
-                "1": "c:sessions/session@none",
-                "3": "environment",
-                "5": "session.status",
-            },
-        },
-        "metric_id": 1,
-        "org_id": 1,
-        "project_id": 3,
-        "retention_days": 90,
-        "tags": {"3": "production", "5": "init"},
-        "timestamp": 1677512412,
-        "type": "c",
-        "use_case_id": "performance",
-        "value": 1.0,
-    }
-
-    check_example(payload, Topic.GENERIC_METRICS)
+# Since these tests are pure, we can override the run_migrations fixture to
+# skip all test isolation. This reduces the test runtime from 10 seconds to 0.6
+# seconds
+@pytest.fixture
+def run_migrations():
+    pass
 
 
-def test_errors_eventstream() -> None:
-    payload = [
-        2,
-        "insert",
-        {
-            "data": {
-                "environment": "production",
-                "event_id": "9cdc4c32dff14fbbb012b0aa9e908126",
-                "level": "error",
-                "logger": "",
-                "platform": "javascript",
-                "received": 1677512412.437706,
-                "release": "123abc",
-                "timestamp": 1677512412.223,
-                "type": "error",
-                "version": "7",
-            },
-            "datetime": "2023-02-27T15:40:12.223000Z",
-            "event_id": "9cdc4c32dff14fbbb012b0aa9e908126",
-            "group_id": 124,
-            "group_ids": [124],
-            "message": "hello world",
-            "organization_id": 123,
-            "platform": "javascript",
-            "primary_hash": "061cf02b26374d108694d6643a7a2f4e",
-            "project_id": 6036610,
-        },
-        {
-            "group_states": [
-                {
-                    "id": "124",
-                    "is_new": False,
-                    "is_new_group_environment": False,
-                    "is_regression": False,
-                }
-            ],
-            "is_new": False,
-            "is_new_group_environment": False,
-            "is_regression": False,
-            "queue": "post_process_errors",
-            "skip_consume": False,
-        },
-    ]
+@dataclass
+class Case:
+    example: Example
+    processor: MessageProcessor
+    replacer_processor: Optional[ReplacerProcessor]
 
-    check_example(payload, Topic.EVENTS)
+    def __repr__(self):
+        return repr(self.example)
+
+
+def _generate_tests():
+    for storage_key in get_writable_storage_keys():
+        storage = get_writable_storage(storage_key)
+        table_writer = storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
+        topic = stream_loader.get_default_topic_spec().topic
+
+        processor = stream_loader.get_processor()
+        replacer_processor = table_writer.get_replacer_processor()
+
+        try:
+            for example in sentry_kafka_schemas.iter_examples(topic.value):
+                yield Case(
+                    example=example,
+                    processor=processor,
+                    replacer_processor=replacer_processor,
+                )
+        except sentry_kafka_schemas.SchemaNotFound:
+            pass
+
+
+@pytest.mark.parametrize("case", _generate_tests())
+def test_all_schemas(case: Case):
+    """
+    "Assert" that no message processor crashes under the example payloads in
+    sentry-kafka-schemas
+    """
+
+    metadata = KafkaMessageMetadata(offset=1, partition=1, timestamp=datetime.now())
+    result = case.processor.process_message(case.example.load(), metadata)
+
+    if isinstance(result, ReplacementBatch):
+        assert case.replacer_processor
+        for message in result.values:
+            [version, action_type, data] = message
+            assert version == 2
+
+            metadata = ReplacementMessageMetadata(
+                partition_index=1, offset=1, consumer_group=""
+            )
+            case.replacer_processor.process_message(
+                ReplacementMessage(
+                    action_type=action_type, data=data, metadata=metadata
+                )
+            )

@@ -101,6 +101,8 @@ REPLACEMENT_EVENT_TYPES = frozenset(
         ReplacementType.TOMBSTONE_EVENTS,
         ReplacementType.EXCLUDE_GROUPS,
         ReplacementType.REPLACE_GROUP,
+        ReplacementType.START_UNMERGE_HIERARCHICAL,
+        ReplacementType.END_UNMERGE_HIERARCHICAL,
     ]
 )
 
