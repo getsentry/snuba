@@ -364,6 +364,7 @@ def clickhouse_querylog_query() -> Response:
                 jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
                 200,
             )
+        raise RuntimeError("no columns")
     except ClickhouseError as err:
         details = {
             "type": "clickhouse",
@@ -394,6 +395,7 @@ def clickhouse_querylog_schema() -> Response:
                 jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
                 200,
             )
+        raise RuntimeError("no columns")
     except ClickhouseError as err:
         details = {
             "type": "clickhouse",
