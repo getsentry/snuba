@@ -19,7 +19,7 @@ class QuotaAllowance:
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
-    def __init__(self, accepted_tenant_types: list[str], **kwargs) -> None:
+    def __init__(self, accepted_tenant_types: list[str], **kwargs: str) -> None:
         self._accepted_tenant_types = set(accepted_tenant_types)
 
     @classmethod
