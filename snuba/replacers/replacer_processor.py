@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Generic, Mapping, NamedTuple, Optional, TypeVar, cast
+from typing import Any, Generic, Mapping, Optional, TypeVar, cast
+
+from typing_extensions import NamedTuple
 
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import ReplacementType
