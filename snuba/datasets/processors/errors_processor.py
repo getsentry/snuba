@@ -6,8 +6,8 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
 import _strptime  # NOQA fixes _strptime deferred import issue
 from sentry_kafka_schemas.schema_types.events_v1 import (
     ClientSdkInfo,
+    EventStreamMessage,
     InsertEvent,
-    InsertEventMessage,
     SentryExceptionChain,
     SentryRequest,
     SentryUser,
@@ -50,7 +50,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
 
     def process_message(
         self,
-        message: InsertEventMessage,
+        message: EventStreamMessage,
         metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         """\
@@ -65,7 +65,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         type_, event = message[1:3]
         if type_ == "insert":
             try:
-                row = self.process_insert(event, metadata)
+                row = self.process_insert(cast(InsertEvent, event), metadata)
             except EventTooOld:
                 return None
 
