@@ -10,8 +10,19 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
+      interval: "daily"
+    open-pull-requests-limit: 50
+    allow:
+      - dependency-name: "sentry-kafka-schemas"
+      - dependency-name: "sentry-arroyo"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
       interval: "weekly"
       day: "sunday"
     open-pull-requests-limit: 50
     ignore:
       - dependency-name: "parsimonious"
+      - dependency-name: "sentry-kafka-schemas"
+      - dependency-name: "sentry-arroyo"
