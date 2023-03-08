@@ -5,7 +5,7 @@ freezegun==1.2.2
 
 # for typing
 mypy==1.1.1
-types-python-dateutil==2.8.19
+types-python-dateutil==2.8.19.8
 types-python-jose==3.3.0
 types-pytz==2022.2.1.0
 types-pyyaml==6.0.11
