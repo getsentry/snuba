@@ -123,7 +123,9 @@ TValue = TypeVar("TValue")
 
 
 def _as_dict_safe(
-    value: Union[None, Iterable[Tuple[TKey, TValue]], Dict[TKey, TValue]],
+    value: Union[
+        None, Iterable[Optional[Tuple[Optional[TKey], TValue]]], Dict[TKey, TValue]
+    ],
 ) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
