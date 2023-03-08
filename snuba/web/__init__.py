@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, NamedTuple, TypedDict, cast
+from dataclasses import dataclass
+from typing import Any, Mapping, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
@@ -42,9 +43,11 @@ class QueryTooLongException(SerializableException):
     """
 
 
-class QueryResult(NamedTuple):
+@dataclass(frozen=True)
+class QueryResult:
     result: Result
     extra: QueryExtraData
+    error: QueryException | None = None
 
 
 def transform_column_names(
