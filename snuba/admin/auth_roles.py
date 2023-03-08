@@ -20,6 +20,7 @@ class Resource(ABC):
 
 
 class MigrationResource(Resource):
+    @property
     def category(self) -> Category:
         return Category.MIGRATIONS
 
