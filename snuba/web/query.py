@@ -52,31 +52,6 @@ metrics = MetricsWrapper(environment.metrics, "api")
 MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
-class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Entity]):
-    """
-    Traverses a query to find FROM clauses that have a sampling
-    rate set to check if turbo is set as well.
-    """
-
-    def _visit_simple_source(self, data_source: Entity) -> bool:
-        return data_source.sample is not None and data_source.sample != 1.0
-
-    def _visit_join(self, data_source: JoinClause[Entity]) -> bool:
-        return self.visit_join_clause(data_source)
-
-    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> bool:
-        return self.visit(data_source.get_from_clause())
-
-    def _visit_composite_query(self, data_source: CompositeQuery[Entity]) -> bool:
-        return self.visit(data_source.get_from_clause())
-
-    def visit_individual_node(self, node: IndividualNode[Entity]) -> bool:
-        return self.visit(node.data_source)
-
-    def visit_join_clause(self, node: JoinClause[Entity]) -> bool:
-        return node.left_node.accept(self) or node.right_node.accept(self)
-
-
 class ProjectsFinder(
     DataSourceVisitor[Set[int], Entity], JoinVisitor[Set[int], Entity]
 ):
@@ -184,11 +159,6 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    if not request.query_settings.get_turbo() and SampleClauseFinder().visit(
-        request.query.get_from_clause()
-    ):
-        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
-
     if request.query_settings.get_dry_run():
         query_runner = _dry_run_query_runner
     else:
