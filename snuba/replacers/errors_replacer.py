@@ -22,6 +22,17 @@ from typing import (
     cast,
 )
 
+from sentry_kafka_schemas.schema_types.events_v1 import (
+    EndDeleteGroupsMessageBody,
+    EndDeleteTagMessageBody,
+    EndMergeMessageBody,
+    EndUnmergeHierarchicalMessageBody,
+    EndUnmergeMessageBody,
+    ExcludeGroupsMessageBody,
+    ReplaceGroupMessageBody,
+    TombstoneEventsMessageBody,
+)
+
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
@@ -204,7 +215,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             promoted_tags=self.__promoted_tags,
         )
 
-    def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
+    def process_message(
+        self, message: ReplacementMessage[Mapping[str, Any]]
+    ) -> Optional[Replacement]:
         if not self.__schema:
             self.__initialize_schema()
         assert self.__schema is not None
@@ -230,20 +243,29 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == ReplacementType.END_DELETE_GROUPS:
-            processed = process_delete_groups(message, self.__required_columns)
+            processed = process_delete_groups(
+                cast(ReplacementMessage[EndDeleteGroupsMessageBody], message),
+                self.__required_columns,
+            )
         elif type_ == ReplacementType.END_MERGE:
-            processed = process_merge(message, self.__all_columns)
+            processed = process_merge(
+                cast(ReplacementMessage[EndMergeMessageBody], message),
+                self.__all_columns,
+            )
         elif type_ == ReplacementType.END_UNMERGE:
             processed = UnmergeGroupsReplacement.parse_message(
-                message, self.__replacement_context
+                cast(ReplacementMessage[EndUnmergeMessageBody], message),
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_UNMERGE_HIERARCHICAL:
             processed = process_unmerge_hierarchical(
-                message, self.__all_columns, self.__state_name
+                cast(ReplacementMessage[EndUnmergeHierarchicalMessageBody], message),
+                self.__all_columns,
+                self.__state_name,
             )
         elif type_ == ReplacementType.END_DELETE_TAG:
             processed = process_delete_tag(
-                message,
+                cast(ReplacementMessage[EndDeleteTagMessageBody], message),
                 self.__all_columns,
                 self.__tag_column_map,
                 self.__promoted_tags,
@@ -251,15 +273,20 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
             processed = process_tombstone_events(
-                message, self.__required_columns, self.__state_name
+                cast(ReplacementMessage[TombstoneEventsMessageBody], message),
+                self.__required_columns,
+                self.__state_name,
             )
         elif type_ == ReplacementType.REPLACE_GROUP:
             processed = process_replace_group(
-                message, self.__all_columns, self.__state_name
+                cast(ReplacementMessage[ReplaceGroupMessageBody], message),
+                self.__all_columns,
+                self.__state_name,
             )
         elif type_ == ReplacementType.EXCLUDE_GROUPS:
             processed = ExcludeGroupsReplacement.parse_message(
-                message, self.__replacement_context
+                cast(ReplacementMessage[ExcludeGroupsMessageBody], message),
+                self.__replacement_context,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -315,7 +342,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
 
 def _build_event_tombstone_replacement(
-    message: ReplacementMessage,
+    message: Union[
+        ReplacementMessage[EndDeleteGroupsMessageBody],
+        ReplacementMessage[TombstoneEventsMessageBody],
+    ],
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
@@ -357,7 +387,10 @@ def _build_event_tombstone_replacement(
 
 
 def _build_group_replacement(
-    message: ReplacementMessage,
+    message: Union[
+        ReplacementMessage[EndMergeMessageBody],
+        ReplacementMessage[ReplaceGroupMessageBody],
+    ],
     project_id: int,
     where: str,
     query_args: Mapping[str, str],
@@ -452,7 +485,7 @@ def _build_event_set_filter(
 
 
 def process_replace_group(
-    message: ReplacementMessage,
+    message: ReplacementMessage[ReplaceGroupMessageBody],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
@@ -492,7 +525,8 @@ def process_replace_group(
 
 
 def process_delete_groups(
-    message: ReplacementMessage, required_columns: Sequence[str]
+    message: ReplacementMessage[EndDeleteGroupsMessageBody],
+    required_columns: Sequence[str],
 ) -> Optional[Replacement]:
     group_ids = message.data["group_ids"]
     if not group_ids:
@@ -523,7 +557,7 @@ def process_delete_groups(
 
 
 def process_tombstone_events(
-    message: ReplacementMessage,
+    message: ReplacementMessage[TombstoneEventsMessageBody],
     required_columns: Sequence[str],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
@@ -582,7 +616,9 @@ class ExcludeGroupsReplacement(Replacement):
 
     @classmethod
     def parse_message(
-        cls, message: ReplacementMessage, context: ReplacementContext
+        cls,
+        message: ReplacementMessage[ExcludeGroupsMessageBody],
+        context: ReplacementContext,
     ) -> Optional[ExcludeGroupsReplacement]:
         if not message.data["group_ids"]:
             return None
@@ -617,7 +653,8 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: ReplacementMessage, all_columns: Sequence[FlattenedColumn]
+    message: ReplacementMessage[EndMergeMessageBody],
+    all_columns: Sequence[FlattenedColumn],
 ) -> Optional[Replacement]:
     """
     Merge all events of one group into another group.
@@ -680,7 +717,9 @@ class UnmergeGroupsReplacement(Replacement):
 
     @classmethod
     def parse_message(
-        cls, message: ReplacementMessage, context: ReplacementContext
+        cls,
+        message: ReplacementMessage[EndUnmergeMessageBody],
+        context: ReplacementContext,
     ) -> Optional["Replacement"]:
         hashes = message.data["hashes"]
         if not hashes:
@@ -777,7 +816,7 @@ def _convert_hash(
 
 
 def process_unmerge_hierarchical(
-    message: ReplacementMessage,
+    message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
@@ -860,7 +899,7 @@ def process_unmerge_hierarchical(
 
 
 def process_delete_tag(
-    message: ReplacementMessage,
+    message: ReplacementMessage[EndDeleteTagMessageBody],
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],

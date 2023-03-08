@@ -21,7 +21,10 @@ class ReplacementMessageMetadata(NamedTuple):
     consumer_group: str
 
 
-class ReplacementMessage(NamedTuple):
+T = TypeVar("T")
+
+
+class ReplacementMessage(NamedTuple, Generic[T]):
     """
     Represent a generic replacement message (version 2 in our protocol) that we
     find on the replacement topic.
@@ -29,7 +32,7 @@ class ReplacementMessage(NamedTuple):
     """
 
     action_type: ReplacementType  # This is a string to make this class agnostic to the dataset
-    data: Mapping[str, Any]
+    data: T
     metadata: ReplacementMessageMetadata
 
 
@@ -75,7 +78,9 @@ class ReplacerProcessor(ABC, Generic[R], metaclass=RegisteredClass):
         return cast("ReplacerProcessor[R]", cls.class_from_name(name))
 
     @abstractmethod
-    def process_message(self, message: ReplacementMessage) -> Optional[R]:
+    def process_message(
+        self, message: ReplacementMessage[Mapping[str, Any]]
+    ) -> Optional[R]:
         """
         Processes one message from the topic.
         """
