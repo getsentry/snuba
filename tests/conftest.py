@@ -26,7 +26,7 @@ def pytest_configure() -> None:
 
 
 @pytest.fixture(scope="session")
-def create_databases():
+def create_databases() -> None:
     for cluster in settings.CLUSTERS:
         clickhouse_cluster = ClickhouseCluster(
             host=cluster["host"],
@@ -58,7 +58,7 @@ def create_databases():
 
 
 @pytest.fixture(autouse=True)
-def run_migrations(create_databases) -> Iterator[None]:
+def run_migrations(create_databases: None) -> Iterator[None]:
     from snuba.migrations.runner import Runner
 
     try:

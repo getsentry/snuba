@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Iterator, Optional
 
 import pytest
 import sentry_kafka_schemas
@@ -23,7 +23,7 @@ from snuba.replacers.replacer_processor import (
 # skip all test isolation. This reduces the test runtime from 10 seconds to 0.6
 # seconds
 @pytest.fixture
-def run_migrations():
+def run_migrations() -> None:
     pass
 
 
@@ -31,13 +31,13 @@ def run_migrations():
 class Case:
     example: Example
     processor: MessageProcessor
-    replacer_processor: Optional[ReplacerProcessor]
+    replacer_processor: Optional[ReplacerProcessor[Any]]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self.example)
 
 
-def _generate_tests():
+def _generate_tests() -> Iterator[Case]:
     for storage_key in get_writable_storage_keys():
         storage = get_writable_storage(storage_key)
         table_writer = storage.get_table_writer()
@@ -59,7 +59,7 @@ def _generate_tests():
 
 
 @pytest.mark.parametrize("case", _generate_tests())
-def test_all_schemas(case: Case):
+def test_all_schemas(case: Case) -> None:
     """
     "Assert" that no message processor crashes under the example payloads in
     sentry-kafka-schemas
@@ -74,11 +74,11 @@ def test_all_schemas(case: Case):
             [version, action_type, data] = message
             assert version == 2
 
-            metadata = ReplacementMessageMetadata(
+            replacement_metadata = ReplacementMessageMetadata(
                 partition_index=1, offset=1, consumer_group=""
             )
             case.replacer_processor.process_message(
                 ReplacementMessage(
-                    action_type=action_type, data=data, metadata=metadata
+                    action_type=action_type, data=data, metadata=replacement_metadata
                 )
             )

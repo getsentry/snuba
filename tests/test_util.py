@@ -7,7 +7,7 @@ from snuba.util import escape_literal
 
 
 @pytest.fixture
-def run_migrations():
+def run_migrations() -> None:
     pass
 
 
