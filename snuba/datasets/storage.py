@@ -87,7 +87,7 @@ class ReadableStorage(Storage):
         return []
 
     def get_allocation_policy(self) -> AllocationPolicy:
-        return PassthroughPolicy(["__any__"])
+        return PassthroughPolicy(self.get_storage_set_key(), ["__any__"])
 
 
 class WritableStorage(Storage):

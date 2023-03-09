@@ -5,6 +5,7 @@ from typing import Optional, Sequence
 from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
 
@@ -55,6 +56,7 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: PhysicalColumnSet
+    allocation_policy: AllocationPolicy
     final: bool = False
     sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions out of

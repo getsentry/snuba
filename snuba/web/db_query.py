@@ -21,7 +21,14 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.query import ProcessableQuery
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    PassthroughPolicy,
+    QueryResultOrError,
+)
 from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
@@ -33,6 +40,7 @@ from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
+from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
@@ -590,3 +598,75 @@ def raw_query(
                 "experiments": clickhouse_query.get_experiments(),
             },
         )
+
+
+def _get_allocation_policy(
+    clickhouse_query: Union[Query, CompositeQuery[Table]]
+) -> AllocationPolicy:
+    """FIXME: docstring, testing"""
+    from_clause = clickhouse_query.get_from_clause()
+    if isinstance(from_clause, Table):
+        return from_clause.allocation_policy
+    elif isinstance(from_clause, ProcessableQuery):
+        return _get_allocation_policy(cast(Query, from_clause))
+    elif isinstance(from_clause, CompositeQuery):
+        return _get_allocation_policy(from_clause)
+    elif isinstance(from_clause, JoinClause):
+        # HACK (Volo): Joins are a weird case for allocation policies and we don't
+        # actually use them anywhere so I'm purposefully just kicking this can down the
+        # road
+        return PassthroughPolicy(storage_set_key="Something", accepted_tenant_types=[])
+    else:
+        # FIXME: make a custom exception
+        raise Exception(f"Could not determine allocation policy for {clickhouse_query}")
+
+
+def db_query(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    stats: MutableMapping[str, Any],
+    trace_id: Optional[str] = None,
+    robust: bool = False,
+) -> QueryResult:
+    result = None
+    error = None
+    allocation_policy = _get_allocation_policy(clickhouse_query)
+    quota_allowance = allocation_policy.get_quota_allowance(
+        # FIXME (Volo): This is a bad way to pass in the attribution info,
+        # we should just pass it in explicitly
+        query_metadata.request.attribution_info.tenant_ids
+    )
+    if not quota_allowance.can_run:
+        # TODO: Maybe this is better as an exception?
+        # I don't like exception handling as control flow too much but it's
+        # the pattern in this file already
+        raise Exception("Tenant is over quota")
+    query_settings.set_resource_quota(
+        ResourceQuota(max_threads=quota_allowance.max_threads)
+    )
+    try:
+        result = raw_query(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            query_metadata,
+            stats,
+            trace_id,
+            robust,
+        )
+    except QueryException as e:
+        error = e
+    finally:
+        allocation_policy.update_quota_balance(
+            tenant_ids=query_metadata.request.attribution_info.tenant_ids,
+            result_or_error=QueryResultOrError(query_result=result, error=error),
+        )
+        if result:
+            return result
+        raise error or Exception("No error or result when running query")
