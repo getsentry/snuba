@@ -15,14 +15,13 @@ pipelines:
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: a
             GKE_BASTION_ZONE: a
-            MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
                 shallow_clone: false
-                branch: master
+                branch: gocd_tests # for non master image sha have to be hardcoded
                 destination: snuba
         stages:
             - checks:
@@ -49,7 +48,7 @@ pipelines:
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
-                                    --image="ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
                                     --container-name="consumer" \
                                     --container-name="errors-consumer" \
@@ -95,8 +94,8 @@ pipelines:
                                     --container-name="optimize"
 
             - migrate:
-                  approval:
-                      type: manual
+                #   approval:
+                #       type: manual
                   fetch_materials: true
                   jobs:
                       migrate:
@@ -109,8 +108,8 @@ pipelines:
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba-admin" \
                                     --container-name="snuba-admin" \
-                                    "snuba-migrate" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
-                                    -- snuba migrations migrate -r ${MIGRATIONS_READINESS}
+                                    "snuba-migrate" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    -- snuba migrations migrate -r complete -r partial
                               - plugin:
                                     options:
                                         script: |
@@ -119,7 +118,7 @@ pipelines:
                                             --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                             --label-selector="service=snuba-admin" \
                                             --container-name="snuba-admin" \
-                                            "snuba-migrate-reverse" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
+                                            "snuba-migrate-reverse" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                             -- snuba migrations reverse-in-progress
                                     run_if: failed
                                     configuration:
