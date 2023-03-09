@@ -112,6 +112,8 @@ class EventsLoader(DirectoryLoader):
             "0018_errors_ro_add_tags_hash_map",
             "0019_add_replay_id_column",
             "0020_add_main_thread_column",
+            "0021_add_replay_id_errors_ro",
+            "0022_add_main_thread_column_errors_ro",
         ]
 
 
