@@ -10,6 +10,17 @@ class SystemQuery(PreDefinedQuery, metaclass=RegisteredClass):
         return cls.__name__
 
 
+class CreateTableQuery(SystemQuery):
+    """Show the current state of the schema by looking at the create_table_query"""
+
+    sql = """
+    SELECT
+        create_table_query
+    FROM system.tables
+    WHERE database not in ('system')
+    """
+
+
 class CurrentMerges(SystemQuery):
     """Currently executing merges"""
 
