@@ -161,14 +161,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
     def _process_event_hash(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        # event_hash is used to uniquely identify a row within a replay
-        # for our segment updates we'll simply hash the segment_id
-        # for future additions, we'll use whatever unique identifier (e.g. event_id)
-        # as the input to the hash
+        event_hash = replay_event.get("event_hash")
+        if event_hash is None:
+            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
 
-        segment_id_bytes = force_bytes(str((replay_event["segment_id"])))
-        segment_hash = md5(segment_id_bytes).hexdigest()
-        processed["event_hash"] = to_uuid(segment_hash)
+        processed["event_hash"] = event_hash
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
@@ -209,6 +206,19 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
 T = TypeVar("T")
 U = TypeVar("U")
+
+
+def segment_id_to_event_hash(segment_id: int | None) -> str:
+    if segment_id is None:
+        # Rows with null segment_id fields are considered "out of band" meaning they do not
+        # originate from the SDK and do not relate to a specific segment.
+        #
+        # For example: archive requests.
+        return str(uuid.uuid4().hex)
+    else:
+        segment_id_bytes = force_bytes(str(segment_id))
+        segment_hash = md5(segment_id_bytes).hexdigest()
+        return to_uuid(segment_hash)
 
 
 def default(default: Callable[[], T], value: T | None) -> T:
