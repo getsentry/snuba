@@ -88,23 +88,7 @@ class ReplacementType(str, Enum):
     EXCLUDE_GROUPS = "exclude_groups"
 
 
-REPLACEMENT_EVENT_TYPES = frozenset(
-    [
-        ReplacementType.START_DELETE_GROUPS,
-        ReplacementType.START_MERGE,
-        ReplacementType.START_UNMERGE,
-        ReplacementType.START_DELETE_TAG,
-        ReplacementType.END_DELETE_GROUPS,
-        ReplacementType.END_MERGE,
-        ReplacementType.END_UNMERGE,
-        ReplacementType.END_DELETE_TAG,
-        ReplacementType.TOMBSTONE_EVENTS,
-        ReplacementType.EXCLUDE_GROUPS,
-        ReplacementType.REPLACE_GROUP,
-        ReplacementType.START_UNMERGE_HIERARCHICAL,
-        ReplacementType.END_UNMERGE_HIERARCHICAL,
-    ]
-)
+REPLACEMENT_EVENT_TYPES = frozenset(ReplacementType.__members__.values())
 
 
 class InsertEvent(TypedDict):
