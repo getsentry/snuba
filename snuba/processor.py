@@ -7,6 +7,7 @@ from hashlib import md5
 from typing import (
     Any,
     Dict,
+    FrozenSet,
     Iterable,
     MutableMapping,
     NamedTuple,
@@ -88,20 +89,8 @@ class ReplacementType(str, Enum):
     EXCLUDE_GROUPS = "exclude_groups"
 
 
-REPLACEMENT_EVENT_TYPES = frozenset(
-    [
-        ReplacementType.START_DELETE_GROUPS,
-        ReplacementType.START_MERGE,
-        ReplacementType.START_UNMERGE,
-        ReplacementType.START_DELETE_TAG,
-        ReplacementType.END_DELETE_GROUPS,
-        ReplacementType.END_MERGE,
-        ReplacementType.END_UNMERGE,
-        ReplacementType.END_DELETE_TAG,
-        ReplacementType.TOMBSTONE_EVENTS,
-        ReplacementType.EXCLUDE_GROUPS,
-        ReplacementType.REPLACE_GROUP,
-    ]
+REPLACEMENT_EVENT_TYPES: FrozenSet[ReplacementType] = frozenset(
+    ReplacementType.__members__.values()
 )
 
 
