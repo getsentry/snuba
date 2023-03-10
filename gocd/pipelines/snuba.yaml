@@ -45,7 +45,7 @@ pipelines:
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
                                     ${GO_REVISION_SNUBA_REPO} \
                                     ${GCP_PROJECT} \
-                                    "us.gcr.io/${GCP_PROJECT}/snuba:5"
+                                    "ghcr.io/getsentry/snuba-ci"
 
             - deploy:
                   fetch_materials: true
