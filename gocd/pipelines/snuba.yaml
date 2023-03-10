@@ -11,7 +11,7 @@ pipelines:
             GKE_CLUSTER_ZONE: a
             GKE_BASTION_ZONE: b
             # Required for checkruns.
-            GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+#             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
