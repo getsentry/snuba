@@ -9,7 +9,7 @@ pipelines:
             GKE_CLUSTER: sns-cluster-snuba
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: a
-            GKE_BASTION_ZONE: b
+            GKE_BASTION_ZONE: a
             # Required for checkruns.
 #             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
         group: snuba
