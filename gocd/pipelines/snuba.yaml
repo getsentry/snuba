@@ -46,7 +46,7 @@ pipelines:
                                     ${GO_REVISION_SNUBA_REPO} \
                                     ${GCP_PROJECT} \
                                     "us.gcr.io/${GCP_PROJECT}/snuba:5"
-    
+
             - deploy:
                   fetch_materials: true
                   jobs:
