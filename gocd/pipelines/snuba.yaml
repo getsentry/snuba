@@ -16,7 +16,7 @@ pipelines:
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
-                git: git@github.com:getsentry/snuba.git
+                git: https://github.com/getsentry/snuba.git
                 shallow_clone: true
                 branch: master
                 destination: snuba
