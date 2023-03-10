@@ -60,7 +60,7 @@ class ClickhouseClientSettings(Enum):
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
-    QUERY_AND_SETTINGS = ClickhouseClientSettingsType({"readonly": 2}, None)
+    QUERY_AND_SETTINGS = ClickhouseClientSettingsType({}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple
