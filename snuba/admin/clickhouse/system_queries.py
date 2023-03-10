@@ -24,9 +24,11 @@ def _run_sql_query_on_host(
     Run the SQL query. It should be validated before getting to this point
     """
     if storage_name == "querylog":
-        # we want to be able to change settings for the querylog which
-        # requires readonly: 2 so we must use QUERY_AND_SETTINGS
-        settings = ClickhouseClientSettings.QUERY_AND_SETTINGS
+        # querylog readonly user profile has readonly=2 set, but if you try
+        # and set readonly=2 as part of the request this will error since
+        # clickhouse doesn't let you set readonly setting if readonly=2 in
+        # the current settings https://github.com/ClickHouse/ClickHouse/blob/20.7/src/Access/SettingsConstraints.cpp#L243-L249
+        settings = ClickhouseClientSettings.QUERYLOG
     else:
         settings = ClickhouseClientSettings.QUERY
 
