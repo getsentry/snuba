@@ -23,15 +23,8 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    if storage_name == "querylog":
-        # we want to be able to change settings for the querylog which
-        # requires readonly: 2 so we must use QUERY_AND_SETTINGS
-        settings = ClickhouseClientSettings.QUERY_AND_SETTINGS
-    else:
-        settings = ClickhouseClientSettings.QUERY
-
     connection = get_ro_node_connection(
-        clickhouse_host, clickhouse_port, storage_name, settings
+        clickhouse_host, clickhouse_port, storage_name, ClickhouseClientSettings.QUERY
     )
     query_result = connection.execute(query=sql, with_column_types=True)
 
