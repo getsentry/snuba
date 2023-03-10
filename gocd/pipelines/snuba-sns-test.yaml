@@ -1,68 +1,33 @@
-# More information on gocd-flavor YAML can be found here:
-# - https://github.com/tomzo/gocd-yaml-config-plugin#pipeline
-# - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
+# Run a GoCD pipeline in the search-and-storage GCP project.
+# The GoCD server is deployed in the gocd namespace. See https://github.com/getsentry/sns-gcloud/tree/main/ops
+# for more details
+#
+# To access the server locally:
+# kubectl port-forward --namespace gocd $(kubectl get pod -A --selector="app=gocd,component=server,release=gocd-app" --output jsonpath='{.items[0].metadata.name}') 8080:8153
+#
+# Server will be available on localhost:8080
 format_version: 10
 pipelines:
-    deploy-snuba:
+    deploy-snuba-sns-test:
         environment_variables:
-            GCP_PROJECT: internal-sentry
-            GKE_CLUSTER: zdpwkxst
+            GCP_PROJECT: search-and-storage
+            GKE_CLUSTER: sns-cluster-snuba
             GKE_REGION: us-central1
-            GKE_CLUSTER_ZONE: b
-            GKE_BASTION_ZONE: b
-            # Required for checkruns.
-            GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+            GKE_CLUSTER_ZONE: a
+            GKE_BASTION_ZONE: a
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
-                git: git@github.com:getsentry/snuba.git
+                git: https://github.com/getsentry/snuba.git
                 shallow_clone: true
                 branch: master
                 destination: snuba
         stages:
-            - checks:
-                  approval:
-                      type: manual
-                  fetch_materials: true
-                  jobs:
-                      checks:
-                          timeout: 1800
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    /devinfra/scripts/checks/githubactions/checkruns.py \
-                                    getsentry/snuba \
-                                    ${GO_REVISION_SNUBA_REPO} \
-                                    "Tests and code coverage (test)" \
-                                    "Tests and code coverage (test_distributed)" \
-                                    "Tests and code coverage (test_distributed_migrations)" \
-                                    "Dataset Config Validation" \
-                                    "sentry (0)" \
-                                    "sentry (1)" \
-                                    "self-hosted-end-to-end"
-                              - script: |
-                                    /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-                                    ${GO_REVISION_SNUBA_REPO} \
-                                    sentryio \
-                                    "us.gcr.io/sentryio/snuba"
             - deploy:
                   fetch_materials: true
                   jobs:
-                      create-sentry-release:
-                          environment_variables:
-                              SENTRY_ORG: sentry
-                              SENTRY_PROJECT: snuba
-                              SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
-                          timeout: 300
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    sentry-cli releases new "${GO_REVISION_SNUBA_REPO}"
-                                    sentry-cli releases set-commits "${GO_REVISION_SNUBA_REPO}" --commit "getsentry/snuba@${GO_REVISION_SNUBA_REPO}"
-                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
-                                    sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
-                      deploy:
+                     deploy:
                           timeout: 1200
                           elastic_profile_id: snuba
                           tasks:
@@ -71,7 +36,7 @@ pipelines:
                                     && /devinfra/scripts/k8s/k8sdeploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
                                     --container-name="consumer" \
                                     --container-name="errors-consumer" \
