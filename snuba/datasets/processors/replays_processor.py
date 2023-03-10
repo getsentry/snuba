@@ -185,23 +185,75 @@ class ReplaysProcessor(DatasetMessageProcessor):
                 "project_id": message["project_id"],
             }
 
-            # # The following helper functions should be able to be applied in any order.
-            # # At time of writing, there are no reads of the values in the `processed`
-            # # dictionary to inform values in other functions.
-            # # Ideally we keep continue that rule
-            self._process_base_replay_event_values(processed, replay_event)
-            self._process_tags(processed, replay_event)
-            self._process_sdk(processed, replay_event)
-            self._process_kafka_metadata(metadata, processed)
+            if replay_event["type"] == "replay_actions":
+                actions = process_replay_actions(replay_event, processed, metadata)
+                return InsertBatch(actions, None)
+            else:
+                # The following helper functions should be able to be applied in any order.
+                # At time of writing, there are no reads of the values in the `processed`
+                # dictionary to inform values in other functions.
+                # Ideally we keep continue that rule
+                self._process_base_replay_event_values(processed, replay_event)
+                self._process_tags(processed, replay_event)
+                self._process_sdk(processed, replay_event)
+                self._process_kafka_metadata(metadata, processed)
 
-            # # the following operation modifies the event_dict and is therefore *not* order-independent
-            self._process_user(processed, replay_event)
-            self._process_event_hash(processed, replay_event)
-            self._process_contexts(processed, replay_event)
-            return InsertBatch([processed], None)
+                # the following operation modifies the event_dict and is therefore *not*
+                # order-independent
+                self._process_user(processed, replay_event)
+                self._process_event_hash(processed, replay_event)
+                self._process_contexts(processed, replay_event)
+                return InsertBatch([processed], None)
         except Exception:
             metrics.increment("consumer_error")
             raise
+
+
+def process_replay_actions(
+    payload: Mapping[Any, Any],
+    processed: Mapping[Any, Any],
+    metadata: KafkaMessageMetadata,
+) -> list[dict[str, Any]]:
+    """Process replay_actions message type."""
+    project_id = processed["project_id"]
+    retention_days = processed["retention_days"]
+    replay_id = payload["replay_id"]
+    segment_id = payload["segment_id"]
+
+    return [
+        {
+            # Primary-key.
+            "project_id": project_id,
+            "timestamp": action["timestamp"],
+            "replay_id": replay_id,
+            "event_hash": action["event_hash"],
+            "segment_id": segment_id,
+            # DOM Index fields.
+            "dom_element": action["dom_element"][:64],
+            "dom_action": action["dom_action"],
+            "dom_id": action["dom_id"][:64],
+            "dom_classes": action["dom_classes"][:100],
+            "dom_aria_label": action["dom_aria_label"][:64],
+            "dom_aria_role": action["dom_aria_role"][:64],
+            "dom_role": action["dom_role"][:64],
+            "dom_text_content": action["dom_text_content"][:64],
+            "dom_node_id": action["dom_node_id"],
+            # Default values for non-nullable columns.
+            "trace_ids": [],
+            "error_ids": [],
+            "urls": [],
+            "title": "",
+            "platform": "javascript",
+            "user": "",
+            "sdk_name": "",
+            "sdk_version": "",
+            # Kafka columns.
+            "retention_days": retention_days,
+            "partition": metadata.partition,
+            "offset": metadata.offset,
+        }
+        for action in payload["actions"]
+    ]
 
 
 T = TypeVar("T")
