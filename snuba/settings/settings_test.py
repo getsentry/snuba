@@ -39,6 +39,7 @@ REDIS_CLUSTERS = {
         "cluster_startup_nodes": None,
         "host": os.environ.get("REDIS_HOST", "127.0.0.1"),
         "port": int(os.environ.get("REDIS_PORT", 6379)),
+        "username": os.environ.get("REDIS_USERNAME"),
         "password": os.environ.get("REDIS_PASSWORD"),
         "db": i,
         "reinitialize_steps": 10,
