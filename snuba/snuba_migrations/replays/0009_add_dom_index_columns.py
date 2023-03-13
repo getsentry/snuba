@@ -15,7 +15,7 @@ columns: Sequence[Tuple[Column[Modifiers], str]] = [
         "dom_element",
     ),
     (Column("dom_id", String(Modifiers(nullable=True))), "dom_action"),
-    (Column("dom_classes", Array(String())), "dom_id"),
+    (Column("dom_classes", Array(String(), Modifiers(nullable=True))), "dom_id"),
     (Column("dom_aria_label", String(Modifiers(nullable=True))), "dom_classes"),
     (
         Column("dom_aria_role", String(Modifiers(nullable=True, low_cardinality=True))),
