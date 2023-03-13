@@ -98,7 +98,7 @@ def optimize(
     )
 
     # add 1 hour to make the redis TTL past the optimize job cuttoff time
-    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+    cutoff_time = last_midnight + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
     redis_expire_time = cutoff_time + timedelta(hours=1)
     logger.info(f"Cutoff time: {str(cutoff_time)}")
     logger.info(f"redis_expire_time time: {str(redis_expire_time)}")
