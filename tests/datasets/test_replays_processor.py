@@ -658,3 +658,76 @@ class TestReplaysProcessor:
 
         with pytest.raises(TypeError):
             normalize_tags("a")
+
+
+class TestReplaysActionProcessor:
+    def test_replay_actions(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        message = {
+            "type": "replay_event",
+            "start_time": datetime.now().timestamp(),
+            "replay_id": "1",
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_actions",
+                            "replay_id": "1",
+                            "segment_id": 0,
+                            "actions": [
+                                {
+                                    "dom_action": "click",
+                                    "dom_element": "div",
+                                    "dom_id": "id",
+                                    "dom_classes": ["class1", "class2"],
+                                    "dom_aria_label": "test",
+                                    "dom_aria_role": "aria-button",
+                                    "dom_role": "button",
+                                    "dom_text_content": "text",
+                                    "dom_node_id": 59,
+                                    "timestamp": 1,
+                                    "event_hash": "df3c3aa2daae465e89f1169e49139827",
+                                }
+                            ],
+                        }
+                    ).encode()
+                )
+            ),
+        }
+
+        result = ReplaysProcessor().process_message(message, meta)
+        assert isinstance(result, InsertBatch)
+        rows = result.rows
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["project_id"] == 1
+        assert row["timestamp"] == 1
+        assert row["replay_id"] == "1"
+        assert row["event_hash"] == "df3c3aa2daae465e89f1169e49139827"
+        assert row["segment_id"] == 0
+        assert row["dom_element"] == "div"
+        assert row["dom_action"] == "click"
+        assert row["dom_id"] == "id"
+        assert row["dom_classes"] == ["class1", "class2"]
+        assert row["dom_aria_label"] == "test"
+        assert row["dom_aria_role"] == "aria-button"
+        assert row["dom_role"] == "button"
+        assert row["dom_text_content"] == "text"
+        assert row["dom_node_id"] == 59
+        assert row["trace_ids"] == []
+        assert row["error_ids"] == []
+        assert row["urls"] == []
+        assert row["title"] == ""
+        assert row["platform"] == "javascript"
+        assert row["user"] == ""
+        assert row["sdk_name"] == ""
+        assert row["sdk_version"] == ""
+        assert row["retention_days"] == 30
+        assert row["partition"] == 0
+        assert row["offset"] == 0
