@@ -17,6 +17,7 @@
   "devDependencies": {
     "@jest/globals": "^29.4.3",
     "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
     "jest": "^29.4.3",
     "jest-environment-jsdom": "^29.5.0",
     "ts-jest": "^29.0.5",

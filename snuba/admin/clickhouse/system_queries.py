@@ -23,8 +23,17 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
+    if storage_name == "querylog":
+        # querylog readonly user profile has readonly=2 set, but if you try
+        # and set readonly=2 as part of the request this will error since
+        # clickhouse doesn't let you set readonly setting if readonly=2 in
+        # the current settings https://github.com/ClickHouse/ClickHouse/blob/20.7/src/Access/SettingsConstraints.cpp#L243-L249
+        settings = ClickhouseClientSettings.QUERYLOG
+    else:
+        settings = ClickhouseClientSettings.QUERY
+
     connection = get_ro_node_connection(
-        clickhouse_host, clickhouse_port, storage_name, ClickhouseClientSettings.QUERY
+        clickhouse_host, clickhouse_port, storage_name, settings
     )
     query_result = connection.execute(query=sql, with_column_types=True)
 

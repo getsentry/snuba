@@ -10,7 +10,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Union, cast
 
 import rapidjson
 import sentry_sdk
-from clickhouse_driver import errors
+from clickhouse_driver.errors import ErrorCodes
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
@@ -27,7 +27,11 @@ from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
+    RequestStatus,
     SnubaQueryMetadata,
+    Status,
+    get_query_status_from_error_codes,
+    get_request_status,
 )
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
@@ -103,6 +107,7 @@ def update_query_metadata_and_stats(
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
+    request_status: Status,
     profile_data: Optional[Mapping[str, Any]] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
@@ -128,6 +133,7 @@ def update_query_metadata_and_stats(
             end_timestamp=end,
             stats=stats,
             status=status,
+            request_status=request_status,
             profile=generate_profile(query),
             trace_id=trace_id,
             result_profile=profile_data,
@@ -346,7 +352,7 @@ def execute_query_with_query_id(
         )
     except ClickhouseError as e:
         if (
-            e.code != errors.ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+            e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
             or not state.get_config("retry_duplicate_query_id", False)
         ):
             raise
@@ -528,48 +534,49 @@ def raw_query(
             robust=robust,
         )
     except Exception as cause:
+        error_code = None
+        trigger_rate_limiter = None
+        status = None
+        request_status = get_request_status(cause)
         if isinstance(cause, RateLimitExceeded):
+            status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
-            stats = update_with_status(
-                QueryStatus.RATE_LIMITED, triggered_rate_limiter=trigger_rate_limiter
-            )
-        else:
-            error_code = None
-            status = QueryStatus.ERROR
+        elif isinstance(cause, ClickhouseError):
+            error_code = cause.code
+            status = get_query_status_from_error_codes(error_code)
+
             with configure_scope() as scope:
-                if isinstance(cause, ClickhouseError):
-                    error_code = cause.code
-                    fingerprint = [
-                        "{{default}}",
-                        str(cause.code),
-                        query_metadata.dataset,
-                    ]
-                    if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
-                        fingerprint.append(query_metadata.request.referrer)
+                fingerprint = [
+                    "{{default}}",
+                    str(cause.code),
+                    query_metadata.dataset,
+                ]
+                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                    fingerprint.append(query_metadata.request.referrer)
+                scope.fingerprint = fingerprint
+        elif isinstance(cause, TimeoutError):
+            status = QueryStatus.TIMEOUT
+        elif isinstance(cause, ExecutionTimeoutError):
+            status = QueryStatus.TIMEOUT
 
-                    scope.fingerprint = fingerprint
-                    if scope.span:
-                        if cause.code == errors.ErrorCodes.TOO_SLOW:
-                            sentry_sdk.set_tag("timeout", "predicted")
-                            status = QueryStatus.TIMEOUT
-                        elif cause.code == errors.ErrorCodes.TIMEOUT_EXCEEDED:
-                            sentry_sdk.set_tag("timeout", "query_timeout")
-                            status = QueryStatus.TIMEOUT
-                        elif cause.code in (
-                            errors.ErrorCodes.SOCKET_TIMEOUT,
-                            errors.ErrorCodes.NETWORK_ERROR,
-                        ):
-                            sentry_sdk.set_tag("timeout", "network")
-                elif isinstance(
-                    cause,
-                    (TimeoutError, ExecutionTimeoutError),
-                ):
-                    if scope.span:
-                        sentry_sdk.set_tag("timeout", "cache_timeout")
-                        status = QueryStatus.TIMEOUT
+        status = status or QueryStatus.ERROR
+        if request_status.status not in (
+            RequestStatus.TABLE_RATE_LIMITED,
+            RequestStatus.RATE_LIMITED,
+        ):
+            # Don't log rate limiting errors to avoid clutter
+            logger.exception("Error running query: %s\n%s", sql, cause)
 
-                logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status(status, error_code=error_code)
+        with configure_scope() as scope:
+            if scope.span:
+                sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+        stats = update_with_status(
+            status,
+            request_status,
+            error_code=error_code,
+            triggered_rate_limiter=trigger_rate_limiter,
+        )
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
@@ -581,7 +588,9 @@ def raw_query(
             },
         ) from cause
     else:
-        stats = update_with_status(QueryStatus.SUCCESS, result["profile"])
+        stats = update_with_status(
+            QueryStatus.SUCCESS, get_request_status(), result["profile"]
+        )
         return QueryResult(
             result,
             {

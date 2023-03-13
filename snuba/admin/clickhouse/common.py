@@ -69,10 +69,14 @@ def get_ro_node_connection(
 
     assert client_settings in {
         ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.QUERYLOG,
         ClickhouseClientSettings.TRACING,
-    }, "admin can only use QUERY or TRACING ClickhouseClientSettings"
+    }, "admin can only use QUERY, QUERYLOG, or TRACING ClickhouseClientSettings"
 
-    if client_settings == ClickhouseClientSettings.QUERY:
+    if (
+        client_settings == ClickhouseClientSettings.QUERY
+        or client_settings == ClickhouseClientSettings.QUERYLOG
+    ):
         username = settings.CLICKHOUSE_READONLY_USER
         password = settings.CLICKHOUSE_READONLY_PASSWORD
     else:

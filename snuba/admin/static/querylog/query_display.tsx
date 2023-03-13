@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Client from "../api_client";
-import { QueryResult } from "../clickhouse_queries/types";
 import { Collapse } from "../collapse";
+import QueryEditor from "../query_editor";
 
 import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 
@@ -10,18 +10,12 @@ type QueryState = Partial<QuerylogRequest>;
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QuerylogResult) => JSX.Element;
-  predefinedQuery: PredefinedQuery | null;
+  predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<
     QuerylogResult[]
   >([]);
-
-  useEffect(() => {
-    if (props.predefinedQuery) {
-      setQuery({ sql: props.predefinedQuery.sql });
-    }
-  }, [props.predefinedQuery]);
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -76,36 +70,36 @@ function QueryDisplay(props: {
 
   return (
     <div>
-      <form>
-        <h2>Construct a Querylog Query</h2>
-        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
+      <h2>Construct a Querylog Query</h2>
+      <QueryEditor
+        onQueryUpdate={(sql) => {
+          updateQuerySql(sql);
+        }}
+        predefinedQueryOptions={props.predefinedQueryOptions}
+      />
+      <div style={executeActionsStyle}>
         <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
+          <button
+            onClick={(evt) => {
+              evt.preventDefault();
+              executeQuery();
+            }}
+            style={executeButtonStyle}
+            disabled={!query.sql}
+          >
+            Execute Query
+          </button>
+          <button
+            onClick={(evt) => {
+              evt.preventDefault();
+              getQuerylogSchema();
+            }}
+            style={executeButtonStyle}
+          >
+            View Querylog Schema
+          </button>
         </div>
-        <div style={executeActionsStyle}>
-          <div>
-            <button
-              onClick={(evt) => {
-                evt.preventDefault();
-                executeQuery();
-              }}
-              style={executeButtonStyle}
-              disabled={!query.sql}
-            >
-              Execute Query
-            </button>
-            <button
-              onClick={(evt) => {
-                evt.preventDefault();
-                getQuerylogSchema();
-              }}
-              style={executeButtonStyle}
-            >
-              View Querylog Schema
-            </button>
-          </div>
-        </div>
-      </form>
+      </div>
       <div>
         <h2>Query results</h2>
         {queryResultHistory.map((queryResult, idx) => {
