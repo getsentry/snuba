@@ -119,47 +119,6 @@ schema:
               [{ name: key, type: String }, { name: value, type: String }],
           },
       },
-      {
-        name: dom_element,
-        type: String,
-        args: { schema_modifiers: [low_cardinality, nullable] },
-      },
-      {
-        name: dom_action,
-        type: String,
-        args: { schema_modifiers: [low_cardinality, nullable] },
-      },
-      { name: dom_id, type: String, args: { schema_modifiers: [nullable] } },
-      {
-        name: dom_classes,
-        type: Array,
-        args: { inner_type: { type: String }, schema_modifiers: [nullable] },
-      },
-      {
-        name: dom_aria_label,
-        type: String,
-        args: { schema_modifiers: [nullable] },
-      },
-      {
-        name: dom_aria_role,
-        type: String,
-        args: { schema_modifiers: [low_cardinality, nullable] },
-      },
-      {
-        name: dom_role,
-        type: String,
-        args: { schema_modifiers: [low_cardinality, nullable] },
-      },
-      {
-        name: dom_text_content,
-        type: String,
-        args: { schema_modifiers: [nullable] },
-      },
-      {
-        name: dom_node_id,
-        type: UInt,
-        args: { size: 32, schema_modifiers: [nullable] },
-      },
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: partition, type: UInt, args: { size: 16 } },
       { name: offset, type: UInt, args: { size: 64 } },
