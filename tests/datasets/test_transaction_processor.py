@@ -275,7 +275,7 @@ class TransactionEvent:
             ret["profile_id"] = str(uuid.UUID(self.profile_id))
         if self.replay_id is not None:
             ret["replay_id"] = str(uuid.UUID(self.replay_id))
-            ret["tags.key"].append("replay_id")
+            ret["tags.key"].append("replayId")
             ret["tags.value"].append(self.replay_id)
 
         return ret
@@ -426,17 +426,15 @@ class TestTransactionsProcessor:
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_replay_id_as_tag(self) -> None:
+        # we should write both the tag and the top level field
+        # if replay_id is sent as a tag
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
 
         message = self.__get_transaction_event()
         payload = message.serialize()
-        # replays will only ever have the context set, or the tag set, not both
-        # this will be guarenteed on the sdk / relay
-
-        # regardless, we should write both the tag and the top level field
 
         payload[2]["data"]["tags"].append(
-            ["replay_id", "d2731f8ed8934c6fa5253e450915aa12"]
+            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
         )
         del payload[2]["data"]["contexts"]["replay"]
 
@@ -447,9 +445,37 @@ class TestTransactionsProcessor:
 
         # when the replay_id is sent as a tag instead of a context,
         # the order in which it's placed in the tags list is different
-        result["tags.key"].remove("replay_id")
+        result["tags.key"].remove("replayId")
         result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
-        result["tags.key"].insert(1, "replay_id")
+        result["tags.key"].insert(1, "replayId")
+        result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)
+
+    def test_replay_id_as_tag_and_context(self) -> None:
+        # replays shoud only ever have the context set, or the tag set, not both
+        # but just in case, ensure that we don't write two replay_id tags
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+
+        payload[2]["data"]["tags"].append(
+            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
+        )
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        result = message.build_result(meta)
+
+        # when the replay_id is sent as a tag instead of a context,
+        # the order in which it's placed in the tags list is different
+        result["tags.key"].remove("replayId")
+        result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
+        result["tags.key"].insert(1, "replayId")
         result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
 
         assert TransactionsMessageProcessor().process_message(

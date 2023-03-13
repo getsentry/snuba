@@ -50,7 +50,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         "sentry:release",
         "sentry:user",
         "sentry:dist",
-        "replay_id",
+        "replayId",
     }
 
     def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
@@ -159,7 +159,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         processed["environment"] = promoted_tags.get("environment")
         processed["user"] = promoted_tags.get("sentry:user", "")
 
-        replay_id = promoted_tags.get("replay_id")
+        replay_id = promoted_tags.get("replayId")
         if replay_id:
             try:
                 processed["replay_id"] = str(uuid.UUID(replay_id))
@@ -275,12 +275,13 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             replay_id = replay_context.get("replay_id")
             if replay_id is not None:
                 replay_id_uuid = uuid.UUID(replay_id)
-
                 processed["replay_id"] = str(replay_id_uuid)
+
                 # remove this after 90 days or we shift query conditions based on timestamp
-                processed["tags.key"].append("replay_id")
-                # the tag value should not have dashes in it so we use .hex
-                processed["tags.value"].append(replay_id_uuid.hex)
+                if "replayId" not in processed["tags.key"]:
+                    processed["tags.key"].append("replayId")
+                    # the tag value should not have dashes in it so we use .hex
+                    processed["tags.value"].append(replay_id_uuid.hex)
 
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
