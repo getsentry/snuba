@@ -18,3 +18,5 @@ tokio = { version = "1.19.2", features = ["full"] }
 clap = { version = "4.1.8", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10.0"
+serde = { version = "1.0", features = ["derive"]}
+serde_json = { version = "1.0" }
