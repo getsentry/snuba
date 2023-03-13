@@ -259,7 +259,9 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     tracker.update_all_partitions([dummy_partition])
 
     with freeze_time(
-        last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
+        last_midnight
+        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+        + timedelta(minutes=15)
     ):
         scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):
