@@ -63,7 +63,7 @@ test_data = [
             None,
         ),
         last_midnight
-        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
         + timedelta(minutes=30),
         id="errors parallel",
     ),
