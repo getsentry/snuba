@@ -185,7 +185,7 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
                         "(90,'2022-06-08')",
                     ]
                 ],
-                last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+                last_midnight + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             ),
             id="non parallel",
         ),
@@ -198,7 +198,7 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
                 "(90,'2022-06-27')",
             ],
             last_midnight
-            + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+            + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
             - timedelta(minutes=30),
             OptimizationSchedule(
                 [
@@ -209,7 +209,8 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
                         "(30,'2022-06-08')",
                     ]
                 ],
-                last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME,
+                last_midnight
+                + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME),
             ),
             id="parallel before parallel start",
         ),
@@ -217,11 +218,12 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
             2,
             ["(90,'2022-03-28')", "(90,'2022-03-21')"],
             last_midnight
-            + settings.PARALLEL_OPTIMIZE_JOB_END_TIME
+            + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_END_TIME)
             - timedelta(minutes=30),
             OptimizationSchedule(
                 [["(90,'2022-03-28')"], ["(90,'2022-03-21')"]],
-                last_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
+                last_midnight
+                + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_END_TIME),
                 [0, settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES],
             ),
             id="parallel before parallel end",
@@ -229,10 +231,12 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
         pytest.param(
             2,
             ["(90,'2022-03-28')", "(90,'2022-03-21')"],
-            last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME - timedelta(minutes=30),
+            last_midnight
+            + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+            - timedelta(minutes=30),
             OptimizationSchedule(
                 [["(90,'2022-03-28')", "(90,'2022-03-21')"]],
-                last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+                last_midnight + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             ),
             id="parallel before final cutoff",
         ),
@@ -253,7 +257,9 @@ def test_get_next_schedule(
 def test_get_next_schedule_raises_exception() -> None:
     optimize_scheduler = OptimizeScheduler(parallel=1)
     with freeze_time(
-        last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=20)
+        last_midnight
+        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+        + timedelta(minutes=20)
     ):
         with pytest.raises(OptimizedSchedulerTimeout):
             optimize_scheduler.get_next_schedule(
