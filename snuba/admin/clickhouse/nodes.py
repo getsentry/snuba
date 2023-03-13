@@ -47,7 +47,7 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
             )
         ]
     except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
-        logger.warning(str(e), extra={"storage_key": storage_key.value, "local": local})
+        logger.warning(str(e), storage_key=storage_key.value, local=local)
         return []
 
 
@@ -58,7 +58,7 @@ def _get_query_node(storage_key: StorageKey) -> Optional[Node]:
         return {"host": query_node.host_name, "port": query_node.port}
 
     except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
-        logger.warning(str(e), extra={"storage_key": storage_key.value})
+        logger.warning(str(e), storage_key=storage_key.value)
         return None
 
 
