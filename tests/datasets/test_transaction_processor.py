@@ -455,8 +455,10 @@ class TestTransactionsProcessor:
         ) == InsertBatch([result], None)
 
     def test_replay_id_as_tag_and_context(self) -> None:
-        # replays shoud only ever have the context set, or the tag set, not both
-        # but just in case, ensure that we don't write two replay_id tags
+        """
+        replays shoud only ever have the context set, or the tag set, not both
+        but just in case, ensure that we don't write two replay_id tags
+        """
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
 
         message = self.__get_transaction_event()
@@ -477,6 +479,33 @@ class TestTransactionsProcessor:
         result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
         result["tags.key"].insert(1, "replayId")
         result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)
+
+    def test_replay_id_as_invalid_tag(self) -> None:
+        """
+        if a replayId is sent as an invalid uuid, don't try to set it on the context,
+        and keep it as a tag
+        """
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+        del payload[2]["data"]["contexts"]["replay"]
+        payload[2]["data"]["tags"].append(["replayId", "I_AM_NOT_A_UUID"])
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        result = message.build_result(meta)
+
+        del result["replay_id"]
+        result["tags.key"].remove("replayId")
+        result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
+        result["tags.key"].insert(1, "replayId")
+        result["tags.value"].insert(1, "I_AM_NOT_A_UUID")
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
