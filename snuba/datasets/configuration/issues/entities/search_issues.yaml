@@ -72,7 +72,7 @@ storages:
             from_table_name:
             from_col_name: "timestamp"
             to_table_name:
-            to_col_name: "client_timestamp"
+            to_col_name: "receive_timestamp"
         - mapper: ColumnToColumn
           args:
             from_table_name:
