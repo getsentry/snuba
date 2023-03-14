@@ -7,12 +7,12 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (
-        Column("dom_element", String(Modifiers(nullable=True, low_cardinality=True))),
+        Column("dom_tag", String(Modifiers(nullable=True, low_cardinality=True))),
         "tags.value",
     ),
     (
         Column("dom_action", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_element",
+        "dom_tag",
     ),
     (Column("dom_id", String(Modifiers(nullable=True))), "dom_action"),
     (Column("dom_classes", Array(String())), "dom_id"),
@@ -27,6 +27,13 @@ columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
     (Column("dom_text_content", String(Modifiers(nullable=True))), "dom_aria_role"),
     (Column("dom_node_id", UInt(32, Modifiers(nullable=True))), "dom_text_content"),
+]
+
+
+alters: Sequence[Column[Modifiers]] = [
+    Column("user", String(Modifiers(nullable=True))),
+    Column("sdk_name", String(Modifiers(nullable=True))),
+    Column("sdk_version", String(Modifiers(nullable=True))),
 ]
 
 
@@ -58,6 +65,11 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
+    for alter in alters:
+        yield operations.ModifyColumn(
+            storage_set=StorageSetKey.REPLAYS, table_name="replays_local", column=alter
+        )
+
 
 def backward_columns_iter() -> Iterator[operations.SqlOperation]:
     for column, _ in columns:
@@ -73,4 +85,9 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
             table_name="replays_local",
             target=operations.OperationTarget.LOCAL,
             column_name=column.name,
+        )
+
+    for alter in alters:
+        yield operations.ModifyColumn(
+            storage_set=StorageSetKey.REPLAYS, table_name="replays_local", column=alter
         )
