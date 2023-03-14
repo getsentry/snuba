@@ -4,13 +4,16 @@ from unittest.mock import patch
 
 import pytest
 
+import snuba.migrations.runner
 from snuba import settings
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
-from snuba.migrations.errors import MigrationError
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
@@ -339,3 +342,38 @@ def test_settings_skipped_group() -> None:
         ClickhouseClientSettings.MIGRATE
     )
     assert connection.execute("SHOW TABLES LIKE 'querylog_local'").results == []
+
+
+def test_check_inactive_replica() -> None:
+    inactive_replica_query_result = ClickhouseResult(
+        results=[
+            ["good_table", 3, 3],
+            ["bad_table", 2, 3],
+        ]
+    )
+
+    with patch.object(
+        snuba.migrations.runner, "get_all_storage_keys"
+    ) as mock_storage_keys:
+        storage_key = StorageKey.ERRORS
+        mock_storage_keys.return_value = [storage_key]
+
+        with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
+            mock_clickhouse_execute.return_value = inactive_replica_query_result
+
+            runner = Runner()
+            with pytest.raises(InactiveClickhouseReplica) as exc:
+                runner.run_migration(
+                    MigrationKey(MigrationGroup.SYSTEM, "0001_migrations")
+                )
+                assert exc.value.args[0] == (
+                    f"Storage {storage_key.value} has inactive replicas for table bad_table "
+                    f"with 2 out of 3 replicas active."
+                )
+
+            assert mock_clickhouse_execute.call_count == 1
+            query = (
+                "SELECT table, total_replicas, active_replicas FROM system.replicas "
+                "WHERE active_replicas < total_replicas AND database ='snuba_test'"
+            )
+            mock_clickhouse_execute.assert_called_with(query)
