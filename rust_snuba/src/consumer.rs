@@ -1,6 +1,8 @@
 use clap::Parser;
 use log;
 
+mod settings;
+
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
@@ -14,9 +16,11 @@ struct Args {
 async fn main() {
     env_logger::init();
     let args = Args::parse();
-    log::warn!(
+    log::info!(
         "Starting consumer for {} with settings at {}",
         args.storage,
         args.settings_path,
     );
+    let settings = settings::Settings::load_from_json(&args.settings_path).unwrap();
+    log::info!("Loaded settings: {:?}", settings);
 }
