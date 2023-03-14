@@ -156,9 +156,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
             "projects": message.get("projects") or [],
-            # TODO: This column is empty for now, we plan to use it soon as we
-            # will start to write org IDs into events and allow querying by org.
-            "organization": None,
+            "organization": message.get("organization"),
             **self.__extract_query_list(message["query_list"]),
         }
         self._remove_invalid_data(processed)
