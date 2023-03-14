@@ -10,8 +10,11 @@ members = ["rust_arroyo"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
 name = "consumer"
-path = "src/bin/consumer/querylog_consumer.rs"
+path = "src/consumer.rs"
 
 [dependencies]
 rust_arroyo = { path = "./rust_arroyo" }
 tokio = { version = "1.19.2", features = ["full"] }
+clap = { version = "4.1.8", features = ["derive"] }
+log = "0.4"
+env_logger = "0.10.0"

@@ -19,13 +19,21 @@ RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
     help="The storage to target",
     required=True,
 )
-def rust_consumer(
-    *,
-    storage_name: str,
-) -> None:
+@click.option(
+    "--log-level",
+    "log_level",
+    type=click.Choice(["error", "warn", "info", "debug", "trace"]),
+    help="Logging level to use.",
+    default="error",
+)
+def rust_consumer(*, storage_name: str, log_level: str) -> None:
     """
     Experimental alternative to`snuba consumer`
     """
     settings_path = write_settings_to_json()
 
-    os.execv(RUST_PATH, ["--storage", storage_name, "--settings-path", settings_path])
+    os.execve(
+        RUST_PATH,
+        ["--", "--storage", storage_name, "--settings-path", settings_path],
+        {"RUST_LOG": log_level},
+    )
