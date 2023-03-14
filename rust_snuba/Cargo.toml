@@ -9,7 +9,7 @@ members = ["rust_arroyo"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
-name = "querylog_consumer"
+name = "consumer"
 path = "src/bin/consumer/querylog_consumer.rs"
 
 [dependencies]

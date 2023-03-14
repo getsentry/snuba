@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from datetime import timedelta
 from pathlib import Path
 from typing import (
     Any,
@@ -12,10 +11,16 @@ from typing import (
     Set,
     Tuple,
     TypedDict,
-    TypeVar,
 )
 
 from snuba.settings.validation import validate_settings
+
+# All settings must be uppercased, have a default value and cannot start with _.
+# The Rust consumer relies on this to create a JSON file from the evaluated settings
+# upon startup with any variables in this module that conform to this format.
+# Similarly, variables that are not supposed to be settings for override/export should not
+# follow this convention otherwise they will be included in the JSON.
+# Sets will be converted to arrays.
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -136,8 +141,6 @@ REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
-
-T = TypeVar("T")
 
 
 class RedisClusters(TypedDict):
@@ -304,17 +307,17 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
-# Start time from UTC 00:00:00 after which we are allowed to run optimize
-# jobs in parallel.
-PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=0)
+# Start time in hours from UTC 00:00:00 after which we are allowed to run
+# optimize jobs in parallel.
+PARALLEL_OPTIMIZE_JOB_START_TIME = 0
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
+PARALLEL_OPTIMIZE_JOB_END_TIME = 9
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
-OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+OPTIMIZE_JOB_CUTOFF_TIME = 23
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # sleep time to wait for a merge to complete
 OPTIMIZE_BASE_SLEEP_TIME = 300  # 5 mins
@@ -337,7 +340,7 @@ ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 # Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE = timedelta(minutes=10)
+COUNTER_WINDOW_SIZE_MINUTES = 10
 
 
 # Slicing Configuration
