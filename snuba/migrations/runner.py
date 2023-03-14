@@ -14,9 +14,12 @@ from snuba.clusters.cluster import (
     ClickhouseNodeType,
     get_cluster,
 )
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
+    InactiveClickhouseReplica,
     InvalidMigrationState,
     MigrationError,
     MigrationInProgress,
@@ -159,6 +162,7 @@ class Runner:
         Requires force to run blocking migrations.
         """
 
+        check_for_inactive_replicas()
         if not group:
             pending_migrations = self._get_pending_migrations()
         else:
@@ -191,7 +195,7 @@ class Runner:
 
         Blocking migrations must be run with force.
         """
-
+        check_for_inactive_replicas()
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
@@ -249,7 +253,7 @@ class Runner:
         """
         Reverses a migration.
         """
-
+        check_for_inactive_replicas()
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
@@ -295,7 +299,7 @@ class Runner:
         will be at most one in-progress migration per group since you
         can't move forward if a migration is in-progress.
         """
-
+        check_for_inactive_replicas()
         migration_status = self._get_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
@@ -502,3 +506,45 @@ class Runner:
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():
                     python_op.execute_new_node(storage_sets)
+
+
+def check_for_inactive_replicas(
+    storage_keys: Optional[Sequence[StorageKey]] = None,
+) -> None:
+    """
+    Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
+    """
+    if storage_keys is None:
+        storage_keys = [
+            storage_key
+            for storage_key in sorted(
+                get_all_storage_keys(), key=lambda storage_key: storage_key.value
+            )
+            if get_storage(storage_key).get_storage_set_key() not in DEV_STORAGE_SETS
+            or settings.ENABLE_DEV_FEATURES
+        ]
+
+    for storage_key in storage_keys:
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+
+        query_node = cluster.get_query_node()
+        local_nodes = cluster.get_local_nodes()
+        distributed_nodes = cluster.get_distributed_nodes()
+
+        checked_nodes = set()
+        for node in (*local_nodes, *distributed_nodes, query_node):
+            if (node.host_name, node.port) in checked_nodes:
+                continue
+            checked_nodes.add((node.host_name, node.port))
+            conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            tables_with_inactive = conn.execute(
+                f"SELECT table, total_replicas, active_replicas FROM system.replicas "
+                f"WHERE active_replicas < total_replicas AND database ='{conn.database}'",
+            ).results
+
+            for table, total_replicas, active_replicas in tables_with_inactive:
+                raise InactiveClickhouseReplica(
+                    f"Storage {storage_key.value} has inactive replicas for table {table} "
+                    f"with {active_replicas} out of {total_replicas} replicas active."
+                )
