@@ -6,7 +6,7 @@ mod settings;
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
-    storage: String,
+    storage: Vec<String>,
 
     #[arg(long)]
     settings_path: String,
@@ -17,7 +17,7 @@ async fn main() {
     env_logger::init();
     let args = Args::parse();
     log::info!(
-        "Starting consumer for {} with settings at {}",
+        "Starting consumer for {:?} with settings at {}",
         args.storage,
         args.settings_path,
     );

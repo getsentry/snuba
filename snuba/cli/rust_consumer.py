@@ -1,4 +1,5 @@
 import os
+from typing import Sequence
 
 import click
 
@@ -12,11 +13,12 @@ RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
 @click.command()
 @click.option(
     "--storage",
-    "storage_name",
+    "storage_names",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
     ),
     help="The storage to target",
+    multiple=True,
     required=True,
 )
 @click.option(
@@ -26,14 +28,19 @@ RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
     help="Logging level to use.",
     default="error",
 )
-def rust_consumer(*, storage_name: str, log_level: str) -> None:
+def rust_consumer(*, storage_names: Sequence[str], log_level: str) -> None:
     """
     Experimental alternative to`snuba consumer`
     """
     settings_path = write_settings_to_json()
 
+    rust_consumer_args = ["--", "--settings-path", settings_path]
+
+    for storage_name in storage_names:
+        rust_consumer_args.extend(["--storage", storage_name])
+
     os.execve(
         RUST_PATH,
-        ["--", "--storage", storage_name, "--settings-path", settings_path],
+        rust_consumer_args,
         {"RUST_LOG": log_level},
     )
