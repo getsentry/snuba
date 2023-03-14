@@ -64,7 +64,7 @@ schema:
         type: IPv6,
         args: { schema_modifiers: [nullable] },
       },
-      { name: user, type: String },
+      { name: user, type: String, args: { schema_modifiers: [nullable] } },
       { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
       { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -108,8 +108,12 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
-      { name: sdk_name, type: String },
-      { name: sdk_version, type: String },
+      { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: sdk_version,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
       {
         name: tags,
         type: Nested,
