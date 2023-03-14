@@ -67,7 +67,17 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
 
     for alter in alters:
         yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS, table_name="replays_local", column=alter
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_local",
+            column=alter,
+            target=operations.OperationTarget.LOCAL,
+        )
+
+        yield operations.ModifyColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_dist",
+            column=alter,
+            target=operations.OperationTarget.DISTRIBUTED,
         )
 
 
