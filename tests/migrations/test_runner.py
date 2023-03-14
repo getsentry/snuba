@@ -356,6 +356,8 @@ def test_check_inactive_replica() -> None:
         snuba.migrations.runner, "get_all_storage_keys"
     ) as mock_storage_keys:
         storage_key = StorageKey.ERRORS
+        storage = get_storage(storage_key)
+        database = storage.get_cluster().get_database()
         mock_storage_keys.return_value = [storage_key]
 
         with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
@@ -374,6 +376,6 @@ def test_check_inactive_replica() -> None:
             assert mock_clickhouse_execute.call_count == 1
             query = (
                 "SELECT table, total_replicas, active_replicas FROM system.replicas "
-                "WHERE active_replicas < total_replicas AND database ='snuba_test'"
+                f"WHERE active_replicas < total_replicas AND database ='{database}'"
             )
             mock_clickhouse_execute.assert_called_with(query)
