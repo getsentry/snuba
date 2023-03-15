@@ -1,4 +1,7 @@
 
+use futures::Future;
+use futures::executor::block_on;
+use futures::stream::FuturesOrdered;
 use log::warn;
 use crate::backends::Producer;
 use crate::backends::kafka::producer::KafkaProducer;
@@ -8,26 +11,42 @@ use crate::processing::strategies::{
 };
 use crate::types::{Message, TopicOrPartition};
 use std::collections::VecDeque;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Context;
 use std::time::{Duration, Instant};
 
+pub struct ProduceFuture {
+    // pub producer: &'a KafkaProducer,
+    // destination: &'a TopicOrPartition,
+    pub producer: Arc<KafkaProducer>,
+    destination: Arc<TopicOrPartition>,
+    payload: KafkaPayload,
+}
+
+impl Future for ProduceFuture {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>, ) -> std::task::Poll<()> {
+        self.producer.produce(&self.destination, &self.payload);
+        return std::task::Poll::Ready(())
+    }
+}
 pub struct Produce<TPayload: Clone + Send + Sync> {
-    pub producer: KafkaProducer,
+    pub producer: Arc<KafkaProducer>,
     pub next_step: Box<dyn ProcessingStrategy<TPayload>>,
-    queue: VecDeque<Message<TPayload>>,
-    topic: TopicOrPartition,
+    queue: VecDeque<(Message<TPayload>, ProduceFuture)>,
+    topic: Arc<TopicOrPartition>,
     closed: bool,
     max_queue_size: usize,
 }
 
-// TODO: make the queue store futures
-// TODO: make this generic
 impl Produce<KafkaPayload> {
     pub fn new(producer: KafkaProducer, next_step: Box<dyn ProcessingStrategy<KafkaPayload>>, topic:TopicOrPartition) -> Self {
         Produce {
-            producer,
+            producer: Arc::new(producer),
             next_step,
             queue: VecDeque::new(),
-            topic,
+            topic: Arc::new(topic),
             closed: false,
             max_queue_size: 1000,
         }
@@ -35,25 +54,33 @@ impl Produce<KafkaPayload> {
 }
 
 impl ProcessingStrategy<KafkaPayload>
-    for Produce<KafkaPayload>
+    for Produce< KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty(){
-            let message = self.queue.pop_front();
+            let message_fut = self.queue.pop_front();
+            let (message, _produce_fut) = message_fut.unwrap();
             self.next_step.poll();
-            self.next_step.submit(message.unwrap()).unwrap()
+            self.next_step.submit(message).unwrap()
         }
         return None
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+        if self.closed {
+            panic!("Attempted to submit a message to a closed Produce strategy")
+        }
         if self.queue.len() >= self.max_queue_size {
             return Err(MessageRejected)
         }
-        print!("Producing message: {:?}", &message.payload.payload);
-        self.producer.produce(&self.topic, &message.payload);
-        self.producer.flush();
-        self.queue.push_back(message);
+
+        let produce_fut = ProduceFuture {
+            producer: Arc::clone(&self.producer),
+            destination: Arc::clone(&self.topic),
+            payload: message.payload.clone(),
+        };
+
+        self.queue.push_back((message, produce_fut));
         return Ok(());
     }
 
@@ -78,9 +105,9 @@ impl ProcessingStrategy<KafkaPayload>
                     break;
                 }
             }
-            let message = self.queue.pop_front();
+            let (message, produce_fut) = self.queue.pop_front().unwrap();
             self.next_step.poll();
-            self.next_step.submit(message.unwrap()).unwrap();
+            self.next_step.submit(message).unwrap();
 
         }
 
@@ -102,6 +129,7 @@ mod tests {
     use crate::types::{Message, Partition, Topic, TopicOrPartition};
     use chrono::Utc;
     use std::collections::VecDeque;
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[test]
@@ -140,9 +168,9 @@ mod tests {
 
         let mut strategy: Produce<KafkaPayload> = Produce {
             next_step: Box::new(Noop {}),
-            producer: producer,
+            producer: Arc::new(producer),
             queue: VecDeque::new(),
-            topic: TopicOrPartition::Topic(partition.topic.clone()),
+            topic: Arc::new(TopicOrPartition::Topic(partition.topic.clone())),
             closed: false,
             max_queue_size: 1000,
         };
