@@ -35,5 +35,5 @@ def rust_consumer(*, storage_name: str, log_level: str) -> None:
     os.execve(
         RUST_PATH,
         ["--", "--storage", storage_name, "--settings-path", settings_path],
-        {"RUST_LOG": log_level},
+        {"RUST_LOG": log_level, **os.environ},
     )
