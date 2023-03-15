@@ -32,6 +32,22 @@ def rust_consumer(*, storage_name: str, log_level: str) -> None:
     """
     settings_path = write_settings_to_json()
 
+    # TODO: compile minimal consumer config here, and pass it down to rust
+    # code, instead of having rust code read the storage yaml. Incomplete list
+    # of things that are unimplemented:
+    #
+    # - slices
+    # - multi-storage consumer
+    # - consumer group (?)
+    # - topic cli arg
+    # - interaction between BROKER_CONFIG + KAFKA_TOPIC_MAP +
+    # KAFKA_BROKER_CONFIG had to be reimplemented. But does it match the Python
+    # impl?
+    #
+    # ideally the config passed to rust would contain physical topic name, the
+    # right kafka broker config and clickhouse cluster to use, and nothing
+    # else.
+
     os.execve(
         RUST_PATH,
         ["--", "--storage", storage_name, "--settings-path", settings_path],
