@@ -33,6 +33,9 @@ class KafkaTopicSpec:
     def __init__(self, topic: Topic) -> None:
         self.__topic = topic
 
+    def __hash__(self) -> int:
+        return hash(self.__topic)
+
     @property
     def topic(self) -> Topic:
         return self.__topic

@@ -23,6 +23,10 @@ struct Args {
 
     #[arg(long)]
     settings_path: String,
+
+    #[arg(long)]
+    config_path: String,
+
 }
 
 struct Noop {}
