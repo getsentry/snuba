@@ -19,7 +19,7 @@ use rust_snuba::storages;
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
-    storage: Vec<String>,
+    storages: Vec<String>,
 
     #[arg(long)]
     settings_path: String,
@@ -81,16 +81,20 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 async fn main() {
     env_logger::init();
     let args = Args::parse();
+
+    // TODO: Support multiple storages
+    let first_storage = args.storages[0].clone();
+
     log::info!(
         "Starting consumer for {:?} with settings at {}",
-        args.storage,
+        first_storage,
         args.settings_path,
     );
     let settings = settings::Settings::load_from_json(&args.settings_path).unwrap();
     log::info!("Loaded settings: {settings:?}");
 
     let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
-    let storage = storage_registry.get(&args.storage).unwrap();
+    let storage = storage_registry.get(&first_storage).unwrap();
 
     struct ConsumerStrategyFactory {
         config: KafkaConfig,
