@@ -47,6 +47,16 @@ def rust_consumer(*, storage_name: str, log_level: str) -> None:
     # ideally the config passed to rust would contain physical topic name, the
     # right kafka broker config and clickhouse cluster to use, and nothing
     # else.
+    #
+    # there is an argument for keeping it as-is, and that is if we need to read
+    # the storage yaml at compile-time, to do code generation. It might be
+    # necessary if we want to define import paths for Rust message processors
+    # in yaml, e.g.:
+    #
+    # stream_loader:
+    #   processor:
+    #     python_name: snuba.processors.QuerylogProcessor
+    #     rust_name: rust_snuba::processors::QuerylogProcessor
 
     os.execve(
         RUST_PATH,
