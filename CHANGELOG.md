@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.3.0
+
+### Various fixes & improvements
+
+- Revert "feat(Querylog): Organization ID from `tenant_ids` (#3857)" (a555678e) by @getsentry-bot
+- feat(Querylog): Organization ID from `tenant_ids` (#3857) by @rahul-kumar-saini
+- feat(rust-consumer): Actually parse Python settings in Rust (#3860) by @lynnagara
+- feat(rust-consumer): Parse Python settings in Rust (#3859) by @lynnagara
+- ref(admin): Log when a connection error happens (#3834) by @evanh
+- feat: Share Python settings with Rust and add Rust consumer entrypoint (#3856) by @lynnagara
+- use correct connection for multi-node clusters (#3846) by @dbanda
+- meta: Update post merge hook to warn about updated deps (#3851) by @lynnagara
+- ref(admin): dont use tracing user for querylog and remove readonly=2 (#3849) by @MeredithAnya
+- ref(schema) Update to 0.0.6 (#3843) by @evanh
+- fix(querylog): enable readonly 2 for querylog (#3847) by @MeredithAnya
+- fix(test): Add extra query editor test (#3841) by @john-z-yang
+- fix(migrations): add replay_id  and exception_main_thread to errors dist ro (#3840) by @MeredithAnya
+- test: Run all consumers' message processors against examples (#3842) by @untitaker
+- ref: Add typing to all messages in errors replacer (#3835) by @untitaker
+- feat(replays): Default event_hash when segment_id is null (#3759) by @cmanallen
+- remove dead code from web/query (#3832) by @volokluev
+- ref: Bump sentry-kafka-schemas to 0.0.5 (#3839) by @untitaker
+- ref(admin) enable events/transactions migration groups (#3838) by @MeredithAnya
+- ref: Update mypy to 1.1.1 (#3836) by @untitaker
+- feat(querylog): Support for query interpolation in Querylog query editor (#3803) by @john-z-yang
+- feat: Add new statuses for SLO (#3747) by @evanh
+- ref: Start using python types from sentry-kafka-schemas (#3812) by @untitaker
+- fix(CapMan): Ensure tenant_ids metric is accurate (#3831) by @rahul-kumar-saini
+
+_Plus 59 more_
+
 ## 23.2.0
 
 ### Various fixes & improvements
