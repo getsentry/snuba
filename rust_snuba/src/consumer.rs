@@ -1,7 +1,8 @@
 use clap::Parser;
 use log;
 
-mod settings;
+use rust_snuba::settings;
+use rust_snuba::storages;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -22,5 +23,8 @@ async fn main() {
         args.settings_path,
     );
     let settings = settings::Settings::load_from_json(&args.settings_path).unwrap();
-    log::info!("Loaded settings: {:?}", settings);
+    log::info!("Loaded settings: {settings:?}");
+
+    let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
+    let storage = storage_registry.get(&args.storage);
 }

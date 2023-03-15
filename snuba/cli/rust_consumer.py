@@ -24,7 +24,7 @@ RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
     "log_level",
     type=click.Choice(["error", "warn", "info", "debug", "trace"]),
     help="Logging level to use.",
-    default="error",
+    default="info",
 )
 def rust_consumer(*, storage_name: str, log_level: str) -> None:
     """

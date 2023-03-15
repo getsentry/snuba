@@ -19,6 +19,7 @@ pub struct Settings {
     pub clusters: Vec<Cluster>,
     pub broker_config: HashMap<String, Option<String>>,
     pub config_files_path: String,
+    pub storage_config_files_glob: String,
 }
 
 impl Settings {
