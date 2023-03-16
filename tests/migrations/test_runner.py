@@ -18,7 +18,6 @@ from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.migrations.status import Status
-from snuba.redis import RedisClientKey, get_redis_client
 
 
 def _drop_all_tables() -> None:
@@ -346,9 +345,7 @@ def test_settings_skipped_group() -> None:
 
 
 def test_check_inactive_replica() -> None:
-    redis_cache = get_redis_client(RedisClientKey.CACHE)
-    redis_cache.delete(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY)
-
+    snuba.migrations.runner.replica_cache_set.invalidate()
     inactive_replica_query_result = ClickhouseResult(
         results=[
             ["good_table", 3, 3],

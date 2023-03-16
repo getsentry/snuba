@@ -383,7 +383,6 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
 # cache for checking inactive replicas for migrations
-MIGRATIONS_CHECK_REPLICAS_REDIS_KEY = "migrations:check_replicas"
 MIGRATIONS_CHECK_REPLICAS_REDIS_TTL = 600  # cache for 10min
 
 

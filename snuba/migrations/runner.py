@@ -28,14 +28,14 @@ from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_l
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.migrations.utils import ReplicaExpiringSet
 
 logger = logging.getLogger("snuba.migrations")
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
-redis_cache = get_redis_client(RedisClientKey.CACHE)
+replica_cache_set = ReplicaExpiringSet(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL)
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
@@ -517,16 +517,12 @@ def check_for_inactive_replicas(
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
-    # initialize redis cache
-    if not redis_cache.exists(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY):
-        redis_cache.sadd(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY, "")
-        redis_cache.expire(
-            settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY,
-            settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL,
-        )
-    else:
-        # if the redis cache exists, the run was already done within the TTL
+
+    # if the redis cache exists, the run was already done within the TTL
+    if replica_cache_set.isvalid():
         return None
+
+    replica_cache_set.reset()
 
     if storage_keys is None:
         storage_keys = [
@@ -548,15 +544,10 @@ def check_for_inactive_replicas(
 
         for node in (*local_nodes, *distributed_nodes, query_node):
             node_str = f"{node.host_name}:{node.port}"
-            if redis_cache.sismember(
-                settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY,
-                node_str,
-            ):
+            if node_str in replica_cache_set:
                 continue
-            redis_cache.sadd(
-                settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY,
-                node_str,
-            )
+
+            replica_cache_set.add(node_str)
 
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             tables_with_inactive = conn.execute(
@@ -567,7 +558,7 @@ def check_for_inactive_replicas(
             for table, total_replicas, active_replicas in tables_with_inactive:
 
                 # clear cache so we can check again next time
-                redis_cache.delete(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY)
+                replica_cache_set.invalidate()
 
                 raise InactiveClickhouseReplica(
                     f"Storage {storage_key.value} has inactive replicas for table {table} "
