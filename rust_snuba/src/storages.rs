@@ -1,21 +1,21 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 
-use crate::settings::{Settings};
+use crate::settings::Settings;
 
+use anyhow::{bail, Context, Error};
 use serde::Deserialize;
 use serde_json::Value;
-use anyhow::{Error, bail, Context};
 
 #[derive(Deserialize)]
 #[serde(tag = "kind")]
 pub enum StorageConfig {
     #[serde(rename = "readable_storage")]
-    ReadableStorage {},
+    Readable{},
     #[serde(rename = "cdc_storage")]
-    CdcStorage {},
+    Cdc {},
     #[serde(rename = "writable_storage")]
-    WritableStorage(WritableStorageConfig)
+    Writable(WritableStorageConfig),
 }
 
 #[derive(Deserialize)]
@@ -59,16 +59,21 @@ pub struct StorageRegistry {
 impl StorageRegistry {
     pub fn load_all(settings: &Settings) -> Result<StorageRegistry, Error> {
         let mut rv = StorageRegistry {
-            storages: BTreeMap::new()
+            storages: BTreeMap::new(),
         };
 
         for entry in glob::glob(&settings.storage_config_files_glob)? {
             let entry = entry?;
-            let file = File::open(entry.as_path()).with_context(|| format!("Failed to load file {entry:?}"))?;
-            let storage: StorageConfig = serde_yaml::from_reader(file).with_context(|| format!("Failed to load file {entry:?}"))?;
+            let file = File::open(entry.as_path())
+                .with_context(|| format!("Failed to load file {entry:?}"))?;
+            let storage: StorageConfig = serde_yaml::from_reader(file)
+                .with_context(|| format!("Failed to load file {entry:?}"))?;
 
-            if let StorageConfig::WritableStorage(writable_storage) = storage {
-                if let Some(other_storage) = rv.storages.insert(writable_storage.name.clone(), writable_storage) {
+            if let StorageConfig::Writable(writable_storage) = storage {
+                if let Some(other_storage) = rv
+                    .storages
+                    .insert(writable_storage.name.clone(), writable_storage)
+                {
                     bail!("Duplicate storage {}", other_storage.name);
                 }
             }

@@ -18,7 +18,7 @@ impl KafkaConfig {
     }
 
     pub fn new_config_from_raw(override_params: HashMap<String, String>) -> Self {
-        let mut config_map = HashMap::new();
+        let config_map = HashMap::new();
         let config = Self { config_map };
         apply_override_params(config, Some(override_params))
     }

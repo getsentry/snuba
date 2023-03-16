@@ -1,6 +1,8 @@
-pub mod settings;
-pub mod storages;
-pub mod consumer;
+mod consumer;
+mod settings;
+mod storages;
+mod strategies;
+mod types;
 
 use pyo3::prelude::*;
 

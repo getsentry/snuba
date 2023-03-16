@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 use std::fs::File;
 
@@ -34,6 +33,8 @@ impl Settings {
     }
 
     pub fn get_broker_config(&self, topic: &str) -> &BrokerConfig {
-        self.kafka_broker_config.get(topic).unwrap_or(&self.broker_config)
+        self.kafka_broker_config
+            .get(topic)
+            .unwrap_or(&self.broker_config)
     }
 }
