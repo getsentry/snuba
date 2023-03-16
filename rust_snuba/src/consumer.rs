@@ -22,6 +22,13 @@ struct Args {
     storage: Vec<String>,
 
     #[arg(long)]
+    consumer_group: String,
+
+    // TODO: Only latest, earliest and error should be allowed
+    #[arg(long)]
+    auto_offset_reset: String,
+
+    #[arg(long)]
     settings_path: String,
 
     #[arg(long)]
@@ -116,7 +123,7 @@ async fn main() {
         .iter()
         .filter_map(|(k, v)| Some((k.to_owned(), v.as_ref()?.to_owned())))
         .collect();
-    let config = KafkaConfig::new_config_from_raw(broker_config);
+    let config = KafkaConfig::new_consumer_config(vec![], args.consumer_group, args.auto_offset_reset, false, Some(broker_config));
 
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
     let mut processor = StreamProcessor::new(
