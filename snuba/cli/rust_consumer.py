@@ -122,6 +122,8 @@ def rust_consumer(
         consumer_config_path,
     ]
 
+    rust_consumer_args = ["--", "--settings-path", settings_path]
+
     for storage_name in storage_names:
         rust_consumer_args.extend(["--storage", storage_name])
 
