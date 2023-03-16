@@ -6,6 +6,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
     get_writable_storage,
@@ -144,6 +145,7 @@ class ClickhouseClusterConfig:
 @dataclass(frozen=True)
 class StorageConfig:
     name: str
+    clickhouse_table_name: str
     clickhouse_cluster: ClickhouseClusterConfig
 
 
@@ -227,13 +229,20 @@ def resolve_consumer_config(
         host="127.0.0.1", port=9000, user="default", password="", database="default"
     )
 
-    return RustConsumerConfig(
-        storages=[
+    storage_configs = []
+    for storage_name, storage in storages.items():
+        table_schema = storage.get_schema()
+        assert isinstance(table_schema, TableSchema)
+        storage_configs.append(
             StorageConfig(
-                name=storage_name, clickhouse_cluster=hardcoded_clickhouse_cluster
+                name=storage_name,
+                clickhouse_table_name=table_schema.get_table_name(),
+                clickhouse_cluster=hardcoded_clickhouse_cluster,
             )
-            for (storage_name, storage) in storages.items()
-        ],
+        )
+
+    return RustConsumerConfig(
+        storages=storage_configs,
         raw_topic=resolved_raw_topic,
         commit_log_topic=resolved_commit_log_topic,
         replacements_topic=resolved_replacements_topic,
