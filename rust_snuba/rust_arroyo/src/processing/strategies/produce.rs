@@ -58,8 +58,7 @@ impl ProcessingStrategy<KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty(){
-            let message_fut = self.queue.pop_front();
-            let (message, _produce_fut) = message_fut.unwrap();
+            let (message, produce_fut) = self.queue.pop_front().unwrap();
             self.next_step.poll();
             self.next_step.submit(message).unwrap()
         }
