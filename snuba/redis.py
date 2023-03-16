@@ -91,7 +91,6 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
         return StrictRedis(
             host=config["host"],
             port=config["port"],
-            username=config["username"],
             password=config["password"],
             db=config["db"],
             socket_keepalive=True,
@@ -104,7 +103,6 @@ _default_redis_client: RedisClientType = _initialize_redis_cluster(
         "cluster_startup_nodes": settings.REDIS_CLUSTER_STARTUP_NODES,
         "host": settings.REDIS_HOST,
         "port": settings.REDIS_PORT,
-        "username": settings.REDIS_USERNAME,
         "password": settings.REDIS_PASSWORD,
         "db": settings.REDIS_DB,
         "reinitialize_steps": settings.REDIS_REINITIALIZE_STEPS,

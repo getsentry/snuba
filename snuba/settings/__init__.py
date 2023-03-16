@@ -122,7 +122,6 @@ class RedisClusterConfig(TypedDict):
     cluster_startup_nodes: list[dict[str, Any]] | None
     host: str
     port: int
-    username: str | None
     password: str | None
     db: int
     reinitialize_steps: int
@@ -136,7 +135,6 @@ USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
-REDIS_USERNAME = os.environ.get("REDIS_USERNAME")
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
