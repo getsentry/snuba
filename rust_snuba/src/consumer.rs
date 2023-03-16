@@ -1,7 +1,6 @@
 use std::time::Duration;
 use std::collections::HashMap;
 
-use clap::Parser;
 use log;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
@@ -16,20 +15,12 @@ use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
-use rust_snuba::settings;
-use rust_snuba::storages::{self, ProcessorConfig};
+use crate::settings;
+use crate::storages::{self, ProcessorConfig};
 
 use anyhow::Error;
-
-#[derive(Parser, Debug)]
-struct Args {
-    #[arg(long)]
-    storage: String,
-
-    #[arg(long)]
-    settings_path: String,
-}
 
 struct Noop {}
 impl<T> ProcessingStrategy<T> for Noop where T: Clone {
@@ -52,7 +43,7 @@ struct ClickhouseInsert {}
 struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<ClickhouseInsert>>,
     processor_config: ProcessorConfig,
-    py_processor: Py<PyAny>,
+    py_process_message: Py<PyAny>,
 }
 
 impl PythonTransformStep {
@@ -63,28 +54,41 @@ impl PythonTransformStep {
         let name = &processor_config.name;
         let args = serde_json::to_string(&processor_config.args).unwrap();
         let code = format!(r#"
-import sys
-import os
-sys.path.extend(os.environ["SNUBA_PYTHONPATH"].split(":"))
-
-import json
+import rapidjson
 from snuba.datasets.processors import DatasetMessageProcessor
 
 processor = DatasetMessageProcessor \
     .get_from_name("{name}") \
-    .from_kwargs(**json.loads("""{args}"""))"#);
+    .from_kwargs(**rapidjson.loads("""{args}"""))
 
-        let py_processor = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.processor import InsertBatch
+
+def _wrapped(message, offset, partition, timestamp):
+    rv = processor.process_message(
+        message=rapidjson.loads(bytearray(message)),
+        metadata=KafkaMessageMetadata(
+            offset=offset,
+            partition=partition,
+            timestamp=timestamp
+        )
+    )
+
+    assert rv is None or isinstance(rv, InsertBatch), "this consumer does not support replacements"
+    return rv
+"#);
+
+        let py_process_message = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
             let fun: Py<PyAny> = PyModule::from_code(
                 py,
                 &code,
                 "",
                 ""
-            )?.getattr("processor")?.into();
+            )?.getattr("_wrapped")?.into();
             Ok(fun)
         })?;
 
-        Ok(PythonTransformStep { processor_config, next_step, py_processor })
+        Ok(PythonTransformStep { processor_config, next_step, py_process_message })
     }
 }
 
@@ -94,7 +98,13 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
-        log::info!("processing message");
+        log::info!("processing message, timestamp={:?}", message.timestamp);
+        let result = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
+            let args = (message.payload.payload, message.offset, message.partition.index, message.timestamp);
+            let result = self.py_process_message.call1(py, args)?;
+            Ok(result)
+        }).unwrap();
+
         let transformed = ClickhouseInsert {};
 
         self.next_step.submit(Message {
@@ -118,20 +128,25 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 }
 
-#[tokio::main]
-async fn main() {
+#[pyfunction]
+pub fn consumer(py: Python<'_>, storage: &str, settings_path: &str) {
+    py.allow_threads(|| {
+        consumer_impl(storage, settings_path)
+    });
+}
+
+fn consumer_impl(storage: &str, settings_path: &str) {
     env_logger::init();
-    let args = Args::parse();
     log::info!(
         "Starting consumer for {} with settings at {}",
-        args.storage,
-        args.settings_path,
+        storage,
+        settings_path,
     );
-    let settings = settings::Settings::load_from_json(&args.settings_path).unwrap();
+    let settings = settings::Settings::load_from_json(&settings_path).unwrap();
     log::info!("Loaded settings: {settings:?}");
 
     let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
-    let storage = storage_registry.get(&args.storage).unwrap();
+    let storage = storage_registry.get(&storage).unwrap();
 
     struct ConsumerStrategyFactory {
         config: KafkaConfig,
@@ -140,7 +155,10 @@ async fn main() {
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let transform_step = PythonTransformStep::new(self.processor_config.clone(), Noop {}).unwrap();
+            let transform_step = PythonTransformStep::new(
+                self.processor_config.clone(),
+                Noop {}
+            ).unwrap();
             Box::new(transform_step)
         }
     }
@@ -155,7 +173,9 @@ async fn main() {
         .collect();
 
     // TODO remove
-    broker_config.insert("group.id".to_owned(), "snuba-consumers".to_owned());
+    let consumer_group = "snuba-consumers".to_owned();
+    broker_config.insert("group.id".to_owned(), consumer_group.clone());
+    let logical_topic = &storage.stream_loader.default_topic;
 
     let config = KafkaConfig::new_config_from_raw(broker_config);
     let processor_config = storage.stream_loader.processor.clone();
@@ -163,11 +183,14 @@ async fn main() {
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
     let mut processor = StreamProcessor::new(
         consumer,
-        Box::new(ConsumerStrategyFactory { config, processor_config })
+        Box::new(ConsumerStrategyFactory {
+            config,
+            processor_config,
+        })
     );
 
     processor.subscribe(Topic {
-        name: settings.kafka_topic_map.get(&storage.stream_loader.default_topic).unwrap_or(&storage.stream_loader.default_topic).to_owned(),
+        name: settings.kafka_topic_map.get(logical_topic).unwrap_or(logical_topic).to_owned(),
     });
 
     processor.run().unwrap();

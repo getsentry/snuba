@@ -1,5 +1,4 @@
 import os
-import sys
 
 import click
 
@@ -59,13 +58,10 @@ def rust_consumer(*, storage_name: str, log_level: str) -> None:
     #     python_name: snuba.processors.QuerylogProcessor
     #     rust_name: rust_snuba::processors::QuerylogProcessor
 
-    os.execve(
-        RUST_PATH,
-        ["--", "--storage", storage_name, "--settings-path", settings_path],
-        {
-            "RUST_LOG": log_level,
-            # support python in virtualenv. apparently does not work out of the box with pyo3
-            "SNUBA_PYTHONPATH": ":".join(sys.path),
-            **os.environ,
-        },
-    )
+    import os
+
+    import rust_snuba
+
+    os.environ["RUST_LOG"] = log_level
+
+    rust_snuba.consumer(storage_name, settings_path)
