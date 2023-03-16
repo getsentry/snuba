@@ -19,10 +19,14 @@ use rust_snuba::storages;
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
-    storages: Vec<String>,
+    storage: Vec<String>,
 
     #[arg(long)]
     settings_path: String,
+
+    #[arg(long)]
+    config_path: String,
+
 }
 
 struct Noop {}
@@ -83,7 +87,7 @@ async fn main() {
     let args = Args::parse();
 
     // TODO: Support multiple storages
-    let first_storage = args.storages[0].clone();
+    let first_storage = args.storage[0].clone();
 
     log::info!(
         "Starting consumer for {:?} with settings at {}",
