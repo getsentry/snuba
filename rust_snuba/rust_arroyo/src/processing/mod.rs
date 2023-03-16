@@ -95,7 +95,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> =
             Box::new(Callbacks::new(self.strategies.clone()));
-        let _ = self.consumer.subscribe(&[topic], callbacks);
+        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -116,7 +116,10 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             //TODO: Support errors properly
             match msg {
                 Ok(m) => self.message = m,
-                Err(_) => return Err(RunError::PollError),
+                Err(e) => {
+                    log::error!("poll error: {}", e);
+                    return Err(RunError::PollError)
+                },
             }
         }
 

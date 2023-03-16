@@ -1,3 +1,6 @@
+use std::time::Duration;
+use std::collections::HashMap;
+
 use clap::Parser;
 use log;
 
@@ -11,10 +14,13 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
-use std::time::Duration;
+
+use pyo3::prelude::*;
 
 use rust_snuba::settings;
-use rust_snuba::storages;
+use rust_snuba::storages::{self, ProcessorConfig};
+
+use anyhow::Error;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -44,7 +50,42 @@ impl<T> ProcessingStrategy<T> for Noop where T: Clone {
 struct ClickhouseInsert {}
 
 struct PythonTransformStep {
-    pub next_step: Box<dyn ProcessingStrategy<ClickhouseInsert>>,
+    next_step: Box<dyn ProcessingStrategy<ClickhouseInsert>>,
+    processor_config: ProcessorConfig,
+    py_processor: Py<PyAny>,
+}
+
+impl PythonTransformStep {
+    fn new<N>(processor_config: ProcessorConfig, next_step: N) -> Result<Self, Error>
+        where N: ProcessingStrategy<ClickhouseInsert> + 'static
+    {
+        let next_step = Box::new(next_step);
+        let name = &processor_config.name;
+        let args = serde_json::to_string(&processor_config.args).unwrap();
+        let code = format!(r#"
+import sys
+import os
+sys.path.extend(os.environ["SNUBA_PYTHONPATH"].split(":"))
+
+import json
+from snuba.datasets.processors import DatasetMessageProcessor
+
+processor = DatasetMessageProcessor \
+    .get_from_name("{name}") \
+    .from_kwargs(**json.loads("""{args}"""))"#);
+
+        let py_processor = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
+            let fun: Py<PyAny> = PyModule::from_code(
+                py,
+                &code,
+                "",
+                ""
+            )?.getattr("processor")?.into();
+            Ok(fun)
+        })?;
+
+        Ok(PythonTransformStep { processor_config, next_step, py_processor })
+    }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
@@ -94,26 +135,35 @@ async fn main() {
 
     struct ConsumerStrategyFactory {
         config: KafkaConfig,
+        processor_config: ProcessorConfig,
     }
+
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let transform_step = PythonTransformStep {
-                next_step: Box::new(Noop {}),
-            };
+            let transform_step = PythonTransformStep::new(self.processor_config.clone(), Noop {}).unwrap();
             Box::new(transform_step)
         }
     }
 
-    let broker_config = settings.get_broker_config(&storage.stream_loader.default_topic)
+    let mut broker_config: HashMap<_, _> = settings.get_broker_config(&storage.stream_loader.default_topic)
         .iter()
-        .filter_map(|(k, v)| Some((k.to_owned(), v.as_ref()?.to_owned())))
+        .filter_map(|(k, v)| {
+            let v = v.as_ref()?;
+            if v.is_empty() { return None }
+            Some((k.to_owned(), v.to_owned()))
+        })
         .collect();
+
+    // TODO remove
+    broker_config.insert("group.id".to_owned(), "snuba-consumers".to_owned());
+
     let config = KafkaConfig::new_config_from_raw(broker_config);
+    let processor_config = storage.stream_loader.processor.clone();
 
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
     let mut processor = StreamProcessor::new(
         consumer,
-        Box::new(ConsumerStrategyFactory { config })
+        Box::new(ConsumerStrategyFactory { config, processor_config })
     );
 
     processor.subscribe(Topic {

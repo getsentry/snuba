@@ -1,4 +1,5 @@
 import os
+import sys
 
 import click
 
@@ -61,5 +62,10 @@ def rust_consumer(*, storage_name: str, log_level: str) -> None:
     os.execve(
         RUST_PATH,
         ["--", "--storage", storage_name, "--settings-path", settings_path],
-        {"RUST_LOG": log_level, **os.environ},
+        {
+            "RUST_LOG": log_level,
+            # support python in virtualenv. apparently does not work out of the box with pyo3
+            "SNUBA_PYTHONPATH": ":".join(sys.path),
+            **os.environ,
+        },
     )

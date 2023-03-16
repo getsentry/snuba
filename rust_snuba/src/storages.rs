@@ -4,6 +4,7 @@ use std::fs::File;
 use crate::settings::{Settings};
 
 use serde::Deserialize;
+use serde_json::Value;
 use anyhow::{Error, bail, Context};
 
 #[derive(Deserialize)]
@@ -26,27 +27,29 @@ pub struct WritableStorageConfig {
     pub writer_options: WriterOptions,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Clone, Debug)]
 #[serde(default)]
 pub struct WriterOptions {
     pub input_format_skip_unknown_fields: u8,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct SchemaConfig {
     pub local_table_name: String,
     pub dist_table_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct StreamLoaderConfig {
     pub processor: ProcessorConfig,
     pub default_topic: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct ProcessorConfig {
-    name: String
+    pub name: String,
+    #[serde(default)]
+    pub args: BTreeMap<String, Value>,
 }
 
 pub struct StorageRegistry {
