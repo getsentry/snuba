@@ -34,6 +34,12 @@ RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
     help="Consumer group use for consuming the raw events topic.",
     required=True,
 )
+@click.option(
+    "--auto-offset-reset",
+    default="error",
+    type=click.Choice(["error", "earliest", "latest"]),
+    help="Kafka consumer auto offset reset.",
+)
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
     "--commit-log-topic",
@@ -78,6 +84,7 @@ def rust_consumer(
     *,
     storage_names: Sequence[str],
     consumer_group: str,
+    auto_offset_reset: str,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -116,6 +123,10 @@ def rust_consumer(
 
     rust_consumer_args = [
         "--",
+        "--consumer-group",
+        consumer_group,
+        "--auto-offset-reset",
+        auto_offset_reset,
         "--settings-path",
         settings_path,
         "--config-path",

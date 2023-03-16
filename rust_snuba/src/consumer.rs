@@ -19,7 +19,14 @@ use rust_snuba::storages;
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
-    storages: Vec<String>,
+    storage: Vec<String>,
+
+    #[arg(long)]
+    consumer_group: String,
+
+    // TODO: Only latest, earliest and error should be allowed
+    #[arg(long)]
+    auto_offset_reset: String,
 
     #[arg(long)]
     settings_path: String,
@@ -87,7 +94,7 @@ async fn main() {
     let args = Args::parse();
 
     // TODO: Support multiple storages
-    let first_storage = args.storages[0].clone();
+    let first_storage = args.storage[0].clone();
 
     log::info!(
         "Starting consumer for {:?} with settings at {}",
@@ -116,7 +123,7 @@ async fn main() {
         .iter()
         .filter_map(|(k, v)| Some((k.to_owned(), v.as_ref()?.to_owned())))
         .collect();
-    let config = KafkaConfig::new_config_from_raw(broker_config);
+    let config = KafkaConfig::new_consumer_config(vec![], args.consumer_group, args.auto_offset_reset, false, Some(broker_config));
 
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
     let mut processor = StreamProcessor::new(
