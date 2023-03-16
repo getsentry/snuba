@@ -382,6 +382,10 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
+# cache for checking inactive replicas for migrations
+MIGRATIONS_CHECK_REPLICAS_REDIS_KEY = "migrations:check_replicas"
+MIGRATIONS_CHECK_REPLICAS_REDIS_TTL = timedelta(180)  # cache for 180s
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
