@@ -517,6 +517,17 @@ def check_for_inactive_replicas(
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
+    # initialize redis cache
+    if not redis_cache.exists(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY):
+        redis_cache.sadd(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY, "")
+        redis_cache.expire(
+            settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY,
+            settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL,
+        )
+    else:
+        # if the redis cache exists, the run was already done within the TTL
+        return None
+
     if storage_keys is None:
         storage_keys = [
             storage_key
@@ -534,14 +545,6 @@ def check_for_inactive_replicas(
         query_node = cluster.get_query_node()
         local_nodes = cluster.get_local_nodes()
         distributed_nodes = cluster.get_distributed_nodes()
-
-        # intialize redis cache
-        if not redis_cache.exists(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY):
-            redis_cache.sadd(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY, "")
-            redis_cache.expire(
-                settings.MIGRATIONS_CHECK_REPLICAS_REDIS_KEY,
-                settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL,
-            )
 
         for node in (*local_nodes, *distributed_nodes, query_node):
             node_str = f"{node.host_name}:{node.port}"
