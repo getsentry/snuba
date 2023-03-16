@@ -164,6 +164,7 @@ def test_error_processor() -> None:
                                 "module": "snuba.clickhouse.http",
                                 "value": "[171] DB::Exception: Block structure mismatch",
                                 "mechanism": {"type": "excepthook", "handled": False},
+                                "thread_id": 1,
                             }
                         ]
                     },
@@ -218,6 +219,14 @@ def test_error_processor() -> None:
                     "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
                     "type": "error",
                     "version": "7",
+                    "threads": {
+                        "values": [
+                            {
+                                "id": 1,
+                                "main": True,
+                            },
+                        ]
+                    },
                 },
             }
         ),
@@ -319,6 +328,7 @@ def test_error_processor() -> None:
         "exception_frames.module": ["__main__"],
         "exception_frames.function": ["<module>"],
         "exception_frames.stack_level": [0],
+        "exception_main_thread": True,
         "sdk_integrations": [
             "argv",
             "atexit",

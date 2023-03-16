@@ -11,6 +11,7 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
     SentryExceptionChain,
     SentryRequest,
     SentryUser,
+    SentryThreadChain,
 )
 
 from snuba import settings
@@ -133,7 +134,19 @@ class ErrorsProcessor(DatasetMessageProcessor):
             or {"values": []}
         )
         stacks = exception.get("values", None) or []
-        self.extract_stacktraces(processed, stacks)
+
+        thread: SentryThreadChain = (
+            data.get(
+                "threads",
+                cast(
+                    SentryThreadChain, data.get("sentry.interfaces.threads.Threads", None)
+                ),
+            )
+            or {"values": []}
+        )
+        threadsStack = thread.get("values", None) or []
+
+        self.extract_stacktraces(processed, stacks, threadsStack)
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
@@ -282,7 +295,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["modules.version"] = module_versions
 
     def extract_stacktraces(
-        self, output: MutableMapping[str, Any], stacks: Sequence[Any]
+        self, output: MutableMapping[str, Any], stacks: Sequence[Any], threads: Sequence[Any]
     ) -> None:
         stack_types = []
         stack_values = []
@@ -298,6 +311,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         frame_colnos = []
         frame_linenos = []
         frame_stack_levels = []
+        exception_main_thread = None
 
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
             stack_level = 0
@@ -311,6 +325,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
                 mechanism = stack.get("mechanism", None) or {}
                 stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
                 stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
+
+                thread_id = stack.get("thread_id", None)
 
                 frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
                 for frame in frames:
@@ -327,6 +343,23 @@ class ErrorsProcessor(DatasetMessageProcessor):
                     frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
                     frame_stack_levels.append(stack_level)
 
+                ## mark if one of the exceptions is in the main thread
+                if exception_main_thread is None and thread_id is not None:
+                    for thread in threads:
+                        if thread is None:
+                            continue
+
+                        ## if it's not the main thread, continue
+                        main = thread.get("main", None)
+                        if main is None or main is False:
+                            continue
+
+                        id = thread.get("id", None)
+                        if id is not None and id == thread_id:
+                            ## if it's the main thread, mark it
+                            exception_main_thread = True
+                            break
+
                 stack_level += 1
 
         output["exception_stacks.type"] = stack_types
@@ -342,6 +375,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["exception_frames.colno"] = frame_colnos
         output["exception_frames.lineno"] = frame_linenos
         output["exception_frames.stack_level"] = frame_stack_levels
+
+        if exception_main_thread is not None:
+            output["exception_main_thread"] = exception_main_thread
 
     def extract_required(
         self,
