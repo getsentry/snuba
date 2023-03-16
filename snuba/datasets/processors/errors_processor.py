@@ -10,8 +10,8 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
     InsertEvent,
     SentryExceptionChain,
     SentryRequest,
-    SentryUser,
     SentryThreadChain,
+    SentryUser,
 )
 
 from snuba import settings
@@ -135,15 +135,12 @@ class ErrorsProcessor(DatasetMessageProcessor):
         )
         stacks = exception.get("values", None) or []
 
-        thread: SentryThreadChain = (
-            data.get(
-                "threads",
-                cast(
-                    SentryThreadChain, data.get("sentry.interfaces.threads.Threads", None)
-                ),
-            )
-            or {"values": []}
-        )
+        thread: SentryThreadChain = data.get(
+            "threads",
+            cast(
+                SentryThreadChain, data.get("sentry.interfaces.threads.Threads", None)
+            ),
+        ) or {"values": []}
         threadsStack = thread.get("values", None) or []
 
         self.extract_stacktraces(processed, stacks, threadsStack)
@@ -295,7 +292,10 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["modules.version"] = module_versions
 
     def extract_stacktraces(
-        self, output: MutableMapping[str, Any], stacks: Sequence[Any], threads: Sequence[Any]
+        self,
+        output: MutableMapping[str, Any],
+        stacks: Sequence[Any],
+        threads: Sequence[Any],
     ) -> None:
         stack_types = []
         stack_values = []
