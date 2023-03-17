@@ -353,7 +353,7 @@ def process_tags_object(value: Any) -> Tag:
         parsed_key, parsed_value = to_string(key), maybe(to_string, value)
 
         if key == "transaction":
-            transaction = parsed_value
+            transaction = parsed_value or ""
         elif parsed_value is not None:
             keys.append(parsed_key)
             values.append(parsed_value)
