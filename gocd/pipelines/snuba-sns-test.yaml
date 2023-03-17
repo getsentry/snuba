@@ -27,7 +27,7 @@ pipelines:
             - deploy:
                   fetch_materials: true
                   jobs:
-                     deploy:
+                      deploy:
                           timeout: 1200
                           elastic_profile_id: snuba
                           tasks:
@@ -79,3 +79,33 @@ pipelines:
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"
+
+            - migrate:
+                  approval:
+                      type: manual
+                  fetch_materials: true
+                  jobs:
+                      - migrate:
+                            timeout: 1200
+                            elastic_profile_id: snuba
+                            tasks:
+                                - script: |
+                                      /devinfra/scripts/k8s/k8stunnel \
+                                      && /devinfra/scripts/k8s/k8s-spawn-job.py \
+                                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                                      --label-selector="service=snuba-admin" \
+                                      --image="ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
+                                      --job-name="snuba migrate" \
+                                      --command="snuba"\
+                                      --args="migrations migrate --force"
+
+                                - script: |
+                                      /devinfra/scripts/k8s/k8stunnel \
+                                      && /devinfra/scripts/k8s/k8s-spawn-job.py \
+                                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                                      --label-selector="service=snuba-admin" \
+                                      --image="ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
+                                      --job-name="snuba migrate" \
+                                      --command="snuba"\
+                                      --args="reverse-in-progress"
+                                  run_if: "failed"
