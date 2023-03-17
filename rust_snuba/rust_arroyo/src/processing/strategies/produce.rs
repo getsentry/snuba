@@ -1,5 +1,5 @@
 
-use futures::Future;
+use futures::{Future, task};
 use futures::executor::block_on;
 use futures::stream::FuturesOrdered;
 use log::warn;
@@ -14,7 +14,9 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use futures::executor::ThreadPool;
 
 pub struct ProduceFuture {
     // pub producer: &'a KafkaProducer,
@@ -22,7 +24,11 @@ pub struct ProduceFuture {
     pub producer: Arc<KafkaProducer>,
     destination: Arc<TopicOrPartition>,
     payload: KafkaPayload,
+    pub completed: bool,
 }
+
+// type Task = Pin<Box<dyn Future<Output = ()> + Send>>;
+type Task = Pin<Box<ProduceFuture>>;
 
 impl Future for ProduceFuture {
     type Output = ();
@@ -34,10 +40,11 @@ impl Future for ProduceFuture {
 pub struct Produce<TPayload: Clone + Send + Sync> {
     pub producer: Arc<KafkaProducer>,
     pub next_step: Box<dyn ProcessingStrategy<TPayload>>,
-    queue: VecDeque<(Message<TPayload>, ProduceFuture)>,
+    queue: VecDeque<(Message<TPayload>, Task, JoinHandle<()>)>,
     topic: Arc<TopicOrPartition>,
     closed: bool,
     max_queue_size: usize,
+    pool: ThreadPool
 }
 
 impl Produce<KafkaPayload> {
@@ -49,6 +56,7 @@ impl Produce<KafkaPayload> {
             topic: Arc::new(topic),
             closed: false,
             max_queue_size: 1000,
+            pool: ThreadPool::new().unwrap()
         }
     }
 }
@@ -58,7 +66,28 @@ impl ProcessingStrategy<KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty(){
-            let (message, produce_fut) = self.queue.pop_front().unwrap();
+            let (message, mut produce_fut) = self.queue.pop_front().unwrap();
+
+            let waker = task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+
+            match produce_fut.as_mut().poll(&mut cx) {
+                task::Poll::Ready(val) => {
+                    // future is done,
+                    produce_fut.completed = true;
+                },
+                task::Poll::Pending => todo!(),
+            } ;
+            // match Future::poll(produce_fut, &mut cx) {
+            //     std::task::Poll::Ready(val) => {
+            //         // future is done,
+            //         produce_fut.completed = true;
+
+            //     }
+            //     std::task::Poll::Pending => {
+            //         break;
+            //     }
+            // };
             self.next_step.poll();
             self.next_step.submit(message).unwrap()
         }
@@ -77,9 +106,12 @@ impl ProcessingStrategy<KafkaPayload>
             producer: Arc::clone(&self.producer),
             destination: Arc::clone(&self.topic),
             payload: message.payload.clone(),
+            completed: false,
         };
+        // spawn the future
+        let handle = tokio::spawn(produce_fut);
 
-        self.queue.push_back((message, produce_fut));
+        self.queue.push_back((message, Box::pin(produce_fut), handle));
         return Ok(());
     }
 
