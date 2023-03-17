@@ -215,7 +215,7 @@ def process_replay_actions(
     metadata: KafkaMessageMetadata,
 ) -> dict[str, Any]:
     """Process replay_actions message type."""
-    return {
+    result = {
         # Primary-key.
         "project_id": processed["project_id"],
         "timestamp": default(
@@ -239,22 +239,33 @@ def process_replay_actions(
         "partition": metadata.partition,
         "offset": metadata.offset,
         # DOM Index fields.
-        "click": [
-            {
-                "node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
-                "tag": to_string(click["tag"])[:32],
-                "id": to_string(click["id"])[:64],
-                "class": to_typed_list(to_string, click["class"][:20]),
-                "text": to_string(click["text"])[:1024],
-                "role": to_string(click["role"])[:32],
-                "alt": to_string(click["alt"])[:64],
-                "testid": to_string(click["testid"])[:64],
-                "aria_label": to_string(click["aria_label"])[:64],
-                "title": to_string(click["title"])[:64],
-            }
-            for click in payload["click"]
-        ],
+        "click.node_id": [],
+        "click.tag": [],
+        "click.id": [],
+        "click.class": [],
+        "click.text": [],
+        "click.role": [],
+        "click.alt": [],
+        "click.testid": [],
+        "click.aria_label": [],
+        "click.title": [],
     }
+
+    for click in payload["click"]:
+        result["click.node_id"].append(
+            _collapse_or_err(_collapse_uint32, int(click["node_id"]))
+        )
+        result["click.tag"].append(to_string(click["tag"])[:32])
+        result["click.id"].append(to_string(click["id"])[:64])
+        result["click.class"].append(to_typed_list(to_string, click["class"][:20]))
+        result["click.text"].append(to_string(click["text"])[:1024])
+        result["click.role"].append(to_string(click["role"])[:32])
+        result["click.alt"].append(to_string(click["alt"])[:64])
+        result["click.testid"].append(to_string(click["testid"])[:64])
+        result["click.aria_label"].append(to_string(click["aria_label"])[:64])
+        result["click.title"].append(to_string(click["title"])[:64])
+
+    return result
 
 
 T = TypeVar("T")
