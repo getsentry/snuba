@@ -35,6 +35,8 @@ logger = logging.getLogger("snuba.migrations")
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
+# because the CI/tests make many calls to the migrations system, we cache results
+# in memory to avoid hitting the database too much
 replica_cache_set = ReplicaExpiringSet(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL)
 
 
@@ -518,8 +520,8 @@ def check_for_inactive_replicas(
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
 
-    # if the redis cache exists, the run was already done within the TTL
-    if replica_cache_set.isvalid():
+    # if cache exists, the run was already done within the TTL
+    if replica_cache_set.is_valid and not (replica_cache_set.expired()):
         return None
 
     replica_cache_set.reset()
@@ -544,10 +546,10 @@ def check_for_inactive_replicas(
 
         for node in (*local_nodes, *distributed_nodes, query_node):
             node_str = f"{node.host_name}:{node.port}"
-            if node_str in replica_cache_set:
+            if node_str in replica_cache_set.cache:
                 continue
 
-            replica_cache_set.add(node_str)
+            replica_cache_set.cache.add(node_str)
 
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             tables_with_inactive = conn.execute(
@@ -557,7 +559,7 @@ def check_for_inactive_replicas(
 
             for table, total_replicas, active_replicas in tables_with_inactive:
 
-                # clear cache so we can check again next time
+                # invalidate cache so we can check again next time
                 replica_cache_set.invalidate()
 
                 raise InactiveClickhouseReplica(
