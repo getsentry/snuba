@@ -1,4 +1,3 @@
-import inspect
 import json
 import os
 from dataclasses import asdict, dataclass
@@ -150,10 +149,8 @@ class ClickhouseClusterConfig:
 
 @dataclass(frozen=True)
 class MessageProcessorConfig:
-    # TODO: Probably won't end up needing all this
     python_class_name: str
     python_module: str
-    python_file_path: str
 
 
 @dataclass(frozen=True)
@@ -269,7 +266,6 @@ def resolve_storage_config(
         message_processor=MessageProcessorConfig(
             python_class_name=processor.__class__.__name__,
             python_module=processor.__class__.__module__,
-            python_file_path=inspect.getfile(processor.__class__),
         ),
     )
 
