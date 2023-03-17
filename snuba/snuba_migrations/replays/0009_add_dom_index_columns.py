@@ -1,40 +1,34 @@
 from typing import Iterator, Sequence, Tuple
 
-from snuba.clickhouse.columns import Array, Column, String, UInt
+from snuba.clickhouse.columns import Array, Column, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (
-        Column("dom_tag", String(Modifiers(nullable=True, low_cardinality=True))),
+        Column(
+            "click",
+            Nested(
+                [
+                    Column("node_id", UInt(32)),
+                    Column("tag", String(Modifiers(low_cardinality=True))),
+                    Column("id", String()),
+                    Column("class", Array(String())),
+                    Column("text", String()),
+                    Column("role", String(Modifiers(low_cardinality=True))),
+                    Column("alt", String()),
+                    Column("testid", String()),
+                    Column("aria_label", String()),
+                    Column("title", String()),
+                ]
+            ),
+        ),
         "tags.value",
     ),
-    (
-        Column("dom_action", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_tag",
-    ),
-    (Column("dom_id", String(Modifiers(nullable=True))), "dom_action"),
-    (Column("dom_classes", Array(String())), "dom_id"),
-    (Column("dom_aria_label", String(Modifiers(nullable=True))), "dom_classes"),
-    (
-        Column("dom_aria_role", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_aria_label",
-    ),
-    (
-        Column("dom_role", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_aria_role",
-    ),
-    (Column("dom_text_content", String(Modifiers(nullable=True))), "dom_aria_role"),
-    (Column("dom_node_id", UInt(32, Modifiers(nullable=True))), "dom_text_content"),
 ]
 
-
-alters: Sequence[Column[Modifiers]] = [
-    Column("user", String(Modifiers(nullable=True))),
-    Column("sdk_name", String(Modifiers(nullable=True))),
-    Column("sdk_version", String(Modifiers(nullable=True))),
-]
+alters: Sequence[str] = ["user", "sdk_name", "sdk_version"]
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -65,18 +59,18 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
-    for alter in alters:
+    for column_name in alters:
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
-            column=alter,
+            column=Column(column_name, String(Modifiers(nullable=True))),
             target=operations.OperationTarget.LOCAL,
         )
 
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_dist",
-            column=alter,
+            column=Column(column_name, String(Modifiers(nullable=True))),
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
@@ -97,7 +91,17 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
             column_name=column.name,
         )
 
-    for alter in alters:
+    for column_name in alters:
         yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS, table_name="replays_local", column=alter
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_local",
+            column=Column(column_name, String(Modifiers(nullable=False))),
+            target=operations.OperationTarget.LOCAL,
+        )
+
+        yield operations.ModifyColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_dist",
+            column=Column(column_name, String(Modifiers(nullable=False))),
+            target=operations.OperationTarget.DISTRIBUTED,
         )
