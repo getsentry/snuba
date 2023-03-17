@@ -14,12 +14,9 @@ from snuba.clusters.cluster import (
     ClickhouseNodeType,
     get_cluster,
 )
-from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
-    InactiveClickhouseReplica,
     InvalidMigrationState,
     MigrationError,
     MigrationInProgress,
@@ -28,16 +25,11 @@ from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_l
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
-from snuba.migrations.utils import ReplicaExpiringSet
 
 logger = logging.getLogger("snuba.migrations")
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
-
-# because the CI/tests make many calls to the migrations system, we cache results
-# in memory to avoid hitting the database too much
-replica_cache_set = ReplicaExpiringSet(settings.MIGRATIONS_CHECK_REPLICAS_REDIS_TTL)
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
@@ -167,7 +159,6 @@ class Runner:
         Requires force to run blocking migrations.
         """
 
-        check_for_inactive_replicas()
         if not group:
             pending_migrations = self._get_pending_migrations()
         else:
@@ -200,7 +191,7 @@ class Runner:
 
         Blocking migrations must be run with force.
         """
-        check_for_inactive_replicas()
+
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
@@ -258,7 +249,7 @@ class Runner:
         """
         Reverses a migration.
         """
-        check_for_inactive_replicas()
+
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
@@ -304,7 +295,7 @@ class Runner:
         will be at most one in-progress migration per group since you
         can't move forward if a migration is in-progress.
         """
-        check_for_inactive_replicas()
+
         migration_status = self._get_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
@@ -511,58 +502,3 @@ class Runner:
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():
                     python_op.execute_new_node(storage_sets)
-
-
-def check_for_inactive_replicas(
-    storage_keys: Optional[Sequence[StorageKey]] = None,
-) -> None:
-    """
-    Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
-    """
-
-    # if cache exists, the run was already done within the TTL
-    if replica_cache_set.is_valid and not (replica_cache_set.expired()):
-        return None
-
-    replica_cache_set.reset()
-
-    if storage_keys is None:
-        storage_keys = [
-            storage_key
-            for storage_key in sorted(
-                get_all_storage_keys(), key=lambda storage_key: storage_key.value
-            )
-            if get_storage(storage_key).get_storage_set_key() not in DEV_STORAGE_SETS
-            or settings.ENABLE_DEV_FEATURES
-        ]
-
-    for storage_key in storage_keys:
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-
-        query_node = cluster.get_query_node()
-        local_nodes = cluster.get_local_nodes()
-        distributed_nodes = cluster.get_distributed_nodes()
-
-        for node in (*local_nodes, *distributed_nodes, query_node):
-            node_str = f"{node.host_name}:{node.port}"
-            if node_str in replica_cache_set.cache:
-                continue
-
-            replica_cache_set.cache.add(node_str)
-
-            conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            tables_with_inactive = conn.execute(
-                f"SELECT table, total_replicas, active_replicas FROM system.replicas "
-                f"WHERE active_replicas < total_replicas AND database ='{conn.database}'",
-            ).results
-
-            for table, total_replicas, active_replicas in tables_with_inactive:
-
-                # invalidate cache so we can check again next time
-                replica_cache_set.invalidate()
-
-                raise InactiveClickhouseReplica(
-                    f"Storage {storage_key.value} has inactive replicas for table {table} "
-                    f"with {active_replicas} out of {total_replicas} replicas active."
-                )
