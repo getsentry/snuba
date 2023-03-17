@@ -6,3 +6,4 @@ is_experimental: false
 
 entities:
   - events
+  - xproj_errors
