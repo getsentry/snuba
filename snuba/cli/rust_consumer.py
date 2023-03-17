@@ -102,12 +102,6 @@ def rust_consumer(
     settings_data = get_settings_json()
     settings_path = write_file_to_tmp_directory(settings_data, "settings.json")
 
-    # TODO: Consumer config is still missing some stuff needed by the Rust consumer, e.g.:
-    #
-    # stream_loader:
-    #   processor:
-    #     python_name: snuba.processors.QuerylogProcessor
-
     consumer_config = resolve_consumer_config(
         storage_names=storage_names,
         raw_topic=raw_events_topic,
@@ -154,10 +148,17 @@ class ClickhouseClusterConfig:
 
 
 @dataclass(frozen=True)
+class MessageProcessorConfig:
+    python_class_name: str
+    python_module: str
+
+
+@dataclass(frozen=True)
 class StorageConfig:
     name: str
     clickhouse_table_name: str
     clickhouse_cluster: ClickhouseClusterConfig
+    message_processor: MessageProcessorConfig
 
 
 @dataclass(frozen=True)
@@ -235,28 +236,37 @@ def resolve_consumer_config(
             slice_id
         )
 
+    return RustConsumerConfig(
+        storages=[
+            resolve_storage_config(storage_name, storage)
+            for (storage_name, storage) in storages.items()
+        ],
+        raw_topic=resolved_raw_topic,
+        commit_log_topic=resolved_commit_log_topic,
+        replacements_topic=resolved_replacements_topic,
+    )
+
+
+def resolve_storage_config(
+    storage_name: str, storage: WritableTableStorage
+) -> StorageConfig:
     # TODO: Temporarily hardcoded. To be properly resolved based on the storage set.
     hardcoded_clickhouse_cluster = ClickhouseClusterConfig(
         host="127.0.0.1", port=9000, user="default", password="", database="default"
     )
 
-    storage_configs = []
-    for storage_name, storage in storages.items():
-        table_schema = storage.get_schema()
-        assert isinstance(table_schema, TableSchema)
-        storage_configs.append(
-            StorageConfig(
-                name=storage_name,
-                clickhouse_table_name=table_schema.get_table_name(),
-                clickhouse_cluster=hardcoded_clickhouse_cluster,
-            )
-        )
+    processor = storage.get_table_writer().get_stream_loader().get_processor()
 
-    return RustConsumerConfig(
-        storages=storage_configs,
-        raw_topic=resolved_raw_topic,
-        commit_log_topic=resolved_commit_log_topic,
-        replacements_topic=resolved_replacements_topic,
+    table_schema = storage.get_schema()
+    assert isinstance(table_schema, TableSchema)
+    return StorageConfig(
+        name=storage_name,
+        clickhouse_table_name=table_schema.get_table_name(),
+        clickhouse_cluster=hardcoded_clickhouse_cluster,
+        message_processor=MessageProcessorConfig(
+            python_class_name=processor.__class__.__name__,
+            python_module=processor.__class__.__module__,
+        ),
     )
 
 
