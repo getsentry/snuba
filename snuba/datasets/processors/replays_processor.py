@@ -257,7 +257,7 @@ def process_replay_actions(
         )
         result["click.tag"].append(to_string(click["tag"])[:32])
         result["click.id"].append(to_string(click["id"])[:64])
-        result["click.class"].append(to_typed_list(to_string, click["class"][:20]))
+        result["click.class"].append(to_typed_list(to_string, click["class"][:10]))
         result["click.text"].append(to_string(click["text"])[:1024])
         result["click.role"].append(to_string(click["role"])[:32])
         result["click.alt"].append(to_string(click["alt"])[:64])
