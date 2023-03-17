@@ -1,0 +1,129 @@
+version: v1
+kind: entity
+name: xproj_errors
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: event_id, type: UUID },
+    { name: group_id, type: UInt, args: { size: 64 } },
+  ]
+required_time_column: timestamp
+storages:
+  - storage: errors_ro
+    is_writable: false
+    translation_mappers:
+      columns:
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: release
+            to_nested_col_table_name: null
+            to_nested_col_name: tags
+            to_nested_mapping_key: sentry:release
+            nullable: false
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: dist
+            to_nested_col_table_name: null
+            to_nested_col_name: tags
+            to_nested_mapping_key: sentry:dist
+            nullable: false
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: user
+            to_nested_col_table_name: null
+            to_nested_col_name: tags
+            to_nested_mapping_key: sentry:user
+            nullable: false
+        - mapper: ColumnToIPAddress
+          args:
+            from_table_name: null
+            from_col_name: ip_address
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: transaction
+            to_table_name: null
+            to_col_name: transaction_name
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: username
+            to_table_name: null
+            to_col_name: user_name
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: email
+            to_table_name: null
+            to_col_name: user_email
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_country_code
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.country_code
+            nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_region
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.region
+            nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_city
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.city
+            nullable: true
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: contexts
+            to_nested_col_table: null
+            to_nested_col_name: contexts
+            value_subcolumn_name: value
+            nullable: false
+storage_selector:
+  selector: DefaultQueryStorageSelector
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - project_id
+  - validator: DatetimeConditionValidator
+    args: {}
