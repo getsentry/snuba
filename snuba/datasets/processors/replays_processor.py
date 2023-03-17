@@ -187,7 +187,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
             if replay_event["type"] == "replay_actions":
                 actions = process_replay_actions(replay_event, processed, metadata)
-                return InsertBatch(actions, None)
+                return InsertBatch([actions], None)
             else:
                 # The following helper functions should be able to be applied in any order.
                 # At time of writing, there are no reads of the values in the `processed`
@@ -213,47 +213,48 @@ def process_replay_actions(
     payload: Mapping[Any, Any],
     processed: Mapping[Any, Any],
     metadata: KafkaMessageMetadata,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Process replay_actions message type."""
-    project_id = processed["project_id"]
-    retention_days = processed["retention_days"]
-    replay_id = payload["replay_id"]
-    segment_id = payload["segment_id"]
-
-    return [
-        {
-            # Primary-key.
-            "project_id": project_id,
-            "timestamp": action["timestamp"],
-            "replay_id": replay_id,
-            "event_hash": action["event_hash"],
-            "segment_id": segment_id,
-            # DOM Index fields.
-            "dom_element": action["dom_element"][:64],
-            "dom_action": action["dom_action"],
-            "dom_id": action["dom_id"][:64],
-            "dom_classes": action["dom_classes"][:100],
-            "dom_aria_label": action["dom_aria_label"][:64],
-            "dom_aria_role": action["dom_aria_role"][:64],
-            "dom_role": action["dom_role"][:64],
-            "dom_text_content": action["dom_text_content"][:64],
-            "dom_node_id": action["dom_node_id"],
-            # Default values for non-nullable columns.
-            "trace_ids": [],
-            "error_ids": [],
-            "urls": [],
-            "title": "",
-            "platform": "javascript",
-            "user": "",
-            "sdk_name": "",
-            "sdk_version": "",
-            # Kafka columns.
-            "retention_days": retention_days,
-            "partition": metadata.partition,
-            "offset": metadata.offset,
-        }
-        for action in payload["actions"]
-    ]
+    return {
+        # Primary-key.
+        "project_id": processed["project_id"],
+        "timestamp": default(
+            lambda: datetime.now(timezone.utc),
+            maybe(to_datetime, payload.get("timestamp")),
+        ),
+        "replay_id": to_uuid(payload["replay_id"]),
+        "event_hash": payload.get("event_hash", segment_id_to_event_hash(None)),
+        "segment_id": None,
+        # Default values for non-nullable columns.
+        "trace_ids": [],
+        "error_ids": [],
+        "urls": [],
+        "title": None,
+        "platform": "javascript",
+        "user": None,
+        "sdk_name": None,
+        "sdk_version": None,
+        # Kafka columns.
+        "retention_days": processed["retention_days"],
+        "partition": metadata.partition,
+        "offset": metadata.offset,
+        # DOM Index fields.
+        "click": [
+            {
+                "node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
+                "tag": to_string(click["tag"])[:32],
+                "id": to_string(click["id"])[:64],
+                "class": to_typed_list(to_string, click["class"][:20]),
+                "text": to_string(click["text"])[:1024],
+                "role": to_string(click["role"])[:32],
+                "alt": to_string(click["alt"])[:64],
+                "testid": to_string(click["testid"])[:64],
+                "aria_label": to_string(click["aria_label"])[:64],
+                "title": to_string(click["title"])[:64],
+            }
+            for click in payload["click"]
+        ],
+    }
 
 
 T = TypeVar("T")

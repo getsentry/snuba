@@ -666,10 +666,12 @@ class TestReplaysActionProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
+        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+
         message = {
             "type": "replay_event",
             "start_time": datetime.now().timestamp(),
-            "replay_id": "1",
+            "replay_id": "bb570198b8f04f8bbe87077668530da7",
             "project_id": 1,
             "retention_days": 30,
             "payload": list(
@@ -677,21 +679,22 @@ class TestReplaysActionProcessor:
                     json.dumps(
                         {
                             "type": "replay_actions",
-                            "replay_id": "1",
-                            "segment_id": 0,
-                            "actions": [
+                            "replay_id": "bb570198b8f04f8bbe87077668530da7",
+                            "timestamp": int(now.timestamp()),
+                            "event_hash": "df3c3aa2daae465e89f1169e49139827",
+                            "segment_id": None,
+                            "click": [
                                 {
-                                    "dom_action": "click",
-                                    "dom_element": "div",
-                                    "dom_id": "id",
-                                    "dom_classes": ["class1", "class2"],
-                                    "dom_aria_label": "test",
-                                    "dom_aria_role": "aria-button",
-                                    "dom_role": "button",
-                                    "dom_text_content": "text",
-                                    "dom_node_id": 59,
-                                    "timestamp": 1,
-                                    "event_hash": "df3c3aa2daae465e89f1169e49139827",
+                                    "node_id": 59,
+                                    "tag": "div",
+                                    "id": "id",
+                                    "class": ["class1", "class2"],
+                                    "text": "text",
+                                    "role": "button",
+                                    "alt": "",
+                                    "testid": "",
+                                    "aria_label": "test",
+                                    "title": "",
                                 }
                             ],
                         }
@@ -707,27 +710,28 @@ class TestReplaysActionProcessor:
 
         row = rows[0]
         assert row["project_id"] == 1
-        assert row["timestamp"] == 1
-        assert row["replay_id"] == "1"
+        assert row["timestamp"] == now
+        assert row["replay_id"] == str(uuid.UUID("bb570198b8f04f8bbe87077668530da7"))
         assert row["event_hash"] == "df3c3aa2daae465e89f1169e49139827"
-        assert row["segment_id"] == 0
-        assert row["dom_element"] == "div"
-        assert row["dom_action"] == "click"
-        assert row["dom_id"] == "id"
-        assert row["dom_classes"] == ["class1", "class2"]
-        assert row["dom_aria_label"] == "test"
-        assert row["dom_aria_role"] == "aria-button"
-        assert row["dom_role"] == "button"
-        assert row["dom_text_content"] == "text"
-        assert row["dom_node_id"] == 59
+        assert row["segment_id"] is None
         assert row["trace_ids"] == []
         assert row["error_ids"] == []
         assert row["urls"] == []
-        assert row["title"] == ""
+        assert row["title"] is None
         assert row["platform"] == "javascript"
-        assert row["user"] == ""
-        assert row["sdk_name"] == ""
-        assert row["sdk_version"] == ""
+        assert row["user"] is None
+        assert row["sdk_name"] is None
+        assert row["sdk_version"] is None
         assert row["retention_days"] == 30
         assert row["partition"] == 0
         assert row["offset"] == 0
+        assert row["click"][0]["node_id"] == 59
+        assert row["click"][0]["tag"] == "div"
+        assert row["click"][0]["id"] == "id"
+        assert row["click"][0]["class"] == ["class1", "class2"]
+        assert row["click"][0]["aria_label"] == "test"
+        assert row["click"][0]["role"] == "button"
+        assert row["click"][0]["text"] == "text"
+        assert row["click"][0]["alt"] == ""
+        assert row["click"][0]["testid"] == ""
+        assert row["click"][0]["title"] == ""

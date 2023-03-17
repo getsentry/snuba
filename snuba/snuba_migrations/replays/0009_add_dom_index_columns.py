@@ -28,7 +28,7 @@ columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
 ]
 
-alters: Sequence[str] = ["user", "sdk_name", "sdk_version"]
+alters: Sequence[str] = ["title", "user", "sdk_name", "sdk_version"]
 
 
 class Migration(migration.ClickhouseNodeMigration):
