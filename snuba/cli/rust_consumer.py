@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import asdict, dataclass
+from hashlib import md5
 from typing import Optional, Sequence
 
 import click
@@ -108,18 +109,26 @@ def rust_consumer(
     #   processor:
     #     python_name: snuba.processors.QuerylogProcessor
 
-    consumer_config = resolve_consumer_config(
-        storage_names=storage_names,
-        raw_topic=raw_events_topic,
-        commit_log_topic=commit_log_topic,
-        replacements_topic=replacements_topic,
-        bootstrap_servers=bootstrap_servers,
-        commit_log_bootstrap_servers=commit_log_bootstrap_servers,
-        replacement_bootstrap_servers=replacement_bootstrap_servers,
-        slice_id=slice_id,
+    consumer_config = json.dumps(
+        asdict(
+            resolve_consumer_config(
+                storage_names=storage_names,
+                raw_topic=raw_events_topic,
+                commit_log_topic=commit_log_topic,
+                replacements_topic=replacements_topic,
+                bootstrap_servers=bootstrap_servers,
+                commit_log_bootstrap_servers=commit_log_bootstrap_servers,
+                replacement_bootstrap_servers=replacement_bootstrap_servers,
+                slice_id=slice_id,
+            )
+        )
     )
+
+    config_hash = md5(consumer_config.encode("utf-8", "replace")).hexdigest()
+
     consumer_config_path = write_file_to_tmp_directory(
-        json.dumps(asdict(consumer_config)), "consumer_config.json"
+        consumer_config,
+        f"consumer_config_{config_hash}.json",
     )
 
     rust_consumer_args = [
