@@ -230,6 +230,16 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
         output["user"] = tags.get("sentry:user", "") or ""
+
+        replay_id = tags.get("replayId")
+        if replay_id:
+            try:
+                # replay_id as a tag is not guarenteed to be UUID (user could set value in theory)
+                # so simply continue if not UUID.
+                output["replay_id"] = str(uuid.UUID(replay_id))
+            except ValueError:
+                pass
+
         # The table has an empty string default, but the events coming from eventstream
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
@@ -238,12 +248,21 @@ class ErrorsProcessor(DatasetMessageProcessor):
     def extract_promoted_contexts(
         self,
         output: MutableMapping[str, Any],
-        contexts: Mapping[str, Any],
-        tags: Mapping[str, Any],
+        contexts: MutableMapping[str, Any],
+        tags: MutableMapping[str, Any],
     ) -> None:
         transaction_ctx = contexts.get("trace") or {}
         trace_id = transaction_ctx.get("trace_id", None)
         span_id = transaction_ctx.get("span_id", None)
+
+        replay_ctx = contexts.get("replay") or {}
+        replay_id = replay_ctx.get("replay_id", None)
+
+        if replay_id:
+            replay_id_uuid = uuid.UUID(replay_id)
+            output["replay_id"] = str(replay_id_uuid)
+            tags["replayId"] = replay_id_uuid.hex
+            del contexts["replay"]
 
         if trace_id:
             output["trace_id"] = str(uuid.UUID(trace_id))

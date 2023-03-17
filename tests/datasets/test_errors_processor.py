@@ -14,6 +14,7 @@ def test_error_processor() -> None:
     received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)
     trace_id = str(uuid.uuid4())
+    replay_id = uuid.uuid4()
     span_id = "deadbeef"
     error = (
         2,
@@ -121,6 +122,7 @@ def test_error_processor() -> None:
                             "build": "3.7.6",
                         },
                         "trace": {"trace_id": trace_id, "span_id": span_id},
+                        "replay": {"replay_id": str(replay_id)},
                     },
                     "culprit": "snuba.clickhouse.http in write",
                     "exception": {
@@ -243,11 +245,13 @@ def test_error_processor() -> None:
         "http_referer": "tagstore.something",
         "trace_id": trace_id,
         "span_id": int(span_id, 16),
+        "replay_id": str(replay_id),
         "tags.key": [
             "environment",
             "handled",
             "level",
             "mechanism",
+            "replayId",
             "runtime",
             "runtime.name",
             "sentry:release",
@@ -259,6 +263,7 @@ def test_error_processor() -> None:
             "no",
             "error",
             "excepthook",
+            replay_id.hex,
             "CPython 3.7.6",
             "CPython",
             "4d23338017cdee67daf25f2c",
