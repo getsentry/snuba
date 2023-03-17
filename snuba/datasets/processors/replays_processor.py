@@ -334,7 +334,7 @@ class Tag:
 
     @classmethod
     def empty_set(cls) -> Tag:
-        return cls([], [], None)
+        return cls([], [], "")
 
 
 def process_tags_object(value: Any) -> Tag:
@@ -346,7 +346,7 @@ def process_tags_object(value: Any) -> Tag:
 
     keys = []
     values = []
-    transaction = None
+    transaction = ""
 
     for key, value in tags:
         # Keys and values are stored as optional strings regardless of their input type.

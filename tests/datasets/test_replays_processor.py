@@ -604,7 +604,7 @@ class TestReplaysProcessor:
         assert tags.values == []
 
         tags = process_tags_object({"hello": "world"})
-        assert tags.transaction is None
+        assert tags.transaction == ""
         assert tags.keys == ["hello"]
         assert tags.values == ["world"]
 
@@ -621,19 +621,19 @@ class TestReplaysProcessor:
         assert tags.values == []
 
         tags = process_tags_object([("hello", "world")])
-        assert tags.transaction is None
+        assert tags.transaction == ""
         assert tags.keys == ["hello"]
         assert tags.values == ["world"]
 
         tags = process_tags_object([("hello", "world", "!")])
-        assert tags.transaction is None
+        assert tags.transaction == ""
         assert tags.keys == []
         assert tags.values == []
 
         # Empty
 
         tags = process_tags_object(None)
-        assert tags.transaction is None
+        assert tags.transaction == ""
         assert tags.keys == []
         assert tags.values == []
 
