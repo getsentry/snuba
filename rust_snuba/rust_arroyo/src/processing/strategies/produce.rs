@@ -1,7 +1,5 @@
 
-use futures::{Future, task};
-use futures::executor::block_on;
-use futures::stream::FuturesOrdered;
+use futures::Future;
 use log::warn;
 use crate::backends::Producer;
 use crate::backends::kafka::producer::KafkaProducer;
@@ -14,9 +12,9 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
-use std::thread::JoinHandle;
+use tokio::task::JoinHandle;
 use std::time::{Duration, Instant};
-use futures::executor::ThreadPool;
+
 
 pub struct ProduceFuture {
     // pub producer: &'a KafkaProducer,
@@ -27,7 +25,6 @@ pub struct ProduceFuture {
     pub completed: bool,
 }
 
-// type Task = Pin<Box<dyn Future<Output = ()> + Send>>;
 type Task = Pin<Box<ProduceFuture>>;
 
 impl Future for ProduceFuture {
@@ -40,11 +37,10 @@ impl Future for ProduceFuture {
 pub struct Produce<TPayload: Clone + Send + Sync> {
     pub producer: Arc<KafkaProducer>,
     pub next_step: Box<dyn ProcessingStrategy<TPayload>>,
-    queue: VecDeque<(Message<TPayload>, Task, JoinHandle<()>)>,
+    queue: VecDeque<(Message<TPayload>, JoinHandle<()>)>,
     topic: Arc<TopicOrPartition>,
     closed: bool,
     max_queue_size: usize,
-    pool: ThreadPool
 }
 
 impl Produce<KafkaPayload> {
@@ -56,7 +52,6 @@ impl Produce<KafkaPayload> {
             topic: Arc::new(topic),
             closed: false,
             max_queue_size: 1000,
-            pool: ThreadPool::new().unwrap()
         }
     }
 }
@@ -66,30 +61,19 @@ impl ProcessingStrategy<KafkaPayload>
 {
     fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty(){
-            let (message, mut produce_fut) = self.queue.pop_front().unwrap();
+            let (message, handle) = self.queue.pop_front().unwrap();
 
-            let waker = task::noop_waker();
-            let mut cx = Context::from_waker(&waker);
+            if handle.is_finished() {
+                let new_message = message.clone();
+                // block_on(async{
+                //     handle.await.unwrap();
+                // });
+                self.next_step.poll();
+                self.next_step.submit(new_message).unwrap()
 
-            match produce_fut.as_mut().poll(&mut cx) {
-                task::Poll::Ready(val) => {
-                    // future is done,
-                    produce_fut.completed = true;
-                },
-                task::Poll::Pending => todo!(),
-            } ;
-            // match Future::poll(produce_fut, &mut cx) {
-            //     std::task::Poll::Ready(val) => {
-            //         // future is done,
-            //         produce_fut.completed = true;
-
-            //     }
-            //     std::task::Poll::Pending => {
-            //         break;
-            //     }
-            // };
-            self.next_step.poll();
-            self.next_step.submit(message).unwrap()
+            }else{
+                break;
+            }
         }
         return None
     }
@@ -111,7 +95,7 @@ impl ProcessingStrategy<KafkaPayload>
         // spawn the future
         let handle = tokio::spawn(produce_fut);
 
-        self.queue.push_back((message, Box::pin(produce_fut), handle));
+        self.queue.push_back((message, handle));
         return Ok(());
     }
 
@@ -136,9 +120,14 @@ impl ProcessingStrategy<KafkaPayload>
                     break;
                 }
             }
-            let (message, produce_fut) = self.queue.pop_front().unwrap();
-            self.next_step.poll();
-            self.next_step.submit(message).unwrap();
+            let (message, handle) = self.queue.pop_front().unwrap();
+            if handle.is_finished() {
+                let new_message = message.clone();
+                self.next_step.poll();
+                self.next_step.submit(new_message).unwrap()
+            }else{
+                break;
+            }
 
         }
 
@@ -163,8 +152,8 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    #[test]
-    fn test_produce() {
+    #[tokio::test]
+    async fn test_produce() {
         let config = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
             "my_group".to_string(),
