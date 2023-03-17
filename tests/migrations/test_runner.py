@@ -1,12 +1,12 @@
 import importlib
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import snuba.migrations.connect
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
@@ -361,8 +361,13 @@ def test_check_inactive_replica() -> None:
         database = storage.get_cluster().get_database()
         mock_storage_keys.return_value = [storage_key]
 
-        with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
-            mock_clickhouse_execute.return_value = inactive_replica_query_result
+        with patch("snuba.migrations.connect.get_storage") as MockGetStorage:
+            mock_cluster = MagicMock()
+            MockGetStorage.return_value.get_cluster.return_value = mock_cluster
+
+            mock_conn = mock_cluster.get_node_connection.return_value
+            mock_conn.database = database
+            mock_conn.execute.return_value = inactive_replica_query_result
 
             with pytest.raises(InactiveClickhouseReplica) as exc:
                 check_for_inactive_replicas()
@@ -372,9 +377,9 @@ def test_check_inactive_replica() -> None:
                     f"with 2 out of 3 replicas active."
                 )
 
-            assert mock_clickhouse_execute.call_count == 1
+            assert mock_conn.execute.call_count == 1
             query = (
                 "SELECT table, total_replicas, active_replicas FROM system.replicas "
                 f"WHERE active_replicas < total_replicas AND database ='{database}'"
             )
-            mock_clickhouse_execute.assert_called_with(query)
+            mock_conn.execute.assert_called_with(query)
