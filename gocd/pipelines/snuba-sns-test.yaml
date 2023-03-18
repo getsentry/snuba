@@ -95,7 +95,7 @@ pipelines:
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba-admin" \
                                     --container-name="snuba-admin" \
-                                    snuba-migrate "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" snuba "migrations migrate"
+                                    "snubamig" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" snuba "migrations migrate"
 
 
                               - plugin:
@@ -106,7 +106,7 @@ pipelines:
                                             --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                             --label-selector="service=snuba-admin" \
                                             --container-name="snuba-migrate" \
-                                            snuba-migrate-reverse "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" snuba "migrations reverse-in-progress"
+                                            "snuba-migrate-reverse" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" snuba "migrations reverse-in-progress"
                                     run_if: failed
                                     configuration:
                                         id: script-executor
