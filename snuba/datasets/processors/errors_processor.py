@@ -135,15 +135,13 @@ class ErrorsProcessor(DatasetMessageProcessor):
         )
         stacks = exception.get("values", None) or []
 
-        thread: SentryThreadChain = data.get(
+        threadChain: SentryThreadChain = data.get(
             "threads",
-            cast(
-                SentryThreadChain, data.get("sentry.interfaces.threads.Threads", None)
-            ),
+            cast(SentryThreadChain, data.get("sentry.interfaces.Threads", None)),
         ) or {"values": []}
-        threadsStack = thread.get("values", None) or []
+        threads = threadChain.get("values", None) or []
 
-        self.extract_stacktraces(processed, stacks, threadsStack)
+        self.extract_stacktraces(processed, stacks, threads)
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
