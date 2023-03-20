@@ -225,7 +225,7 @@ class SnubaQueryMetadata:
     def to_dict(self) -> Dict[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
-        return {
+        request_dict = {
             "request": {
                 "id": self.request.id,
                 "body": self.request.original_body,
@@ -246,6 +246,11 @@ class SnubaQueryMetadata:
             "projects": list(self.projects),
             "snql_anonymized": self.snql_anonymized,
         }
+        # TODO: Remove check once Org IDs are required
+        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
+            if isinstance(org_id, int):
+                request_dict["organization"] = org_id
+        return request_dict
 
     @property
     def status(self) -> QueryStatus:
