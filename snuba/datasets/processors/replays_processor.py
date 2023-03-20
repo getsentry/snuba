@@ -80,7 +80,10 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         tags = process_tags_object(replay_event.get("tags"))
-        processed["title"] = tags.transaction
+
+        # we have to set title to empty string as it is non-nullable,
+        # and on clickhouse 20 this throws an error.
+        processed["title"] = tags.transaction or ""
         processed["tags.key"] = tags.keys
         processed["tags.value"] = tags.values
 
@@ -334,7 +337,7 @@ class Tag:
 
     @classmethod
     def empty_set(cls) -> Tag:
-        return cls([], [], "")
+        return cls([], [], None)
 
 
 def process_tags_object(value: Any) -> Tag:
@@ -346,14 +349,14 @@ def process_tags_object(value: Any) -> Tag:
 
     keys = []
     values = []
-    transaction = ""
+    transaction = None
 
     for key, value in tags:
         # Keys and values are stored as optional strings regardless of their input type.
         parsed_key, parsed_value = to_string(key), maybe(to_string, value)
 
         if key == "transaction":
-            transaction = parsed_value or ""
+            transaction = parsed_value
         elif parsed_value is not None:
             keys.append(parsed_key)
             values.append(parsed_value)

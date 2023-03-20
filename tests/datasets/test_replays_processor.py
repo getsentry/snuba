@@ -69,7 +69,7 @@ class ReplayEvent:
             event_hash=None,
             error_sample_rate=0,
             session_sample_rate=0,
-            title="",
+            title=None,
             error_ids=[],
             trace_ids=[],
             segment_id=None,
@@ -218,7 +218,7 @@ class ReplayEvent:
             "device_model": self.device_model,
             "tags.key": ["customtag"],
             "tags.value": ["is_set"],
-            "title": self.title,
+            "title": self.title or "",
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
@@ -604,7 +604,7 @@ class TestReplaysProcessor:
         assert tags.values == []
 
         tags = process_tags_object({"hello": "world"})
-        assert tags.transaction == ""
+        assert tags.transaction is None
         assert tags.keys == ["hello"]
         assert tags.values == ["world"]
 
@@ -621,19 +621,19 @@ class TestReplaysProcessor:
         assert tags.values == []
 
         tags = process_tags_object([("hello", "world")])
-        assert tags.transaction == ""
+        assert tags.transaction is None
         assert tags.keys == ["hello"]
         assert tags.values == ["world"]
 
         tags = process_tags_object([("hello", "world", "!")])
-        assert tags.transaction == ""
+        assert tags.transaction is None
         assert tags.keys == []
         assert tags.values == []
 
         # Empty
 
         tags = process_tags_object(None)
-        assert tags.transaction == ""
+        assert tags.transaction is None
         assert tags.keys == []
         assert tags.values == []
 
