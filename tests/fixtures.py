@@ -164,7 +164,7 @@ def get_raw_event() -> InsertEvent:
                     }
                 ],
             },
-            "sentry.interfaces.threads.Threads": {
+            "sentry.interfaces.Threads": {
                 "values": [
                     {
                         "id": 1,
