@@ -67,22 +67,28 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
 }
 
 #[pyfunction]
-pub fn consumer(py: Python<'_>, storage: &str, settings_path: &str) {
-    py.allow_threads(|| consumer_impl(storage, settings_path));
+pub fn consumer(py: Python<'_>, consumer_group: &str, auto_offset_reset: &str, settings_path: &str, consumer_config_path: &str, storage_names: Vec<String>) {
+    py.allow_threads(|| consumer_impl(
+            consumer_group, auto_offset_reset, settings_path, consumer_config_path, storage_names
+    ))
 }
 
-fn consumer_impl(storage: &str, settings_path: &str) {
+pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, settings_path: &str, consumer_config_path: &str, storage_names: Vec<String>) {
     env_logger::init();
+    // TODO: Support multiple storages
+    assert_eq!(storage_names.len(), 1);
+    let first_storage = storage_names[0].clone();
+
     log::info!(
-        "Starting consumer for {} with settings at {}",
-        storage,
+        "Starting consumer for {:?} with settings at {}",
+        first_storage,
         settings_path,
     );
     let settings = settings::Settings::load_from_json(settings_path).unwrap();
     log::info!("Loaded settings: {settings:?}");
 
     let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
-    let storage = storage_registry.get(storage).unwrap();
+    let storage = storage_registry.get(&first_storage).unwrap();
 
     struct ConsumerStrategyFactory {
         processor_config: ProcessorConfig,
@@ -99,8 +105,10 @@ fn consumer_impl(storage: &str, settings_path: &str) {
         }
     }
 
-    let mut broker_config: HashMap<_, _> = settings
-        .get_broker_config(&storage.stream_loader.default_topic)
+    let logical_topic = &storage.stream_loader.default_topic;
+
+    let broker_config: HashMap<_, _> = settings
+        .get_broker_config(&logical_topic)
         .iter()
         .filter_map(|(k, v)| {
             let v = v.as_ref()?;
@@ -111,12 +119,9 @@ fn consumer_impl(storage: &str, settings_path: &str) {
         })
         .collect();
 
-    // TODO remove
-    let consumer_group = "snuba-consumers".to_owned();
-    broker_config.insert("group.id".to_owned(), consumer_group);
-    let logical_topic = &storage.stream_loader.default_topic;
 
-    let config = KafkaConfig::new_config_from_raw(broker_config);
+    let config = KafkaConfig::new_consumer_config(vec![], consumer_group.to_owned(), auto_offset_reset.to_owned(), false, Some(broker_config));
+
     let processor_config = storage.stream_loader.processor.clone();
 
     let consumer = Box::new(KafkaConsumer::new(config));
@@ -124,6 +129,7 @@ fn consumer_impl(storage: &str, settings_path: &str) {
         consumer,
         Box::new(ConsumerStrategyFactory { processor_config }),
     );
+
 
     processor.subscribe(Topic {
         name: settings

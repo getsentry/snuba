@@ -17,12 +17,6 @@ impl KafkaConfig {
         apply_override_params(config, override_params)
     }
 
-    pub fn new_config_from_raw(override_params: HashMap<String, String>) -> Self {
-        let config_map = HashMap::new();
-        let config = Self { config_map };
-        apply_override_params(config, Some(override_params))
-    }
-
     pub fn new_consumer_config(
         bootstrap_servers: Vec<String>,
         group_id: String,
