@@ -17,8 +17,6 @@ use std::time::{Duration, Instant};
 
 
 pub struct ProduceFuture {
-    // pub producer: &'a KafkaProducer,
-    // destination: &'a TopicOrPartition,
     pub producer: Arc<KafkaProducer>,
     destination: Arc<TopicOrPartition>,
     payload: KafkaPayload,
