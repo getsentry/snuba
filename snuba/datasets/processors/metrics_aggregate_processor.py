@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
+from sentry_kafka_schemas.schema_types.snuba_metrics_v1 import Metric
+
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -53,7 +55,7 @@ class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
         raise NotImplementedError
 
     def process_message(
-        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+        self, message: Metric, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         if not self._should_process(message):
             return None

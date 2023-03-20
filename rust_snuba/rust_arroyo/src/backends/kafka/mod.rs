@@ -67,7 +67,7 @@ fn create_kafka_message(msg: BorrowedMessage) -> ArroyoMessage<KafkaPayload> {
             headers: msg.headers().map(BorrowedHeaders::detach),
             payload: msg.payload().map(|p| p.to_vec()),
         },
-        DateTime::from_utc(NaiveDateTime::from_timestamp(time_millis, 0), Utc),
+        DateTime::from_utc(NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN), Utc),
     )
 }
 

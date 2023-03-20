@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Optional, Sequence, TypedDict
 
+import structlog
+
 from snuba import settings
 from snuba.clusters.cluster import UndefinedClickhouseCluster
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+
+logger = structlog.get_logger().bind(module=__name__)
 
 Node = TypedDict("Node", {"host": str, "port": int})
 
@@ -42,8 +46,8 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
                 cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
             )
         ]
-    except (AssertionError, KeyError, UndefinedClickhouseCluster):
-        # If cluster_name is not defined just return an empty list
+    except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
+        logger.warning(str(e), storage_key=storage_key.value, local=local)
         return []
 
 
@@ -53,7 +57,8 @@ def _get_query_node(storage_key: StorageKey) -> Optional[Node]:
         query_node = cluster.get_query_node()
         return {"host": query_node.host_name, "port": query_node.port}
 
-    except (AssertionError, KeyError, UndefinedClickhouseCluster):
+    except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
+        logger.warning(str(e), storage_key=storage_key.value)
         return None
 
 

@@ -18,7 +18,9 @@ from snuba.querylog.query_metadata import (
     ClickhouseQueryProfile,
     FilterProfile,
     QueryStatus,
+    RequestStatus,
     SnubaQueryMetadata,
+    Status,
 )
 from snuba.request import Request
 from snuba.utils.clock import TestingClock
@@ -78,6 +80,7 @@ def test_simple() -> None:
                     "triggered_rate_limiter": "test_rate_limiter",
                 },
                 status=QueryStatus.SUCCESS,
+                request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
@@ -200,6 +203,7 @@ def test_missing_fields() -> None:
                 end_timestamp=None,
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
+                request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
@@ -327,6 +331,7 @@ def test_negative_project_id_fields() -> None:
                 end_timestamp=None,
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
+                request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
@@ -357,4 +362,5 @@ def test_negative_project_id_fields() -> None:
         message, KafkaMessageMetadata(0, 0, datetime.now())
     )
     # We keep only valid project ids (>= 0)
+    assert isinstance(res_batch, InsertBatch)
     assert res_batch.rows[0]["projects"] == [420]

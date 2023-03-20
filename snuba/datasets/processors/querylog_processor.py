@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 import simplejson as json
+from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
+    ClickhouseQueryProfile,
+    Querylog,
+    QueryMetadata,
+)
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
@@ -31,7 +36,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         return sample
 
     def __extract_query_list(
-        self, query_list: Sequence[Mapping[str, Any]]
+        self, query_list: Sequence[QueryMetadata]
     ) -> Mapping[str, Any]:
         sql = []
         status = []
@@ -70,15 +75,16 @@ class QuerylogProcessor(DatasetMessageProcessor):
             # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
             consistent.append(int(query["stats"].get("consistent") or 0))
-            profile = query.get("profile") or {
+            fallback_profile: ClickhouseQueryProfile = {
                 "time_range": 0,
                 "all_columns": [],
                 "multi_level_condition": False,
                 "where_profile": {"columns": [], "mapping_cols": []},
                 "groupby_cols": [],
                 "array_join_cols": [],
-                "bytes_scanned": 0,
             }
+            profile = query.get("profile") or fallback_profile
+
             result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
             num_days.append(
@@ -142,7 +148,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         processed["projects"] = valid_project_ids
 
     def process_message(
-        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+        self, message: Querylog, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         processed = {
             "request_id": str(uuid.UUID(message["request"]["id"])),
@@ -150,16 +156,14 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
             "projects": message.get("projects") or [],
-            # TODO: This column is empty for now, we plan to use it soon as we
-            # will start to write org IDs into events and allow querying by org.
-            "organization": None,
+            "organization": message.get("organization"),
             **self.__extract_query_list(message["query_list"]),
         }
         self._remove_invalid_data(processed)
 
         # These fields are sometimes missing from the payload. If they are missing, don't
         # add them to processed so Clickhouse sets a default value for them.
-        missing_fields = {}
+        missing_fields: MutableMapping[str, Any] = {}
         timing = message.get("timing") or {}
         if timing.get("timestamp") is not None:
             missing_fields["timestamp"] = timing["timestamp"]

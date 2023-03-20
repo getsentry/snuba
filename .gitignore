@@ -12,3 +12,4 @@ snuba.egg-info/
 node_modules
 .vscode/*.log
 snuba/admin/dist/bundle.js*
+tmp/
