@@ -11,7 +11,7 @@ use serde_json::Value;
 #[serde(tag = "kind")]
 pub enum StorageConfig {
     #[serde(rename = "readable_storage")]
-    Readable{},
+    Readable {},
     #[serde(rename = "cdc_storage")]
     Cdc {},
     #[serde(rename = "writable_storage")]

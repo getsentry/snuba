@@ -67,13 +67,32 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
 }
 
 #[pyfunction]
-pub fn consumer(py: Python<'_>, consumer_group: &str, auto_offset_reset: &str, settings_path: &str, consumer_config_path: &str, storage_names: Vec<String>) {
-    py.allow_threads(|| consumer_impl(
-            consumer_group, auto_offset_reset, settings_path, consumer_config_path, storage_names
-    ))
+pub fn consumer(
+    py: Python<'_>,
+    consumer_group: &str,
+    auto_offset_reset: &str,
+    settings_path: &str,
+    consumer_config_path: &str,
+    storage_names: Vec<String>,
+) {
+    py.allow_threads(|| {
+        consumer_impl(
+            consumer_group,
+            auto_offset_reset,
+            settings_path,
+            consumer_config_path,
+            storage_names,
+        )
+    })
 }
 
-pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, settings_path: &str, consumer_config_path: &str, storage_names: Vec<String>) {
+pub fn consumer_impl(
+    consumer_group: &str,
+    auto_offset_reset: &str,
+    settings_path: &str,
+    consumer_config_path: &str,
+    storage_names: Vec<String>,
+) {
     env_logger::init();
     // TODO: Support multiple storages
     assert_eq!(storage_names.len(), 1);
@@ -119,8 +138,13 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, settings_pat
         })
         .collect();
 
-
-    let config = KafkaConfig::new_consumer_config(vec![], consumer_group.to_owned(), auto_offset_reset.to_owned(), false, Some(broker_config));
+    let config = KafkaConfig::new_consumer_config(
+        vec![],
+        consumer_group.to_owned(),
+        auto_offset_reset.to_owned(),
+        false,
+        Some(broker_config),
+    );
 
     let processor_config = storage.stream_loader.processor.clone();
 
@@ -129,7 +153,6 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, settings_pat
         consumer,
         Box::new(ConsumerStrategyFactory { processor_config }),
     );
-
 
     processor.subscribe(Topic {
         name: settings
