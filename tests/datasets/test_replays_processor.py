@@ -69,7 +69,7 @@ class ReplayEvent:
             event_hash=None,
             error_sample_rate=0,
             session_sample_rate=0,
-            title=None,
+            title="",
             error_ids=[],
             trace_ids=[],
             segment_id=None,
