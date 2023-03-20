@@ -90,7 +90,8 @@ pub fn consumer_impl(
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
-    assert!(consumer_config.
+    assert!(consumer_config.replacements_topic.is_none());
+    assert!(consumer_config.commit_log_topic.is_none());
     let first_storage = &consumer_config.storages[0];
 
     log::info!(
