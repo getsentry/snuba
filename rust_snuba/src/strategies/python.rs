@@ -38,7 +38,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch
 from datetime import datetime
 from snuba.consumers.consumer import json_row_encoder
-        
+
 
 def _wrapped(message, offset, partition, timestamp):
     rv = processor.process_message(
@@ -80,7 +80,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         // TODO: add procspawn/parallelism
-        log::info!("processing message, timestamp={:?}", message.timestamp);
+        log::debug!("processing message, timestamp={:?}", message.timestamp);
         let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
             let args = (
                 message.payload.payload,

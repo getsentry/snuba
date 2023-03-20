@@ -42,7 +42,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
         for row in message.payload.rows {
             let decoded_row = String::from_utf8_lossy(&row);
-            println!("insert: {:?}", decoded_row);
+            log::debug!("insert: {:?}", decoded_row);
         }
 
         self.next_step.submit(Message {
@@ -85,7 +85,7 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, settings_pat
         settings_path,
     );
     let settings = settings::Settings::load_from_json(settings_path).unwrap();
-    log::info!("Loaded settings: {settings:?}");
+    log::debug!("Loaded settings: {settings:?}");
 
     let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
     let storage = storage_registry.get(&first_storage).unwrap();
