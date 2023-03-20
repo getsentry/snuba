@@ -48,6 +48,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
+    def __eq__(self, other: AllocationPolicy) -> bool:
+        """There should not be a need to compare these except that
+        AllocationPolicies are attached to the Table a query is executed against.
+        In order to allow that comparison, this function is implemented here.
+        """
+        return self.__class__ == other.__class__
+
     @classmethod
     def from_kwargs(
         cls, **kwargs: str
@@ -92,7 +99,7 @@ class PassthroughPolicy(AllocationPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         from snuba.state import get_config
 
-        max_threads = get_config("query_settings/max_threads", 10)
+        max_threads = get_config("query_settings/max_threads", 8)
         assert isinstance(max_threads, int)
         return QuotaAllowance(
             can_run=True, max_threads=max_threads, tenants_over_quota=[]
@@ -104,3 +111,8 @@ class PassthroughPolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
+
+
+DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
+    StorageSetKey("default.no_storage_set_key"), accepted_tenant_types=[]
+)

@@ -203,6 +203,8 @@ def _run_query_pipeline(
 
     record_missing_tenant_ids(request)
 
+    # NOTE: It's not obvious from this code however it's possible for the query_runner to be
+    # executed multiple times. The QueryExecutionStrategy may split up the query into multiple chunks
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
