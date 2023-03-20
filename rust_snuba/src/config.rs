@@ -11,7 +11,6 @@ pub struct ConsumerConfig {
     pub replacements_topic: Option<TopicConfig>,
 }
 
-
 #[derive(Deserialize)]
 pub struct TopicConfig {
     pub physical_topic_name: String,

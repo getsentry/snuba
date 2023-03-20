@@ -72,20 +72,10 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
 ) {
-    py.allow_threads(|| {
-        consumer_impl(
-            consumer_group,
-            auto_offset_reset,
-            consumer_config_raw,
-        )
-    })
+    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw))
 }
 
-pub fn consumer_impl(
-    consumer_group: &str,
-    auto_offset_reset: &str,
-    consumer_config_raw: &str,
-) {
+pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str) {
     env_logger::init();
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     // TODO: Support multiple storages
@@ -94,10 +84,7 @@ pub fn consumer_impl(
     assert!(consumer_config.commit_log_topic.is_none());
     let first_storage = &consumer_config.storages[0];
 
-    log::info!(
-        "Starting consumer for {:?}",
-        first_storage.name,
-    );
+    log::info!("Starting consumer for {:?}", first_storage.name,);
 
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
@@ -114,7 +101,9 @@ pub fn consumer_impl(
         }
     }
 
-    let broker_config: HashMap<_, _>  = consumer_config.raw_topic.broker_config
+    let broker_config: HashMap<_, _> = consumer_config
+        .raw_topic
+        .broker_config
         .iter()
         .filter_map(|(k, v)| {
             let v = v.as_ref()?;
