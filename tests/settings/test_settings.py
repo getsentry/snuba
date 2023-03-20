@@ -1,5 +1,4 @@
 import importlib
-import json
 from copy import deepcopy
 from typing import Any, Dict
 from unittest.mock import patch
@@ -8,7 +7,6 @@ import pytest
 
 from snuba import settings
 from snuba.settings import validation
-from snuba.settings.utils import get_settings_json
 from snuba.settings.validation import (
     InvalidTopicError,
     validate_settings,
@@ -129,15 +127,3 @@ def test_validation_catches_unmapped_topic_pair() -> None:
         validate_slicing_settings(all_settings)
 
     del sliced_topics[("events", 1)]
-
-
-def test_json_serializable() -> None:
-    # Settings file can be serialized
-    settings_json = get_settings_json()
-
-    # Convert json back to python object
-    settings_py = json.loads(settings_json)
-
-    assert settings_py["TESTING"] == True
-    # Set got turned to a list
-    assert settings_py["PROJECT_STACKTRACE_BLACKLIST"] == []
