@@ -6,5 +6,5 @@ The goal of this project is to provide a feature complete Rust equivalent to the
 
 ## How to run
 
-1. Run `maturin develop` in this folder.
+1. Run `make watch-rust-snuba`.
 2. `snuba rust-consumer` can now be used to run a simple Rust consumer that currently does not insert into clickhouse.

@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 
 use crate::types::BytesInsertBatch;
 
-use crate::storages::ProcessorConfig;
+use crate::config::MessageProcessorConfig;
 
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
@@ -18,21 +18,21 @@ pub struct PythonTransformStep {
 }
 
 impl PythonTransformStep {
-    pub fn new<N>(processor_config: ProcessorConfig, next_step: N) -> Result<Self, Error>
+    pub fn new<N>(processor_config: MessageProcessorConfig, next_step: N) -> Result<Self, Error>
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let next_step = Box::new(next_step);
-        let name = &processor_config.name;
-        let args = serde_json::to_string(&processor_config.args).unwrap();
+        let python_module = &processor_config.python_module;
+        let python_class_name = &processor_config.python_class_name;
         let code = format!(
             r#"
 import rapidjson
 from snuba.datasets.processors import DatasetMessageProcessor
 
-processor = DatasetMessageProcessor \
-    .get_from_name("{name}") \
-    .from_kwargs(**rapidjson.loads("""{args}"""))
+from {python_module} import {python_class_name} as Processor
+
+processor = Processor.from_kwargs()
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch

@@ -14,8 +14,7 @@ use rust_arroyo::types::{Message, Topic};
 
 use pyo3::prelude::*;
 
-use crate::settings;
-use crate::storages::{self, ProcessorConfig};
+use crate::config;
 use crate::strategies::noop::Noop;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
@@ -71,17 +70,13 @@ pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
     auto_offset_reset: &str,
-    settings_path: &str,
-    consumer_config_path: &str,
-    storage_names: Vec<String>,
+    consumer_config_raw: &str,
 ) {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
             auto_offset_reset,
-            settings_path,
-            consumer_config_path,
-            storage_names,
+            consumer_config_raw,
         )
     })
 }
@@ -89,28 +84,22 @@ pub fn consumer(
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
-    settings_path: &str,
-    consumer_config_path: &str,
-    storage_names: Vec<String>,
+    consumer_config_raw: &str,
 ) {
     env_logger::init();
+    let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     // TODO: Support multiple storages
-    assert_eq!(storage_names.len(), 1);
-    let first_storage = storage_names[0].clone();
+    assert_eq!(consumer_config.storages.len(), 1);
+    assert!(consumer_config.
+    let first_storage = &consumer_config.storages[0];
 
     log::info!(
-        "Starting consumer for {:?} with settings at {}",
-        first_storage,
-        settings_path,
+        "Starting consumer for {:?}",
+        first_storage.name,
     );
-    let settings = settings::Settings::load_from_json(settings_path).unwrap();
-    log::debug!("Loaded settings: {settings:?}");
-
-    let storage_registry = storages::StorageRegistry::load_all(&settings).unwrap();
-    let storage = storage_registry.get(&first_storage).unwrap();
 
     struct ConsumerStrategyFactory {
-        processor_config: ProcessorConfig,
+        processor_config: config::MessageProcessorConfig,
     }
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -124,10 +113,7 @@ pub fn consumer_impl(
         }
     }
 
-    let logical_topic = &storage.stream_loader.default_topic;
-
-    let broker_config: HashMap<_, _> = settings
-        .get_broker_config(&logical_topic)
+    let broker_config: HashMap<_, _>  = consumer_config.raw_topic.broker_config
         .iter()
         .filter_map(|(k, v)| {
             let v = v.as_ref()?;
@@ -146,7 +132,7 @@ pub fn consumer_impl(
         Some(broker_config),
     );
 
-    let processor_config = storage.stream_loader.processor.clone();
+    let processor_config = first_storage.message_processor.clone();
 
     let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
@@ -155,11 +141,7 @@ pub fn consumer_impl(
     );
 
     processor.subscribe(Topic {
-        name: settings
-            .kafka_topic_map
-            .get(logical_topic)
-            .unwrap_or(logical_topic)
-            .to_owned(),
+        name: consumer_config.raw_topic.physical_topic_name.to_owned(),
     });
 
     processor.run().unwrap();
