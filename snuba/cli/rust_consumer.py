@@ -119,7 +119,7 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level
 
-    rust_snuba.consumer(
+    rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         consumer_config_raw,
