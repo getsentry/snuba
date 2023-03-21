@@ -3,8 +3,9 @@ use std::any::type_name;
 use std::cmp::Eq;
 use std::fmt;
 use std::hash::Hash;
+use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct Topic {
     pub name: String,
 }
@@ -15,7 +16,7 @@ impl fmt::Display for Topic {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Partition {
     // TODO: Make this a reference to 'static Topic.
     pub topic: Topic,
@@ -35,36 +36,124 @@ pub enum TopicOrPartition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Message<T: Clone> {
+pub struct BrokerMessage<T: Clone> {
+    pub payload: T,
     pub partition: Partition,
     pub offset: u64,
-    pub payload: T,
     pub timestamp: DateTime<Utc>,
 }
 
-impl<T: Clone> Message<T> {
-    pub fn new(partition: Partition, offset: u64, payload: T, timestamp: DateTime<Utc>) -> Self {
+impl<T: Clone>BrokerMessage<T> {
+    pub fn new(payload: T, partition: Partition, offset: u64, timestamp: DateTime<Utc>) -> Self {
         Self {
+            payload,
             partition,
             offset,
-            payload,
             timestamp,
         }
     }
-    pub fn next_offset(&self) -> u64 {
-        self.offset + 1
+
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
+        BrokerMessage {
+            payload: replacement,
+            partition: self.partition,
+            offset: self.offset,
+            timestamp: self.timestamp,
+        }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnyMessage<T: Clone> {
+    pub payload: T,
+    pub committable: BTreeMap<Partition, u64>
+}
+
+impl<T: Clone> AnyMessage<T> {
+    pub fn new(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
+        Self {
+            payload, committable
+        }
+    }
+
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced>{
+        AnyMessage{payload: replacement, committable: self.committable}
+    }
+}
+
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InnerMessage<T: Clone> {
+    BrokerMessage(BrokerMessage<T>),
+    AnyMessage(AnyMessage<T>),
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Message<T: Clone> {
+    pub inner_message:  InnerMessage<T>,
+}
+
+impl<T: Clone> Message<T> {
+    pub fn payload(&self) -> T {
+        match &self.inner_message {
+            InnerMessage::BrokerMessage(BrokerMessage{payload, ..}) => payload.clone(),
+            InnerMessage::AnyMessage(AnyMessage{payload, ..}) => payload.clone(),
+        }
+    }
+
+    pub fn committable(&self) -> BTreeMap<Partition, u64> {
+        match &self.inner_message {
+            InnerMessage::BrokerMessage(BrokerMessage{partition, offset, ..}) => {
+                let mut map = BTreeMap::new();
+                // TODO: Get rid of the clone
+                map.insert(partition.clone(), offset + 1);
+                map
+            },
+            InnerMessage::AnyMessage(AnyMessage{committable, ..}) => {
+                committable.clone()
+            }
+        }
+
+    }
+
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
+        match self.inner_message {
+            InnerMessage::BrokerMessage(inner) => {
+                Message{inner_message: InnerMessage::BrokerMessage(inner.replace(replacement))}
+            },
+            InnerMessage::AnyMessage(inner) => {
+                Message{inner_message: InnerMessage::AnyMessage(inner.replace(replacement))}
+            },
+        }
+    }
+
 }
 
 impl<T: Clone> fmt::Display for Message<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Message<{}>(partition={}), offset={}",
-            type_name::<T>(),
-            &self.partition,
-            &self.offset
-        )
+        match &self.inner_message {
+            InnerMessage::BrokerMessage(BrokerMessage{partition, offset, ..}) => {
+                write!(
+                    f,
+                    "Message<{}>(partition={}), offset={}",
+                    type_name::<T>(),
+                    &partition,
+                    &offset
+                )
+            },
+            InnerMessage::AnyMessage(AnyMessage{committable, ..}) => {
+                write!(
+                    f,
+                    "Message<{}>(committable={})",
+                    type_name::<T>(),
+                    &committable.iter().map(|(k, v)| format!("{}:{}", k, v)).collect::<Vec<_>>().join(",")
+                )
+            }
+        }
+
+
     }
 }
 

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use log;
-
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
@@ -39,17 +37,12 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     }
 
     fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
-        for row in message.payload.rows {
+        for row in message.payload().rows {
             let decoded_row = String::from_utf8_lossy(&row);
             log::debug!("insert: {:?}", decoded_row);
         }
 
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: (),
-            timestamp: message.timestamp,
-        })
+        self.next_step.submit(message.replace(()))
     }
 
     fn close(&mut self) {

@@ -1,4 +1,4 @@
-use super::types::{Message, Partition, Topic, TopicOrPartition};
+use super::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use thiserror::Error;
@@ -92,7 +92,7 @@ pub trait Consumer<'a, TPayload: Clone> {
     fn poll(
         &mut self,
         timeout: Option<Duration>,
-    ) -> Result<Option<Message<TPayload>>, ConsumerError>;
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumerError>;
 
     /// Pause consuming from the provided partitions.
     ///
