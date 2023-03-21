@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.8.13
-ARG BUILD_BASE=build_admin_ui
+ARG SHOULD_BUILD_ADMIN_UI=true
 
 FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
 WORKDIR /usr/src/snuba
@@ -81,6 +81,7 @@ ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
+    [ "$SHOULD_BUILD_ADMIN_UI" = "true" ] || exit 0; \
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
     curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - &&\
