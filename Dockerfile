@@ -1,7 +1,7 @@
 ARG PYTHON_VERSION=3.8.13
 ARG BUILD_BASE=build_admin_ui
-FROM python:${PYTHON_VERSION}-slim-bullseye AS base
 
+FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -9,19 +9,31 @@ ENV PIP_NO_CACHE_DIR=off \
 
 # Install dependencies first because requirements.txt is way less likely to be changed.
 COPY requirements.txt ./
+
 RUN set -ex; \
     \
     buildDeps=' \
+        curl \
         gcc \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
+        libssl-dev \
         wget \
         zlib1g-dev \
+        pkg-config \
+        cmake \
+        make \
+        g++ \
+        gnupg \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
     pip install -r requirements.txt; \
+    echo "$buildDeps" > /tmp/build-deps.txt
+
+FROM build_base AS base
+RUN set -ex; \
     \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
@@ -33,16 +45,36 @@ RUN set -ex; \
     # TODO: https://github.com/lincolnloop/pyuwsgi-wheels/pull/17
     python -c 'import os, sys; sys.setdlopenflags(sys.getdlopenflags() | os.RTLD_GLOBAL); import pyuwsgi; pyuwsgi.run()' --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     \
-    apt-get purge -y --auto-remove $buildDeps; \
+    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
+    rm /tmp/build-deps.txt; \
     rm -rf /var/lib/apt/lists/*;
 
+# We assume that compared to snuba codebase, the Rust consumer is the least likely to get
+# changed. We do need requirements.txt installed though, so we cannot use the
+# official Rust docker images and rather have to install Rust into the existing
+# Python image.
+# We could choose to install maturin into the Rust docker image instead of the
+# entirety of requirements.txt, but we are not yet confident that the Python
+# library we build is portable across Python versions.
+# There are optimizations we can make in the future to split building of Rust
+# dependencies from building the Rust source code, see Relay Dockerfile.
+
+FROM build_base AS build_rust_snuba
+ARG RUST_TOOLCHAIN=1.68
+
+COPY ./rust_snuba/ ./rust_snuba/
+RUN set -ex; \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
+    cd ./rust_snuba/; \
+    export PATH="$HOME/.cargo/bin/:$PATH"; \
+    maturin build --release --compatibility linux --locked --strip
+
 # Install nodejs and yarn and build the admin UI
-FROM base AS build_admin_ui
+FROM build_base AS build_admin_ui
 ENV NODE_VERSION=19
+
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
-    apt-get update && \
-    apt-get install -y curl gnupg --no-install-recommends && \
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
     curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - &&\
@@ -52,20 +84,23 @@ RUN set -ex; \
     yarn install && \
     yarn run build && \
     yarn cache clean && \
-    rm -rf node_modules && \
-    apt-get purge -y --auto-remove yarn curl nodejs gnupg && \
-    rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/yarn.list
+    rm -rf node_modules
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
-FROM $BUILD_BASE AS application
+FROM base AS application
+COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
+COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/ ./snuba/admin/
 COPY . ./
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
+    pip install /tmp/rust_wheels/*; \
+    rm -rf /tmp/rust_wheels/; \
     pip install -e .; \
-    snuba --help;
+    snuba --help; \
+    python -c 'import rust_snuba'
 
 ARG SOURCE_COMMIT
 ENV SNUBA_RELEASE=$SOURCE_COMMIT \
