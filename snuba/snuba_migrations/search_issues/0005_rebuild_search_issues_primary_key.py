@@ -77,11 +77,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(project_id, toStartOfDay(client_timestamp), primary_hash, cityHash64(occurrence_id))",
                     version_column="deleted",
-                    partition_by="(retention_days, toMonday(receive_timestamp))",
+                    partition_by="(retention_days, toMonday(client_timestamp))",
                     sample_by="cityHash64(occurrence_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=StorageSetKey.SEARCH_ISSUES,
-                    ttl="receive_timestamp + toIntervalDay(retention_days)",
+                    ttl="client_timestamp + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
             ),
