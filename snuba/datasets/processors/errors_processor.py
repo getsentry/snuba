@@ -341,22 +341,26 @@ class ErrorsProcessor(DatasetMessageProcessor):
                     frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
                     frame_stack_levels.append(stack_level)
 
-                ## mark if one of the exceptions is in the main thread
-                if exception_main_thread is None and thread_id is not None:
+                ## mark if at least one of the exceptions happened in the main thread
+                if thread_id is not None and exception_main_thread is not True:
                     for thread in threads:
                         if thread is None:
                             continue
 
-                        ## if it's not the main thread, continue
                         main = thread.get("main", None)
-                        if main is None or main is False:
+                        id = thread.get("id", None)
+
+                        if main is None or id is None:
                             continue
 
-                        id = thread.get("id", None)
-                        if id is not None and id == thread_id:
-                            ## if it's the main thread, mark it
+                        if id == thread_id:
+                            ## if it's the main thread, mark it as such and stop it
                             exception_main_thread = True
                             break
+                        else:
+                            ## if it's NOT the main thread, mark it as such, but
+                            ## keep looking for the main thread
+                            exception_main_thread = False
 
                 stack_level += 1
 
