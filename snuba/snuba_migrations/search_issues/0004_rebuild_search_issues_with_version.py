@@ -58,6 +58,12 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
+def inject_delay() -> None:
+    import time
+
+    time.sleep(5)
+
+
 class Migration(migration.ClickhouseNodeMigration):
     """
     This migration rebuilds the search_issues table by collapsing all migrations from 0001-0003 into a single migration
@@ -107,6 +113,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 new_table_name="search_issues_local",
                 target=OperationTarget.LOCAL,
             ),
+            # add a delay
+            operations.RunPython(
+                func=inject_delay, description="intentially wait some amount of time "
+            ).
             # dist second
             operations.CreateTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
