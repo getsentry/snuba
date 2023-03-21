@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import partial
-from typing import Callable, cast
+from typing import Any, cast
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.utils.registered_class import RegisteredClass
@@ -19,7 +18,7 @@ class QueryResultOrError:
     query_result: QueryResult | None
     error: QueryException | None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None
 
 
@@ -48,22 +47,26 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
-    def __eq__(self, other: AllocationPolicy) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
         AllocationPolicies are attached to the Table a query is executed against.
         In order to allow that comparison, this function is implemented here.
         """
-        return self.__class__ == other.__class__
+        return bool(self.__class__ == other.__class__)
 
     @classmethod
-    def from_kwargs(
-        cls, **kwargs: str
-    ) -> Callable[[StorageSetKey], "AllocationPolicy"]:
+    def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
         accepted_tenant_types = kwargs.pop("accepted_tenant_types", None)
+        storage_set_key = kwargs.pop("storage_set_key", None)
         assert isinstance(
             accepted_tenant_types, list
         ), "accepted_tenant_types must be a list of strings"
-        return partial(cls, accepted_tenant_types=accepted_tenant_types, **kwargs)
+        assert isinstance(storage_set_key, str)
+        return cls(
+            accepted_tenant_types=accepted_tenant_types,
+            storage_set_key=StorageSetKey(storage_set_key),
+            **kwargs,
+        )
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         return self._get_quota_allowance(tenant_ids)
