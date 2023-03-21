@@ -81,6 +81,7 @@ ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
+    mkdir -p snuba/admin/dist/; \
     [ "$SHOULD_BUILD_ADMIN_UI" = "true" ] || exit 0; \
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
@@ -89,16 +90,14 @@ RUN set -ex; \
     apt-get install -y yarn nodejs --no-install-recommends && \
     cd snuba/admin && \
     yarn install && \
-    yarn run build && \
-    yarn cache clean && \
-    rm -rf node_modules
+    yarn run build
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
 FROM base AS application
 COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
-COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/bundle.js* ./snuba/admin/dist/
+COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
