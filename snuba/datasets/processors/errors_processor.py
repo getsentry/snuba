@@ -261,7 +261,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
         if replay_id:
             replay_id_uuid = uuid.UUID(replay_id)
             output["replay_id"] = str(replay_id_uuid)
-            tags["replayId"] = replay_id_uuid.hex
+            if "replayId" not in tags:
+                tags["replayId"] = replay_id_uuid.hex
             del contexts["replay"]
 
         if trace_id:
