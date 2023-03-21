@@ -93,7 +93,12 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     partition,
                     timestamp,
                 }) => {
-                    let args = (payload.payload.clone(), offset.clone(), partition.index, timestamp.clone());
+                    let args = (
+                        payload.payload.clone(),
+                        *offset,
+                        partition.index,
+                        *timestamp,
+                    );
                     let result = self.py_process_message.call1(py, args)?;
                     let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
                     Ok(BytesInsertBatch {
@@ -108,11 +113,11 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn close(&mut self) {
-        self.next_step.close()
+        self.next_step.close();
     }
 
     fn terminate(&mut self) {
-        self.next_step.terminate()
+        self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
