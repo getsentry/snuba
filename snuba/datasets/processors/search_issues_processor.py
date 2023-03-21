@@ -194,6 +194,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             event_occurrence_data["detection_time"]
         )
         receive_timestamp = datetime.utcfromtimestamp(event_data["received"])
+        retention_days = enforce_retention(
+            event.get("retention_days", 90), detection_timestamp
+        )
 
         if event_data.get("client_timestamp", None):
             client_timestamp = datetime.utcfromtimestamp(event_data["client_timestamp"])
@@ -211,10 +214,6 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
                     f"datetime field has incompatible datetime format: expected({settings.PAYLOAD_DATETIME_FORMAT}), got ({event['datetime']})"
                 )
             client_timestamp = _client_timestamp
-
-        retention_days = enforce_retention(
-            event.get("retention_days", 90), client_timestamp
-        )
 
         fingerprints = event_occurrence_data["fingerprint"]
         fingerprints = fingerprints[: self.FINGERPRINTS_HARD_LIMIT_SIZE - 1]
