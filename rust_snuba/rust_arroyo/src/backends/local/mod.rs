@@ -233,30 +233,30 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
         unimplemented!("Seek is not implemented");
     }
 
-    fn stage_positions(
+    fn stage_offsets(
         &mut self,
-        positions: HashMap<Partition, u64>,
+        offsets: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
         let assigned_partitions: HashSet<&Partition> =
             self.subscription_state.offsets.keys().collect();
-        let requested_partitions: HashSet<&Partition> = positions.keys().collect();
+        let requested_partitions: HashSet<&Partition> = offsets.keys().collect();
         let diff = requested_partitions.difference(&assigned_partitions);
 
         if diff.count() > 0 {
             return Err(ConsumerError::UnassignedPartition);
         }
-        for (partition, position) in positions {
+        for (partition, offset) in offsets {
             self.subscription_state
                 .staged_positions
-                .insert(partition, position);
+                .insert(partition, offset);
         }
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -571,10 +571,10 @@ mod tests {
             },
             100,
         )]);
-        let stage_result = consumer.stage_positions(positions.clone());
+        let stage_result = consumer.stage_offsets(positions.clone());
         assert!(stage_result.is_ok());
 
-        let offsets = consumer.commit_positions();
+        let offsets = consumer.commit_offsetes();
         assert!(offsets.is_ok());
         assert_eq!(offsets.unwrap(), positions);
 
@@ -587,7 +587,7 @@ mod tests {
             100
         )]);
 
-        let stage_result = consumer.stage_positions(invalid_positions);
+        let stage_result = consumer.stage_offsets(invalid_positions);
         assert!(stage_result.is_err());
     }
 }
