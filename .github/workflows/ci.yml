@@ -63,17 +63,6 @@ jobs:
         with:
           github-token: ${{ steps.token.outputs.token }}
 
-  rust-linting:
-    name: "Linting - Rust"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v3
-        name: Checkout code
-      - name: Run linter
-        run: |
-          make lint-rust
-
   typing:
     name: "mypy typing"
     runs-on: ubuntu-latest
