@@ -35,12 +35,6 @@ pub enum TopicOrPartition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Position {
-    pub offset: u64,
-    pub timestamp: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct Message<T: Clone> {
     pub partition: Partition,
     pub offset: u64,

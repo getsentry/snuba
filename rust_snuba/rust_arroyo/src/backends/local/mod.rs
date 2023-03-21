@@ -1,7 +1,7 @@
 pub mod broker;
 
 use super::{AssignmentCallbacks, Consumer, ConsumerError};
-use crate::types::{Message, Partition, Position, Topic};
+use crate::types::{Message, Partition, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
@@ -20,7 +20,7 @@ struct SubscriptionState {
     topics: Vec<Topic>,
     callbacks: Option<Box<dyn AssignmentCallbacks>>,
     offsets: HashMap<Partition, u64>,
-    staged_positions: HashMap<Partition, Position>,
+    staged_positions: HashMap<Partition, u64>,
     last_eof_at: HashMap<Partition, u64>,
 }
 
@@ -235,7 +235,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
     fn stage_positions(
         &mut self,
-        positions: HashMap<Partition, Position>,
+        positions: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
@@ -256,7 +256,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, Position>, ConsumerError> {
+    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -264,7 +264,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
         let offsets = positions
             .iter()
-            .map(|(part, position)| (part.clone(), position.offset))
+            .map(|(part, offset)| (part.clone(), offset.clone()))
             .collect();
         self.broker.commit(&self.group, offsets);
         self.subscription_state.staged_positions.clear();
@@ -299,7 +299,7 @@ mod tests {
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::storages::memory::MemoryMessageStorage;
     use crate::backends::Consumer;
-    use crate::types::{Partition, Position, Topic};
+    use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
     use chrono::Utc;
     use std::collections::{HashMap, HashSet};
@@ -569,10 +569,7 @@ mod tests {
                 topic: topic2.clone(),
                 index: 0,
             },
-            Position {
-                offset: 100,
-                timestamp: Utc::now(),
-            },
+            100,
         )]);
         let stage_result = consumer.stage_positions(positions.clone());
         assert!(stage_result.is_ok());
@@ -587,10 +584,7 @@ mod tests {
                 topic: topic2,
                 index: 1,
             },
-            Position {
-                offset: 100,
-                timestamp: Utc::now(),
-            },
+            100
         )]);
 
         let stage_result = consumer.stage_positions(invalid_positions);

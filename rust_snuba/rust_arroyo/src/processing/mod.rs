@@ -217,7 +217,7 @@ mod tests {
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalConsumer;
     use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::types::{Message, Partition, Position, Topic};
+    use crate::types::{Message, Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
     use std::time::Duration;
@@ -234,10 +234,7 @@ mod tests {
                 Some(message) => Some(CommitRequest {
                     positions: HashMap::from([(
                         message.partition.clone(),
-                        Position {
-                            offset: message.offset,
-                            timestamp: message.timestamp,
-                        },
+                        message.offset,
                     )]),
                 }),
             }
