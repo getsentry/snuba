@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { COLORS } from "./theme";
 import { NAV_ITEMS } from "./data";
 import Client from "./api_client";
-import { AllowedTools } from "./types";
 
 type NavProps = {
   active: string | null;
