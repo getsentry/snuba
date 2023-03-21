@@ -80,7 +80,10 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         tags = process_tags_object(replay_event.get("tags"))
-        processed["title"] = tags.transaction
+
+        # we have to set title to empty string as it is non-nullable,
+        # and on clickhouse 20 this throws an error.
+        processed["title"] = tags.transaction or ""
         processed["tags.key"] = tags.keys
         processed["tags.value"] = tags.values
 

@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
+from typing import Any, Dict, MutableSequence, Optional, Set
 
 from clickhouse_driver.errors import ErrorCodes
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.request import Request
@@ -135,7 +136,7 @@ class FilterProfile:
     # Filters on non optimized mapping columns like tags/contexts
     mapping_cols: Columnset
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.ClickhouseQueryProfileWhereProfile:
         return {
             "columns": sorted(self.columns),
             "mapping_cols": sorted(self.mapping_cols),
@@ -162,7 +163,7 @@ class ClickhouseQueryProfile:
     # Columns in arrayjoin statements
     array_join_cols: Columnset
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.ClickhouseQueryProfile:
         return {
             "time_range": self.time_range,
             "table": self.table,
@@ -180,14 +181,14 @@ class ClickhouseQueryMetadata:
     sql_anonymized: str
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
-    stats: Mapping[str, Any]
+    stats: Dict[str, Any]
     status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
-    result_profile: Optional[Mapping[str, Any]] = None
+    result_profile: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.QueryMetadata:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
@@ -224,7 +225,7 @@ class SnubaQueryMetadata:
     def to_dict(self) -> Dict[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
-        return {
+        request_dict = {
             "request": {
                 "id": self.request.id,
                 "body": self.request.original_body,
@@ -245,6 +246,11 @@ class SnubaQueryMetadata:
             "projects": list(self.projects),
             "snql_anonymized": self.snql_anonymized,
         }
+        # TODO: Remove check once Org IDs are required
+        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
+            if isinstance(org_id, int):
+                request_dict["organization"] = org_id
+        return request_dict
 
     @property
     def status(self) -> QueryStatus:

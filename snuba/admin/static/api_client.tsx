@@ -132,15 +132,16 @@ function Client() {
     },
     getClickhouseNodes: () => {
       const url = baseUrl + "clickhouse_nodes";
-      return (
-        fetch(url)
-          .then((resp) => resp.json())
-          // If the cluster_name was not defined in the Snuba installation,
-          // no local nodes can be found so let's filter these out
-          .then((res) => {
-            return res.filter((storage: any) => storage.local_nodes.length > 0);
-          })
-      );
+      return fetch(url)
+        .then((resp) => resp.json())
+        .then((res) => {
+          return res.filter(
+            (storage: any) =>
+              storage.local_nodes.length > 0 ||
+              storage.dist_nodes.length > 0 ||
+              storage.query_node
+          );
+        });
     },
 
     getSnubaDatasetNames: () => {

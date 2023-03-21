@@ -167,7 +167,7 @@ class SubscriptionData:
             {
                 "query": self.query,
                 "tenant_ids": {
-                    "organization_id": "<subscriptions>",
+                    "organization_id": 1,  # TODO: Defaulting to 1 for now, should be the Org ID of the subscription
                     "referrer": referrer,
                 },
             },

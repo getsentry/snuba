@@ -4,7 +4,7 @@ use super::Consumer as ArroyoConsumer;
 use super::ConsumerError;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::types::Message as ArroyoMessage;
-use crate::types::{Partition, Position, Topic};
+use crate::types::{Partition, Topic};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -67,7 +67,7 @@ fn create_kafka_message(msg: BorrowedMessage) -> ArroyoMessage<KafkaPayload> {
             headers: msg.headers().map(BorrowedHeaders::detach),
             payload: msg.payload().map(|p| p.to_vec()),
         },
-        DateTime::from_utc(NaiveDateTime::from_timestamp(time_millis, 0), Utc),
+        DateTime::from_utc(NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN), Utc),
     )
 }
 
@@ -144,7 +144,7 @@ pub struct KafkaConsumer {
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    staged_offsets: HashMap<Partition, Position>,
+    staged_offsets: HashMap<Partition, u64>,
 }
 
 impl KafkaConsumer {
@@ -266,7 +266,7 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
 
     fn stage_positions(
         &mut self,
-        positions: HashMap<Partition, Position>,
+        positions: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError> {
         for (partition, position) in positions {
             self.staged_offsets.insert(partition, position);
@@ -274,14 +274,14 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, Position>, ConsumerError> {
+    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
         let mut topic_map = HashMap::new();
-        for (partition, position) in self.staged_offsets.iter() {
+        for (partition, offset) in self.staged_offsets.iter() {
             topic_map.insert(
                 (partition.topic.name.clone(), partition.index as i32),
-                Offset::from_raw(position.offset as i64),
+                Offset::from_raw(*offset as i64),
             );
         }
 
@@ -311,7 +311,7 @@ mod tests {
     use super::{AssignmentCallbacks, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::Consumer;
-    use crate::types::{Partition, Position, Topic};
+    use crate::types::{Partition, Topic};
     use chrono::Utc;
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;
@@ -425,10 +425,7 @@ mod tests {
 
         let positions = HashMap::from([(
             Partition { topic, index: 0 },
-            Position {
-                offset: 100,
-                timestamp: Utc::now(),
-            },
+            100,
         )]);
 
         consumer.stage_positions(positions.clone()).unwrap();

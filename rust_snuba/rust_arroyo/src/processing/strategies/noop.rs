@@ -1,12 +1,12 @@
 use crate::backends::kafka::types::KafkaPayload;
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-use crate::types::{Message, Partition, Position};
+use crate::types::{Message, Partition};
 use log::info;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 pub struct NoopCommit {
-    partitions: HashMap<Partition, Position>,
+    partitions: HashMap<Partition, u64>,
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
@@ -19,10 +19,7 @@ impl ProcessingStrategy<KafkaPayload> for NoopCommit {
         let next_offset = message.next_offset();
         self.partitions.insert(
             message.partition,
-            Position {
-                offset: next_offset,
-                timestamp: message.timestamp,
-            },
+            next_offset,
         );
         Ok(())
     }
@@ -74,7 +71,7 @@ pub fn new(commit_frequency: Duration) -> NoopCommit {
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
     use crate::processing::strategies::{noop, CommitRequest, ProcessingStrategy};
-    use crate::types::{Message, Partition, Position, Topic};
+    use crate::types::{Message, Partition, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -123,10 +120,7 @@ mod tests {
         };
         commit_req1.positions.insert(
             partition1,
-            Position {
-                offset: 1001,
-                timestamp,
-            },
+            1001,
         );
         noop.submit(m1).expect("Failed to submit");
         assert_eq!(noop.poll(), None);
@@ -139,10 +133,7 @@ mod tests {
         };
         commit_req2.positions.insert(
             partition2,
-            Position {
-                offset: 2001,
-                timestamp,
-            },
+            2001,
         );
         noop.submit(m2).expect("Failed to submit");
         assert_eq!(noop.poll(), None);

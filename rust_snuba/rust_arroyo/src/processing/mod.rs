@@ -95,7 +95,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> =
             Box::new(Callbacks::new(self.strategies.clone()));
-        let _ = self.consumer.subscribe(&[topic], callbacks);
+        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -116,7 +116,10 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             //TODO: Support errors properly
             match msg {
                 Ok(m) => self.message = m,
-                Err(_) => return Err(RunError::PollError),
+                Err(e) => {
+                    log::error!("poll error: {}", e);
+                    return Err(RunError::PollError)
+                },
             }
         }
 
@@ -214,7 +217,7 @@ mod tests {
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalConsumer;
     use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::types::{Message, Partition, Position, Topic};
+    use crate::types::{Message, Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
     use std::time::Duration;
@@ -231,10 +234,7 @@ mod tests {
                 Some(message) => Some(CommitRequest {
                     positions: HashMap::from([(
                         message.partition.clone(),
-                        Position {
-                            offset: message.offset,
-                            timestamp: message.timestamp,
-                        },
+                        message.offset,
                     )]),
                 }),
             }
