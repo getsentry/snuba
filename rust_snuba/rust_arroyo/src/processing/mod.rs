@@ -115,15 +115,11 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             let msg = self.consumer.poll(Some(Duration::ZERO));
             //TODO: Support errors properly
             match msg {
-                Ok(m) => {
-                    match m {
-                        None => {
-                            self.message = None;
-                        }
-                        Some(inner) => {
-                            self.message = Some(Message{inner_message: InnerMessage::BrokerMessage(inner)});
-                        }
-                    }
+                Ok(None) => {
+                    self.message = None;
+                },
+                Ok(Some(inner)) => {
+                    self.message = Some(Message{inner_message: InnerMessage::BrokerMessage(inner)});
                 },
                 Err(e) => {
                     log::error!("poll error: {}", e);
