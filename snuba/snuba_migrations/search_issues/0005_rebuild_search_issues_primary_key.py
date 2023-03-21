@@ -75,6 +75,17 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
+            # drop tables first
+            operations.DropTable(
+                storage_set=StorageSetKey.SEARCH_ISSUES,
+                table_name="search_issues_dist",
+                target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.SEARCH_ISSUES,
+                table_name="search_issues_local",
+                target=OperationTarget.LOCAL,
+            ),
             # local first
             operations.CreateTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
@@ -99,11 +110,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_local",
                 target=OperationTarget.LOCAL,
             ),
             operations.RenameTable(
@@ -135,11 +141,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_dist",
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.RenameTable(
