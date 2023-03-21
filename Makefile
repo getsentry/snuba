@@ -1,4 +1,4 @@
-.PHONY: develop setup-git test install-python-dependencies
+.PHONY: develop setup-git test install-python-dependencies install-py-dev
 
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
@@ -42,6 +42,8 @@ install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
+
+install-py-dev: install-python-dependencies
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
