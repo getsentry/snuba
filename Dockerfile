@@ -7,8 +7,9 @@ WORKDIR /usr/src/snuba
 ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on
 
-# Install dependencies first because requirements.txt is way less likely to be changed.
-COPY requirements.txt ./
+# requirements-build.txt is separate from requirements.txt so that Python
+# dependency bumps do not cause invalidation of the Rust layer.
+COPY requirements-build.txt ./
 
 RUN set -ex; \
     \
@@ -29,12 +30,17 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
-    pip install -r requirements.txt; \
+    pip install -r requirements-build.txt; \
     echo "$buildDeps" > /tmp/build-deps.txt
 
 FROM build_base AS base
+
+# Install dependencies first because requirements.txt is way less likely to be
+# changed compared to the rest of the application.
+COPY requirements.txt ./
 RUN set -ex; \
     \
+    pip install -r requirements.txt; \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
     | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \

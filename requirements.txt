@@ -13,7 +13,6 @@ python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
 fastjsonschema==2.16.2
 Markdown==3.4.1
-maturin==0.14.15
 packaging==21.3
 # Do not update parsimonious, there is a performance issue in newer versions
 parsimonious==0.8.1
