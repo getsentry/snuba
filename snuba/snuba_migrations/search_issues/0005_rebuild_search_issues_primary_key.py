@@ -58,12 +58,6 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-def inject_delay() -> None:
-    import time
-
-    time.sleep(5)
-
-
 class Migration(migration.ClickhouseNodeMigration):
     """
     This migration rebuilds the search_issues table to use `client_timestamp` as part of the primary key instead of
@@ -117,10 +111,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 old_table_name="search_issues_local_new",
                 new_table_name="search_issues_local",
                 target=OperationTarget.LOCAL,
-            ),
-            operations.RunPython(
-                func=inject_delay,
-                description="intentionally delay running dist until local ops settle",
             ),
             # dist second
             operations.CreateTable(
