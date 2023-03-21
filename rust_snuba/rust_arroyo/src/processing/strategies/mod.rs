@@ -1,9 +1,10 @@
-use crate::types::{Message, Partition, Position};
+use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
 
 pub mod noop;
 pub mod transform;
+pub mod produce;
 
 #[derive(Debug, Clone)]
 pub struct MessageRejected;
@@ -14,7 +15,7 @@ pub struct InvalidMessage;
 /// Signals that we need to commit offsets
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommitRequest {
-    pub positions: HashMap<Partition, Position>,
+    pub positions: HashMap<Partition, u64>,
 }
 
 /// A processing strategy defines how a stream processor processes messages
