@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-use rust_arroyo::types::Message;
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
 use anyhow::Error;
 
@@ -80,28 +80,31 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         // TODO: add procspawn/parallelism
-        log::debug!("processing message, timestamp={:?}", message.timestamp);
+        log::debug!("processing message,  message={}", message);
+
         let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
-            let args = (
-                message.payload.payload,
-                message.offset,
-                message.partition.index,
-                message.timestamp,
-            );
-            let result = self.py_process_message.call1(py, args)?;
-            let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-            Ok(BytesInsertBatch {
-                rows: result_decoded,
-            })
+            match &message.inner_message {
+                InnerMessage::AnyMessage(..) => {
+                    panic!("AnyMessage cannot be processed");
+                }
+                InnerMessage::BrokerMessage(BrokerMessage {
+                    payload,
+                    offset,
+                    partition,
+                    timestamp,
+                }) => {
+                    let args = (payload.payload.clone(), offset.clone(), partition.index, timestamp.clone());
+                    let result = self.py_process_message.call1(py, args)?;
+                    let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
+                    Ok(BytesInsertBatch {
+                        rows: result_decoded,
+                    })
+                }
+            }
         })
         .unwrap();
 
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: result,
-            timestamp: message.timestamp,
-        })
+        self.next_step.submit(message.replace(result))
     }
 
     fn close(&mut self) {

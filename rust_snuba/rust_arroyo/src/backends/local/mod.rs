@@ -1,7 +1,7 @@
 pub mod broker;
 
 use super::{AssignmentCallbacks, Consumer, ConsumerError};
-use crate::types::{Message, Partition, Topic};
+use crate::types::{BrokerMessage, Partition, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
@@ -112,7 +112,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
     fn poll(
         &mut self,
         _timeout: Option<Duration>,
-    ) -> Result<Option<Message<TPayload>>, ConsumerError> {
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -143,7 +143,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
         let keys = self.subscription_state.offsets.keys();
         let mut new_offset: Option<(Partition, u64)> = None;
-        let mut ret_message: Option<Message<TPayload>> = None;
+        let mut ret_message: Option<BrokerMessage<TPayload>> = None;
         for partition in keys.collect::<Vec<_>>() {
             if self.paused.contains(partition) {
                 continue;
@@ -153,7 +153,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
             let message = self.broker.consume(partition, offset).unwrap();
             match message {
                 Some(msg) => {
-                    new_offset = Some((partition.clone(), msg.next_offset()));
+                    new_offset = Some((partition.clone(), msg.offset + 1));
                     ret_message = Some(msg);
                     break;
                 }

@@ -16,11 +16,12 @@ impl ProcessingStrategy<KafkaPayload> for NoopCommit {
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
-        let next_offset = message.next_offset();
-        self.partitions.insert(
-            message.partition,
-            next_offset,
-        );
+        for (partition, offset) in message.committable() {
+            self.partitions.insert(
+                partition,
+                offset
+            );
+        }
         Ok(())
     }
 
