@@ -21,7 +21,7 @@ pipelines:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
                 shallow_clone: true
-                branch: master
+                branch: meredith/borked-migration
                 destination: snuba
         stages:
             - deploy:
