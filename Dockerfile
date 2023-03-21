@@ -95,9 +95,9 @@ RUN set -ex; \
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
 FROM base AS application
+COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/ ./snuba/admin/
-COPY . ./
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
