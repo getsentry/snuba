@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, Optional, Union, cast
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Union, cast
 
 import rapidjson
 import sentry_sdk
@@ -102,13 +102,13 @@ def update_query_metadata_and_stats(
     query: Query,
     sql: str,
     timer: Timer,
-    stats: MutableMapping[str, Any],
+    stats: Dict[str, Any],
     query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
     request_status: Status,
-    profile_data: Optional[Mapping[str, Any]] = None,
+    profile_data: Optional[Dict[str, Any]] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
 ) -> MutableMapping[str, Any]:

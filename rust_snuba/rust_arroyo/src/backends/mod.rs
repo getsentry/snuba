@@ -1,4 +1,4 @@
-use super::types::{Message, Partition, Position, Topic, TopicOrPartition};
+use super::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use thiserror::Error;
@@ -92,7 +92,7 @@ pub trait Consumer<'a, TPayload: Clone> {
     fn poll(
         &mut self,
         timeout: Option<Duration>,
-    ) -> Result<Option<Message<TPayload>>, ConsumerError>;
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumerError>;
 
     /// Pause consuming from the provided partitions.
     ///
@@ -143,12 +143,12 @@ pub trait Consumer<'a, TPayload: Clone> {
     /// moves in reverse.)
     fn stage_positions(
         &mut self,
-        positions: HashMap<Partition, Position>,
+        positions: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError>;
 
     /// Commit staged offsets. The return value of this method is a mapping
     /// of streams with their committed offsets as values.
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, Position>, ConsumerError>;
+    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError>;
 
     fn close(&mut self);
 

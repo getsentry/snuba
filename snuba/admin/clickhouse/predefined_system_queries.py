@@ -23,6 +23,17 @@ class CurrentMerges(SystemQuery):
     """
 
 
+class CreateTableQuery(SystemQuery):
+    """Show the current state of the schema by looking at the create_table_query"""
+
+    sql = """
+    SELECT
+        create_table_query
+    FROM system.tables
+    WHERE database not in ('system')
+    """
+
+
 class ActivePartsPerTable(SystemQuery):
     """Number of parts grouped by table. Parts should not be in the high thousands."""
 

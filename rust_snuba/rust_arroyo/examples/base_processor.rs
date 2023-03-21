@@ -7,12 +7,12 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Message, Partition, Position, Topic};
+use rust_arroyo::types::{Message, Partition, Topic};
 use std::collections::HashMap;
 use std::time::Duration;
 
 struct TestStrategy {
-    partitions: HashMap<Partition, Position>,
+    partitions: HashMap<Partition, u64>,
 }
 impl ProcessingStrategy<KafkaPayload> for TestStrategy {
     fn poll(&mut self) -> Option<CommitRequest> {
@@ -34,10 +34,7 @@ impl ProcessingStrategy<KafkaPayload> for TestStrategy {
         println!("SUBMIT {}", message);
         self.partitions.insert(
             message.partition,
-            Position {
-                offset: message.offset,
-                timestamp: message.timestamp,
-            },
+            message.offset,
         );
         Ok(())
     }
