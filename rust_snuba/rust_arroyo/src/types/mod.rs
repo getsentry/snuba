@@ -53,10 +53,10 @@ impl<T: Clone>BrokerMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(&self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
         BrokerMessage {
             payload: replacement,
-            partition: self.partition.clone(),
+            partition: self.partition,
             offset: self.offset,
             timestamp: self.timestamp,
         }
@@ -76,9 +76,8 @@ impl<T: Clone> AnyMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(&self, replacement: TReplaced) -> AnyMessage<TReplaced>{
-        // TODO: Get rid of the clone
-        AnyMessage{payload: replacement, committable: self.committable.clone()}
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced>{
+        AnyMessage{payload: replacement, committable: self.committable}
     }
 }
 
@@ -119,8 +118,8 @@ impl<T: Clone> Message<T> {
 
     }
 
-    pub fn replace<TReplaced: Clone>(&self, replacement: TReplaced) -> Message<TReplaced> {
-        match &self.inner_message {
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
+        match self.inner_message {
             InnerMessage::BrokerMessage(inner) => {
                 Message{inner_message: InnerMessage::BrokerMessage(inner.replace(replacement))}
             },
