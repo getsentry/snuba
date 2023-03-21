@@ -333,6 +333,7 @@ class SearchIssuesLoader(DirectoryLoader):
             "0002_search_issues_add_tags_hash_map",
             "0003_search_issues_modify_occurrence_type_id_size",
             "0004_rebuild_search_issues_with_version",
+            "0005_rebuild_search_issues_primary_key",
         ]
 
 
