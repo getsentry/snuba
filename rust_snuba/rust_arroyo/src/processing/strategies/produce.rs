@@ -23,11 +23,9 @@ pub struct ProduceFuture {
     pub completed: bool,
 }
 
-type Task = Pin<Box<ProduceFuture>>;
-
 impl Future for ProduceFuture {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>, ) -> std::task::Poll<()> {
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>, ) -> std::task::Poll<()> {
         self.producer.produce(&self.destination, &self.payload);
         return std::task::Poll::Ready(())
     }
@@ -87,7 +85,7 @@ impl ProcessingStrategy<KafkaPayload>
         let produce_fut = ProduceFuture {
             producer: Arc::clone(&self.producer),
             destination: Arc::clone(&self.topic),
-            payload: message.payload.clone(),
+            payload: message.payload().clone(),
             completed: false,
         };
         // spawn the future

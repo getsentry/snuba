@@ -46,11 +46,11 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     }
 
     fn close(&mut self) {
-        self.next_step.close()
+        self.next_step.close();
     }
 
     fn terminate(&mut self) {
-        self.next_step.terminate()
+        self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
@@ -65,20 +65,10 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
 ) {
-    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw))
+    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw));
 }
 
 pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str) {
-    env_logger::init();
-    let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
-    // TODO: Support multiple storages
-    assert_eq!(consumer_config.storages.len(), 1);
-    assert!(consumer_config.replacements_topic.is_none());
-    assert!(consumer_config.commit_log_topic.is_none());
-    let first_storage = &consumer_config.storages[0];
-
-    log::info!("Starting consumer for {:?}", first_storage.name,);
-
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
     }
@@ -93,6 +83,16 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
             Box::new(transform_step)
         }
     }
+
+    env_logger::init();
+    let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
+    // TODO: Support multiple storages
+    assert_eq!(consumer_config.storages.len(), 1);
+    assert!(consumer_config.replacements_topic.is_none());
+    assert!(consumer_config.commit_log_topic.is_none());
+    let first_storage = &consumer_config.storages[0];
+
+    log::info!("Starting consumer for {:?}", first_storage.name,);
 
     let broker_config: HashMap<_, _> = consumer_config
         .raw_topic
