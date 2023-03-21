@@ -1,4 +1,3 @@
-use crate::backends::kafka::types::KafkaPayload;
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, Partition};
 use log::info;
@@ -10,12 +9,12 @@ pub struct NoopCommit {
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl ProcessingStrategy<KafkaPayload> for NoopCommit {
+impl <T: Clone> ProcessingStrategy<T> for NoopCommit {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(
                 partition,
