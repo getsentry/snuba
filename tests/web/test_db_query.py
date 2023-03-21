@@ -3,12 +3,14 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence
 import pytest
 
 from snuba import state
+from snuba.clickhouse.formatter.query import format_query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.web.db_query import (
     _apply_thread_quota_to_clickhouse_query_settings,
     _get_query_settings_from_config,
+    db_query,
 )
 
 test_data = [
@@ -98,3 +100,25 @@ def test_apply_thread_quota(
         settings, clickhouse_query_settings, rate_limit_stats
     )
     assert clickhouse_query_settings == expected_query_settings
+
+
+def test_db_query(ch_query):
+    from snuba.clickhouse.native import NativeDriverReader
+    from snuba.datasets.storages.factory import get_storage
+    from snuba.datasets.storages.storage_key import StorageKey
+    from snuba.querylog.query_metadata import SnubaQueryMetadata
+    from snuba.utils.metrics.timer import Timer
+
+    reader = get_storage(StorageKey("errors")).get_cluster().get_reader()
+
+    # result = db_query(
+    #     clickhouse_query=ch_query,
+    #     query_settings=HTTPQuerySettings()
+    #     formatted_query=format_query(ch_query),
+    #     reader=reader,
+    #     timer=Timer(),
+    #     query_metadata: SnubaQueryMetadata,
+    #     stats: MutableMapping[str, Any],
+    #     trace_id: Optional[str] = None,
+    #     robust: bool = False,
+    # )

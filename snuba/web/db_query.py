@@ -23,8 +23,8 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
-    PassthroughPolicy,
     QueryResultOrError,
 )
 from snuba.query.composite import CompositeQuery
@@ -624,7 +624,7 @@ def _get_allocation_policy(
         # HACK (Volo): Joins are a weird case for allocation policies and we don't
         # actually use them anywhere so I'm purposefully just kicking this can down the
         # road
-        return PassthroughPolicy(storage_set_key="Something", accepted_tenant_types=[])
+        return DEFAULT_PASSTHROUGH_POLICY
     else:
         # FIXME: make a custom exception
         raise Exception(f"Could not determine allocation policy for {clickhouse_query}")
@@ -678,4 +678,6 @@ def db_query(
         )
         if result:
             return result
-        raise error or Exception("No error or result when running query")
+        raise error or Exception(
+            "No error or result when running query, this should never happen"
+        )
