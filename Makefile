@@ -66,3 +66,7 @@ watch-rust-snuba:
 generate-config-docs:
 	pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
+
+lint-rust:
+	cd rust_snuba && cargo clippy -- -W clippy::pedantic
+.PHONY: lint-rust
