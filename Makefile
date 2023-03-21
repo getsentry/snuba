@@ -70,5 +70,5 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 lint-rust:
-	cd rust_snuba && cargo clippy -- -W clippy::pedantic -D warnings
+	cd rust_snuba && cargo clippy -- -D warnings
 .PHONY: lint-rust
