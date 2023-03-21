@@ -87,7 +87,7 @@ impl ProcessingStrategy<KafkaPayload>
         let produce_fut = ProduceFuture {
             producer: Arc::clone(&self.producer),
             destination: Arc::clone(&self.topic),
-            payload: message.payload.clone(),
+            payload: message.payload().clone(),
             completed: false,
         };
         // spawn the future
