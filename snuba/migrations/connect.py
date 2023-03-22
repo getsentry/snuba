@@ -95,8 +95,12 @@ def check_for_inactive_replicas() -> None:
                 f"WHERE active_replicas < total_replicas AND database ='{conn.database}'",
             ).results
 
+            inactive_replica_info = []
             for table, total_replicas, active_replicas in tables_with_inactive:
-                raise InactiveClickhouseReplica(
+                inactive_replica_info.append(
                     f"Storage {storage_key.value} has inactive replicas for table {table} "
                     f"with {active_replicas} out of {total_replicas} replicas active."
                 )
+
+            if inactive_replica_info:
+                raise InactiveClickhouseReplica("\n".join(inactive_replica_info))

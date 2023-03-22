@@ -348,8 +348,8 @@ def test_settings_skipped_group() -> None:
 def test_check_inactive_replica() -> None:
     inactive_replica_query_result = ClickhouseResult(
         results=[
-            ["good_table", 3, 3],
-            ["bad_table", 2, 3],
+            ["bad_table_1", 3, 2],
+            ["bad_table_2", 4, 1],
         ]
     )
 
@@ -372,10 +372,12 @@ def test_check_inactive_replica() -> None:
             with pytest.raises(InactiveClickhouseReplica) as exc:
                 check_for_inactive_replicas()
 
-                assert exc.value.args[0] == (
-                    f"Storage {storage_key.value} has inactive replicas for table bad_table "
-                    f"with 2 out of 3 replicas active."
-                )
+            assert exc.value.args[0] == (
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_1 "
+                f"with 2 out of 3 replicas active.\n"
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_2 "
+                f"with 1 out of 4 replicas active."
+            )
 
             assert mock_conn.execute.call_count == 1
             query = (
