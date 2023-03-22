@@ -240,16 +240,16 @@ def process_replay_actions(
             "partition": metadata.partition,
             "offset": metadata.offset,
             # DOM Index fields.
-            "click.node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
-            "click.tag": to_string(click["tag"])[:32],
-            "click.id": to_string(click["id"])[:64],
-            "click.class": to_typed_list(to_string, click["class"][:10]),
-            "click.text": to_string(click["text"])[:1024],
-            "click.role": to_string(click["role"])[:32],
-            "click.alt": to_string(click["alt"])[:64],
-            "click.testid": to_string(click["testid"])[:64],
-            "click.aria_label": to_string(click["aria_label"])[:64],
-            "click.title": to_string(click["title"])[:64],
+            "click_node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
+            "click_tag": to_string(click["tag"])[:32],
+            "click_id": to_string(click["id"])[:64],
+            "click_class": to_typed_list(to_string, click["class"][:10]),
+            "click_text": to_string(click["text"])[:1024],
+            "click_role": to_string(click["role"])[:32],
+            "click_alt": to_string(click["alt"])[:64],
+            "click_testid": to_string(click["testid"])[:64],
+            "click_aria_label": to_string(click["aria_label"])[:64],
+            "click_title": to_string(click["title"])[:64],
         }
         for click in payload["click"]
     ]
