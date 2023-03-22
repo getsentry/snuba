@@ -58,7 +58,8 @@ impl<T: Clone + Send + Sync> ProcessingStrategy<T> for Batch<T> {
 }
 
 impl <T: Clone>Batch<T> {
-    pub fn new(
+    #[allow(dead_code)]
+    fn new(
         next_step: Box<dyn ProcessingStrategy<Vec<T>>>,
         max_batch_size: usize,
         max_batch_time: Duration,
