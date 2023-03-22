@@ -222,7 +222,7 @@ class SnubaQueryMetadata:
     projects: Set[int]
     snql_anonymized: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.Querylog:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         request_dict = {
