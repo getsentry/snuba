@@ -8,6 +8,10 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict
 
+GO_SERVER_URL = os.environ.get(
+    "GO_SERVER_URL", "http://gocd-server.gocd.svc.cluster.local:8153/go"
+)
+
 
 def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
     # stage["result"] isn't populated if it isn't run
@@ -26,7 +30,7 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
         )
 
     req = urllib.request.Request(
-        f"http://gocd-server.gocd.svc.cluster.local:8153/go/api/pipelines/{pipeline_name}/history",
+        f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history",
         headers={
             "Accept": "application/vnd.go.cd.v1+json",
             "Authorization": f"bearer {GOCD_ACCESS_TOKEN}",
