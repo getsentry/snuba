@@ -52,6 +52,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "transactions-subscription-results",
         "sessions-subscription-results",
         "metrics-subscription-results",
+        "generic-metrics-subscription-results",
         "generic-metrics-sets-subscription-results",
         "generic-metrics-distributions-subscription-results",
         "generic-metrics-counters-subscription-results",
