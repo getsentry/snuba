@@ -1,12 +1,12 @@
+#!/usr/bin/env python3
+import argparse
+import subprocess
+from shutil import ExecError
+
 """
 This script is meant to be run in CI to check that migrations changes are
 not coupled with other changes.
 """
-
-
-import argparse
-import subprocess
-from shutil import ExecError
 
 
 class CoupledMigrations(Exception):
