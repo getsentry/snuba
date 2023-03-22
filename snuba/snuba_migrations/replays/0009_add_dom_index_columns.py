@@ -12,7 +12,7 @@ columns: Sequence[Tuple[Column[Modifiers], str]] = [
         "click_node_id",
     ),
     (Column("click_id", String(Modifiers(default="''"))), "click_tag"),
-    (Column("click_class", Array(String(Modifiers(default="''")))), "click_id"),
+    (Column("click_class", Array(String())), "click_id"),
     (Column("click_text", String(Modifiers(default="''"))), "click_class"),
     (
         Column("click_role", String(Modifiers(default="''", low_cardinality=True))),
