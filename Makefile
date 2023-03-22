@@ -1,4 +1,4 @@
-.PHONY: develop setup-git test install-python-dependencies
+.PHONY: develop setup-git test install-python-dependencies install-py-dev
 
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
@@ -43,6 +43,8 @@ install-python-dependencies:
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
 
+install-py-dev: install-python-dependencies
+
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
@@ -60,6 +62,13 @@ test-admin:
 validate-configs:
 	python3 snuba/validate_configs.py
 
+watch-rust-snuba:
+	cd rust_snuba/ && cargo watch -s 'maturin develop'
+
 generate-config-docs:
 	pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
+
+lint-rust:
+	cd rust_snuba && cargo clippy -- -D warnings
+.PHONY: lint-rust

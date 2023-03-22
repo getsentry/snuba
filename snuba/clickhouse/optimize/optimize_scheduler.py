@@ -45,14 +45,14 @@ class OptimizeScheduler:
         self.__last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        self.__parallel_start_time = (
-            self.__last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        self.__parallel_start_time = self.__last_midnight + timedelta(
+            hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME
         )
-        self.__parallel_end_time = (
-            self.__last_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME
+        self.__parallel_end_time = self.__last_midnight + timedelta(
+            hours=settings.PARALLEL_OPTIMIZE_JOB_END_TIME
         )
-        self.__full_job_end_time = (
-            self.__last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        self.__full_job_end_time = self.__last_midnight + timedelta(
+            hours=settings.OPTIMIZE_JOB_CUTOFF_TIME
         )
 
     @staticmethod
@@ -122,7 +122,8 @@ class OptimizeScheduler:
         if self.__parallel == 1:
             return OptimizationSchedule(
                 partitions=[self.sort_partitions(partitions)],
-                cutoff_time=self.__last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+                cutoff_time=self.__last_midnight
+                + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             )
         else:
             if current_time < self.__parallel_start_time:

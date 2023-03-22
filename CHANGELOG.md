@@ -1,5 +1,67 @@
 # Changelog
 
+## 23.3.1
+
+### Various fixes & improvements
+
+- add file for self hosted settings (#3889) by @enochtangg
+- ci: Run Rust linter (#3884) by @lynnagara
+- Add sns gcloud project GoCD pipeline (#3850) by @dbanda
+- rust: add simple transform and produce strategy example (#3796) by @dbanda
+- ref: Rename positions to offsets everywhere (#3888) by @lynnagara
+- feat(rust-arroyo): Split the message interface to support batching (#3885) by @lynnagara
+- feat(tx_processor): write replay_id as top level column (#3854) by @JoshFerge
+- feat(rust-arroyo): Get rid of `Position` (#3883) by @lynnagara
+- Remove filtering only local nodes for tracing tool (#3876) by @enochtangg
+- fix: Add sentry-compatible alias to install-python-dependencies (#3875) by @untitaker
+- fix(replays): set transaction as empty string instead of null (#3878) by @JoshFerge
+- feat(schemas): Partially type the data in querylog producer (#3858) by @lynnagara
+- feat: The Rust consumer calls Python message processors (#3871) by @untitaker
+- feat(rust-consumer): Avoid config files overwriting each other (#3873) by @lynnagara
+- ref: Bump sentry-kafka-schemas 0.0.9 (#3882) by @marandaneto
+- ref(admin): add CreateTableQuery predefined queries (#3844) by @MeredithAnya
+- feat(rust-consumer): Add python processor info to consumer config (#3874) by @lynnagara
+- feat(rust-consumer): Remove option to build raw config (#3870) by @lynnagara
+- feat: Start building the config for Rust consumer (#3869) by @lynnagara
+- Revert "use redis username from env (#3862)" (a03fb448) by @getsentry-bot
+- use redis username from env (#3862) by @HydrofinLoewenherz
+- feat(rust-consumer): Multistorage consumer (#3865) by @lynnagara
+- fix(rust-consumer): Remove auto-initialize feature (#3868) by @lynnagara
+- feat(Querylog): Organization ID from tenant_ids again (#3867) by @rahul-kumar-saini
+
+_Plus 2 more_
+
+## 23.3.0
+
+### Various fixes & improvements
+
+- Revert "feat(Querylog): Organization ID from `tenant_ids` (#3857)" (a555678e) by @getsentry-bot
+- feat(Querylog): Organization ID from `tenant_ids` (#3857) by @rahul-kumar-saini
+- feat(rust-consumer): Actually parse Python settings in Rust (#3860) by @lynnagara
+- feat(rust-consumer): Parse Python settings in Rust (#3859) by @lynnagara
+- ref(admin): Log when a connection error happens (#3834) by @evanh
+- feat: Share Python settings with Rust and add Rust consumer entrypoint (#3856) by @lynnagara
+- use correct connection for multi-node clusters (#3846) by @dbanda
+- meta: Update post merge hook to warn about updated deps (#3851) by @lynnagara
+- ref(admin): dont use tracing user for querylog and remove readonly=2 (#3849) by @MeredithAnya
+- ref(schema) Update to 0.0.6 (#3843) by @evanh
+- fix(querylog): enable readonly 2 for querylog (#3847) by @MeredithAnya
+- fix(test): Add extra query editor test (#3841) by @john-z-yang
+- fix(migrations): add replay_id  and exception_main_thread to errors dist ro (#3840) by @MeredithAnya
+- test: Run all consumers' message processors against examples (#3842) by @untitaker
+- ref: Add typing to all messages in errors replacer (#3835) by @untitaker
+- feat(replays): Default event_hash when segment_id is null (#3759) by @cmanallen
+- remove dead code from web/query (#3832) by @volokluev
+- ref: Bump sentry-kafka-schemas to 0.0.5 (#3839) by @untitaker
+- ref(admin) enable events/transactions migration groups (#3838) by @MeredithAnya
+- ref: Update mypy to 1.1.1 (#3836) by @untitaker
+- feat(querylog): Support for query interpolation in Querylog query editor (#3803) by @john-z-yang
+- feat: Add new statuses for SLO (#3747) by @evanh
+- ref: Start using python types from sentry-kafka-schemas (#3812) by @untitaker
+- fix(CapMan): Ensure tenant_ids metric is accurate (#3831) by @rahul-kumar-saini
+
+_Plus 59 more_
+
 ## 23.2.0
 
 ### Various fixes & improvements

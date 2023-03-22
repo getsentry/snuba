@@ -13,9 +13,7 @@ impl KafkaConfig {
     ) -> Self {
         let mut config_map = HashMap::new();
         config_map.insert("bootstrap.servers".to_string(), bootstrap_servers.join(","));
-
         let config = Self { config_map };
-
         apply_override_params(config, override_params)
     }
 

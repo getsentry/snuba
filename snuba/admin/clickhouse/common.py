@@ -69,16 +69,17 @@ def get_ro_node_connection(
 
     assert client_settings in {
         ClickhouseClientSettings.QUERY,
-        ClickhouseClientSettings.QUERY_AND_SETTINGS,
-    }, "admin can only use QUERY or TRACING ClickhouseClientSettings"
+        ClickhouseClientSettings.QUERYLOG,
+        ClickhouseClientSettings.TRACING,
+    }, "admin can only use QUERY, QUERYLOG, or TRACING ClickhouseClientSettings"
 
-    if client_settings == ClickhouseClientSettings.QUERY:
+    if (
+        client_settings == ClickhouseClientSettings.QUERY
+        or client_settings == ClickhouseClientSettings.QUERYLOG
+    ):
         username = settings.CLICKHOUSE_READONLY_USER
         password = settings.CLICKHOUSE_READONLY_PASSWORD
     else:
-        # renamed the ClickhouseClientSettings.TRACING to
-        # ClickhouseClientSettings.QUERY_AND_SETTINGS but didnt
-        # want to have to change these settings in ops
         username = settings.CLICKHOUSE_TRACE_USER
         password = settings.CLICKHOUSE_TRACE_PASSWORD
 
