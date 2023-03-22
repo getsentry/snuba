@@ -15,6 +15,7 @@ RUN set -ex; \
     \
     buildDeps=' \
         curl \
+        git \
         gcc \
         libc6-dev \
         liblz4-dev \
@@ -73,6 +74,8 @@ RUN set -ex; \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
     cd ./rust_snuba/; \
     export PATH="$HOME/.cargo/bin/:$PATH"; \
+    # use git CLI to avoid OOM on ARM64
+    echo -e "[net]\ngit-fetch-with-cli = true" > $CARGO_HOME/config; \
     maturin build --release --compatibility linux --locked --strip
 
 # Install nodejs and yarn and build the admin UI
