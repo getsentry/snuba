@@ -21,7 +21,7 @@ pipelines:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
                 shallow_clone: true
-                branch: meredith/borked-migration
+                branch: gocd_tests
                 destination: snuba
         stages:
             - checks:
@@ -34,8 +34,6 @@ pipelines:
                           elastic_profile_id: snuba
                           tasks:
                               - script: |
-                                    ls -lR
-                                    ls snuba
                                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
                                     snuba/scripts/check-migrations.py --to $deploy_sha
             - deploy:
