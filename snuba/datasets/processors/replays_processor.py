@@ -187,7 +187,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
             if replay_event["type"] == "replay_actions":
                 actions = process_replay_actions(replay_event, processed, metadata)
-                return InsertBatch([actions], None)
+                return InsertBatch(actions, None)
             else:
                 # The following helper functions should be able to be applied in any order.
                 # At time of writing, there are no reads of the values in the `processed`
@@ -213,59 +213,46 @@ def process_replay_actions(
     payload: Mapping[Any, Any],
     processed: Mapping[Any, Any],
     metadata: KafkaMessageMetadata,
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     """Process replay_actions message type."""
-    result = {
-        # Primary-key.
-        "project_id": processed["project_id"],
-        "timestamp": default(
-            lambda: datetime.now(timezone.utc),
-            maybe(to_datetime, payload.get("timestamp")),
-        ),
-        "replay_id": to_uuid(payload["replay_id"]),
-        "event_hash": payload.get("event_hash", segment_id_to_event_hash(None)),
-        "segment_id": None,
-        # Default values for non-nullable columns.
-        "trace_ids": [],
-        "error_ids": [],
-        "urls": [],
-        "title": None,
-        "platform": "javascript",
-        "user": None,
-        "sdk_name": None,
-        "sdk_version": None,
-        # Kafka columns.
-        "retention_days": processed["retention_days"],
-        "partition": metadata.partition,
-        "offset": metadata.offset,
-        # DOM Index fields.
-        "click.node_id": [],
-        "click.tag": [],
-        "click.id": [],
-        "click.class": [],
-        "click.text": [],
-        "click.role": [],
-        "click.alt": [],
-        "click.testid": [],
-        "click.aria_label": [],
-        "click.title": [],
-    }
-
-    for click in payload["click"]:
-        result["click.node_id"].append(
-            _collapse_or_err(_collapse_uint32, int(click["node_id"]))
-        )
-        result["click.tag"].append(to_string(click["tag"])[:32])
-        result["click.id"].append(to_string(click["id"])[:64])
-        result["click.class"].append(to_typed_list(to_string, click["class"][:10]))
-        result["click.text"].append(to_string(click["text"])[:1024])
-        result["click.role"].append(to_string(click["role"])[:32])
-        result["click.alt"].append(to_string(click["alt"])[:64])
-        result["click.testid"].append(to_string(click["testid"])[:64])
-        result["click.aria_label"].append(to_string(click["aria_label"])[:64])
-        result["click.title"].append(to_string(click["title"])[:64])
-
-    return result
+    return [
+        {
+            # Primary-key.
+            "project_id": processed["project_id"],
+            "timestamp": default(
+                lambda: datetime.now(timezone.utc),
+                maybe(to_datetime, payload.get("timestamp")),
+            ),
+            "replay_id": to_uuid(payload["replay_id"]),
+            "segment_id": None,
+            "event_hash": payload.get("event_hash", segment_id_to_event_hash(None)),
+            # Default values for non-nullable columns.
+            "trace_ids": [],
+            "error_ids": [],
+            "urls": [],
+            "title": None,
+            "platform": "javascript",
+            "user": None,
+            "sdk_name": None,
+            "sdk_version": None,
+            # Kafka columns.
+            "retention_days": processed["retention_days"],
+            "partition": metadata.partition,
+            "offset": metadata.offset,
+            # DOM Index fields.
+            "click.node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
+            "click.tag": to_string(click["tag"])[:32],
+            "click.id": to_string(click["id"])[:64],
+            "click.class": to_typed_list(to_string, click["class"][:10]),
+            "click.text": to_string(click["text"])[:1024],
+            "click.role": to_string(click["role"])[:32],
+            "click.alt": to_string(click["alt"])[:64],
+            "click.testid": to_string(click["testid"])[:64],
+            "click.aria_label": to_string(click["aria_label"])[:64],
+            "click.title": to_string(click["title"])[:64],
+        }
+        for click in payload["click"]
+    ]
 
 
 T = TypeVar("T")

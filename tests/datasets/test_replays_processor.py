@@ -725,13 +725,13 @@ class TestReplaysActionProcessor:
         assert row["retention_days"] == 30
         assert row["partition"] == 0
         assert row["offset"] == 0
-        assert row["click.node_id"][0] == 59
-        assert row["click.tag"][0] == "div"
-        assert row["click.id"][0] == "id"
-        assert row["click.class"][0] == ["class1", "class2"]
-        assert row["click.aria_label"][0] == "test"
-        assert row["click.role"][0] == "button"
-        assert row["click.text"][0] == "text"
-        assert row["click.alt"][0] == ""
-        assert row["click.testid"][0] == ""
-        assert row["click.title"][0] == ""
+        assert row["click.node_id"] == 59
+        assert row["click.tag"] == "div"
+        assert row["click.id"] == "id"
+        assert row["click.class"] == ["class1", "class2"]
+        assert row["click.aria_label"] == "test"
+        assert row["click.role"] == "button"
+        assert row["click.text"] == "text"
+        assert row["click.alt"] == ""
+        assert row["click.testid"] == ""
+        assert row["click.title"] == ""
