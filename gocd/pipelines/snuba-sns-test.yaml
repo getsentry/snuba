@@ -34,7 +34,8 @@ pipelines:
                           elastic_profile_id: snuba
                           tasks:
                               - script: |
-                                    ls
+                                    ls -lR
+                                    ls snuba
                                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
                                     snuba/scripts/check-migrations.py --to $deploy_sha
             - deploy:
