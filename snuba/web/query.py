@@ -11,6 +11,7 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import (
@@ -164,15 +165,18 @@ def _run_query_pipeline(
     else:
         query_runner = partial(
             _run_and_apply_column_names,
-            timer,
-            query_metadata,
-            request.referrer,
-            robust,
-            concurrent_queries_gauge,
+            timer=timer,
+            query_metadata=query_metadata,
+            attribution_info=request.attribution_info,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
         )
 
     record_missing_tenant_ids(request)
-
+    # NOTE: Something which is not immediately clear from looking at the code is that the
+    # query_runner can be run multiple times during the execution of the pipeline.
+    # The execution pipeline may choose to break up a query into multiple subqueries. And
+    # then assemble those together into one resut
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
@@ -201,6 +205,10 @@ def _dry_run_query_runner(
     query_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
+    # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
+    # you will only see the sql reported that the first of the split queries ran. Since this returns
+    # no results, you won't see any others
+
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
@@ -211,6 +219,7 @@ def _dry_run_query_runner(
             "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
+            "query_metadata": None,
         },
     )
 
@@ -218,7 +227,7 @@ def _dry_run_query_runner(
 def _run_and_apply_column_names(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    referrer: str,
+    attribution_info: AttributionInfo,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -237,7 +246,7 @@ def _run_and_apply_column_names(
     result = _format_storage_query_and_run(
         timer,
         query_metadata,
-        referrer,
+        attribution_info,
         clickhouse_query,
         query_settings,
         reader,
@@ -270,7 +279,7 @@ def _run_and_apply_column_names(
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    referrer: str,
+    attribution_info: AttributionInfo,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
@@ -303,7 +312,7 @@ def _format_storage_query_and_run(
     stats = {
         "clickhouse_table": table_names,
         "final": visitor.any_final(),
-        "referrer": referrer,
+        "referrer": attribution_info.referrer,
         "sample": visitor.get_sample_rate(),
     }
 
@@ -320,6 +329,7 @@ def _format_storage_query_and_run(
                 stats=stats,
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
+                query_metadata=None,
             ),
         ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
@@ -327,14 +337,16 @@ def _format_storage_query_and_run(
 
         def execute() -> QueryResult:
             return raw_query(
-                clickhouse_query,
-                query_settings,
-                formatted_query,
-                reader,
-                timer,
-                query_metadata,
-                stats,
-                span.trace_id,
+                clickhouse_query=clickhouse_query,
+                query_settings=query_settings,
+                attribution_info=attribution_info,
+                dataset_name=query_metadata.dataset,
+                formatted_query=formatted_query,
+                reader=reader,
+                timer=timer,
+                query_metadata_list=query_metadata.query_list,
+                stats=stats,
+                trace_id=span.trace_id,
                 robust=robust,
             )
 

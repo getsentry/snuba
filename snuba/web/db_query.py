@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Union, cast
+from typing import Any, Dict, Mapping, MutableSequence, Optional, Union, cast
 
 import rapidjson
 import sentry_sdk
@@ -15,6 +15,7 @@ from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, state
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.formatter.query import format_query_anonymized
@@ -28,7 +29,6 @@ from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
     RequestStatus,
-    SnubaQueryMetadata,
     Status,
     get_query_status_from_error_codes,
     get_request_status,
@@ -82,7 +82,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # We are not initializing all the cache partitions here and instead relying on lazy
 # initialization because this module only learn of cache partitions ids from the
 # reader when running a query.
-cache_partitions: MutableMapping[str, Cache[Result]] = {
+cache_partitions: Dict[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_cache_client,
         "snuba-query-cache:",
@@ -101,9 +101,8 @@ logger = logging.getLogger("snuba.query")
 def update_query_metadata_and_stats(
     query: Query,
     sql: str,
-    timer: Timer,
     stats: Dict[str, Any],
-    query_metadata: SnubaQueryMetadata,
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
@@ -111,7 +110,7 @@ def update_query_metadata_and_stats(
     profile_data: Optional[Dict[str, Any]] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
-) -> MutableMapping[str, Any]:
+) -> Dict[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
     well as timing information.
@@ -125,7 +124,7 @@ def update_query_metadata_and_stats(
     sql_anonymized = format_query_anonymized(query).get_sql()
     start, end = get_time_range_estimate(query)
 
-    query_metadata.query_list.append(
+    query_metadata_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
             sql_anonymized=sql_anonymized,
@@ -139,7 +138,7 @@ def update_query_metadata_and_stats(
             result_profile=profile_data,
         )
     )
-
+    print("METADATA: ", query_metadata_list)
     return stats
 
 
@@ -154,8 +153,8 @@ def execute_query(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
+    stats: Dict[str, Any],
+    clickhouse_query_settings: Dict[str, Any],
     robust: bool,
 ) -> Result:
     """
@@ -188,7 +187,7 @@ def execute_query(
 def _record_rate_limit_metrics(
     rate_limit_stats_container: RateLimitStatsContainer,
     reader: Reader,
-    stats: MutableMapping[str, Any],
+    stats: Dict[str, Any],
 ) -> None:
     # This is a temporary metric that will be removed once the organization
     # rate limit has been tuned.
@@ -240,7 +239,7 @@ def _record_rate_limit_metrics(
 
 def _apply_thread_quota_to_clickhouse_query_settings(
     query_settings: QuerySettings,
-    clickhouse_query_settings: MutableMapping[str, Any],
+    clickhouse_query_settings: Dict[str, Any],
     project_rate_limit_stats: Optional[RateLimitStats],
 ) -> None:
     thread_quota = query_settings.get_resource_quota()
@@ -264,8 +263,8 @@ def execute_query_with_rate_limits(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
+    stats: Dict[str, Any],
+    clickhouse_query_settings: Dict[str, Any],
     robust: bool,
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
@@ -332,8 +331,8 @@ def execute_query_with_query_id(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
+    stats: Dict[str, Any],
+    clickhouse_query_settings: Dict[str, Any],
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
@@ -384,8 +383,8 @@ def execute_query_with_readthrough_caching(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
+    stats: Dict[str, Any],
+    clickhouse_query_settings: Dict[str, Any],
     robust: bool,
     query_id: str,
 ) -> Result:
@@ -432,9 +431,7 @@ def execute_query_with_readthrough_caching(
     )
 
 
-def _get_cache_wait_timeout(
-    query_settings: MutableMapping[str, Any], reader: Reader
-) -> int:
+def _get_cache_wait_timeout(query_settings: Dict[str, Any], reader: Reader) -> int:
     """
     Helper function to determine how long a query should wait when doing
     a readthrough caching.
@@ -456,7 +453,7 @@ def _get_cache_wait_timeout(
 
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
-) -> MutableMapping[str, Any]:
+) -> Dict[str, Any]:
     """
     Helper function to get the query settings from the config.
 
@@ -468,7 +465,7 @@ def _get_query_settings_from_config(
     all_confs = state.get_all_configs()
 
     # Populate the query settings with the default values
-    clickhouse_query_settings: MutableMapping[str, Any] = {
+    clickhouse_query_settings: Dict[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
@@ -489,11 +486,13 @@ def raw_query(
     # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    query_metadata: SnubaQueryMetadata,
-    stats: MutableMapping[str, Any],
+    stats: Dict[str, Any],
     trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
@@ -513,13 +512,12 @@ def raw_query(
 
     update_with_status = partial(
         update_query_metadata_and_stats,
-        clickhouse_query,
-        sql,
-        timer,
-        stats,
-        query_metadata,
-        clickhouse_query_settings,
-        trace_id,
+        query=clickhouse_query,
+        query_metadata_list=query_metadata_list,
+        sql=sql,
+        stats=stats,
+        query_settings=clickhouse_query_settings,
+        trace_id=trace_id,
     )
 
     try:
@@ -546,13 +544,9 @@ def raw_query(
             status = get_query_status_from_error_codes(error_code)
 
             with configure_scope() as scope:
-                fingerprint = [
-                    "{{default}}",
-                    str(cause.code),
-                    query_metadata.dataset,
-                ]
+                fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
-                    fingerprint.append(query_metadata.request.referrer)
+                    fingerprint.append(attribution_info.referrer)
                 scope.fingerprint = fingerprint
         elif isinstance(cause, TimeoutError):
             status = QueryStatus.TIMEOUT
@@ -572,10 +566,10 @@ def raw_query(
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
         stats = update_with_status(
-            status,
-            request_status,
+            status=status,
+            request_status=request_status,
             error_code=error_code,
-            triggered_rate_limiter=trigger_rate_limiter,
+            triggered_rate_limiter=str(trigger_rate_limiter),
         )
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
@@ -589,7 +583,9 @@ def raw_query(
         ) from cause
     else:
         stats = update_with_status(
-            QueryStatus.SUCCESS, get_request_status(), result["profile"]
+            status=QueryStatus.SUCCESS,
+            request_status=get_request_status(),
+            profile_data=result["profile"],
         )
         return QueryResult(
             result,
