@@ -49,8 +49,8 @@ schema:
       { name: offset, type: UInt, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
     ]
-  local_table_name: search_issues_local
-  dist_table_name: search_issues_dist
+  local_table_name: search_issues_local_v2
+  dist_table_name: search_issues_dist_v2
 
 query_processors:
   - processor: TableRateLimit
