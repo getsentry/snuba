@@ -6,27 +6,22 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 columns: Sequence[Tuple[Column[Modifiers], str]] = [
+    (Column("click_node_id", UInt(32, Modifiers(default="0"))), "tags.value"),
     (
-        Column("dom_tag", String(Modifiers(nullable=True, low_cardinality=True))),
-        "tags.value",
+        Column("click_tag", String(Modifiers(default="''", low_cardinality=True))),
+        "click_node_id",
     ),
+    (Column("click_id", String(Modifiers(default="''"))), "click_tag"),
+    (Column("click_class", Array(String(Modifiers(default="''")))), "click_id"),
+    (Column("click_text", String(Modifiers(default="''"))), "click_class"),
     (
-        Column("dom_action", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_tag",
+        Column("click_role", String(Modifiers(default="''", low_cardinality=True))),
+        "click_text",
     ),
-    (Column("dom_id", String(Modifiers(nullable=True))), "dom_action"),
-    (Column("dom_classes", Array(String())), "dom_id"),
-    (Column("dom_aria_label", String(Modifiers(nullable=True))), "dom_classes"),
-    (
-        Column("dom_aria_role", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_aria_label",
-    ),
-    (
-        Column("dom_role", String(Modifiers(nullable=True, low_cardinality=True))),
-        "dom_aria_role",
-    ),
-    (Column("dom_text_content", String(Modifiers(nullable=True))), "dom_aria_role"),
-    (Column("dom_node_id", UInt(32, Modifiers(nullable=True))), "dom_text_content"),
+    (Column("click_alt", String(Modifiers(default="''"))), "click_role"),
+    (Column("click_testid", String(Modifiers(default="''"))), "click_alt"),
+    (Column("click_aria_label", String(Modifiers(default="''"))), "click_testid"),
+    (Column("click_title", String(Modifiers(default="''"))), "click_aria_label"),
 ]
 
 alters: Sequence[str] = ["user", "sdk_name", "sdk_version"]
