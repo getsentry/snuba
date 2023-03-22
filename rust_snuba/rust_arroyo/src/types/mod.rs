@@ -1,3 +1,4 @@
+pub use chrono;
 use chrono::{DateTime, Utc};
 use std::any::type_name;
 use std::cmp::Eq;

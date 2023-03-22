@@ -105,7 +105,7 @@ impl <T: Clone>Batch<T> {
 mod tests {
     use rust_arroyo::processing::strategies::{noop, ProcessingStrategy};
     use crate::strategies::batch::Batch;
-    use chrono;
+    use rust_arroyo::types::chrono;
 
 
     use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
