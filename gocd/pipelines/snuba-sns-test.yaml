@@ -20,7 +20,7 @@ pipelines:
         materials:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: master
                 destination: snuba
         stages:
@@ -34,8 +34,8 @@ pipelines:
                           elastic_profile_id: snuba
                           tasks:
                               - script: |
-                                    deploy_sha=`python scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
-                                    python scripts/check-migrations.py --to $deploy_sha
+                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
+                                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
                   jobs:
