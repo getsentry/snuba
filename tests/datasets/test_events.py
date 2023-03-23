@@ -1,3 +1,5 @@
+import pytest
+
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -16,6 +18,8 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestEventsDataset:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test_tags_hash_map(self) -> None:
         """
         Adds an event and ensures the tags_hash_map is properly populated
