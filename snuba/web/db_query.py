@@ -138,7 +138,6 @@ def update_query_metadata_and_stats(
             result_profile=profile_data,
         )
     )
-    print("METADATA: ", query_metadata_list)
     return stats
 
 
