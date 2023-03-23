@@ -24,8 +24,6 @@ columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (Column("click_title", String(Modifiers(default="''"))), "click_aria_label"),
 ]
 
-alters: Sequence[str] = ["title", "user", "sdk_name", "sdk_version"]
-
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
@@ -55,21 +53,6 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
-    for column_name in alters:
-        yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_local",
-            column=Column(column_name, String(Modifiers(nullable=True))),
-            target=operations.OperationTarget.LOCAL,
-        )
-
-        yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_dist",
-            column=Column(column_name, String(Modifiers(nullable=True))),
-            target=operations.OperationTarget.DISTRIBUTED,
-        )
-
 
 def backward_columns_iter() -> Iterator[operations.SqlOperation]:
     for column, _ in columns:
@@ -85,19 +68,4 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
             table_name="replays_local",
             target=operations.OperationTarget.LOCAL,
             column_name=column.name,
-        )
-
-    for column_name in alters:
-        yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_local",
-            column=Column(column_name, String(Modifiers(nullable=False))),
-            target=operations.OperationTarget.LOCAL,
-        )
-
-        yield operations.ModifyColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_dist",
-            column=Column(column_name, String(Modifiers(nullable=False))),
-            target=operations.OperationTarget.DISTRIBUTED,
         )
