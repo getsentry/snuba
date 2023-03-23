@@ -75,7 +75,8 @@ RUN set -ex; \
     cd ./rust_snuba/; \
     export PATH="$HOME/.cargo/bin/:$PATH"; \
     # use git CLI to avoid OOM on ARM64
-    echo -e "[net]\ngit-fetch-with-cli = true" > ~/.cargo/config; \
+    echo '[net]' > ~/.cargo/config; \
+    echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
     maturin build --release --compatibility linux --locked --strip
 
 # Install nodejs and yarn and build the admin UI
