@@ -37,7 +37,7 @@ def __run_querylog_query(query: str) -> ClickhouseResult:
     query and does not validate/sanitize query or response data.
     """
     connection = get_ro_query_node_connection(
-        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERY
+        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
     )
     query_result = connection.execute(query=query, with_column_types=True)
     return query_result

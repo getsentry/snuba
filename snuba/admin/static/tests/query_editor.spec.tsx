@@ -62,8 +62,8 @@ describe("Query editor", () => {
           description: "descripton for query 2",
         },
       ];
-      let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
       it("should show right number of predefined queries in drop down menu", () => {
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getAllByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
@@ -76,30 +76,44 @@ describe("Query editor", () => {
       });
       it("should invoke callback when predefined query is selected", async () => {
         const user = userEvent.setup();
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        predefinedQueries.forEach(async (predefinedQuery) => {
+        for (const predefinedQuery of predefinedQueries) {
           await user.selectOptions(getByTestId("select"), predefinedQuery.name);
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
-        });
+        }
       });
       it("should show query and description when predefined query selected", async () => {
         const user = userEvent.setup();
-        let { getByTestId, getByText } = render(
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        let { getByTestId, getByText, getAllByText } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        predefinedQueries.forEach(async (predefinedQuery) => {
+        for (const predefinedQuery of predefinedQueries) {
           await user.selectOptions(getByTestId("select"), predefinedQuery.name);
           expect(getByText(predefinedQuery.description)).toBeTruthy();
-          expect(getByText(predefinedQuery.sql)).toBeTruthy();
-        });
+          expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
+        }
+      });
+    });
+    describe("with text area input", () => {
+      it("should invoke call back with text area value when no labels are present", async () => {
+        const user = userEvent.setup();
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        let { getByTestId } = render(
+          <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
+        );
+        const input = "abcde";
+        await user.type(getByTestId("text-area-input"), input);
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });
   });
