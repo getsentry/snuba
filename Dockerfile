@@ -1,5 +1,4 @@
 ARG PYTHON_VERSION=3.8.13
-ARG SHOULD_BUILD_ADMIN_UI=true
 
 FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
 WORKDIR /usr/src/snuba
@@ -68,11 +67,14 @@ RUN set -ex; \
 
 FROM build_base AS build_rust_snuba
 ARG RUST_TOOLCHAIN=1.68
+ARG SHOULD_BUILD_RUST=true
 
 COPY ./rust_snuba/ ./rust_snuba/
 RUN set -ex; \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
     cd ./rust_snuba/; \
+    mkdir -p ./target/wheels/; \
+    [ "$SHOULD_BUILD_RUST" = "true" ] || exit 0; \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
     export PATH="$HOME/.cargo/bin/:$PATH"; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
@@ -83,6 +85,7 @@ RUN set -ex; \
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
+ARG SHOULD_BUILD_ADMIN_UI=true
 ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
@@ -108,7 +111,7 @@ RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
-    pip install /tmp/rust_wheels/*; \
+    [ -z "`find -type f /tmp/rust_wheels`" ] || pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
     pip install -e .; \
     snuba --help; \
