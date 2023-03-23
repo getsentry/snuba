@@ -7,6 +7,7 @@ from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
@@ -24,6 +25,7 @@ def pytest_configure() -> None:
     ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
     setup_sentry()
+    initialize_snuba()
 
 
 @pytest.fixture(scope="session")
