@@ -20,7 +20,7 @@ def _get_migration_changes(to: str = "origin/master") -> str:
 def _get_changes(glob: str, to: str = "origin/master") -> str:
 
     # deep fetch to make sure we have the history
-    subprocess.run(["git", "fetch", "--depth", "1000"], check=True)
+    subprocess.run(["git", "fetch", "--unshallow", "1000"], check=True)
     print("orginal to", to)
     to = "8c07121fc38b443524c8d88e1559f8095f97c3b1"
     migrations_changes = subprocess.run(
