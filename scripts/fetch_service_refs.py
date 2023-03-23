@@ -53,6 +53,7 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
             for r in pipeline["build_cause"]["material_revisions"]:
                 # example material description format... `in` is good enough
                 # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'
+                print("description", r["material"]["description"])
                 if (
                     f"git@github.com:getsentry/{repo}.git"
                     in r["material"]["description"]
