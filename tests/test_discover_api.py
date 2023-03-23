@@ -14,6 +14,8 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestDiscoverApi(BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:

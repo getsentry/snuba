@@ -1,4 +1,5 @@
 import json
+import traceback
 from typing import Any, Callable, Iterator, Tuple, Union
 
 import pytest
@@ -57,8 +58,80 @@ def create_databases() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-@pytest.fixture(autouse=True)
-def run_migrations(create_databases: None) -> Iterator[None]:
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if item.get_closest_marker("clickhouse_db"):
+            item.fixturenames.append("clickhouse_db")
+        else:
+            item.fixturenames.append("block_clickhouse_db")
+
+        if item.get_closest_marker("redis_db"):
+            item.fixturenames.append("redis_db")
+        else:
+            item.fixturenames.append("block_redis_db")
+
+
+class BlockedObject:
+    def __init__(self, message):
+        self.__failures = []
+        self.__message = message
+
+    def snuba_test_teardown(self):
+        if self.__failures:
+            pytest.fail(f"{self.__message}, stacktrace: {self.__failures[0]}")
+
+    def __getattr__(self, key):
+        # record stacktrace and print it during teardown so there's no chance
+        # of the exception being caught down somehow
+        self.__failures.append(traceback.format_stack())
+        pytest.fail(self.__message)
+
+
+@pytest.fixture
+def block_redis_db(monkeypatch):
+    from snuba.redis import _redis_clients
+
+    blocked = BlockedObject(
+        "attempted to access redis in test that does not use @pytest.mark.redis_db"
+    )
+
+    for key in _redis_clients:
+        monkeypatch.setitem(_redis_clients, key, blocked)
+
+    yield
+
+    blocked.snuba_test_teardown()
+
+
+@pytest.fixture
+def block_clickhouse_db(monkeypatch):
+    from snuba.clusters.cluster import ClickhouseCluster
+
+    blocked = BlockedObject(
+        "attempted to access clickhouse in test that does not use @pytest.mark.clickhouse_db"
+    )
+
+    def get_blocked(*args, **kwargs):
+        return blocked
+
+    monkeypatch.setattr(ClickhouseCluster, "get_query_connection", get_blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_node_connection", get_blocked)
+
+    yield
+
+    blocked.snuba_test_teardown()
+
+
+@pytest.fixture
+def redis_db():
+    yield
+
+    for redis_client in all_redis_clients():
+        redis_client.flushdb()
+
+
+@pytest.fixture
+def clickhouse_db(create_databases: None) -> Iterator[None]:
     from snuba.migrations.runner import Runner
 
     try:
@@ -83,9 +156,6 @@ def run_migrations(create_databases: None) -> Iterator[None]:
                     connection.execute(
                         f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
                     )
-
-        for redis_client in all_redis_clients():
-            redis_client.flushdb()
 
 
 @pytest.fixture(autouse=True)

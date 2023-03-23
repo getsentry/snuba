@@ -19,14 +19,6 @@ from snuba.replacers.replacer_processor import (
 )
 
 
-# Since these tests are pure, we can override the run_migrations fixture to
-# skip all test isolation. This reduces the test runtime from 10 seconds to 0.6
-# seconds
-@pytest.fixture
-def run_migrations() -> None:
-    pass
-
-
 @dataclass
 class Case:
     example: Example
