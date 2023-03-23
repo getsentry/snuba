@@ -488,10 +488,12 @@ def raw_query(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: Dict[str, Any],
     trace_id: Optional[str] = None,
     robust: bool = False,
