@@ -43,6 +43,7 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
     data = json.loads(resp.read())
 
     rev = None
+    print("pipelines", data["pipelines"])
     for pipeline in sorted(
         data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
     ):
@@ -67,7 +68,7 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
                     rev = r["modifications"][0]["revision"]
                     break
     if rev is None:
-        raise SystemExit(f"Couldn't find {repo} in {pipeline}")
+        raise SystemExit(f"Couldn't find passed pipeline for {repo}")
     print(rev)
     return 0
 
