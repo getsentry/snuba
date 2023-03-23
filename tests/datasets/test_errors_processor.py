@@ -12,6 +12,8 @@ from snuba.state import set_config
 
 
 def test_error_processor() -> None:
+    set_config("check_exception_main_thread", 1)
+
     received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)
     trace_id = str(uuid.uuid4())
@@ -372,6 +374,8 @@ def test_error_processor() -> None:
 
 
 def test_exception_main_thread_false() -> None:
+    set_config("check_exception_main_thread", 1)
+
     received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)
     trace_id = str(uuid.uuid4())

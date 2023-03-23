@@ -312,7 +312,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         frame_stack_levels = []
         exception_main_thread = None
 
-        check_exception_main_thread = get_config("check_exception_main_thread", 1)
+        check_exception_main_thread = get_config("check_exception_main_thread", 0)
 
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
             stack_level = 0
