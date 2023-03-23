@@ -227,19 +227,13 @@ class ChangeInTotalByteScannedPercentage(QuerylogQuery):
         AND (timestamp > ({{t1}}))
         AND (timestamp < {{t1}} + {{delta_t}})
         AND dataset IN ('{{dataset}}')
-    ) AS bytes_scanned_p1,
-    (
-        round(bytes_scanned_p0 / all_bytes_scanned_p0 * 100, 4)
-    ) AS pct_bytes_scanned_p0,
-    (
-        round(bytes_scanned_p1 / all_bytes_scanned_p1 * 100, 4)
-    ) AS pct_bytes_scanned_p1
+    ) AS bytes_scanned_p1
     SELECT
         bytes_scanned_p0,
         all_bytes_scanned_p0,
-        pct_bytes_scanned_p0,
+        round(bytes_scanned_p0 / all_bytes_scanned_p0 * 100, 4) AS pct_bytes_scanned_p0,
         bytes_scanned_p1,
         all_bytes_scanned_p1,
-        pct_bytes_scanned_p1,
+        round(bytes_scanned_p1 / all_bytes_scanned_p1 * 100, 4) AS pct_bytes_scanned_p1,
         round(pct_bytes_scanned_p1 - pct_bytes_scanned_p0, 4) AS delta_pct
     """
