@@ -19,3 +19,7 @@ class MigrationInProgress(SerializableException):
 
 class InvalidClickhouseVersion(SerializableException):
     pass
+
+
+class InactiveClickhouseReplica(SerializableException):
+    pass

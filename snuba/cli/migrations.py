@@ -6,7 +6,10 @@ import click
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.environment import setup_logging
-from snuba.migrations.connect import check_clickhouse_connections
+from snuba.migrations.connect import (
+    check_clickhouse_connections,
+    check_for_inactive_replicas,
+)
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
@@ -64,6 +67,7 @@ def migrate(
     """
     setup_logging(log_level)
     check_clickhouse_connections()
+    check_for_inactive_replicas()
     runner = Runner()
 
     try:
@@ -105,6 +109,7 @@ def run(
     setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections()
+        check_for_inactive_replicas()
 
     runner = Runner()
     migration_group = MigrationGroup(group)
@@ -153,6 +158,7 @@ def reverse(
     setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections()
+        check_for_inactive_replicas()
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
@@ -197,6 +203,7 @@ def reverse_in_progress(
     setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections()
+        check_for_inactive_replicas()
     runner = Runner()
 
     migration_group = MigrationGroup(group) if group else None
