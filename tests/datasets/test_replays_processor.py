@@ -680,21 +680,20 @@ class TestReplaysActionProcessor:
                         {
                             "type": "replay_actions",
                             "replay_id": "bb570198b8f04f8bbe87077668530da7",
-                            "timestamp": int(now.timestamp()),
-                            "event_hash": "df3c3aa2daae465e89f1169e49139827",
-                            "segment_id": None,
-                            "click": [
+                            "clicks": [
                                 {
                                     "node_id": 59,
                                     "tag": "div",
                                     "id": "id",
                                     "class": ["class1", "class2"],
-                                    "text": "text",
                                     "role": "button",
+                                    "aria_label": "test",
                                     "alt": "",
                                     "testid": "",
-                                    "aria_label": "test",
                                     "title": "",
+                                    "text": "text",
+                                    "timestamp": int(now.timestamp()),
+                                    "event_hash": "df3c3aa2daae465e89f1169e49139827",
                                 }
                             ],
                         }

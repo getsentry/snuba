@@ -221,11 +221,11 @@ def process_replay_actions(
             "project_id": processed["project_id"],
             "timestamp": default(
                 lambda: datetime.now(timezone.utc),
-                maybe(to_datetime, payload.get("timestamp")),
+                maybe(to_datetime, click["timestamp"]),
             ),
             "replay_id": to_uuid(payload["replay_id"]),
             "segment_id": None,
-            "event_hash": payload.get("event_hash", segment_id_to_event_hash(None)),
+            "event_hash": click["event_hash"],
             # Default values for non-nullable columns.
             "trace_ids": [],
             "error_ids": [],
@@ -251,7 +251,7 @@ def process_replay_actions(
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
         }
-        for click in payload["click"]
+        for click in payload["clicks"]
     ]
 
 
