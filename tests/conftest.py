@@ -25,6 +25,7 @@ def pytest_configure() -> None:
 
     initialize_snuba()
     setup_sentry()
+    initialize_snuba()
 
 
 @pytest.fixture(scope="session")
