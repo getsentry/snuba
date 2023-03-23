@@ -1,4 +1,5 @@
 import os
+from typing import List
 
 env = os.environ.get
 
@@ -15,5 +16,8 @@ USE_REDIS_CLUSTER = False
 # Dogstatsd Options
 DOGSTATSD_HOST = env("DOGSTATSD_HOST")
 DOGSTATSD_PORT = env("DOGSTATSD_PORT")
+
+# Dataset readiness states supported in this environment
+SUPPORTED_STATES: List[str] = ["complete"]
 
 SENTRY_DSN = env("SENTRY_DSN")
