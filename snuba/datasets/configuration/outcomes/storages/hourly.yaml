@@ -4,6 +4,7 @@ name: outcomes_hourly
 storage:
   key: outcomes_hourly
   set_key: outcomes
+readiness_state: complete
 schema:
   columns:
     [

@@ -4,6 +4,7 @@ name: groupassignees
 storage:
   key: groupassignees
   set_key: cdc
+readiness_state: complete
 schema:
   columns:
     [

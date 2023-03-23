@@ -4,6 +4,7 @@ name: generic_metrics_sets_raw
 storage:
   key: generic_metrics_sets_raw
   set_key: generic_metrics_sets
+readiness_state: complete
 schema:
   columns:
     [
