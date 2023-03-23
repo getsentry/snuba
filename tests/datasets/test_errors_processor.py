@@ -732,7 +732,7 @@ def test_exception_main_thread_false() -> None:
 
 
 def test_exception_main_thread_false_config_false() -> None:
-    set_config("check_exception_main_thread", False)
+    set_config("check_exception_main_thread", 0)
 
     received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)

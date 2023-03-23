@@ -312,7 +312,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         frame_stack_levels = []
         exception_main_thread = None
 
-        check_exception_main_thread = get_config("check_exception_main_thread", True)
+        check_exception_main_thread = get_config("check_exception_main_thread", 1)
 
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
             stack_level = 0
@@ -345,7 +345,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
                     frame_stack_levels.append(stack_level)
 
                 ## do not check for the main thread if the config is set to False
-                if check_exception_main_thread is not True:
+                if check_exception_main_thread != 1:
                     continue
 
                 ## mark if at least one of the exceptions happened in the main thread
