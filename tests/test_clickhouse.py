@@ -1,5 +1,6 @@
 from unittest.mock import call, patch
 
+import pytest
 from clickhouse_driver import Client, errors
 
 from snuba.clickhouse.columns import Array
@@ -13,7 +14,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 
 def test_flattened() -> None:
     columns = (
-        get_writable_storage(StorageKey.ERRORS)
+        get_writable_storage(StorageKey("errors"))
         .get_table_writer()
         .get_schema()
         .get_columns()
@@ -64,6 +65,7 @@ def test_reconnect(FakeClient: Client) -> None:
     ]
 
 
+@pytest.mark.clickhouse_db
 def test_capture_trace() -> None:
     storage = get_storage(StorageKey.ERRORS)
     clickhouse = storage.get_cluster().get_query_connection(
