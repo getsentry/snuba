@@ -77,6 +77,8 @@ RUN set -ex; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
+    echo '[registries.crates-io]' >> ~/.cargo/config; \
+    echo 'protocol = "sparse"' >> ~/.cargo/config' \
     maturin build --release --compatibility linux --locked --strip
 
 # Install nodejs and yarn and build the admin UI
