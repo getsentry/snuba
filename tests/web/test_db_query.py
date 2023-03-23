@@ -138,7 +138,12 @@ def test_raw_query_success() -> None:
         clickhouse_query=query,
         query_settings=HTTPQuerySettings(),
         attribution_info=AttributionInfo(
-            app_id=AppID(key="key"), tenant_ids={}, referrer="something"
+            app_id=AppID(key="key"),
+            tenant_ids={},
+            referrer="something",
+            team=None,
+            feature=None,
+            parent_api=None,
         ),
         dataset_name="events",
         query_metadata_list=query_metadata_list,
@@ -183,7 +188,12 @@ def test_raw_query_fail() -> None:
             clickhouse_query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=AttributionInfo(
-                app_id=AppID(key="key"), tenant_ids={}, referrer="something"
+                app_id=AppID(key="key"),
+                tenant_ids={},
+                referrer="something",
+                team=None,
+                feature=None,
+                parent_api=None,
             ),
             dataset_name="events",
             query_metadata_list=query_metadata_list,
