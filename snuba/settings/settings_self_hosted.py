@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import Set
 
 env = os.environ.get
 
@@ -18,6 +18,6 @@ DOGSTATSD_HOST = env("DOGSTATSD_HOST")
 DOGSTATSD_PORT = env("DOGSTATSD_PORT")
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: List[str] = ["complete"]
+SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 
 SENTRY_DSN = env("SENTRY_DSN")

@@ -1,5 +1,5 @@
 import os
-from typing import List, Set
+from typing import Set
 
 TESTING = True
 
@@ -13,7 +13,7 @@ USE_RESULT_CACHE = True
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
-SUPPORTED_STATES: List[str] = ["deprecate", "limited", "partial", "complete"]
+SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 ENABLE_DEV_FEATURES = True
 
 # Sometimes we want the raw structure of an expression
