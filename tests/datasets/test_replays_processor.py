@@ -16,6 +16,7 @@ from snuba.datasets.processors.replays_processor import (
     process_tags_object,
     segment_id_to_event_hash,
     to_capped_list,
+    to_capped_string,
     to_datetime,
     to_enum,
     to_string,
@@ -658,6 +659,13 @@ class TestReplaysProcessor:
 
         with pytest.raises(TypeError):
             normalize_tags("a")
+
+    def test_to_capped_string(self) -> None:
+        """Test "to_capped_string" function."""
+        assert to_capped_string(1, "123") == "1"
+        assert to_capped_string(2, "123") == "12"
+        assert to_capped_string(3, "123") == "123"
+        assert to_capped_string(4, "123") == "123"
 
 
 class TestReplaysActionProcessor:

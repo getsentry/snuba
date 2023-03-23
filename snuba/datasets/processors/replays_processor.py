@@ -4,6 +4,7 @@ import dataclasses
 import logging
 import uuid
 from datetime import datetime, timezone
+from functools import partial
 from hashlib import md5
 from typing import Any, Callable, Mapping, MutableMapping, Optional, TypeVar
 
@@ -246,7 +247,9 @@ def process_replay_actions(
             "click_node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
             "click_tag": to_string(click["tag"])[:32],
             "click_id": to_string(click["id"])[:64],
-            "click_class": to_typed_list(to_string, click["class"][:10]),
+            "click_class": to_typed_list(
+                partial(to_capped_string, 64), click["class"][:10]
+            ),
             "click_text": to_string(click["text"])[:1024],
             "click_role": to_string(click["role"])[:32],
             "click_alt": to_string(click["alt"])[:64],
@@ -313,6 +316,11 @@ def to_string(value: Any) -> str:
         return ""
     else:
         return _encode_utf8(str(value))
+
+
+def to_capped_string(capacity: int, value: Any) -> str:
+    """Return a capped string."""
+    return to_string(value)[:capacity]
 
 
 def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
