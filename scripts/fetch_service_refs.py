@@ -43,6 +43,7 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
     data = json.loads(resp.read())
 
     rev = None
+    print("fetching pipeline history for", pipeline_name)
     print("pipelines", data["pipelines"])
     for pipeline in sorted(
         data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
