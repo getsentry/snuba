@@ -28,6 +28,8 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db, redis_db) -> Generator[None, None, None]:
