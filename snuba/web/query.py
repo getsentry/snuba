@@ -177,6 +177,9 @@ def _run_query_pipeline(
     # query_runner can be run multiple times during the execution of the pipeline.
     # The execution pipeline may choose to break up a query into multiple subqueries. And
     # then assemble those together into one resut
+
+    # Throughout those executions, the query_metadata.query_list is appended to every time a query runs
+    # within `db_query.py` with metadata about the query. That metada then goes into the querylog
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
