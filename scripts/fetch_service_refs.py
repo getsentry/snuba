@@ -7,7 +7,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 GO_SERVER_URL = os.environ.get(
     "GO_SERVER_URL", "http://gocd-server.gocd.svc.cluster.local:8153/go"
@@ -29,46 +29,62 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
             GOCD_ACCESS_TOKEN not set. It should be an access token belonging to bot@sentry.io.
             """
         )
+    fetch_url: Optional[str] = f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history"
 
-    req = urllib.request.Request(
-        f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history",
-        headers={
-            "Accept": "application/vnd.go.cd.v1+json",
-            "Authorization": f"bearer {GOCD_ACCESS_TOKEN}",
-        },
-    )
-    try:
-        resp = urllib.request.urlopen(req)
-    except urllib.error.HTTPError as e:
-        raise SystemExit(f"Failed to fetch pipeline history:\n{e.read().decode()}")
-    data = json.loads(resp.read())
+    while fetch_url:
+        req = urllib.request.Request(
+            f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history",
+            headers={
+                "Accept": "application/vnd.go.cd.v1+json",
+                "Authorization": f"bearer {GOCD_ACCESS_TOKEN}",
+            },
+        )
+        try:
+            resp = urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            raise SystemExit(f"Failed to fetch pipeline history:\n{e.read().decode()}")
 
-    rev = None
-    print("fetching pipeline history for", pipeline_name, file=sys.stderr)
-    print("\npipelines", data["pipelines"], file=sys.stderr)
-    for pipeline in sorted(
-        data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
-    ):
-        # Look at the most recent passing pipeline,
-        # and get its deployment revision for the main material.
-        if pipeline_passed(pipeline):
+        print("fetching pipeline history for", pipeline_name, file=sys.stderr)
+        data = json.loads(resp.read())
 
-            for r in pipeline["build_cause"]["material_revisions"]:
-                # example material description format... `in` is good enough
-                # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'
-                print("description", r["material"]["description"])
-                if (
-                    f"git@github.com:getsentry/{repo}.git"
-                    in r["material"]["description"]
-                ):
-                    rev = r["modifications"][0]["revision"]
-                    break
-                elif (
-                    f"https://github.com/getsentry/{repo}.git"
-                    in r["material"]["description"]
-                ):
-                    rev = r["modifications"][0]["revision"]
-                    break
+        if "_links" in data and "next" in data["_links"]:
+            fetch_url = data["_links"]["next"]["href"]
+        else:
+            fetch_url = None
+
+        rev = None
+
+        print(
+            "\npipelines",
+            json.dumps(data["pipelines"], indent=2),
+            "\n",
+            file=sys.stderr,
+        )
+        for pipeline in sorted(
+            data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
+        ):
+            # Look at the most recent passing pipeline,
+            # and get its deployment revision for the main material.
+            if pipeline_passed(pipeline):
+
+                for r in pipeline["build_cause"]["material_revisions"]:
+                    # example material description format... `in` is good enough
+                    # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'
+                    if (
+                        f"git@github.com:getsentry/{repo}.git"
+                        in r["material"]["description"]
+                    ):
+                        rev = r["modifications"][0]["revision"]
+                        print(rev)
+                        return 0
+                    elif (
+                        f"https://github.com/getsentry/{repo}.git"
+                        in r["material"]["description"]
+                    ):
+                        rev = r["modifications"][0]["revision"]
+                        print(rev)
+                        return 0
+
     if rev is None:
         raise SystemExit(f"Couldn't find passed pipeline for {repo}")
     print(rev)
