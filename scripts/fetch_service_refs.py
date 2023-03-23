@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from typing import Any, Dict
@@ -43,8 +44,8 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
     data = json.loads(resp.read())
 
     rev = None
-    print("fetching pipeline history for", pipeline_name)
-    print("pipelines", data["pipelines"])
+    print("fetching pipeline history for", pipeline_name, file=sys.stderr)
+    print("\npipelines", data["pipelines"], file=sys.stderr)
     for pipeline in sorted(
         data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
     ):
