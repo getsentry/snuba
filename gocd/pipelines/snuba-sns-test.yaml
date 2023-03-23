@@ -20,7 +20,7 @@ pipelines:
         materials:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: gocd_tests
                 destination: snuba
         stages:
