@@ -219,7 +219,6 @@ def _dry_run_query_runner(
             "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
-            "query_metadata": None,
         },
     )
 
@@ -329,7 +328,6 @@ def _format_storage_query_and_run(
                 stats=stats,
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
-                query_metadata=None,
             ),
         ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:

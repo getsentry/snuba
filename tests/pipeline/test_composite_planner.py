@@ -542,11 +542,11 @@ def test_composite_planner(
             )
 
     def runner(
-        query: Union[ClickhouseQuery, CompositeQuery[Table]],
+        clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
-        report = query.equals(processed_query)
+        report = clickhouse_query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"
         return QueryResult(
             {"data": []},

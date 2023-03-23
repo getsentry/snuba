@@ -14,6 +14,6 @@ class AttributionInfo:
     app_id: AppID
     tenant_ids: dict[str, str | int]
     referrer: str
-    team: str | None
-    feature: str | None
-    parent_api: str | None
+    team: str | None = None
+    feature: str | None = None
+    parent_api: str | None = None
