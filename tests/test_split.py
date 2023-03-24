@@ -53,6 +53,7 @@ split_specs = [
     "dataset_name, entity_name, id_column, project_column, timestamp_column",
     split_specs,
 )
+@pytest.mark.clickhouse_db
 def test_no_split(
     dataset_name: str,
     entity_name: str,
@@ -176,6 +177,7 @@ test_data_col = [
     "dataset_name, entity_name, id_column, project_column, timestamp_column, first_query_data, second_query_data",
     test_data_col,
 )
+@pytest.mark.clickhouse_db
 def test_col_split(
     dataset_name: str,
     entity_name: str,
