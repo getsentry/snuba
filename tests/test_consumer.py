@@ -29,7 +29,6 @@ from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
@@ -46,7 +45,7 @@ def test_streaming_consumer_strategy() -> None:
         for i in itertools.count()
     )
 
-    replacements_producer = FakeConfluentKafkaProducer()
+    replacements_producer = Mock()
 
     processor = Mock()
     processor.process_message.side_effect = [
@@ -112,7 +111,9 @@ def test_streaming_consumer_strategy() -> None:
     ), assert_changes(
         lambda: writer.write.call_count, 0, expected_write_count
     ), assert_changes(
-        lambda: len(replacements_producer.messages), 0, 1
+        lambda: replacements_producer.produce.call_count,
+        0,
+        1,
     ):
         strategy.close()
         strategy.join()
