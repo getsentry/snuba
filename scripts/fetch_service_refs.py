@@ -54,7 +54,6 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
             fetch_url = data["_links"]["next"]["href"]
         else:
             fetch_url = None
-        print([x["counter"] for x in data["pipelines"]], file=sys.stderr)
         rev = None
 
         for pipeline in sorted(
