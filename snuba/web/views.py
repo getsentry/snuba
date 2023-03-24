@@ -452,12 +452,12 @@ def health() -> Response:
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
-def parse_request_body(http_request: Request) -> MutableMapping[str, Any]:
+def parse_request_body(http_request: Request) -> Dict[str, Any]:
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
-            assert isinstance(body, MutableMapping)
+            assert isinstance(body, Dict)
             return body
         except json.JSONDecodeError as error:
             raise JsonDecodeException(str(error)) from error
@@ -505,9 +505,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 
 
 @with_span()
-def dataset_query(
-    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
-) -> Response:
+def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
