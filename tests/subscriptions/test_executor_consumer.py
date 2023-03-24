@@ -277,6 +277,8 @@ def test_too_many_concurrent_queries() -> None:
     strategy.join()
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_skip_execution_for_entity() -> None:
     metrics = TestingMetricsBackend()
 
@@ -294,6 +296,9 @@ def test_skip_execution_for_entity() -> None:
     strategy.submit(metrics_sets_message)
     metrics_counters_message = next(generate_message(EntityKey.METRICS_COUNTERS))
     strategy.submit(metrics_counters_message)
+
+    strategy.close()
+    strategy.join()
 
     assert (
         Increment("skipped_execution", 1, {"entity": "metrics_sets"})
