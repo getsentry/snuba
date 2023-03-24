@@ -129,7 +129,11 @@ def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None
 
 
 @pytest.fixture
-def redis_db() -> Generator[None, None, None]:
+def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("redis_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail("Need to use redis_db marker if redis_db fixture is used")
+
     for redis_client in all_redis_clients():
         redis_client.flushdb()
 
@@ -137,7 +141,13 @@ def redis_db() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def clickhouse_db(create_databases: None) -> Generator[None, None, None]:
+def clickhouse_db(
+    request: pytest.FixtureRequest, create_databases: None
+) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("clickhouse_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")
+
     from snuba.migrations.runner import Runner
 
     try:

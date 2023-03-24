@@ -71,6 +71,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         ]
 
 
+@pytest.mark.clickhouse_db
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",

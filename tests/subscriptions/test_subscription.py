@@ -106,6 +106,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
+    @pytest.mark.clickhouse_db
     def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -152,6 +153,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
+    @pytest.mark.clickhouse_db
     def test_invalid_resolution(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):

@@ -159,6 +159,7 @@ def test_query_settings_prefix() -> None:
         }
     ),
 )
+@pytest.mark.clickhouse_db
 def test_disabled_cluster() -> None:
     importlib.reload(cluster)
 
@@ -229,6 +230,7 @@ def test_cache_connections() -> None:
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
+@pytest.mark.clickhouse_db
 def test_sliced_cluster() -> None:
     importlib.reload(cluster)
 
