@@ -104,13 +104,14 @@ SLICED_CLUSTERS_CONFIG = [
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown() -> Generator[None, None, None]:
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     yield
     importlib.reload(settings)
     importlib.reload(cluster)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+@pytest.mark.clickhouse_db
 def test_clusters() -> None:
     importlib.reload(cluster)
     assert (
