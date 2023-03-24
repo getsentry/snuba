@@ -152,6 +152,7 @@ def invalid_message() -> Message[KafkaPayload]:
     )
 
 
+@pytest.mark.redis_db
 def test_count(
     valid_message: Message[KafkaPayload],
     invalid_message: Message[KafkaPayload],
@@ -170,6 +171,7 @@ def test_count(
         dlq_count.submit(invalid_message)
 
 
+@pytest.mark.redis_db
 def test_count_short(
     valid_message: Message[KafkaPayload],
     invalid_message: Message[KafkaPayload],
@@ -192,6 +194,7 @@ def test_count_short(
     dlq_count_short.submit(invalid_message)
 
 
+@pytest.mark.redis_db
 def test_stateful_count(
     valid_message: Message[KafkaPayload],
     invalid_message: Message[KafkaPayload],
@@ -225,6 +228,7 @@ def test_stateful_count(
         dlq_count_load_state.submit(invalid_message)
 
 
+@pytest.mark.redis_db
 def test_invalid_batched_messages(
     valid_message: Message[KafkaPayload],
     invalid_message: Message[KafkaPayload],
