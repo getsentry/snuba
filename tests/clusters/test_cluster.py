@@ -122,6 +122,7 @@ def test_clusters() -> None:
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+@pytest.mark.clickhouse_db
 def test_cache_partition() -> None:
     get_storage(
         StorageKey("transactions")
@@ -133,6 +134,7 @@ def test_cache_partition() -> None:
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+@pytest.mark.clickhouse_db
 def test_query_settings_prefix() -> None:
     get_storage(
         StorageKey("transactions")
@@ -184,6 +186,7 @@ def test_get_local_nodes() -> None:
         assert distributed_cluster.get_local_nodes()[1].host_name == "host_2"
 
 
+@pytest.mark.clickhouse_db
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
         "127.0.0.1", 8000, "default", "", "default", 8001, {"events"}, True
