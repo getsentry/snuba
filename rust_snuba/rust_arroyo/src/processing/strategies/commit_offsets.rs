@@ -1,21 +1,20 @@
-use crate::backends::kafka::types::KafkaPayload;
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, Partition};
 use log::info;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-pub struct NoopCommit {
+pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl ProcessingStrategy<KafkaPayload> for NoopCommit {
+impl <T: Clone>ProcessingStrategy<T> for CommitOffsets {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(
                 partition,
@@ -34,7 +33,7 @@ impl ProcessingStrategy<KafkaPayload> for NoopCommit {
     }
 }
 
-impl NoopCommit {
+impl CommitOffsets {
     fn commit(&mut self, force: bool) -> Option<CommitRequest> {
         if SystemTime::now()
             > self
@@ -60,8 +59,8 @@ impl NoopCommit {
     }
 }
 
-pub fn new(commit_frequency: Duration) -> NoopCommit {
-    NoopCommit {
+pub fn new(commit_frequency: Duration) -> CommitOffsets {
+    CommitOffsets {
         partitions: Default::default(),
         last_commit_time: SystemTime::now(),
         commit_frequency,
@@ -71,7 +70,7 @@ pub fn new(commit_frequency: Duration) -> NoopCommit {
 #[cfg(test)]
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
-    use crate::processing::strategies::{noop, CommitRequest, ProcessingStrategy};
+    use crate::processing::strategies::{commit_offsets, CommitRequest, ProcessingStrategy};
     use crate::types::{Message, Partition, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
@@ -114,7 +113,7 @@ mod tests {
             timestamp,
         };
 
-        let mut noop = noop::new(Duration::from_secs(1));
+        let mut noop = commit_offsets::new(Duration::from_secs(1));
 
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
