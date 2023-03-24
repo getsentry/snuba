@@ -217,6 +217,7 @@ def generate_message(
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_execute_query_strategy() -> None:
     next_step = mock.Mock()
 
@@ -251,6 +252,7 @@ def test_execute_query_strategy() -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_too_many_concurrent_queries() -> None:
     state.set_config("executor_queue_size_factor", 1)
 
