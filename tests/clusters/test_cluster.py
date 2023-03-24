@@ -1,4 +1,5 @@
 import importlib
+from typing import Generator
 from unittest.mock import patch
 
 import pytest
@@ -102,7 +103,9 @@ SLICED_CLUSTERS_CONFIG = [
 ]
 
 
-def teardown_function() -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown() -> Generator[None, None, None]:
+    yield
     importlib.reload(settings)
     importlib.reload(cluster)
 
