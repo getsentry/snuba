@@ -161,8 +161,6 @@ REDIS_CLUSTERS: RedisClusters = {
     "optimize": None,
 }
 
-USE_RESULT_CACHE = True
-
 # Query Recording Options
 RECORD_QUERIES = False
 
@@ -301,9 +299,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
-
-
-MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from glob import glob
-from typing import Generator, Type
+from typing import Type
 
 import sentry_sdk
 
@@ -37,10 +37,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
 
         self._dataset_map.update(self._config_built_datasets)
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
-
-    def iter_all(self) -> Generator[Dataset, None, None]:
-        for dset in self._dataset_map.values():
-            yield dset
 
     def all_names(self) -> list[str]:
         return [
