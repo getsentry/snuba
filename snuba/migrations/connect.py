@@ -1,13 +1,15 @@
 import logging
 import re
 import time
+from typing import Sequence
 
 from packaging import version
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings
+from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, ClickhouseNode
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.clickhouse import CLICKHOUSE_SERVER_MIN_VERSION
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
 from snuba.settings import ENABLE_DEV_FEATURES
@@ -81,8 +83,12 @@ def check_for_inactive_replicas() -> None:
         cluster = storage.get_cluster()
 
         query_node = cluster.get_query_node()
-        local_nodes = cluster.get_local_nodes()
-        distributed_nodes = cluster.get_distributed_nodes()
+        if storage_key == StorageKey.DISCOVER:
+            local_nodes: Sequence[ClickhouseNode] = []
+            distributed_nodes: Sequence[ClickhouseNode] = []
+        else:
+            local_nodes = cluster.get_local_nodes()
+            distributed_nodes = cluster.get_distributed_nodes()
 
         for node in (*local_nodes, *distributed_nodes, query_node):
             if (node.host_name, node.port) in checked_nodes:
