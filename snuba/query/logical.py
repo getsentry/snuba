@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
+from typing import Callable, Iterable, Optional, Sequence
 
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Expression, ExpressionVisitor
-
-Aggregation = Union[
-    Tuple[Any, Any, Any],
-    Sequence[Any],
-]
 
 
 class Query(AbstractQuery[Entity]):
@@ -72,9 +67,6 @@ class Query(AbstractQuery[Entity]):
 
     def get_sample(self) -> Optional[float]:
         return self.__sample
-
-    def set_sample(self, sample: float) -> None:
-        self.__sample = sample
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_final", "get_sample")
