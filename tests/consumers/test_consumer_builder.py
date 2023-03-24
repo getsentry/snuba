@@ -160,6 +160,7 @@ def test_optional_kafka_overrides() -> None:
         ), "Commit log topic name should match commit log Kafka topic override"
 
 
+@pytest.mark.clickhouse_db
 def test_run_processing_strategy() -> None:
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 0
 

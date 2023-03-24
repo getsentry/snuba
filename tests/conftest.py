@@ -80,7 +80,8 @@ class BlockedObject:
 
     def snuba_test_teardown(self):
         if self.__failures:
-            pytest.fail(f"{self.__message}, stacktrace: {self.__failures[0]}")
+            lines = "\n".join(self.__failures[0])
+            pytest.fail(f"{self.__message}, stacktrace: \n{lines}")
 
     def __call__(self, *args, **kwargs):
         # record stacktrace and print it during teardown so there's no chance
@@ -99,6 +100,10 @@ def block_redis_db(monkeypatch):
 
     for key in _redis_clients:
         monkeypatch.setattr(_redis_clients[key], "execute_command", blocked)
+
+    # Patch out Snuba settings so that random config access does not hit redis
+    # (setting config still requires redis_db marker)
+    monkeypatch.setattr("snuba.state.get_raw_configs", dict)
 
     yield
 
