@@ -174,6 +174,8 @@ class Runner:
         use_through = False if through == "all" else True
 
         def migration_exists(through: str) -> bool:
+            # (todo) make sure there is only one that could match
+            # aka `00` isn't valid since all the migrations could match that
             for migration_key in pending_migrations:
                 if migration_key.migration_id.startswith(through):
                     return True
