@@ -12,6 +12,7 @@ from tests.subscriptions import BaseSubscriptionTest
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Sequence[SubscriptionData]:
