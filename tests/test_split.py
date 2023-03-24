@@ -27,7 +27,8 @@ from snuba.reader import Reader
 from snuba.web import QueryResult
 
 
-def setup_function(function) -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown(redis_db: None) -> None:
     state.set_config("use_split", 1)
 
 
