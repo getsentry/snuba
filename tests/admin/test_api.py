@@ -173,6 +173,7 @@ def get_node_for_table(
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -206,6 +207,7 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -221,6 +223,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -236,6 +239,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
+@pytest.mark.clickhouse_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -252,6 +256,7 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
@@ -264,6 +269,7 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
     assert "column_names" in data and data["column_names"] == ["count()"]
 
 
+@pytest.mark.clickhouse_db
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -277,6 +283,7 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_describe(admin_api: FlaskClient) -> None:
     response = admin_api.get("/clickhouse_querylog_schema")
     assert response.status_code == 200

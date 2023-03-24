@@ -166,6 +166,7 @@ def test_disabled_cluster() -> None:
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+@pytest.mark.clickhouse_db
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
     with patch.object(ClickhousePool, "execute") as execute:

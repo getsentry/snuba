@@ -45,6 +45,7 @@ for group in MigrationGroup:
         for migration_id, snuba_migration in all_migrations
     ],
 )
+@pytest.mark.clickhouse_db
 def test_validate_all_migrations(
     snuba_migration: migration.ClickhouseNodeMigration,
 ) -> None:
