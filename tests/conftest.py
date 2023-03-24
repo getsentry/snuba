@@ -225,6 +225,6 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 
 
 @pytest.fixture
-def disable_query_cache(snuba_set_config: SnubaSetConfig) -> None:
+def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
     snuba_set_config("use_cache", False)
     snuba_set_config("use_readthrough_query_cache", 0)
