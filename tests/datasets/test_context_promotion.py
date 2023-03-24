@@ -36,6 +36,7 @@ span_id_as_uint64 = int(span_id_hex, 16)
         ),
     ],
 )
+@pytest.mark.clickhouse_db
 def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
     """In order to save space in the contexts column and provide faster query
     performance, we promote span_id to a proper column and don't store it in the
