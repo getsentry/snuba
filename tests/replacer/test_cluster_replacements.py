@@ -1,6 +1,15 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Any, Callable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    Tuple,
+)
 
 import pytest
 
@@ -56,18 +65,22 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
 @pytest.fixture
 def override_cluster(
     monkeypatch: pytest.MonkeyPatch,
-) -> Callable[[bool], FakeClickhouseCluster]:
-    def override(healthy: bool) -> FakeClickhouseCluster:
-        test_cluster = _build_cluster(healthy=healthy)
-        monkeypatch.setattr(cluster, "CLUSTERS", [test_cluster])
-        monkeypatch.setattr(
-            cluster,
-            "_STORAGE_SET_CLUSTER_MAP",
-            {StorageSetKey.EVENTS: cluster.CLUSTERS[0]},
-        )
-        return test_cluster
+    clickhouse_db: None,
+    redis_db: None,
+) -> Generator[Callable[[bool], FakeClickhouseCluster], None, None]:
+    with monkeypatch.context() as m:
 
-    return override
+        def override(healthy: bool) -> FakeClickhouseCluster:
+            test_cluster = _build_cluster(healthy=healthy)
+            m.setattr(cluster, "CLUSTERS", [test_cluster])
+            m.setattr(
+                cluster,
+                "_STORAGE_SET_CLUSTER_MAP",
+                {StorageSetKey.EVENTS: cluster.CLUSTERS[0]},
+            )
+            return test_cluster
+
+        yield override
 
 
 LOCAL_QUERY = """\
@@ -145,6 +158,8 @@ REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0, "")
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
 )
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
@@ -182,6 +197,8 @@ def test_write_each_node(
     assert queries == expected_queries
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_failing_query(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -213,6 +230,8 @@ def test_failing_query(
         )
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_load_balancing(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -336,6 +355,8 @@ TEST_LOCAL_EXECUTOR = [
 @pytest.mark.parametrize(
     "nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
 )
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_local_executor(
     nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,
