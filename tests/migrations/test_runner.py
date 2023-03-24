@@ -1,5 +1,6 @@
 import importlib
 from datetime import datetime
+from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,7 +35,7 @@ def _drop_all_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db):
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     _drop_all_tables()
     yield
     _drop_all_tables()

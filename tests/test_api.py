@@ -32,7 +32,9 @@ from tests.helpers import write_processed_messages
 @pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db, redis_db) -> Generator[None, None, None]:
+    def setup_teardown(
+        self, clickhouse_db: None, redis_db: None
+    ) -> Generator[None, None, None]:
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments

@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import Any, Callable, Iterator, Tuple, Union
+from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -60,7 +60,7 @@ def create_databases() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
@@ -74,16 +74,16 @@ def pytest_collection_modifyitems(items):
 
 
 class BlockedObject:
-    def __init__(self, message):
-        self.__failures = []
+    def __init__(self, message: str) -> None:
+        self.__failures: List[List[str]] = []
         self.__message = message
 
-    def snuba_test_teardown(self):
+    def snuba_test_teardown(self) -> None:
         if self.__failures:
             lines = "\n".join(self.__failures[0])
             pytest.fail(f"{self.__message}, stacktrace: \n{lines}")
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # record stacktrace and print it during teardown so there's no chance
         # of the exception being caught down somehow
         self.__failures.append(traceback.format_stack())
@@ -91,7 +91,7 @@ class BlockedObject:
 
 
 @pytest.fixture
-def block_redis_db(monkeypatch):
+def block_redis_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     from snuba.redis import _redis_clients
 
     blocked = BlockedObject(
@@ -111,7 +111,7 @@ def block_redis_db(monkeypatch):
 
 
 @pytest.fixture
-def block_clickhouse_db(monkeypatch):
+def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     from snuba.clusters.cluster import ClickhouseCluster
 
     blocked = BlockedObject(
@@ -127,7 +127,7 @@ def block_clickhouse_db(monkeypatch):
 
 
 @pytest.fixture
-def redis_db():
+def redis_db() -> Generator[None, None, None]:
     yield
 
     for redis_client in all_redis_clients():
@@ -135,7 +135,7 @@ def redis_db():
 
 
 @pytest.fixture
-def clickhouse_db(create_databases: None) -> Iterator[None]:
+def clickhouse_db(create_databases: None) -> Generator[None, None, None]:
     from snuba.migrations.runner import Runner
 
     try:
@@ -163,7 +163,7 @@ def clickhouse_db(create_databases: None) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def clear_recorded_metrics() -> Iterator[None]:
+def clear_recorded_metrics() -> Generator[None, None, None]:
     from snuba.utils.metrics.backends.testing import clear_recorded_metric_calls
 
     yield

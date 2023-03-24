@@ -1,6 +1,7 @@
 import importlib
 import os
 from copy import deepcopy
+from typing import Generator
 
 import pytest
 
@@ -12,7 +13,7 @@ from snuba.migrations import runner
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db) -> None:
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     settings.CLUSTERS = [
         {
             **deepcopy(settings.CLUSTERS[0]),
