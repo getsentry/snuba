@@ -305,6 +305,7 @@ def test_skip_execution_for_entity() -> None:
     )
 
 
+@pytest.mark.clickhouse_db
 def test_produce_result() -> None:
     epoch = datetime(1970, 1, 1)
     scheduled_topic = Topic("scheduled-subscriptions-events")
