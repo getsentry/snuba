@@ -100,6 +100,7 @@ class TestCdcEvents(BaseApiTest):
         ).write([json.dumps(assignee).encode("utf-8") for assignee in assignees])
 
     @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "relationship, operator, expected_rows", TEST_GROUP_JOIN_PARAMS
     )
@@ -138,6 +139,7 @@ class TestCdcEvents(BaseApiTest):
         assert len(data["data"]) == expected_rows, data
 
     @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "relationship, operator, expected_rows", TEST_ASSIGNEE_JOIN_PARAMS
     )

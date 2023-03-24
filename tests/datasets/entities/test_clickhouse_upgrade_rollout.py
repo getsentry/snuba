@@ -76,6 +76,7 @@ TESTS = [
     "query_referrer, referrer_trust_config, global_trust_config, referrer_execute_config, global_execute_config, expceted",
     TESTS,
 )
+@pytest.mark.redis_db
 def test_rollout_percentage(
     query_referrer: str,
     referrer_trust_config: Optional[float],

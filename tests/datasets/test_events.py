@@ -53,6 +53,7 @@ class TestEventsDataset:
         assert event[0][0] == self.event["data"]["id"]
 
 
+@pytest.mark.redis_db
 def test_storage_selector() -> None:
     state.set_config("enable_events_readonly_table", True)
 
