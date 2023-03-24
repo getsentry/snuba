@@ -130,10 +130,10 @@ def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None
 
 @pytest.fixture
 def redis_db() -> Generator[None, None, None]:
-    yield
-
     for redis_client in all_redis_clients():
         redis_client.flushdb()
+
+    yield
 
 
 @pytest.fixture
