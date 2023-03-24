@@ -5,7 +5,7 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, commit_offsets
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic};
@@ -13,7 +13,6 @@ use rust_arroyo::types::{Message, Topic};
 use pyo3::prelude::*;
 
 use crate::config;
-use crate::strategies::noop::Noop;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -77,7 +76,7 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
-                ClickhouseWriterStep::new(Noop),
+                ClickhouseWriterStep::new(commit_offsets::new(Duration::from_secs(1))),
             )
             .unwrap();
             Box::new(transform_step)
