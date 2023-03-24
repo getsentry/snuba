@@ -51,13 +51,15 @@ def list() -> None:
 
 
 @migrations.command()
+@click.argument("group", default="all")
+@click.argument("through", default="all")
 @click.option("--force", is_flag=True)
-@click.option("--group", help="Migration group")
+@click.option("--fake", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
 def migrate(
-    force: bool, group: Optional[str] = None, log_level: Optional[str] = None
+    group: str, through: str, force: bool, fake: bool, log_level: Optional[str] = None
 ) -> None:
     """
     If group is specified, runs all the migrations for a group (including any pending
@@ -71,11 +73,13 @@ def migrate(
     runner = Runner()
 
     try:
-        if group is not None:
+        if group != "all":
             migration_group = MigrationGroup(group)
         else:
+            if through != "all":
+                raise click.ClickException("Need migration group")
             migration_group = None
-        runner.run_all(force=force, group=migration_group)
+        runner.run_all(through=through, force=force, fake=fake, group=migration_group)
     except MigrationError as e:
         raise click.ClickException(str(e))
 

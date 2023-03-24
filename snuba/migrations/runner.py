@@ -145,7 +145,12 @@ class Runner:
         return migrations
 
     def run_all(
-        self, *, force: bool = False, group: Optional[MigrationGroup] = None
+        self,
+        *,
+        through: str,
+        fake: bool = False,
+        force: bool = False,
+        group: Optional[MigrationGroup] = None,
     ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
@@ -166,6 +171,17 @@ class Runner:
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
+        use_through = False if through == "all" else True
+
+        def migration_exists(through: str) -> bool:
+            for migration_key in pending_migrations:
+                if migration_key.migration_id.startswith(through):
+                    return True
+            return False
+
+        if use_through and not migration_exists(through):
+            raise MigrationError(f"No pending migration matching: {through}")
+
         # Do not run migrations if any are blocking
         if not force:
             for migration_key in pending_migrations:
@@ -177,6 +193,9 @@ class Runner:
 
         for migration_key in pending_migrations:
             self._run_migration_impl(migration_key, force=force)
+            if use_through and migration_key.migration_id.startswith(through):
+                logger.info(f"Ran through: {migration_key.migration_id}")
+                break
 
     def run_migration(
         self,
