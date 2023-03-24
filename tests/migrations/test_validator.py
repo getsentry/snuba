@@ -413,6 +413,7 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
 
 
 @patch.object(validator, "_get_dist_connection")
+@pytest.mark.clickhouse_db
 def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     cluster = get_cluster(StorageSetKey.MIGRATIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
