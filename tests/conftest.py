@@ -82,7 +82,7 @@ class BlockedObject:
         if self.__failures:
             pytest.fail(f"{self.__message}, stacktrace: {self.__failures[0]}")
 
-    def __getattr__(self, key):
+    def __call__(self, *args, **kwargs):
         # record stacktrace and print it during teardown so there's no chance
         # of the exception being caught down somehow
         self.__failures.append(traceback.format_stack())
@@ -98,7 +98,7 @@ def block_redis_db(monkeypatch):
     )
 
     for key in _redis_clients:
-        monkeypatch.setitem(_redis_clients, key, blocked)
+        monkeypatch.setattr(_redis_clients[key], "execute_command", blocked)
 
     yield
 
@@ -113,11 +113,8 @@ def block_clickhouse_db(monkeypatch):
         "attempted to access clickhouse in test that does not use @pytest.mark.clickhouse_db"
     )
 
-    def get_blocked(*args, **kwargs):
-        return blocked
-
-    monkeypatch.setattr(ClickhouseCluster, "get_query_connection", get_blocked)
-    monkeypatch.setattr(ClickhouseCluster, "get_node_connection", get_blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_query_connection", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_node_connection", blocked)
 
     yield
 
