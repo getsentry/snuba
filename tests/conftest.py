@@ -120,6 +120,8 @@ def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None
 
     monkeypatch.setattr(ClickhouseCluster, "get_query_connection", blocked)
     monkeypatch.setattr(ClickhouseCluster, "get_node_connection", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_batch_writer", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_reader", blocked)
 
     yield
 
