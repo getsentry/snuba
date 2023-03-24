@@ -96,6 +96,7 @@ class TestMigrationPolicies:
         "snuba.migrations.runner.Runner.get_status",
         return_value=(Status.IN_PROGRESS, None),
     )
+    @pytest.mark.clickhouse_db
     def test_pending_migration_reverse(self, mock_get_status: Mock) -> None:
         """
         The NonBlockingMigrationsPolicy allows pending, non-blocking migrations
@@ -120,6 +121,7 @@ class TestMigrationPolicies:
             + timedelta(hours=-(MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS - 5)),
         ),
     )
+    @pytest.mark.clickhouse_db
     def test_completed_migration_reverse(self, mock_get_status: Mock) -> None:
         """
         The NonBlockingMigrationsPolicy allows reversing a migration if it was
