@@ -11,7 +11,6 @@ CONFIGURATION_DOCS_PATH = f"{settings.ROOT_REPO_PATH}/docs/source/configuration"
 if __name__ == "__main__":
     for component, schema in V1_ALL_SCHEMAS.items():
         with TemporaryDirectory() as temp_dir:
-            temp_filename = f"{temp_dir}/{component}"
             parser = jsonschema2md.Parser(
                 examples_as_yaml=False,
                 show_examples="all",

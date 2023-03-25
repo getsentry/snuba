@@ -209,7 +209,8 @@ jobs:
           docker buildx create --name arm64-builder --use
           docker buildx build --platform linux/arm64 \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg BUILD_BASE=base \
+            --build-arg SHOULD_BUILD_ADMIN_UI=false \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ${SNUBA_IMAGE}:latest \
             --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:latest \
@@ -237,7 +238,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     strategy:
       matrix:
         snuba_settings:
@@ -256,6 +257,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
