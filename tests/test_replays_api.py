@@ -66,7 +66,7 @@ class TestReplaysApi(BaseApiTest):
             }
         ]
 
-    def test_nullable_columns(self) -> None:
+    def test_sdk_user_title_nullability(self) -> None:
         payload = rapidjson.loads(bytes(self.event["payload"]))
         assert isinstance(payload, dict)
 
