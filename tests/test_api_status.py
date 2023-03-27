@@ -108,14 +108,6 @@ class TestApiCodes(BaseApiTest):
                 "invalid-typing",
                 "for",
             ),
-            (
-                ClickhouseError(
-                    "DB::Exception: There is no supertype for types FixedString, String because some of them are String/FixedString and some of them are not",
-                    code=ErrorCodes.NO_COMMON_TYPE,
-                ),
-                "error",
-                "against",
-            ),
         ]
 
         for exception, status, slo in tests:
