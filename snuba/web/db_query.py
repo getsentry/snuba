@@ -6,7 +6,16 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import Any, Dict, Mapping, MutableSequence, Optional, Union, cast
+from typing import (
+    Any,
+    Dict,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Union,
+    cast,
+)
 
 import rapidjson
 import sentry_sdk
@@ -82,7 +91,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # We are not initializing all the cache partitions here and instead relying on lazy
 # initialization because this module only learn of cache partitions ids from the
 # reader when running a query.
-cache_partitions: Dict[str, Cache[Result]] = {
+cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_cache_client,
         "snuba-query-cache:",
@@ -110,7 +119,7 @@ def update_query_metadata_and_stats(
     profile_data: Optional[Dict[str, Any]] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
     well as timing information.
@@ -152,8 +161,8 @@ def execute_query(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: Dict[str, Any],
-    clickhouse_query_settings: Dict[str, Any],
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     """
@@ -186,7 +195,7 @@ def execute_query(
 def _record_rate_limit_metrics(
     rate_limit_stats_container: RateLimitStatsContainer,
     reader: Reader,
-    stats: Dict[str, Any],
+    stats: MutableMapping[str, Any],
 ) -> None:
     # This is a temporary metric that will be removed once the organization
     # rate limit has been tuned.
@@ -238,7 +247,7 @@ def _record_rate_limit_metrics(
 
 def _apply_thread_quota_to_clickhouse_query_settings(
     query_settings: QuerySettings,
-    clickhouse_query_settings: Dict[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     project_rate_limit_stats: Optional[RateLimitStats],
 ) -> None:
     thread_quota = query_settings.get_resource_quota()
@@ -262,8 +271,8 @@ def execute_query_with_rate_limits(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: Dict[str, Any],
-    clickhouse_query_settings: Dict[str, Any],
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
@@ -330,8 +339,8 @@ def execute_query_with_query_id(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: Dict[str, Any],
-    clickhouse_query_settings: Dict[str, Any],
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
@@ -382,8 +391,8 @@ def execute_query_with_readthrough_caching(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
-    stats: Dict[str, Any],
-    clickhouse_query_settings: Dict[str, Any],
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
     query_id: str,
 ) -> Result:
@@ -430,7 +439,9 @@ def execute_query_with_readthrough_caching(
     )
 
 
-def _get_cache_wait_timeout(query_settings: Dict[str, Any], reader: Reader) -> int:
+def _get_cache_wait_timeout(
+    query_settings: MutableMapping[str, Any], reader: Reader
+) -> int:
     """
     Helper function to determine how long a query should wait when doing
     a readthrough caching.
@@ -452,7 +463,7 @@ def _get_cache_wait_timeout(query_settings: Dict[str, Any], reader: Reader) -> i
 
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
-) -> Dict[str, Any]:
+) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config.
 
@@ -464,7 +475,7 @@ def _get_query_settings_from_config(
     all_confs = state.get_all_configs()
 
     # Populate the query settings with the default values
-    clickhouse_query_settings: Dict[str, Any] = {
+    clickhouse_query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
@@ -493,7 +504,7 @@ def raw_query(
     reader: Reader,
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
-    stats: Dict[str, Any],
+    stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
