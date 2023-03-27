@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, MutableMapping
+from typing import Any, Dict
 
 import pytest
 
@@ -61,7 +61,7 @@ TESTS = [
 
 
 @pytest.mark.parametrize("body, condition", TESTS)
-def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
+def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = get_entity(EntityKey.EVENTS)
     schema = RequestSchema.build(HTTPQuerySettings)

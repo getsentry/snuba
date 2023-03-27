@@ -134,6 +134,7 @@ jobs:
         run: |
           docker build . \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg SHOULD_BUILD_RUST=false \
             -t ghcr.io/getsentry/snuba-ci:latest \
             -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
@@ -156,89 +157,11 @@ jobs:
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
 
-  # This step does not have a set timeout because it is very slow. This is due
-  # because emulation required (this is running on an Intel host rather than an arm64 host)
-  # and that many Python packages do not have arm wheels, thus, requirying to build them from source.
-  # Upgrading Python package versions + giving access to a cache could improve things a lot
-  snuba-arm64-image:
-    name: "Docker Arm64 build"
-    runs-on: ubuntu-latest
-    env:
-      # `sentry devservices up snuba` picks up the `amd64` version of the image
-      # For now, we will publish to a different name until we want to officially
-      # support the image on Docker Hub
-      # NOTE: This image has only been tested for local development
-      SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
-      NODE_VERSION: 19.x
-    steps:
-      - uses: actions/checkout@v3
-        name: Checkout code
-      - uses: actions/setup-node@v3
-        with:
-          node-version: ${{env.NODE_VERSION}}
-      - name: Get branch name
-        id: branch
-        # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
-        # it can be used as a docker tag
-        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
-      # for Arm64, we build the bundle.js outside of docker because inside it is extremely
-      # slow due to emulation.
-      - name: build admin UI
-        run: |
-          # allow copying the bundle to docker image
-          sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
-          # build bundle
-          cd snuba/admin
-          yarn install
-          yarn run build
-
-      - name: enable arm64 building
-        run: docker run --rm --privileged tonistiigi/binfmt --install arm64
-
-      - name: Registry login
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      - name: Pull snuba CI images
-        run: |
-          docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
-            docker pull ${SNUBA_IMAGE}:latest || true
-
-      - name: Create Image
-        run: |
-          docker buildx create --name arm64-builder --use
-          docker buildx build --platform linux/arm64 \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg SHOULD_BUILD_ADMIN_UI=false \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --cache-from ${SNUBA_IMAGE}:latest \
-            --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
-            -t ${SNUBA_IMAGE}:latest \
-            -t ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
-            -t ${SNUBA_IMAGE}:${{ github.sha }} \
-            --load .
-
-      - name: Publish
-        # Forks cannot push to the getsentry org
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # Useful to speed up PRs
-          docker push ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }}
-          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
-            # Useful for regression testing on Sentry's checkout
-            docker push ${SNUBA_IMAGE}:${{ github.sha }}
-            # The latest tag should only be published on `master`
-            docker push ${SNUBA_IMAGE}:latest
-          fi
-
   tests:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     strategy:
       matrix:
         snuba_settings:
@@ -257,6 +180,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
@@ -329,6 +253,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \

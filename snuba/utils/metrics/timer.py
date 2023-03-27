@@ -1,16 +1,16 @@
 from itertools import groupby
-from typing import Mapping, MutableSequence, Optional, Tuple, TypedDict
+from typing import Dict, Mapping, MutableSequence, Optional, Tuple, TypedDict
 
 from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
 
 
-class TimerData(TypedDict):
+class TimerData(TypedDict, total=False):
     timestamp: int
     duration_ms: int
-    marks_ms: Mapping[str, int]
-    tags: Tags
+    marks_ms: Dict[str, int]
+    tags: Dict[str, str]
 
 
 class Timer:
@@ -27,7 +27,7 @@ class Timer:
             (self.__name, self.__clock.time())
         ]
         self.__data: Optional[TimerData] = None
-        self.__tags: Tags = tags or {}
+        self.__tags: Dict[str, str] = dict(tags or {})
 
     def mark(self, name: str) -> None:
         self.__data = None
