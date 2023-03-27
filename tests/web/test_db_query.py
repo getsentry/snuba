@@ -9,6 +9,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
@@ -115,21 +116,28 @@ def test_apply_thread_quota(
     assert clickhouse_query_settings == expected_query_settings
 
 
-def test_raw_query_success() -> None:
+def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]:
     storage = get_storage(StorageKey("errors"))
-    query = ClickhouseQuery(
-        from_clause=Table(
-            storage.get_schema().get_data_source().get_table_name(),  # type: ignore
-            schema=storage.get_schema().get_columns(),
-            final=False,
+    return (
+        ClickhouseQuery(
+            from_clause=Table(
+                storage.get_schema().get_data_source().get_table_name(),  # type: ignore
+                schema=storage.get_schema().get_columns(),
+                final=False,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "some_alias",
+                    parse_clickhouse_function(select_expression),
+                )
+            ],
         ),
-        selected_columns=[
-            SelectedExpression(
-                "porject_count",
-                parse_clickhouse_function("count(distinct(project_id))"),
-            )
-        ],
+        storage,
     )
+
+
+def test_raw_query_success() -> None:
+    query, storage = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
@@ -166,19 +174,7 @@ def test_raw_query_success() -> None:
 
 
 def test_raw_query_fail() -> None:
-    storage = get_storage(StorageKey("errors"))
-    query = ClickhouseQuery(
-        from_clause=Table(
-            storage.get_schema().get_data_source().get_table_name(),  # type: ignore
-            schema=storage.get_schema().get_columns(),
-            final=False,
-        ),
-        selected_columns=[
-            SelectedExpression(
-                "bad_column", parse_clickhouse_function("count(non_existent_column)")
-            )
-        ],
-    )
+    query, storage = _build_test_query("count(non_existent_column)")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
