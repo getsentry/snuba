@@ -724,7 +724,6 @@ class TestReplaysActionProcessor:
         assert row["trace_ids"] == []
         assert row["error_ids"] == []
         assert row["urls"] == []
-        assert row["title"] is None
         assert row["platform"] == "javascript"
         assert row["user"] is None
         assert row["sdk_name"] is None

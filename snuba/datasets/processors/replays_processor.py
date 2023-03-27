@@ -234,7 +234,6 @@ def process_replay_actions(
             "trace_ids": [],
             "error_ids": [],
             "urls": [],
-            "title": None,
             "platform": "javascript",
             "user": None,
             "sdk_name": None,
