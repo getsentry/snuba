@@ -49,7 +49,9 @@ def test_tags_hashmap_optimization() -> None:
     )
     # --------------------------------------------------------------------
 
-    def query_verifier(query: Query, settings: QuerySettings, reader: Reader) -> None:
+    def query_verifier(
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
+    ) -> None:
         class ConditionVisitor(NoopVisitor):
             def __init__(self) -> None:
                 self.found_hashmap_condition = False
@@ -65,7 +67,7 @@ def test_tags_hashmap_optimization() -> None:
                 return super().visit_function_call(exp)
 
         visitor = ConditionVisitor()
-        query.get_condition().accept(visitor)
+        clickhouse_query.get_condition().accept(visitor)
         assert visitor.found_hashmap_condition
 
     entity.get_query_pipeline_builder().build_execution_pipeline(
