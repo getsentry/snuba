@@ -218,7 +218,7 @@ class ReplayEvent:
             "device_model": self.device_model,
             "tags.key": ["customtag"],
             "tags.value": ["is_set"],
-            "title": self.title,
+            "title": self.title or "",
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,

@@ -7,7 +7,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::backends::AssignmentCallbacks;
 use rust_arroyo::processing::strategies::ProcessingStrategy;
-use rust_arroyo::processing::strategies::{noop, ProcessingStrategyFactory};
+use rust_arroyo::processing::strategies::{commit_offsets, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Partition, Topic};
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ struct StrategyFactory {
 }
 impl ProcessingStrategyFactory<KafkaPayload> for StrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        Box::new(noop::new(Duration::from_millis(self.batch_time)))
+        Box::new(commit_offsets::new(Duration::from_millis(self.batch_time)))
     }
 }
 

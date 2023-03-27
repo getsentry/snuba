@@ -1,7 +1,7 @@
 import json
 import os
 from dataclasses import asdict, dataclass
-from typing import Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import click
 
@@ -13,10 +13,8 @@ from snuba.datasets.storages.factory import (
     get_writable_storage_keys,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.settings.utils import get_settings_json
-
-RUST_ENVIRONMENT = os.environ.get("RUST_ENVIRONMENT", "debug")
-RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.utils.streams.configuration_builder import _get_default_topic_configuration
 
 
 @click.command()
@@ -99,15 +97,6 @@ def rust_consumer(
     Experimental alternative to`snuba consumer`
     """
 
-    settings_data = get_settings_json()
-    settings_path = write_file_to_tmp_directory(settings_data, "settings.json")
-
-    # TODO: Consumer config is still missing some stuff needed by the Rust consumer, e.g.:
-    #
-    # stream_loader:
-    #   processor:
-    #     python_name: snuba.processors.QuerylogProcessor
-
     consumer_config = resolve_consumer_config(
         storage_names=storage_names,
         raw_topic=raw_events_topic,
@@ -118,29 +107,19 @@ def rust_consumer(
         replacement_bootstrap_servers=replacement_bootstrap_servers,
         slice_id=slice_id,
     )
-    consumer_config_path = write_file_to_tmp_directory(
-        json.dumps(asdict(consumer_config)), "consumer_config.json"
-    )
 
-    rust_consumer_args = [
-        "--",
-        "--consumer-group",
+    consumer_config_raw = json.dumps(asdict(consumer_config))
+
+    import os
+
+    import rust_snuba
+
+    os.environ["RUST_LOG"] = log_level
+
+    rust_snuba.consumer(  # type: ignore
         consumer_group,
-        "--auto-offset-reset",
         auto_offset_reset,
-        "--settings-path",
-        settings_path,
-        "--config-path",
-        consumer_config_path,
-    ]
-
-    for storage_name in storage_names:
-        rust_consumer_args.extend(["--storage", storage_name])
-
-    os.execve(
-        RUST_PATH,
-        rust_consumer_args,
-        {"RUST_LOG": log_level},
+        consumer_config_raw,
     )
 
 
@@ -154,10 +133,23 @@ class ClickhouseClusterConfig:
 
 
 @dataclass(frozen=True)
+class MessageProcessorConfig:
+    python_class_name: str
+    python_module: str
+
+
+@dataclass(frozen=True)
 class StorageConfig:
     name: str
     clickhouse_table_name: str
     clickhouse_cluster: ClickhouseClusterConfig
+    message_processor: MessageProcessorConfig
+
+
+@dataclass(frozen=True)
+class TopicConfig:
+    broker_config: Mapping[str, Any]
+    physical_topic_name: str
 
 
 @dataclass(frozen=True)
@@ -167,9 +159,28 @@ class RustConsumerConfig:
     """
 
     storages: Sequence[StorageConfig]
-    raw_topic: str
-    commit_log_topic: Optional[str]
-    replacements_topic: Optional[str]
+    raw_topic: TopicConfig
+    commit_log_topic: Optional[TopicConfig]
+    replacements_topic: Optional[TopicConfig]
+
+
+def _resolve_topic_config(
+    param: str,
+    topic_spec: Optional[KafkaTopicSpec],
+    cli_param: Optional[str],
+    slice_id: Optional[int],
+) -> Optional[TopicConfig]:
+    if topic_spec is None:
+        if cli_param is not None:
+            raise ValueError(f"{param} not supported for this storage")
+        return None
+    elif cli_param is not None:
+        physical_topic_name = cli_param
+    else:
+        physical_topic_name = topic_spec.get_physical_topic_name(slice_id)
+
+    broker = _get_default_topic_configuration(topic_spec.topic, slice_id)
+    return TopicConfig(broker_config=broker, physical_topic_name=physical_topic_name)
 
 
 def resolve_consumer_config(
@@ -197,66 +208,54 @@ def resolve_consumer_config(
     validate_storages([*storages.values()])
 
     stream_loader = storages[storage_names[0]].get_table_writer().get_stream_loader()
+    default_topic_spec = stream_loader.get_default_topic_spec()
 
-    resolved_raw_topic: str
-    if raw_topic is not None:
-        resolved_raw_topic = raw_topic
-    else:
-        resolved_raw_topic = (
-            stream_loader.get_default_topic_spec().get_physical_topic_name(slice_id)
-        )
+    resolved_raw_topic = _resolve_topic_config(
+        "main topic", default_topic_spec, raw_topic, slice_id
+    )
+    assert resolved_raw_topic is not None
 
-    resolved_commit_log_topic: Optional[str]
     commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+    resolved_commit_log_topic = _resolve_topic_config(
+        "commit log", commit_log_topic_spec, commit_log_topic, slice_id
+    )
 
-    if commit_log_topic_spec is None:
-        if commit_log_topic is not None:
-            raise ValueError("Commit log not supported for this storage")
-        resolved_commit_log_topic = None
-    elif commit_log_topic is not None:
-        resolved_commit_log_topic = commit_log_topic
-    else:
-        resolved_commit_log_topic = commit_log_topic_spec.get_physical_topic_name(
-            slice_id
-        )
-
-    resolved_replacements_topic: Optional[str]
     replacements_topic_spec = stream_loader.get_replacement_topic_spec()
+    resolved_replacements_topic = _resolve_topic_config(
+        "replacements topic", replacements_topic_spec, replacements_topic, slice_id
+    )
 
-    if replacements_topic_spec is None:
-        if replacements_topic is not None:
-            raise ValueError("Commit log not supported for this storage")
+    return RustConsumerConfig(
+        storages=[
+            resolve_storage_config(storage_name, storage)
+            for (storage_name, storage) in storages.items()
+        ],
+        raw_topic=resolved_raw_topic,
+        commit_log_topic=resolved_commit_log_topic,
+        replacements_topic=resolved_replacements_topic,
+    )
 
-        resolved_replacements_topic = None
-    elif commit_log_topic is not None:
-        resolved_commit_log_topic = replacements_topic
-    else:
-        resolved_commit_log_topic = replacements_topic_spec.get_physical_topic_name(
-            slice_id
-        )
 
+def resolve_storage_config(
+    storage_name: str, storage: WritableTableStorage
+) -> StorageConfig:
     # TODO: Temporarily hardcoded. To be properly resolved based on the storage set.
     hardcoded_clickhouse_cluster = ClickhouseClusterConfig(
         host="127.0.0.1", port=9000, user="default", password="", database="default"
     )
 
-    storage_configs = []
-    for storage_name, storage in storages.items():
-        table_schema = storage.get_schema()
-        assert isinstance(table_schema, TableSchema)
-        storage_configs.append(
-            StorageConfig(
-                name=storage_name,
-                clickhouse_table_name=table_schema.get_table_name(),
-                clickhouse_cluster=hardcoded_clickhouse_cluster,
-            )
-        )
+    processor = storage.get_table_writer().get_stream_loader().get_processor()
 
-    return RustConsumerConfig(
-        storages=storage_configs,
-        raw_topic=resolved_raw_topic,
-        commit_log_topic=resolved_commit_log_topic,
-        replacements_topic=resolved_replacements_topic,
+    table_schema = storage.get_schema()
+    assert isinstance(table_schema, TableSchema)
+    return StorageConfig(
+        name=storage_name,
+        clickhouse_table_name=table_schema.get_table_name(),
+        clickhouse_cluster=hardcoded_clickhouse_cluster,
+        message_processor=MessageProcessorConfig(
+            python_class_name=processor.__class__.__name__,
+            python_module=processor.__class__.__module__,
+        ),
     )
 
 

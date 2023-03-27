@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -65,7 +65,7 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 
 
 def build_request(
-    body: MutableMapping[str, Any],
+    body: Dict[str, Any],
     parser: Parser,
     settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
     schema: RequestSchema,

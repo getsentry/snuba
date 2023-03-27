@@ -18,14 +18,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
 
     fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected> {
         // TODO: Handle InvalidMessage
-        let transformed = (self.function)(message.payload).unwrap();
+        let transformed = (self.function)(message.payload()).unwrap();
 
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: transformed,
-            timestamp: message.timestamp,
-        })
+        self.next_step.submit(message.replace(transformed))
     }
 
     fn close(&mut self) {

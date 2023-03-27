@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, MutableMapping
 
@@ -9,10 +8,6 @@ from snuba import environment, settings, state
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "bucket_timer")
-
-
-def get_time_sum(group: List[timedelta]) -> timedelta:
-    return sum([processing_time for processing_time in group], timedelta())
 
 
 def floor_minute(time: datetime) -> datetime:
@@ -23,13 +18,6 @@ def ceil_minute(time: datetime) -> datetime:
     if time.second == 0 and time.microsecond == 0:
         return time
     return floor_minute(time + timedelta(minutes=1))
-
-
-@dataclass
-class Bucket:
-    project_id: int
-    minute: datetime
-    processing_time: timedelta = timedelta(seconds=0)
 
 
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from glob import glob
-from typing import Generator
 
 import sentry_sdk
 
@@ -37,10 +36,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         }
 
         self._all_storages = self._config_built_storages
-
-    def iter_all(self) -> Generator[Storage, None, None]:
-        for storage in self._all_storages.values():
-            yield storage
 
     def get(self, storage_key: StorageKey) -> Storage:
         return self._all_storages[storage_key]
