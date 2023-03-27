@@ -179,7 +179,15 @@ def _run_query_pipeline(
     # then assemble those together into one resut
 
     # Throughout those executions, the query_metadata.query_list is appended to every time a query runs
-    # within `db_query.py` with metadata about the query. That metada then goes into the querylog
+    # within `db_query.py` with metadata about the query. That metadata then goes into the querylog.
+
+    # There is the possibility that the `query_runner` is used across different threads. In that case,
+    # there *may* be a race condition on the `query_list`. At time of writing (27-03-2023) this is not a concern because:
+    #
+    #   - MultipleConcurrentPipeline is not in use and therefore this does not happen in practice
+    #   - Even when the runner function is invoked across multiple threads, threads in python are not truly paralllel
+    #   - synchornizing locks for mostly theoretical analytics reasons does not seem worth it. When you are reading
+    #       this comment, that may no longer be true
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
