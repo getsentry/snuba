@@ -59,12 +59,12 @@ def test_sessions_processing() -> None:
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
         )
-        assert query.get_selected_columns() == [
+        assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(
                 "duration_quantiles",
                 CurriedFunctionCall(
@@ -233,9 +233,9 @@ def test_select_storage(
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
-        assert query.get_from_clause().table_name == expected_table
+        assert clickhouse_query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})
 
     sessions_entity.get_query_pipeline_builder().build_execution_pipeline(
