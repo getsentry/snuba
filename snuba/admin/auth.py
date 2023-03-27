@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Sequence
+from typing import Sequence
 
 import structlog
 from flask import request
@@ -19,8 +19,6 @@ logger = structlog.get_logger().bind(module=__name__)
 class UnauthorizedException(Exception):
     pass
 
-
-auth_provider = Callable[[], AdminUser]
 
 # This function takes the Flask request and authorizes it.
 # If the request is valid it would return the user id.

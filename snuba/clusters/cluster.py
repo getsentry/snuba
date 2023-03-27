@@ -396,12 +396,6 @@ assert len(_registered_storage_sets) == len(
     _unique_registered_storage_sets
 ), "Storage set registered to more than one cluster"
 
-expected_storage_sets = {
-    s
-    for s in StorageSetKey
-    if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
-}
-
 _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster
     for cluster in CLUSTERS

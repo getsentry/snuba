@@ -40,12 +40,20 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
     try:
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
-        return [
-            {"host": node.host_name, "port": node.port}
-            for node in (
-                cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
-            )
-        ]
+        if storage_key == StorageKey.DISCOVER:
+            # Discover does not follow typical cluster pattern.
+            # The get_nodes cluster methods would result in an error because
+            # discover is not a single node, but also does not belong to any cluster.
+            return []
+        else:
+            return [
+                {"host": node.host_name, "port": node.port}
+                for node in (
+                    cluster.get_local_nodes()
+                    if local
+                    else cluster.get_distributed_nodes()
+                )
+            ]
     except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
         logger.warning(str(e), storage_key=storage_key.value, local=local)
         return []

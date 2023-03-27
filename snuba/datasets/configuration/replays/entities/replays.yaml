@@ -29,7 +29,11 @@ schema:
     },
     { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
     { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
-    { name: title, type: String, args: { schema_modifiers: [readonly] } },
+    {
+      name: title,
+      type: String,
+      args: { schema_modifiers: [readonly, nullable] },
+    },
     { name: url, type: String, args: { schema_modifiers: [nullable] } },
     { name: urls, type: Array, args: { inner_type: { type: String } } },
     {

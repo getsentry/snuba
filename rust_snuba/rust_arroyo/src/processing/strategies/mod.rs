@@ -2,7 +2,7 @@ use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub mod noop;
+pub mod commit_offsets;
 pub mod transform;
 pub mod produce;
 
