@@ -9,7 +9,6 @@ from pickle import PickleBuffer
 from typing import (
     Any,
     Callable,
-    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -400,7 +399,6 @@ class MultistorageCollector:
         self.__steps = steps
         self.__closed = False
         self.__commit_log_config = commit_log_config
-        self.__ignore_errors = ignore_errors
         self.__messages: MutableMapping[
             StorageKey,
             List[
@@ -491,17 +489,6 @@ class MultistorageKafkaPayload(NamedTuple):
 MultistorageProcessedMessage = Sequence[
     Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
 ]
-
-
-def __message_to_dict(
-    value: BrokerValue[KafkaPayload],
-) -> Dict[str, Any]:
-    return {
-        "message_payload_value": value.payload.value,
-        "message_offset": value.offset,
-        "message_partition": value.partition.index,
-        "message_topic": value.partition.topic.name,
-    }
 
 
 def __invalid_kafka_message(

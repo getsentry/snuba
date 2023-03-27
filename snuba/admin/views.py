@@ -39,6 +39,7 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
@@ -173,6 +174,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 else AuditLogAction.REVERSED_MIGRATION_STARTED,
                 {"migration": str(migration_key), "force": force, "fake": fake},
             )
+            check_for_inactive_replicas()
 
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)

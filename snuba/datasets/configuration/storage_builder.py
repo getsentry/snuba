@@ -37,7 +37,6 @@ from snuba.utils.streams.topics import Topic
 KIND = "kind"
 READABLE_STORAGE = "readable_storage"
 WRITABLE_STORAGE = "writable_storage"
-CDC_STORAGE = "cdc_storage"
 STORAGE = "storage"
 STORAGE_KEY = "storage_key"
 SET_KEY = "set_key"

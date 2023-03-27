@@ -10,7 +10,6 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 CERTS: Optional[Any] = None
-AUDIENCE: Optional[str] = None
 
 
 def _certs() -> Any:

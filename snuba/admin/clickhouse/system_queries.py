@@ -6,15 +6,6 @@ from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connec
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.utils.serializable_exception import SerializableException
-
-
-class NonExistentSystemQuery(SerializableException):
-    pass
-
-
-class InvalidResultError(SerializableException):
-    pass
 
 
 def _run_sql_query_on_host(

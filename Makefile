@@ -40,6 +40,7 @@ backend-typing:
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
+	pip install `grep ^-- requirements.txt` -r requirements-build.txt
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
 
