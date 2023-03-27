@@ -196,7 +196,11 @@ class Runner:
                     raise MigrationError("Requires force to run blocking migrations")
 
         for migration_key in pending_migrations:
-            self._run_migration_impl(migration_key, force=force)
+            if fake:
+                self._update_migration_status(migration_key, Status.COMPLETED)
+            else:
+                self._run_migration_impl(migration_key, force=force)
+
             if use_through and migration_key.migration_id.startswith(through):
                 logger.info(f"Ran through: {migration_key.migration_id}")
                 break
