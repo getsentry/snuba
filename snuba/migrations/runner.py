@@ -147,7 +147,7 @@ class Runner:
     def run_all(
         self,
         *,
-        through: str,
+        through: str = "all",
         fake: bool = False,
         force: bool = False,
         group: Optional[MigrationGroup] = None,
@@ -173,16 +173,18 @@ class Runner:
 
         use_through = False if through == "all" else True
 
-        def migration_exists(through: str) -> bool:
-            # (todo) make sure there is only one that could match
-            # aka `00` isn't valid since all the migrations could match that
-            for migration_key in pending_migrations:
-                if migration_key.migration_id.startswith(through):
-                    return True
+        def exact_migration_exists(through: str) -> bool:
+            migration_ids = [
+                key.migration_id
+                for key in pending_migrations
+                if key.migration_id.startswith(through)
+            ]
+            if len(migration_ids) == 1:
+                return True
             return False
 
-        if use_through and not migration_exists(through):
-            raise MigrationError(f"No pending migration matching: {through}")
+        if use_through and not exact_migration_exists(through):
+            raise MigrationError(f"No exact match for: {through}")
 
         # Do not run migrations if any are blocking
         if not force:

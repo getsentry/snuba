@@ -208,6 +208,42 @@ def test_run_all() -> None:
 
 
 @pytest.mark.clickhouse_db
+def test_run_all_using_through() -> None:
+    """
+    Using "through" allows migrating up to (including)
+    a specified migration id (or prefix) for a given group.
+
+    `snuba migrations migrate generic_metrics 0003`
+
+    Prefix must match exactly one migration id to be valid.
+    """
+    runner = Runner()
+
+    with pytest.raises(MigrationError):
+        # using through requires a group
+        runner.run_all(force=True, through="0001")
+
+    group = MigrationGroup.GENERIC_METRICS
+    all_generic_metrics = len(get_group_loader(group).get_migrations())
+    assert (
+        len(runner._get_pending_migrations_for_group(group=group))
+        == all_generic_metrics
+    )
+
+    with pytest.raises(MigrationError):
+        # too many migrations id matches
+        runner.run_all(force=True, group=group, through="00")
+
+    with pytest.raises(MigrationError):
+        # no migration id matches
+        runner.run_all(force=True, group=group, through="9999")
+
+    runner.run_all(force=True, group=group, through="0003")
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (
+        all_generic_metrics - 3
+    )
+
+@pytest.mark.clickhouse_db
 def test_reverse_all() -> None:
     runner = Runner()
     all_migrations = runner._get_pending_migrations()
