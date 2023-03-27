@@ -26,14 +26,14 @@ def migrations() -> None:
 
 @migrations.command()
 @click.argument("group", default="all")
-def list(group) -> None:
+def list(group: str) -> None:
     """
     Lists migrations and their statuses
     """
     check_clickhouse_connections()
     runner = Runner()
     groups = [] if group == "all" else [group]
-    for group, group_migrations in runner.show_all(groups):
+    for migration_group, group_migrations in runner.show_all(groups):
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
         for migration_id, status, blocking in group_migrations:
