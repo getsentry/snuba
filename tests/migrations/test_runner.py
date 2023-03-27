@@ -238,9 +238,22 @@ def test_run_all_using_through() -> None:
         # no migration id matches
         runner.run_all(force=True, group=group, through="9999")
 
-    runner.run_all(force=True, group=group, through="0003")
+    runner.run_all(force=True, group=group, through="0002")
     assert len(runner._get_pending_migrations_for_group(group=group)) == (
-        all_generic_metrics - 3
+        all_generic_metrics - 2
+    )
+
+    # Running with --fake
+    # (generic_metric_sets_aggregation_mv was added in 0003)
+    runner.run_all(force=True, group=group, through="0003", fake=True)
+    connection = get_cluster(StorageSetKey.GENERIC_METRICS_SETS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert (
+        connection.execute(
+            "SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'"
+        ).results
+        == []
     )
 
 @pytest.mark.clickhouse_db
