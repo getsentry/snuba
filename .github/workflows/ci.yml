@@ -134,6 +134,7 @@ jobs:
         run: |
           docker build . \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg SHOULD_BUILD_RUST=false \
             -t ghcr.io/getsentry/snuba-ci:latest \
             -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
@@ -252,6 +253,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
