@@ -199,6 +199,7 @@ class ReplaysLoader(DirectoryLoader):
             "0007_add_replay_type_column",
             "0008_add_sample_rate",
             "0009_add_dom_index_columns",
+            "0010_add_nullable_columns",
         ]
 
 
