@@ -41,7 +41,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         subscription_id = str(subscription.identifier)
         request, result = value.result
 
-        data: events_subscription_results_v1.SubscriptionResults = {
+        data: events_subscription_results_v1.SubscriptionResult = {
             "version": 3,
             "payload": {
                 "subscription_id": subscription_id,
