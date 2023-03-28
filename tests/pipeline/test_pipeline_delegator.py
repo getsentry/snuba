@@ -111,15 +111,15 @@ def test() -> None:
     runner_settings: MutableSequence[QuerySettings] = []
 
     def query_runner(
-        query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         nonlocal runner_call_count
         nonlocal runner_settings
 
         runner_call_count += 1
-        runner_settings.append(settings)
+        runner_settings.append(query_settings)
         return query_result
 
     set_config("pipeline_split_rate_limiter", 1)
