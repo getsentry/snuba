@@ -464,7 +464,7 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
 READINESS_STATE_SCHEMA = {
     "type": "string",
     "enum": ["limited", "deprecate", "partial", "complete"],
-    "description": 'The readiness state defines how "available" the storage should be. Internally, this label is used to determine which environments this storage is released in.There for four different readiness states: limited, deprecrate, partial, and complete. Snuba maintainers are in charge of which environments each state maps to. If this is a new storage, start with `limited` which only exposes the storage to CI and local development.',
+    "description": "The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with `limited` which only exposes the storage to CI and local development.",
 }
 
 STORAGE_AND_MAPPER = {
