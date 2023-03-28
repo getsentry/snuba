@@ -70,7 +70,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         return buffer
 
     def _hash_timeseries_id(
-        self, message: GenericMetric, sorted_tag_items: Iterable[Tuple[str, int]]
+        self, message: GenericMetric, sorted_tag_items: Iterable[Tuple[str, str]]
     ) -> int:
         """
         _hash_timeseries_id should return a UInt32 whose distribution should shard
@@ -137,9 +137,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             **self._process_values(message),
             "materialization_version": 1,
             "retention_days": retention_days,
-            "timeseries_id": self._hash_timeseries_id(
-                message, [(key, int(val)) for key, val in sorted_tag_items]
-            ),
+            "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
             "granularities": [
                 GRANULARITY_ONE_MINUTE,
                 GRANULARITY_ONE_HOUR,
