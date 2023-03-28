@@ -20,7 +20,6 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_SESSIONS = "scheduled-subscriptions-sessions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
 
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS = "scheduled-subscriptions-generic-metrics"
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = (
         "scheduled-subscriptions-generic-metrics-sets"
     )
