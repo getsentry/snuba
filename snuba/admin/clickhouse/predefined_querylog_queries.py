@@ -166,3 +166,74 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     ORDER BY pct_diff DESC
     LIMIT 10
     """
+
+
+class TopNReferrerBytotalByteScannedPercentage(QuerylogQuery):
+    """Specify a time period and N. Get the top N referrers with the highest percentage of all bytes scanned."""
+
+    sql = """
+    WITH
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned
+    SELECT
+        referrer,
+        sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) AS bytes_scanned,
+        all_bytes_scanned,
+        round((bytes_scanned / all_bytes_scanned) * 100, 3) AS pct
+    FROM querylog_local
+    WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
+    AND dataset IN ('{{dataset}}')
+    GROUP BY referrer
+    ORDER BY bytes_scanned DESC
+    LIMIT {{n}}
+    """
+
+
+class ChangeInTotalByteScannedPercentage(QuerylogQuery):
+    """Specify a 2 time periods and an org ID. Get the change in percentage of all bytes scanned that org used between those time periods."""
+
+    sql = """
+    WITH
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{t0}}))
+        AND (timestamp < {{t0}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned_p0,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{t1}}))
+        AND (timestamp < {{t1}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned_p1,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE organization = {{org}}
+        AND (timestamp > ({{t0}}))
+        AND (timestamp < {{t0}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS bytes_scanned_p0,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE organization = {{org}}
+        AND (timestamp > ({{t1}}))
+        AND (timestamp < {{t1}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS bytes_scanned_p1
+    SELECT
+        bytes_scanned_p0,
+        all_bytes_scanned_p0,
+        round(bytes_scanned_p0 / all_bytes_scanned_p0 * 100, 4) AS pct_bytes_scanned_p0,
+        bytes_scanned_p1,
+        all_bytes_scanned_p1,
+        round(bytes_scanned_p1 / all_bytes_scanned_p1 * 100, 4) AS pct_bytes_scanned_p1,
+        round(pct_bytes_scanned_p1 - pct_bytes_scanned_p0, 4) AS delta_pct
+    """

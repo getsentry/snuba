@@ -6,6 +6,8 @@ on:
     paths:
     - 'rust_snuba/**'
   pull_request:
+    paths:
+    - 'rust_snuba/**'
 
 jobs:
   rust-linting:

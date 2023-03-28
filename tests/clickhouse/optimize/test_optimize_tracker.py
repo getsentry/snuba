@@ -41,6 +41,8 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
         ),
     ],
 )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     assert len(tracker.get_all_partitions()) == 0
     assert len(tracker.get_completed_partitions()) == 0
@@ -65,6 +67,8 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     assert len(tracker.get_completed_partitions()) == 0
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_run_optimize_with_partition_tracker() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(
@@ -153,6 +157,8 @@ def test_run_optimize_with_partition_tracker() -> None:
     assert num_optimized == original_num_partitions
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_run_optimize_with_ongoing_merges() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(

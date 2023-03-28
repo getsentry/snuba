@@ -36,6 +36,7 @@ from tests.backends.metrics import TestingMetricsBackend
 commit_codec = CommitCodec()
 
 
+@pytest.mark.redis_db
 def test_scheduler_consumer() -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)

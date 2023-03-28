@@ -102,6 +102,7 @@ referrer_tests = [
 @pytest.mark.parametrize(
     "enabled, referrer, config_to_set, organization_id, expected_quota", referrer_tests
 )
+@pytest.mark.redis_db
 def test_apply_quota(
     enabled: int,
     referrer: str,
@@ -128,6 +129,7 @@ def test_apply_quota(
     assert settings.get_resource_quota() == expected_quota
 
 
+@pytest.mark.redis_db
 def test_apply_overlapping_quota() -> None:
     referrer = "MYREFERRER"
     referrer_project_limited_project_id = 1337

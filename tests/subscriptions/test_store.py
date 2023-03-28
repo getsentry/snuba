@@ -1,6 +1,8 @@
 from typing import Sequence
 from uuid import uuid1
 
+import pytest
+
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
@@ -9,6 +11,8 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Sequence[SubscriptionData]:

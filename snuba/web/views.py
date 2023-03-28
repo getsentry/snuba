@@ -36,7 +36,7 @@ from markdown import markdown
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
-from snuba import environment, settings, state, util
+from snuba import environment, settings, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import (
@@ -62,7 +62,6 @@ from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
-from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -324,72 +323,6 @@ def send_img(path: str) -> Response:
     return application.send_static_file(os.path.join("img", path))
 
 
-@application.route("/dashboard")
-@application.route("/dashboard.<fmt>")
-def dashboard(fmt: str = "html") -> Union[Response, RespTuple]:
-    if fmt == "json":
-        result = {
-            "queries": state.get_queries(),
-            "concurrent": {k: state.get_concurrent(k) for k in ["global"]},
-            "rates": {k: state.get_rates(k) for k in ["global"]},
-        }
-        return (json.dumps(result), 200, {"Content-Type": "application/json"})
-    else:
-        return application.send_static_file("dashboard.html")
-
-
-@application.route("/config")
-@application.route("/config.<fmt>", methods=["GET", "POST"])
-def config(fmt: str = "html") -> Union[Response, RespTuple]:
-    if fmt == "json":
-        if http_request.method == "GET":
-            return (
-                json.dumps(state.get_raw_configs()),
-                200,
-                {"Content-Type": "application/json"},
-            )
-        else:
-            assert http_request.method == "POST"
-            try:
-                state.set_configs(
-                    json.loads(http_request.data),
-                    user=http_request.headers.get("x-forwarded-email"),
-                )
-                return (
-                    json.dumps(state.get_raw_configs()),
-                    200,
-                    {"Content-Type": "application/json"},
-                )
-            except MismatchedTypeException as exc:
-                return (
-                    json.dumps(
-                        {
-                            "error": {
-                                "type": "client_error",
-                                "message": "Existing value and New value have different types. Use option force to override check",
-                                "key": str(exc.key),
-                                "original value type": str(exc.original_type),
-                                "new_value_type": str(exc.new_type),
-                            }
-                        },
-                        indent=4,
-                    ),
-                    400,
-                    {"Content-Type": "application/json"},
-                )
-    else:
-        return application.send_static_file("config.html")
-
-
-@application.route("/config/changes.json")
-def config_changes() -> RespTuple:
-    return (
-        json.dumps(state.get_config_changes_legacy()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
 @application.route("/health_envoy")
 def health_envoy() -> Response:
     """K8s can decide to shut down the pod, at which point it will write the down file.
@@ -452,12 +385,12 @@ def health() -> Response:
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
-def parse_request_body(http_request: Request) -> MutableMapping[str, Any]:
+def parse_request_body(http_request: Request) -> Dict[str, Any]:
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
-            assert isinstance(body, MutableMapping)
+            assert isinstance(body, Dict)
             return body
         except json.JSONDecodeError as error:
             raise JsonDecodeException(str(error)) from error
@@ -505,9 +438,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 
 
 @with_span()
-def dataset_query(
-    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
-) -> Response:
+def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 

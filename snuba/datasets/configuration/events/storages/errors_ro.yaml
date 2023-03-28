@@ -202,6 +202,11 @@ schema:
           },
       },
       {
+        name: exception_main_thread,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 8 },
+      },
+      {
         name: sdk_integrations,
         type: Array,
         args: { inner_type: { type: String } },

@@ -95,6 +95,8 @@ TEST_CASES = [
 ]
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 @pytest.mark.parametrize(
     "snql_query, dataset, storage_connections, selector, partition_key_column_name, expected_storage_set_key",
     TEST_CASES,
