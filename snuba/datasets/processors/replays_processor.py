@@ -223,9 +223,8 @@ def process_replay_actions(
         {
             # Primary-key.
             "project_id": processed["project_id"],
-            "timestamp": default(
-                lambda: datetime.now(timezone.utc),
-                maybe(to_datetime, click["timestamp"]),
+            "timestamp": raise_on_null(
+                "timestamp", maybe(to_datetime, click["timestamp"])
             ),
             "replay_id": to_uuid(payload["replay_id"]),
             "segment_id": None,
@@ -344,6 +343,12 @@ def to_typed_list(callable: Callable[[Any], T], values: list[Any]) -> list[T]:
 def to_uuid(value: Any) -> str:
     """Return a stringified uuid or err."""
     return str(uuid.UUID(str(value)))
+
+
+def raise_on_null(field: str, value: Any) -> Any:
+    if value is None:
+        raise ValueError(f"Missing data for required field: {field}")
+    return value
 
 
 def _is_list(value: Any) -> list[Any]:

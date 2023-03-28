@@ -14,6 +14,7 @@ from snuba.datasets.processors.replays_processor import (
     maybe,
     normalize_tags,
     process_tags_object,
+    raise_on_null,
     segment_id_to_event_hash,
     to_capped_list,
     to_capped_string,
@@ -666,6 +667,10 @@ class TestReplaysProcessor:
         assert to_capped_string(2, "123") == "12"
         assert to_capped_string(3, "123") == "123"
         assert to_capped_string(4, "123") == "123"
+
+    def test_raise_on_null(self) -> None:
+        with pytest.raises(ValueError):
+            raise_on_null("test", None)
 
 
 class TestReplaysActionProcessor:
