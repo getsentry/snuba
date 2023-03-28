@@ -674,8 +674,8 @@ def db_query(
         what status code to send back to the service caller. Changing that mechanism would mean
         changing those layers as well
     * The readthrough cache accepts an arbitary function to run with a readthrough redis cache. Currently
-        it is applied around the rate limiting function but not the allocation policy. The layers look
-        like this:
+        it is applied around the rate limiting function but not the allocation policy.
+        The layers look like this:
 
             --> db_query
                 --> allocation policy
