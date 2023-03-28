@@ -6,7 +6,7 @@ storage:
   key: search_issues
   set_key: search_issues
 
-readiness_state: complete
+readiness_state: partial
 
 schema:
   columns:

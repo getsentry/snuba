@@ -4,7 +4,7 @@ name: groupedmessages
 storage:
   key: groupedmessages
   set_key: cdc
-readiness_state: complete
+readiness_state: deprecate
 schema:
   columns:
     [
