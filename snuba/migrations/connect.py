@@ -82,7 +82,7 @@ def check_for_inactive_replicas() -> None:
     ]
 
     checked_nodes = set()
-
+    inactive_replica_info = []
     for storage_key in storage_keys:
         storage = get_storage(storage_key)
         try:
@@ -109,12 +109,11 @@ def check_for_inactive_replicas() -> None:
                 f"WHERE active_replicas < total_replicas AND database ='{conn.database}'",
             ).results
 
-            inactive_replica_info = []
             for table, total_replicas, active_replicas in tables_with_inactive:
                 inactive_replica_info.append(
                     f"Storage {storage_key.value} has inactive replicas for table {table} "
                     f"with {active_replicas} out of {total_replicas} replicas active."
                 )
 
-            if inactive_replica_info:
-                raise InactiveClickhouseReplica("\n".join(inactive_replica_info))
+    if inactive_replica_info:
+        raise InactiveClickhouseReplica("\n".join(set(inactive_replica_info)))
