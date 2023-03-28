@@ -85,6 +85,7 @@ test_data = [
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.parametrize("org_id, expected_slice_db, set_override", test_data)
+@pytest.mark.redis_db
 def test_column_based_partition_selector(
     org_id: int, expected_slice_db: str, set_override: bool
 ) -> None:
@@ -162,6 +163,7 @@ mega_cluster_test_data = [
     "storage_set, logical_partition, override_config, " "expected",
     mega_cluster_test_data,
 )
+@pytest.mark.redis_db
 def test_should_use_mega_cluster(
     storage_set: StorageSetKey,
     logical_partition: int,

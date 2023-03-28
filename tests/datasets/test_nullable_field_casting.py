@@ -28,6 +28,7 @@ from snuba.web import QueryResult
         )
     ],
 )
+@pytest.mark.clickhouse_db
 def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> None:
     dataset_name = "discover"
 

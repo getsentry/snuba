@@ -492,6 +492,7 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("logical_query, composite_plan, processed_query", TEST_CASES)
+@pytest.mark.clickhouse_db
 def test_composite_planner(
     logical_query: CompositeQuery[Entity],
     composite_plan: CompositeQueryPlan,

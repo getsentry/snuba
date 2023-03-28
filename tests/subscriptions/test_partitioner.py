@@ -42,6 +42,7 @@ TESTS = [
 
 class TestBuildRequest(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS)
+    @pytest.mark.clickhouse_db
     def test(self, subscription: SubscriptionData) -> None:
         settings.TOPIC_PARTITION_COUNTS = {"events": 64}
         partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
