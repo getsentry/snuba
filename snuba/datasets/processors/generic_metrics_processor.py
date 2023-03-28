@@ -137,7 +137,9 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             **self._process_values(message),
             "materialization_version": 1,
             "retention_days": retention_days,
-            "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
+            "timeseries_id": self._hash_timeseries_id(
+                message, [(key, int(val)) for key, val in sorted_tag_items]
+            ),
             "granularities": [
                 GRANULARITY_ONE_MINUTE,
                 GRANULARITY_ONE_HOUR,
