@@ -6,14 +6,15 @@ from typing import Any, Callable
 
 from flask import Response, g, jsonify, make_response
 
-from snuba.admin.auth_roles import ViewToolAction
+from snuba.admin.auth_roles import InteractToolAction
 from snuba.admin.user import AdminUser
 
 
 class AdminTools(Enum):
     """
-    These correspond to the different tabs in the Admin tool. Every endpoint
-    should be annotated with one of these tools to ensure correct permissions.
+    These correspond to the different tabs in the Admin tool. Specifically, the
+    id of the nav items in the front end.
+    Every endpoint should be annotated with one of these tools to ensure correct permissions.
     """
 
     ALL = "all"
@@ -31,7 +32,7 @@ def get_user_allowed_tools(user: AdminUser) -> set[AdminTools]:
     user_allowed_tools = set()
     for role in user.roles:
         for action in role.actions:
-            if not isinstance(action, ViewToolAction):
+            if not isinstance(action, InteractToolAction):
                 continue
 
             for resource in action._resources:
@@ -48,7 +49,7 @@ def check_tool_perms(
     tools: list[AdminTools],
 ) -> Callable[[Callable[..., Response]], Callable[..., Response]]:
     """
-    A wrapper decorator applied to all endpoints. A user must have access to all tools
+    A wrapper decorator that should be applied to all endpoints. A user must have access to all tools
     or one of the specified tools.
     """
     error_message = f"No permissions on {', '.join(t.value for t in tools)}"

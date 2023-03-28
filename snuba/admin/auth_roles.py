@@ -70,7 +70,7 @@ class ToolAction(Action[ToolResource]):
         return resources
 
 
-class ViewToolAction(ToolAction):
+class InteractToolAction(ToolAction):
     # Gives users access to view a tool on the admin page
     pass
 
@@ -138,7 +138,7 @@ def generate_migration_test_role(
 
 
 def generate_tool_test_role(tool: str) -> Role:
-    return Role(name=tool, actions={ViewToolAction([ToolResource(tool)])})
+    return Role(name=tool, actions={InteractToolAction([ToolResource(tool)])})
 
 
 ROLES = {
@@ -160,11 +160,11 @@ ROLES = {
     ),
     "AllTools": Role(
         name="all-tools",
-        actions={ViewToolAction([TOOL_RESOURCES["all"]])},
+        actions={InteractToolAction([TOOL_RESOURCES["all"]])},
     ),
     "SnQLToSQL": Role(
         name="snql-to-snql",
-        actions={ViewToolAction([TOOL_RESOURCES["snql-to-sql"]])},
+        actions={InteractToolAction([TOOL_RESOURCES["snql-to-sql"]])},
     ),
 }
 
