@@ -87,7 +87,7 @@ def build_request(
                 query_settings["referrer"] = referrer
                 if (
                     tenant_ids := request_parts.attribution_info.get("tenant_ids")
-                ) and "organization_id" in tenant_ids:
+                ) and tenant_ids.get("organization_id") is not None:
                     query_settings["organization_id"] = int(
                         tenant_ids["organization_id"]
                     )
