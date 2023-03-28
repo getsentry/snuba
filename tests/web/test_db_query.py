@@ -282,8 +282,6 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_allocation_policy_threads_applied_to_query() -> None:
-    state.set_config("read_through_cache.short_circuit", 1)
-
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
