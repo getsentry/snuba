@@ -1,11 +1,9 @@
 import json
-import os
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 import click
 
-from snuba import settings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
@@ -304,20 +302,3 @@ def validate_storages(storages: Sequence[WritableTableStorage]) -> None:
         )
         < 2
     ), "All storages must have the same replacement topic spec"
-
-
-def write_file_to_tmp_directory(data: str, filename: str) -> str:
-    """
-    Write data to json file, return the file path.
-    """
-
-    tmp_dir = os.path.join(settings.ROOT_REPO_PATH, "tmp")
-    file_path = os.path.join(tmp_dir, filename)
-
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-
-    with open(file_path, "w") as f:
-        f.write(data)
-
-    return file_path

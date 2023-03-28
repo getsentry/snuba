@@ -1,4 +1,3 @@
-import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -27,8 +26,6 @@ from snuba.datasets.metrics_messages import (
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
-
-logger = logging.getLogger(__name__)
 
 # These are the hardcoded values from the materialized view
 GRANULARITY_ONE_MINUTE = 1

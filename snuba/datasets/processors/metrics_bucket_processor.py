@@ -1,4 +1,3 @@
-import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -23,8 +22,6 @@ from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
 DISABLED_MATERIALIZATION_VERSION = 1
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
-
-logger = logging.getLogger(__name__)
 
 
 class MetricsBucketProcessor(DatasetMessageProcessor, ABC):

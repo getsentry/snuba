@@ -41,7 +41,6 @@ class RetryingStrictRedisCluster(RedisCluster):  # type: ignore #  Missing type 
             return super(self.__class__, self).execute_command(*args, **kwargs)
 
 
-RANDOM_SLEEP_MAX = 50
 KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE = "All slots are not"
 
 RedisInitFunction = TypeVar("RedisInitFunction", bound=Callable[..., Any])
