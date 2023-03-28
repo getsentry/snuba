@@ -51,7 +51,7 @@ def list() -> None:
 
 
 @migrations.command()
-@click.argument("group", default="all")
+@click.option("-g", "--group", default=None)
 @click.argument("through", default="all")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
@@ -73,7 +73,7 @@ def migrate(
     runner = Runner()
 
     try:
-        if group != "all":
+        if group:
             migration_group = MigrationGroup(group)
         else:
             if through != "all":
