@@ -136,6 +136,9 @@ def test_subscription_task_result_encoder() -> None:
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
+        "totals": {},
+        "profile": {},
+        "trace_output": "",
     }
 
     task_result = SubscriptionTaskResult(
@@ -219,6 +222,9 @@ def test_metrics_subscription_task_result_encoder(
             {"name": "tags[3]", "type": "UInt64"},
             {"name": "value", "type": "Float64"},
         ],
+        "totals": {},
+        "profile": {},
+        "trace_output": "",
     }
     task_result = SubscriptionTaskResult(
         ScheduledSubscriptionTask(
