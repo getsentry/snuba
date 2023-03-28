@@ -33,6 +33,7 @@ RetentionDays = int
 
 # Limit for error_ids / trace_ids / urls array elements
 LIST_ELEMENT_LIMIT = 1000
+MAX_CLICK_EVENTS = 20
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
@@ -255,7 +256,7 @@ def process_replay_actions(
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
         }
-        for click in payload["clicks"]
+        for click in payload["clicks"][:MAX_CLICK_EVENTS]
     ]
 
 
