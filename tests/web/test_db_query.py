@@ -137,6 +137,8 @@ def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]
     )
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_raw_query_success() -> None:
     query, storage = _build_test_query("count(distinct(project_id))")
 
@@ -174,6 +176,8 @@ def test_raw_query_success() -> None:
     }
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_raw_query_fail() -> None:
     query, storage = _build_test_query("count(non_existent_column)")
 
