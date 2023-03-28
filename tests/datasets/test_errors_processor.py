@@ -544,3 +544,46 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["replay_id"] = str(replay_id)
         assert processor.process_message(payload, meta) == InsertBatch([result], None)
+
+    def test_errors_replayid_invalid_tag(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            replay_id=None,
+        )
+        invalid_replay_id = "imnotavaliduuid"
+        payload = message.serialize()
+        payload[2]["data"]["tags"].append(["replayId", invalid_replay_id])
+
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+        processor = ErrorsProcessor(
+            {
+                "environment": "environment",
+                "sentry:release": "release",
+                "sentry:dist": "dist",
+                "sentry:user": "user",
+                "transaction": "transaction_name",
+                "level": "level",
+            }
+        )
+        result = message.build_result(meta)
+        result = message.build_result(meta)
+        result["tags.key"].insert(4, "replayId")
+        result["tags.value"].insert(4, invalid_replay_id)
+        assert processor.process_message(payload, meta) == InsertBatch([result], None)
