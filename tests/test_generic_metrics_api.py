@@ -76,6 +76,8 @@ SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
 }
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -86,11 +88,10 @@ class TestGenericMetricsApiSets(BaseApiTest):
         return "generic_metrics_sets"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
         self.count = 10
@@ -236,6 +237,8 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -246,11 +249,10 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         return "generic_metrics_distributions"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
         self.count = 10
@@ -388,6 +390,8 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert smallest_time_bucket.minute == 0
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -398,11 +402,10 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_post(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
         self.count = 10
@@ -488,6 +491,8 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 1, data
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -498,11 +503,11 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
         self.count = 3600
         self.base_time = utc_yesterday_12_15()
 
@@ -617,10 +622,9 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         assert first_row["tag_string"] == expected_value
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
-
     def test_arbitrary_granularity(self) -> None:
         super().test_arbitrary_granularity()
 
@@ -631,10 +635,9 @@ class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistribu
         pass
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
-
     def test_indexed_tags(self) -> None:
         super().test_indexed_tags()
 

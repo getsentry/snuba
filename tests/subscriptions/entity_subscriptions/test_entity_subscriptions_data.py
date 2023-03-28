@@ -1,6 +1,8 @@
 from typing import List, Tuple, cast
 from uuid import UUID
 
+import pytest
+
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
@@ -45,6 +47,8 @@ def subscription_data_builder() -> SubscriptionData:
     )
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_entity_subscriptions_data() -> None:
     subscription_data = subscription_data_builder()
 

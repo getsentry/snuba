@@ -30,6 +30,7 @@ assert isinstance(sessions_read_schema, TableSchema)
 assert isinstance(sessions_raw_schema, TableSchema)
 
 
+@pytest.mark.clickhouse_db
 def test_sessions_processing() -> None:
     query_body = {
         "query": """
@@ -204,6 +205,7 @@ selector_tests = [
     "query_body, is_subscription, expected_table",
     selector_tests,
 )
+@pytest.mark.clickhouse_db
 def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:

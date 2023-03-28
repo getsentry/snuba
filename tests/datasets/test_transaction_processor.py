@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
+import pytest
+
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.transactions_processor import (
@@ -281,6 +283,8 @@ class TransactionEvent:
         return ret
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestTransactionsProcessor:
     def __get_timestamps(self) -> Tuple[float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)

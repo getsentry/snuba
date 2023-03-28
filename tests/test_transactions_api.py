@@ -2,7 +2,7 @@ import calendar
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Generator, Tuple, Union
 
 import pytest
 import pytz
@@ -19,6 +19,8 @@ SNQL_ROUTE = "/transactions/snql"
 LIMIT_BY_COUNT = 5
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestTransactionsApi(BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -29,11 +31,13 @@ class TestTransactionsApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self,
+        clickhouse_db: None,
+        redis_db: None,
+        _build_snql_post_methods: Callable[[str], Any],
+    ) -> Generator[None, None, None]:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
@@ -50,7 +54,8 @@ class TestTransactionsApi(BaseApiTest):
         self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
-    def teardown_method(self, test_method: Any) -> None:
+        yield
+
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")

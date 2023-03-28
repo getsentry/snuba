@@ -29,6 +29,8 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 CONSUMER_GROUP = "consumer_group"
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestReplacer:
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:

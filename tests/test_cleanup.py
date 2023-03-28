@@ -14,7 +14,7 @@ from tests.helpers import write_processed_messages
 
 test_data = [
     pytest.param(
-        StorageKey.ERRORS,
+        StorageKey("errors"),
         lambda dt, retention: InsertBatch(
             [
                 {
@@ -31,7 +31,7 @@ test_data = [
         id="errors",
     ),
     pytest.param(
-        StorageKey.TRANSACTIONS,
+        StorageKey("transactions"),
         lambda dt, retention: InsertBatch(
             [
                 {
@@ -49,6 +49,8 @@ test_data = [
 ]
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestCleanup:
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date",

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
+import pytest
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -11,12 +12,14 @@ from tests.fixtures import get_replay_event
 from tests.helpers import write_raw_unprocessed_events
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestReplaysApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         self.replay_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad05")
         self.event = get_replay_event(replay_id=str(self.replay_id))
         self.project_id = self.event["project_id"]
