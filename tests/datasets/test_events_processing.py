@@ -44,9 +44,9 @@ def test_events_processing() -> None:
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
-        assert query.get_selected_columns() == [
+        assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(
                 "tags[transaction]",
                 Column("_snuba_tags[transaction]", None, "transaction_name"),

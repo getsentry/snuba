@@ -24,6 +24,7 @@ def pytest_configure() -> None:
         settings.TESTING
     ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
+    initialize_snuba()
     setup_sentry()
     initialize_snuba()
 

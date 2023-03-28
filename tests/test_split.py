@@ -70,7 +70,7 @@ def test_no_split(
     )
 
     def do_query(
-        query: ClickhouseQuery,
+        clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
@@ -107,7 +107,9 @@ def test_set_limit_on_split_query():
 
     query_run_count = 0
 
-    def do_query(query: ClickhouseQuery, query_settings: QuerySettings) -> QueryResult:
+    def do_query(
+        clickhouse_query: ClickhouseQuery, query_settings: QuerySettings
+    ) -> QueryResult:
         nonlocal query_run_count
         query_run_count += 1
         if query_run_count == 1:
@@ -129,7 +131,7 @@ def test_set_limit_on_split_query():
                 extra={},
             )
         else:
-            assert query.get_limit() == 2
+            assert clickhouse_query.get_limit() == 2
             return QueryResult({}, {})
 
     ColumnSplitQueryStrategy(
@@ -192,7 +194,7 @@ def test_col_split(
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
     def do_query(
-        query: ClickhouseQuery,
+        clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
