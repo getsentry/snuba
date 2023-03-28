@@ -27,18 +27,7 @@ class Codec(
     pass
 
 
-T = TypeVar("T")
-
-
 class ExceptionAwareCodec(Codec[TEncoded, TDecoded]):
     @abstractmethod
     def encode_exception(self, value: SerializableException) -> TEncoded:
         raise NotImplementedError
-
-
-class PassthroughCodec(Generic[T], Codec[T, T]):
-    def encode(self, value: T) -> T:
-        return value
-
-    def decode(self, value: T) -> T:
-        return value

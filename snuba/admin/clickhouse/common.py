@@ -24,12 +24,14 @@ class InvalidStorageError(SerializableException):
     pass
 
 
-def is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
+def is_valid_node(
+    host: str, port: int, cluster: ClickhouseCluster, storage_name: str
+) -> bool:
     nodes = [
-        *cluster.get_local_nodes(),
         cluster.get_query_node(),
-        *cluster.get_distributed_nodes(),
     ]
+    if storage_name != "discover":
+        nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
 
     return any(node.host_name == host and node.port == port for node in nodes)
 
@@ -59,7 +61,7 @@ def get_ro_node_connection(
     storage = get_storage(storage_key)
     cluster = storage.get_cluster()
 
-    if not is_valid_node(clickhouse_host, clickhouse_port, cluster):
+    if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
         raise InvalidNodeError(
             f"host {clickhouse_host} and port {clickhouse_port} are not valid",
             extra_data={"host": clickhouse_host, "port": clickhouse_port},

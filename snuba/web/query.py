@@ -11,6 +11,7 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import (
@@ -43,7 +44,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import db_query
+from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -158,17 +159,37 @@ def _run_query_pipeline(
     - Executing the plan specific query processors.
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
+
+
+    ** GOTCHAS **
+
+    Something which is not immediately clear from looking at the code is that the
+    query_runner can be run multiple times during the execution of the pipeline.
+    The execution pipeline may choose to break up a query into multiple subqueries. And
+    then assemble those together into one resut
+
+    Throughout those executions, the query_metadata.query_list is appended to every time a query runs
+    within `db_query.py` with metadata about the query. That metadata then goes into the querylog.
+
+    There is the possibility that the `query_runner` is used across different threads. In that case,
+    there *may* be a race condition on the `query_list`. At time of writing (27-03-2023) this is not a concern because:
+
+      - MultipleConcurrentPipeline is not in use and therefore this does not happen in practice
+      - Even when the runner function is invoked across multiple threads, threads in python are not truly paralllel
+      - synchornizing locks for mostly theoretical analytics reasons does not seem worth it. When you are reading
+          this comment, that may no longer be true
+
     """
     if request.query_settings.get_dry_run():
         query_runner = _dry_run_query_runner
     else:
         query_runner = partial(
             _run_and_apply_column_names,
-            timer,
-            query_metadata,
-            request.referrer,
-            robust,
-            concurrent_queries_gauge,
+            timer=timer,
+            query_metadata=query_metadata,
+            attribution_info=request.attribution_info,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
         )
 
     record_missing_tenant_ids(request)
@@ -203,6 +224,10 @@ def _dry_run_query_runner(
     query_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
+    # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
+    # you will only see the sql reported that the first of the split queries ran. Since this returns
+    # no results, you won't see any others
+
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
@@ -220,7 +245,7 @@ def _dry_run_query_runner(
 def _run_and_apply_column_names(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    referrer: str,
+    attribution_info: AttributionInfo,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -239,7 +264,7 @@ def _run_and_apply_column_names(
     result = _format_storage_query_and_run(
         timer,
         query_metadata,
-        referrer,
+        attribution_info,
         clickhouse_query,
         query_settings,
         reader,
@@ -272,7 +297,7 @@ def _run_and_apply_column_names(
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    referrer: str,
+    attribution_info: AttributionInfo,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
@@ -305,7 +330,7 @@ def _format_storage_query_and_run(
     stats = {
         "clickhouse_table": table_names,
         "final": visitor.any_final(),
-        "referrer": referrer,
+        "referrer": attribution_info.referrer,
         "sample": visitor.get_sample_rate(),
     }
 
@@ -328,15 +353,17 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return db_query(
-                clickhouse_query,
-                query_settings,
-                formatted_query,
-                reader,
-                timer,
-                query_metadata,
-                stats,
-                span.trace_id,
+            return raw_query(
+                clickhouse_query=clickhouse_query,
+                query_settings=query_settings,
+                attribution_info=attribution_info,
+                dataset_name=query_metadata.dataset,
+                formatted_query=formatted_query,
+                reader=reader,
+                timer=timer,
+                query_metadata_list=query_metadata.query_list,
+                stats=stats,
+                trace_id=span.trace_id,
                 robust=robust,
             )
 

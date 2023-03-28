@@ -1,5 +1,5 @@
 use super::{ConsumeError, MessageStorage, TopicDoesNotExist, TopicExists};
-use crate::types::{Message, Partition, Topic};
+use crate::types::{BrokerMessage, Partition, Topic};
 use chrono::{DateTime, Utc};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 
 struct TopicContent<TPayload: Clone> {
     partition_meta: Vec<Partition>,
-    partitions: HashMap<Partition, Vec<Message<TPayload>>>,
+    partitions: HashMap<Partition, Vec<BrokerMessage<TPayload>>>,
 }
 
 impl<TPayload: Clone> TopicContent<TPayload> {
@@ -28,14 +28,14 @@ impl<TPayload: Clone> TopicContent<TPayload> {
         }
     }
 
-    fn get_messages(&self, partition: &Partition) -> Result<&Vec<Message<TPayload>>, ConsumeError> {
+    fn get_messages(&self, partition: &Partition) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
         if !self.partition_meta.contains(partition) {
             return Err(ConsumeError::PartitionDoesNotExist);
         }
         Ok(&self.partitions[partition])
     }
 
-    fn add_message(&mut self, message: Message<TPayload>) -> Result<(), ConsumeError> {
+    fn add_message(&mut self, message: BrokerMessage<TPayload>) -> Result<(), ConsumeError> {
         if !self.partition_meta.contains(&message.partition) {
             return Err(ConsumeError::PartitionDoesNotExist);
         }
@@ -117,7 +117,7 @@ impl<TPayload: Clone> MessageStorage<TPayload> for MemoryMessageStorage<TPayload
         &self,
         partition: &Partition,
         offset: u64,
-    ) -> Result<Option<Message<TPayload>>, ConsumeError> {
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError> {
         let n_offset = usize::try_from(offset).unwrap();
         let messages = self.topics[&partition.topic].get_messages(partition)?;
         match messages.len().cmp(&n_offset) {
@@ -138,11 +138,11 @@ impl<TPayload: Clone> MessageStorage<TPayload> for MemoryMessageStorage<TPayload
             .get_mut(&partition.topic)
             .ok_or(ConsumeError::TopicDoesNotExist)?;
         let offset = messages.get_messages(partition)?.len();
-        let _ = messages.add_message(Message::new(
+        let _ = messages.add_message(BrokerMessage::new(
+            payload,
             partition.clone(),
             u64::try_from(offset).unwrap(),
-            payload,
-            timestamp,
+             timestamp,
         ));
         Ok(u64::try_from(offset).unwrap())
     }

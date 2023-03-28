@@ -39,7 +39,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
-from snuba.migrations.errors import MigrationError
+from snuba.migrations.connect import check_for_inactive_replicas
+from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
@@ -173,6 +174,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 else AuditLogAction.REVERSED_MIGRATION_STARTED,
                 {"migration": str(migration_key), "force": force, "fake": fake},
             )
+            check_for_inactive_replicas()
 
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
@@ -216,6 +218,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         logger.error(err, exc_info=True)
         return make_response(
             jsonify({"error": "clickhouse error: " + err.message}), 400
+        )
+    except InactiveClickhouseReplica as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": "inactive replicas error: " + err.message}), 400
         )
 
 

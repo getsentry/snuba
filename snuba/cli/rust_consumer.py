@@ -16,9 +16,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.utils.streams.configuration_builder import _get_default_topic_configuration
 
-RUST_ENVIRONMENT = os.environ.get("RUST_ENVIRONMENT", "debug")
-RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
-
 
 @click.command()
 @click.option(

@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.3.1
+
+### Various fixes & improvements
+
+- add file for self hosted settings (#3889) by @enochtangg
+- ci: Run Rust linter (#3884) by @lynnagara
+- Add sns gcloud project GoCD pipeline (#3850) by @dbanda
+- rust: add simple transform and produce strategy example (#3796) by @dbanda
+- ref: Rename positions to offsets everywhere (#3888) by @lynnagara
+- feat(rust-arroyo): Split the message interface to support batching (#3885) by @lynnagara
+- feat(tx_processor): write replay_id as top level column (#3854) by @JoshFerge
+- feat(rust-arroyo): Get rid of `Position` (#3883) by @lynnagara
+- Remove filtering only local nodes for tracing tool (#3876) by @enochtangg
+- fix: Add sentry-compatible alias to install-python-dependencies (#3875) by @untitaker
+- fix(replays): set transaction as empty string instead of null (#3878) by @JoshFerge
+- feat(schemas): Partially type the data in querylog producer (#3858) by @lynnagara
+- feat: The Rust consumer calls Python message processors (#3871) by @untitaker
+- feat(rust-consumer): Avoid config files overwriting each other (#3873) by @lynnagara
+- ref: Bump sentry-kafka-schemas 0.0.9 (#3882) by @marandaneto
+- ref(admin): add CreateTableQuery predefined queries (#3844) by @MeredithAnya
+- feat(rust-consumer): Add python processor info to consumer config (#3874) by @lynnagara
+- feat(rust-consumer): Remove option to build raw config (#3870) by @lynnagara
+- feat: Start building the config for Rust consumer (#3869) by @lynnagara
+- Revert "use redis username from env (#3862)" (a03fb448) by @getsentry-bot
+- use redis username from env (#3862) by @HydrofinLoewenherz
+- feat(rust-consumer): Multistorage consumer (#3865) by @lynnagara
+- fix(rust-consumer): Remove auto-initialize feature (#3868) by @lynnagara
+- feat(Querylog): Organization ID from tenant_ids again (#3867) by @rahul-kumar-saini
+
+_Plus 2 more_
+
 ## 23.3.0
 
 ### Various fixes & improvements

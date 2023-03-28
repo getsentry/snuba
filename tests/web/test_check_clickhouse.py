@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Sequence
 from unittest import mock
 
+import pytest
+
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.web.views import check_clickhouse
@@ -55,6 +57,7 @@ def fake_get_dataset(name: str) -> Dataset:
     return_value=["events", "experimental"],
 )
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
+@pytest.mark.clickhouse_db
 def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
     assert check_clickhouse(ignore_experimental=True)
     assert not check_clickhouse(ignore_experimental=False)

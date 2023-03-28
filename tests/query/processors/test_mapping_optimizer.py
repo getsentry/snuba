@@ -189,6 +189,7 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("query, expected_condition", TEST_CASES)
+@pytest.mark.redis_db
 def test_tags_hash_map(
     query: ClickhouseQuery,
     expected_condition: Expression,

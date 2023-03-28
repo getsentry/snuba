@@ -1,16 +1,30 @@
+from __future__ import annotations
+
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 import pytest
 
 from snuba import state
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
+from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
+from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
+from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryException
 from snuba.web.db_query import (
     _apply_thread_quota_to_clickhouse_query_settings,
     _get_query_settings_from_config,
-    db_query,
+    raw_query,
 )
 
 test_data = [
@@ -60,6 +74,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
@@ -95,30 +110,106 @@ def test_apply_thread_quota(
     for rlimit in rate_limit_params:
         settings.add_rate_limit(rlimit)
     settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings: MutableMapping[str, Any] = {}
+    clickhouse_query_settings: dict[str, Any] = {}
     _apply_thread_quota_to_clickhouse_query_settings(
         settings, clickhouse_query_settings, rate_limit_stats
     )
     assert clickhouse_query_settings == expected_query_settings
 
 
-def test_db_query(ch_query):
-    from snuba.clickhouse.native import NativeDriverReader
-    from snuba.datasets.storages.factory import get_storage
-    from snuba.datasets.storages.storage_key import StorageKey
-    from snuba.querylog.query_metadata import SnubaQueryMetadata
-    from snuba.utils.metrics.timer import Timer
+def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]:
+    storage = get_storage(StorageKey("errors"))
+    return (
+        ClickhouseQuery(
+            from_clause=Table(
+                storage.get_schema().get_data_source().get_table_name(),  # type: ignore
+                schema=storage.get_schema().get_columns(),
+                final=False,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "some_alias",
+                    parse_clickhouse_function(select_expression),
+                )
+            ],
+        ),
+        storage,
+    )
 
-    reader = get_storage(StorageKey("errors")).get_cluster().get_reader()
 
-    # result = db_query(
-    #     clickhouse_query=ch_query,
-    #     query_settings=HTTPQuerySettings()
-    #     formatted_query=format_query(ch_query),
-    #     reader=reader,
-    #     timer=Timer(),
-    #     query_metadata: SnubaQueryMetadata,
-    #     stats: MutableMapping[str, Any],
-    #     trace_id: Optional[str] = None,
-    #     robust: bool = False,
-    # )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_raw_query_success() -> None:
+    query, storage = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = raw_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=AttributionInfo(
+            app_id=AppID(key="key"),
+            tenant_ids={},
+            referrer="something",
+            team=None,
+            feature=None,
+            parent_api=None,
+        ),
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert len(query_metadata_list) == 1
+    assert result.extra["stats"] == stats
+    assert result.extra["sql"] is not None
+    assert set(result.result["profile"].keys()) == {  # type: ignore
+        "elapsed",
+        "bytes",
+        "blocks",
+        "rows",
+    }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_raw_query_fail() -> None:
+    query, storage = _build_test_query("count(non_existent_column)")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+    exception_raised = False
+    try:
+        raw_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=AttributionInfo(
+                app_id=AppID(key="key"),
+                tenant_ids={},
+                referrer="something",
+                team=None,
+                feature=None,
+                parent_api=None,
+            ),
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+    except QueryException as e:
+        exception_raised = True
+        assert len(query_metadata_list) == 1
+        assert query_metadata_list[0].status.value == "error"
+        assert e.extra["stats"] == stats
+
+        assert e.extra["sql"] is not None
+    assert exception_raised
