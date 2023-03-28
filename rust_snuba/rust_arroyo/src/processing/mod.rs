@@ -139,8 +139,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                 match commit_request {
                     None => {}
                     Some(request) => {
-                        self.consumer.stage_positions(request.positions).unwrap();
-                        self.consumer.commit_positions().unwrap();
+                        self.consumer.stage_offsets(request.positions).unwrap();
+                        self.consumer.commit_offsets().unwrap();
                     }
                 };
 

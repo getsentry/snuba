@@ -4,7 +4,7 @@ import calendar
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable, List, Sequence, Tuple, Union
+from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,10 +28,13 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
-
+    @pytest.fixture(autouse=True)
+    def setup_teardown(
+        self, clickhouse_db: None, redis_db: None
+    ) -> Generator[None, None, None]:
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments
@@ -49,7 +52,8 @@ class SimpleAPITest(BaseApiTest):
         self.table = self.storage.get_table_writer().get_schema().get_table_name()
         self.generate_fizzbuzz_events()
 
-    def teardown_method(self, test_method: Callable[..., Any]) -> None:
+        yield
+
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")
@@ -157,6 +161,8 @@ class SimpleAPITest(BaseApiTest):
             return dbsize
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestApi(SimpleAPITest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -1547,11 +1553,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    def test_static_page_renders(self) -> None:
-        response = self.app.get("/config")
-        assert response.status_code == 200
-        assert len(response.data) > 100
-
     def test_exception_captured_by_sentry(self) -> None:
         events: List[Any] = []
         with Hub(Client(transport=events.append)):
@@ -2148,6 +2149,8 @@ class TestApi(SimpleAPITest):
         assert data["error"]["message"] == "stuff"
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
     entity_key = "events"
@@ -2297,6 +2300,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         }
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
     dataset = get_dataset(dataset_name)

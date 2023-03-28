@@ -1,21 +1,17 @@
 import inspect
-import logging
-import numbers
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from typing import (
     Any,
     Callable,
-    List,
     Mapping,
     MutableMapping,
     NamedTuple,
     Optional,
     Pattern,
     Sequence,
-    Tuple,
     TypeVar,
     Union,
     cast,
@@ -26,26 +22,10 @@ import sentry_sdk
 from dateutil.parser import parse as dateutil_parse
 
 from snuba import settings
-from snuba.clickhouse.escaping import escape_string
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.types import Tags
-
-logger = logging.getLogger("snuba.util")
-
-
-T = TypeVar("T")
-
-# example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
-
-QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
-SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
-
-
-def to_list(value: Union[T, List[T]]) -> List[T]:
-    return value if isinstance(value, list) else [value]
 
 
 def qualified_column(column_name: str, alias: str = "") -> str:
@@ -59,43 +39,6 @@ def qualified_column(column_name: str, alias: str = "") -> str:
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
-
-
-# TODO: Fix the type of Tuple concatenation when mypy supports it.
-def is_function(column_expr: Any, depth: int = 0) -> Optional[Tuple[Any, ...]]:
-    """
-    Returns a 3-tuple of (name, args, alias) if column_expr is a function,
-    otherwise None.
-
-    A function expression is of the form:
-
-        [func, [arg1, arg2]]  => func(arg1, arg2)
-
-    If a string argument is followed by list arg, the pair of them is assumed
-    to be a nested function call, with extra args to the outer function afterward.
-
-        [func1, [func2, [arg1, arg2], arg3]]  => func1(func2(arg1, arg2), arg3)
-
-    Although at the top level, there is no outer function call, and the optional
-    3rd argument is interpreted as an alias for the entire expression.
-
-        [func, [arg1], alias] => function(arg1) AS alias
-
-    """
-    if (
-        isinstance(column_expr, (tuple, list))
-        and len(column_expr) >= 2
-        and isinstance(column_expr[0], str)
-        and isinstance(column_expr[1], (tuple, list))
-        and (depth > 0 or len(column_expr) <= 3)
-    ):
-        assert SAFE_FUNCTION_RE.match(column_expr[0])
-        if len(column_expr) == 2:
-            return tuple(column_expr) + (None,)
-        else:
-            return tuple(column_expr)
-    else:
-        return None
 
 
 def is_condition(cond_or_list: Sequence[Any]) -> bool:
@@ -116,29 +59,6 @@ def tuplify(nested: Any) -> Any:
     if isinstance(nested, (list, tuple)):
         return tuple(tuplify(child) for child in nested)
     return nested
-
-
-def escape_literal(
-    value: Optional[Union[str, datetime, date, List[Any], Tuple[Any], numbers.Number]]
-) -> str:
-    """
-    Escape a literal value for use in a SQL clause.
-    """
-    if isinstance(value, str):
-        return escape_string(value)
-    elif isinstance(value, datetime):
-        value = value.replace(tzinfo=None, microsecond=0)
-        return "toDateTime('{}', 'Universal')".format(value.isoformat())
-    elif isinstance(value, date):
-        return "toDate('{}', 'Universal')".format(value.isoformat())
-    elif isinstance(value, (list, tuple)):
-        return "({})".format(", ".join(escape_literal(v) for v in value))
-    elif isinstance(value, numbers.Number):
-        return str(value)
-    elif value is None:
-        return ""
-    else:
-        raise ValueError("Do not know how to escape {} for SQL".format(type(value)))
 
 
 F = TypeVar("F", bound=Callable[..., Any])

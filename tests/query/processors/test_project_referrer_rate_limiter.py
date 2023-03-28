@@ -28,6 +28,7 @@ tests = [
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
+@pytest.mark.redis_db
 def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
@@ -51,6 +52,7 @@ def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) 
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
+@pytest.mark.redis_db
 def test_referrer_specified_project(unprocessed: Expression, project_id: int) -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),

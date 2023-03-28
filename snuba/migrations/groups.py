@@ -198,6 +198,8 @@ class ReplaysLoader(DirectoryLoader):
             "0006_add_is_archived_column",
             "0007_add_replay_type_column",
             "0008_add_sample_rate",
+            "0009_add_dom_index_columns",
+            "0010_add_nullable_columns",
         ]
 
 
@@ -333,6 +335,7 @@ class SearchIssuesLoader(DirectoryLoader):
             "0002_search_issues_add_tags_hash_map",
             "0003_search_issues_modify_occurrence_type_id_size",
             "0004_rebuild_search_issues_with_version",
+            "0005_search_issues_v2",
         ]
 
 

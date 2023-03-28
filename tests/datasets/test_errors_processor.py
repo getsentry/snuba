@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping
 from uuid import UUID
 
+import pytest
 import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -374,6 +375,7 @@ class ErrorEvent:
         return expected_result
 
 
+@pytest.mark.redis_db
 class TestErrorsProcessor:
     def __get_timestamps(self) -> tuple[datetime, datetime]:
         timestamp = datetime.now() - timedelta(seconds=5)

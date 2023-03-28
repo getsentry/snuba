@@ -214,6 +214,7 @@ TEST_CASES = [
 @pytest.mark.parametrize(
     "entity_name, column_name, entity_key, translated_value", TEST_CASES
 )
+@pytest.mark.clickhouse_db
 def test_metrics_processing(
     entity_name: str,
     column_name: str,
@@ -250,11 +251,11 @@ def test_metrics_processing(
     )
 
     def query_runner(
-        query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
-        assert query.get_selected_columns() == [
+        expected_columns = [
             SelectedExpression(
                 "org_id",
                 Column("_snuba_org_id", None, "org_id"),
@@ -283,6 +284,8 @@ def test_metrics_processing(
                 translated_value,
             ),
         ]
+
+        assert clickhouse_query.get_selected_columns() == expected_columns
         return QueryResult(
             result={"meta": [], "data": [], "totals": {}},
             extra={"stats": {}, "sql": "", "experiments": {}},

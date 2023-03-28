@@ -36,6 +36,7 @@ span_id_as_uint64 = int(span_id_hex, 16)
         ),
     ],
 )
+@pytest.mark.clickhouse_db
 def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
     """In order to save space in the contexts column and provide faster query
     performance, we promote span_id to a proper column and don't store it in the
@@ -86,16 +87,16 @@ def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
     # --------------------------------------------------------------------
 
     def query_verifier(
-        query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
-        assert isinstance(query, Query)
+        assert isinstance(clickhouse_query, Query)
         # in local and CI there's a table name difference
         # errors_local vs errors_dist and discover_local vs discover_dist
         # so we check using `in` instead of `==`
-        assert expected_table_name in query.get_from_clause().table_name
-        assert query.get_selected_columns() == [
+        assert expected_table_name in clickhouse_query.get_from_clause().table_name
+        assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(
                 name="contexts[trace.span_id]",
                 # the select converts the span_id into a lowecase hex string
@@ -123,7 +124,7 @@ def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
                 return super().visit_function_call(exp)
 
         verifier = SpanIdVerifier()
-        condition = query.get_condition()
+        condition = clickhouse_query.get_condition()
         assert condition is not None
         condition.accept(verifier)
         assert verifier.found_span_condition

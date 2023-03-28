@@ -4,6 +4,7 @@ import dataclasses
 import logging
 import uuid
 from datetime import datetime, timezone
+from functools import partial
 from hashlib import md5
 from typing import Any, Callable, Mapping, MutableMapping, Optional, TypeVar
 
@@ -32,6 +33,7 @@ RetentionDays = int
 
 # Limit for error_ids / trace_ids / urls array elements
 LIST_ELEMENT_LIMIT = 1000
+MAX_CLICK_EVENTS = 20
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
@@ -188,23 +190,74 @@ class ReplaysProcessor(DatasetMessageProcessor):
                 "project_id": message["project_id"],
             }
 
-            # # The following helper functions should be able to be applied in any order.
-            # # At time of writing, there are no reads of the values in the `processed`
-            # # dictionary to inform values in other functions.
-            # # Ideally we keep continue that rule
-            self._process_base_replay_event_values(processed, replay_event)
-            self._process_tags(processed, replay_event)
-            self._process_sdk(processed, replay_event)
-            self._process_kafka_metadata(metadata, processed)
+            if replay_event["type"] == "replay_actions":
+                actions = process_replay_actions(replay_event, processed, metadata)
+                return InsertBatch(actions, None)
+            else:
+                # The following helper functions should be able to be applied in any order.
+                # At time of writing, there are no reads of the values in the `processed`
+                # dictionary to inform values in other functions.
+                # Ideally we keep continue that rule
+                self._process_base_replay_event_values(processed, replay_event)
+                self._process_tags(processed, replay_event)
+                self._process_sdk(processed, replay_event)
+                self._process_kafka_metadata(metadata, processed)
 
-            # # the following operation modifies the event_dict and is therefore *not* order-independent
-            self._process_user(processed, replay_event)
-            self._process_event_hash(processed, replay_event)
-            self._process_contexts(processed, replay_event)
-            return InsertBatch([processed], None)
+                # the following operation modifies the event_dict and is therefore *not*
+                # order-independent
+                self._process_user(processed, replay_event)
+                self._process_event_hash(processed, replay_event)
+                self._process_contexts(processed, replay_event)
+                return InsertBatch([processed], None)
         except Exception:
             metrics.increment("consumer_error")
             raise
+
+
+def process_replay_actions(
+    payload: Mapping[Any, Any],
+    processed: Mapping[Any, Any],
+    metadata: KafkaMessageMetadata,
+) -> list[dict[str, Any]]:
+    """Process replay_actions message type."""
+    return [
+        {
+            # Primary-key.
+            "project_id": processed["project_id"],
+            "timestamp": raise_on_null(
+                "timestamp", maybe(to_datetime, click["timestamp"])
+            ),
+            "replay_id": to_uuid(payload["replay_id"]),
+            "segment_id": None,
+            "event_hash": click["event_hash"],
+            # Default values for non-nullable columns.
+            "trace_ids": [],
+            "error_ids": [],
+            "urls": [],
+            "platform": "javascript",
+            "user": None,
+            "sdk_name": None,
+            "sdk_version": None,
+            # Kafka columns.
+            "retention_days": processed["retention_days"],
+            "partition": metadata.partition,
+            "offset": metadata.offset,
+            # DOM Index fields.
+            "click_node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
+            "click_tag": to_string(click["tag"])[:32],
+            "click_id": to_string(click["id"])[:64],
+            "click_class": to_typed_list(
+                partial(to_capped_string, 64), click["class"][:10]
+            ),
+            "click_text": to_string(click["text"])[:1024],
+            "click_role": to_string(click["role"])[:32],
+            "click_alt": to_string(click["alt"])[:64],
+            "click_testid": to_string(click["testid"])[:64],
+            "click_aria_label": to_string(click["aria_label"])[:64],
+            "click_title": to_string(click["title"])[:64],
+        }
+        for click in payload["clicks"][:MAX_CLICK_EVENTS]
+    ]
 
 
 T = TypeVar("T")
@@ -264,6 +317,11 @@ def to_string(value: Any) -> str:
         return _encode_utf8(str(value))
 
 
+def to_capped_string(capacity: int, value: Any) -> str:
+    """Return a capped string."""
+    return to_string(value)[:capacity]
+
+
 def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
     def inline(value: Any) -> str | None:
         for enum in enumeration:
@@ -286,6 +344,12 @@ def to_typed_list(callable: Callable[[Any], T], values: list[Any]) -> list[T]:
 def to_uuid(value: Any) -> str:
     """Return a stringified uuid or err."""
     return str(uuid.UUID(str(value)))
+
+
+def raise_on_null(field: str, value: Any) -> Any:
+    if value is None:
+        raise ValueError(f"Missing data for required field: {field}")
+    return value
 
 
 def _is_list(value: Any) -> list[Any]:

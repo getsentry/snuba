@@ -40,6 +40,7 @@ backend-typing:
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
+	pip install `grep ^-- requirements.txt` -r requirements-build.txt
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
 
@@ -68,3 +69,7 @@ watch-rust-snuba:
 generate-config-docs:
 	pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
+
+lint-rust:
+	cd rust_snuba && cargo clippy -- -D warnings
+.PHONY: lint-rust

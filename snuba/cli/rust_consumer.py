@@ -16,9 +16,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.utils.streams.configuration_builder import _get_default_topic_configuration
 
-RUST_ENVIRONMENT = os.environ.get("RUST_ENVIRONMENT", "debug")
-RUST_PATH = f"rust_snuba/target/{RUST_ENVIRONMENT}/consumer"
-
 
 @click.command()
 @click.option(
@@ -242,9 +239,14 @@ def resolve_consumer_config(
 def resolve_storage_config(
     storage_name: str, storage: WritableTableStorage
 ) -> StorageConfig:
-    # TODO: Temporarily hardcoded. To be properly resolved based on the storage set.
-    hardcoded_clickhouse_cluster = ClickhouseClusterConfig(
-        host="127.0.0.1", port=9000, user="default", password="", database="default"
+    cluster = storage.get_cluster()
+    user, password = cluster.get_credentials()
+    clickhouse_cluster = ClickhouseClusterConfig(
+        host=cluster.get_host(),
+        port=cluster.get_port(),
+        user=user,
+        password=password,
+        database=cluster.get_database(),
     )
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()
@@ -254,7 +256,7 @@ def resolve_storage_config(
     return StorageConfig(
         name=storage_name,
         clickhouse_table_name=table_schema.get_table_name(),
-        clickhouse_cluster=hardcoded_clickhouse_cluster,
+        clickhouse_cluster=clickhouse_cluster,
         message_processor=MessageProcessorConfig(
             python_class_name=processor.__class__.__name__,
             python_module=processor.__class__.__module__,

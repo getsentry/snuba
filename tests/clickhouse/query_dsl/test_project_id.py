@@ -170,6 +170,7 @@ test_cases = [
 ]
 
 
+@pytest.mark.redis_db
 @pytest.mark.parametrize("query_body, expected_projects", test_cases)
 def test_find_projects(
     query_body: MutableMapping[str, Any], expected_projects: Optional[Set[int]]

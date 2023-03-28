@@ -265,17 +265,17 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
         Ok(())
     }
 
-    fn stage_positions(
+    fn stage_offsets(
         &mut self,
-        positions: HashMap<Partition, u64>,
+        offsets: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError> {
-        for (partition, position) in positions {
-            self.staged_offsets.insert(partition, position);
+        for (partition, offset) in offsets {
+            self.staged_offsets.insert(partition, offset);
         }
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
         let mut topic_map = HashMap::new();
@@ -429,7 +429,7 @@ mod tests {
             100,
         )]);
 
-        consumer.stage_positions(positions.clone()).unwrap();
+        consumer.stage_offsets(positions.clone()).unwrap();
 
         // Wait until the consumer got an assignment
         for _ in 0..10 {
@@ -441,7 +441,7 @@ mod tests {
             sleep(Duration::from_millis(200));
         }
 
-        let res = consumer.commit_positions().unwrap();
+        let res = consumer.commit_offsets().unwrap();
         assert_eq!(res, positions);
         consumer.unsubscribe().unwrap();
         consumer.close();

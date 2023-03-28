@@ -25,6 +25,7 @@ def test_transform_datetime() -> None:
     )
 
 
+@pytest.mark.redis_db
 def test_robust_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = ClickhouseError(
@@ -58,6 +59,7 @@ class TestConcurrentError(errors.Error):  # type: ignore
     code = errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES
 
 
+@pytest.mark.redis_db
 def test_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = TestError("some error")
@@ -85,6 +87,7 @@ CLUSTER_HOST = "host"
 CLUSTER_PORT = 100
 
 
+@pytest.mark.redis_db
 def test_get_fallback_host() -> None:
     FALLBACK_HOSTS_CONFIG_VAL = "host1:100,host2:100,host3:100"
     FALLBACK_HOSTS = [("host1", 100), ("host2", 100), ("host3", 100)]
@@ -98,6 +101,7 @@ def test_get_fallback_host() -> None:
     assert pool.get_fallback_host() in FALLBACK_HOSTS
 
 
+@pytest.mark.redis_db
 def test_fallback_logic() -> None:
     state.set_config("use_fallback_host_in_native_connection_pool", 1)
 
@@ -142,6 +146,7 @@ def teardown_function(_: Callable[..., Any]) -> None:
         pytest.param(False, 1, id="no retries"),
     ],
 )
+@pytest.mark.redis_db
 def test_execute_retries(retryable: bool, expected: int) -> None:
     socket_timeout_connection = mock.Mock()
     socket_timeout_connection.execute.side_effect = errors.SocketTimeoutError
