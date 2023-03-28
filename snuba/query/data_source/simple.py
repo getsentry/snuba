@@ -56,6 +56,9 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: PhysicalColumnSet
+    # By default a table has a regular passthrough policy.
+    # this is overwridden by the query pipeline if there
+    # is one defined on the storage.
     allocation_policy: AllocationPolicy = DEFAULT_PASSTHROUGH_POLICY
     final: bool = False
     sampling_rate: Optional[float] = None

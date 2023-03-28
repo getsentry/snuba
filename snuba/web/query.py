@@ -44,7 +44,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import raw_query
+from snuba.web.db_query import db_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -353,7 +353,7 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return raw_query(
+            return db_query(
                 clickhouse_query=clickhouse_query,
                 query_settings=query_settings,
                 attribution_info=attribution_info,
