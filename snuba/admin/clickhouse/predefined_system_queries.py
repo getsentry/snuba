@@ -81,3 +81,30 @@ class PartSizeWithinPartition(SystemQuery):
         bytes_on_disk > 1000000
     ORDER BY bytes_on_disk DESC
     """
+
+
+class InactiveReplicas(SystemQuery):
+    """
+    Checks for inactive replicas by querying for active_replicas < total_replicas.
+    Also checks if total_replicas < 2 as this is likely an indication
+    that a replica is not configured correctly.
+
+    Shows the replica path of the current replica. To get the replica paths of the
+    inactive replicas you need to inspect the system.zookeeper table.
+
+    """
+
+    sql = """
+    SELECT
+        total_replicas,
+        active_replicas,
+        replica_path,
+        last_queue_update,
+        zookeeper_exception,
+        is_leader,
+        is_readonly
+    FROM system.replicas
+    WHERE
+        active_replicas < total_replicas
+        OR total_replicas < 2
+    """
