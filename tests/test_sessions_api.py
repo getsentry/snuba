@@ -67,6 +67,8 @@ class BaseSessionsMockTest:
         ).write([json.dumps(session).encode("utf-8") for session in sessions])
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 class TestLegacySessionsApi(BaseSessionsMockTest, BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -283,6 +285,8 @@ class TestLegacySessionsApi(BaseSessionsMockTest, BaseApiTest):
         }
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})

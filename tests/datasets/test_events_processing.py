@@ -1,3 +1,5 @@
+import pytest
+
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
@@ -13,6 +15,7 @@ from snuba.request import Request
 from snuba.web import QueryResult
 
 
+@pytest.mark.clickhouse_db
 def test_events_processing() -> None:
     query_body = {
         "query": """
