@@ -59,7 +59,11 @@ def list() -> None:
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
 def migrate(
-    group: str, through: str, force: bool, fake: bool, log_level: Optional[str] = None
+    group: Optional[str],
+    through: str,
+    force: bool,
+    fake: bool,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     If group is specified, runs all the migrations for a group (including any pending
