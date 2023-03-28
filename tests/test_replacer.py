@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
 from unittest import mock
 
+import pytest
 import pytz
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
@@ -30,8 +31,11 @@ CONSUMER_GROUP = "consumer_group"
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestReplacer:
-    def setup_method(self) -> None:
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         from snuba.web.views import application
 
         assert application.testing is True

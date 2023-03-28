@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Tuple, Union, cast
+from typing import Any, Callable, Generator, Optional, Tuple, Union, cast
 
 import pytest
 import pytz
@@ -45,6 +45,8 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -55,11 +57,10 @@ class TestMetricsApiCounters(BaseApiTest):
         return "metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, _build_snql_post_methods: Callable[[str], Any], clickhouse_db: None
+    ) -> Generator[None, None, None]:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         # values for test data
         self.metric_id = 1001
@@ -82,7 +83,8 @@ class TestMetricsApiCounters(BaseApiTest):
         )
         self.generate_counters()
 
-    def teardown_method(self, test_method: Any) -> None:
+        yield
+
         teardown_common()
 
     def generate_counters(self) -> None:
@@ -196,6 +198,8 @@ class TestMetricsApiCounters(BaseApiTest):
         assert aggregation["total_seconds"] == 3600
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOrgMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -331,6 +335,8 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         ]
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiSets(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -427,6 +433,8 @@ class TestMetricsApiSets(BaseApiTest):
         assert aggregation["unique_values"] == self.unique_set_values
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:

@@ -1,3 +1,5 @@
+import pytest
+
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
@@ -59,6 +61,7 @@ def test_project_rate_limit_processor() -> None:
     assert len(settings.get_rate_limit_params()) == num_before
 
 
+@pytest.mark.redis_db
 def test_project_rate_limit_processor_overridden() -> None:
     referrer_name = "foo"
     settings = HTTPQuerySettings(referrer="foo")
@@ -76,6 +79,7 @@ def test_project_rate_limit_processor_overridden() -> None:
     assert rate_limiter.concurrent_limit == 10
 
 
+@pytest.mark.redis_db
 def test_project_rate_limit_processor_overridden_only_one() -> None:
     referrer_name = "foo"
     settings = HTTPQuerySettings(referrer="foo")

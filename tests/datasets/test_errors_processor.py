@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from uuid import UUID
 
+import pytest
 import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -11,6 +12,7 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.state import set_config
 
 
+@pytest.mark.redis_db
 def test_error_processor() -> None:
     set_config("check_exception_main_thread", 1)
 
@@ -373,6 +375,7 @@ def test_error_processor() -> None:
     assert processed_message == expected_message
 
 
+@pytest.mark.redis_db
 def test_exception_main_thread_false() -> None:
     set_config("check_exception_main_thread", 1)
 
@@ -735,6 +738,7 @@ def test_exception_main_thread_false() -> None:
     assert processed_message == expected_message
 
 
+@pytest.mark.redis_db
 def test_exception_main_thread_false_config_false() -> None:
     set_config("check_exception_main_thread", 0)
 
