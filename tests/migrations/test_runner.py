@@ -256,6 +256,7 @@ def test_run_all_using_through() -> None:
         == []
     )
 
+
 @pytest.mark.clickhouse_db
 def test_reverse_all() -> None:
     runner = Runner()
