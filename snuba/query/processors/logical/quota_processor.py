@@ -16,7 +16,8 @@ REFERRER_ORGANIZATION_CONFIG = "referrer_organization_thread_quota"
 class ResourceQuotaProcessor(LogicalQueryProcessor):
     """
     Applies a referrer/project thread quota to the query. Can throttle a referrer
-    or a (referrer, project) pair. The more specific restriction takes precedence
+    or a (referrer, organization) pair or a (referrer, project) pair. The more
+    specific restriction takes precedence
 
     Example:
         - SET referrer_thread_quota_MYREFERRER = 20
@@ -35,36 +36,41 @@ class ResourceQuotaProcessor(LogicalQueryProcessor):
         self.__project_field = project_field
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        enabled = get_config(ENABLED_CONFIG, 1)
-        if not enabled:
+        if not get_config(ENABLED_CONFIG, 1):
             return
 
-        referrer_thread_quota = get_config(
-            f"{REFERRER_CONFIG}_{query_settings.referrer}"
-        )
+        # Try Project + Referrer Quota
         project_ids = get_object_ids_in_query_ast(query, self.__project_field)
-        if not project_ids and not referrer_thread_quota:
-            return
-
         # TODO: Like for the rate limiter Add logic for multiple IDs
-        project_id = str(project_ids.pop()) if project_ids else "NO_PROJECT_ID"
-        project_referrer_thread_quota = get_config(
-            f"{REFERRER_PROJECT_CONFIG}_{query_settings.referrer}_{project_id}"
-        )
-
-        organization_thread_quota = get_config(
-            f"{REFERRER_ORGANIZATION_CONFIG}_{query_settings.referrer}_{query_settings.get_organization_id() or 'NO_ORG_ID'}"
-        )
-
-        # Order of this statement matters, most granular thread quota is used
-        thread_quota = (
-            project_referrer_thread_quota
-            or organization_thread_quota
-            or referrer_thread_quota
-        )
-
-        if not thread_quota:
+        project_id = str(project_ids.pop()) if project_ids else None
+        if project_id and self.__set_resource_quota(
+            query_settings,
+            f"{REFERRER_PROJECT_CONFIG}_{query_settings.referrer}_{project_id}",
+        ):
             return
 
-        assert isinstance(thread_quota, int)
-        query_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))
+        # Try Organization + Referrer Quota
+        if (
+            organization_id := query_settings.get_organization_id()
+        ) and self.__set_resource_quota(
+            query_settings,
+            f"{REFERRER_ORGANIZATION_CONFIG}_{query_settings.referrer}_{organization_id}",
+        ):
+            return
+
+        # Try just Referrer Quota
+        self.__set_resource_quota(
+            query_settings, f"{REFERRER_CONFIG}_{query_settings.referrer}"
+        )
+
+    def __set_resource_quota(
+        self, query_settings: QuerySettings, quota_config: str
+    ) -> bool:
+
+        thread_quota = get_config(quota_config)
+        if thread_quota:
+            assert isinstance(thread_quota, int)
+            query_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))
+            return True
+
+        return False
