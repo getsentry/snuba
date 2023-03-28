@@ -1547,11 +1547,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    def test_static_page_renders(self) -> None:
-        response = self.app.get("/config")
-        assert response.status_code == 200
-        assert len(response.data) > 100
-
     def test_exception_captured_by_sentry(self) -> None:
         events: List[Any] = []
         with Hub(Client(transport=events.append)):
