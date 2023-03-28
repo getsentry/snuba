@@ -133,15 +133,58 @@ def test_apply_quota(
 def test_apply_overlapping_quota() -> None:
     referrer = "MYREFERRER"
     referrer_project_limited_project_id = 1337
-    referrer_limited_project_id = 314
+    referrer_organization_rate_limited = 420
+
+    arbitrary_project_id = 314
+
     referrer_quota = 20
+    referrer_organization_quota = 10
     referrer_project_quota = 5
 
     state.set_config(ENABLED_CONFIG, 1)
-    state.set_config(f"referrer_thread_quota_{referrer}", referrer_quota)
+    state.set_config(f"{REFERRER_CONFIG}_{referrer}", referrer_quota)
     state.set_config(
-        f"referrer_project_thread_quota_{referrer}_{referrer_project_limited_project_id}",
+        f"{REFERRER_ORGANIZATION_CONFIG}_{referrer}_{referrer_organization_rate_limited}",
+        referrer_organization_quota,
+    )
+    state.set_config(
+        f"{REFERRER_PROJECT_CONFIG}_{referrer}_{referrer_project_limited_project_id}",
         referrer_project_quota,
+    )
+
+    # test with just the referrer limit applied
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, arbitrary_project_id),
+        ),
+    )
+    settings = HTTPQuerySettings()
+    settings.referrer = referrer
+    ResourceQuotaProcessor("project_id").process_query(query, settings)
+    # see that just the referrer limit was applied given that there was no config for that
+    # specific project id
+    assert settings.get_resource_quota() == ResourceQuota(max_threads=referrer_quota)
+
+    # test with the referrer_organization config
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, arbitrary_project_id),
+        ),
+    )
+    settings = HTTPQuerySettings(organization_id=referrer_organization_rate_limited)
+    settings.referrer = referrer
+    ResourceQuotaProcessor("project_id").process_query(query, settings)
+    # see that the more restrictive quota is applied
+    assert settings.get_resource_quota() == ResourceQuota(
+        max_threads=referrer_organization_quota
     )
 
     # test the limit with the referrer_project config
@@ -156,27 +199,8 @@ def test_apply_overlapping_quota() -> None:
     )
     settings = HTTPQuerySettings()
     settings.referrer = referrer
-
     ResourceQuotaProcessor("project_id").process_query(query, settings)
-    # see that the more restrictive quota is applied
+    # see that the most restrictive quota is applied
     assert settings.get_resource_quota() == ResourceQuota(
         max_threads=referrer_project_quota
     )
-
-    # test with just the referrer limit applied
-    query = Query(
-        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
-        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
-        condition=binary_condition(
-            ConditionFunctions.EQ,
-            Column("_snuba_project_id", None, "project_id"),
-            Literal(None, referrer_limited_project_id),
-        ),
-    )
-    settings = HTTPQuerySettings()
-    settings.referrer = referrer
-
-    ResourceQuotaProcessor("project_id").process_query(query, settings)
-    # see that just the referrer limit was applied given that there was no config for that
-    # specific project id
-    assert settings.get_resource_quota() == ResourceQuota(max_threads=referrer_quota)
