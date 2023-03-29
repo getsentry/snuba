@@ -92,7 +92,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>     StorageSetKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
         >>> )
         >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"})
-        >>> result = run_db_query()
+        >>> result = run_db_query(allowance)
         >>> policy.update_quota_balance(
         >>>     tenant_ids={"organization_id": 1234, "referrer": "myreferrer"},
         >>>     QueryResultOrError(result=result)
