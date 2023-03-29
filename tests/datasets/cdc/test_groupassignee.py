@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 import pytz
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -15,6 +16,8 @@ from snuba.processor import InsertBatch
 from tests.helpers import write_processed_messages
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGroupassignee:
     storage = get_writable_storage(StorageKey.GROUPASSIGNEES)
 
