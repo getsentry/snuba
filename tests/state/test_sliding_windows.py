@@ -16,6 +16,7 @@ def limiter() -> RedisSlidingWindowRateLimiter:
 TIMESTAMP_OFFSET = 100
 
 
+@pytest.mark.redis_db
 def test_empty_quota(limiter: RedisSlidingWindowRateLimiter) -> None:
     quotas = [
         Quota(
@@ -36,6 +37,7 @@ def test_empty_quota(limiter: RedisSlidingWindowRateLimiter) -> None:
     assert resp == [GrantedQuota(prefix="foo", granted=0, reached_quotas=quotas)]
 
 
+@pytest.mark.redis_db
 def test_basic(limiter: RedisSlidingWindowRateLimiter) -> None:
     quotas = [
         Quota(
@@ -74,6 +76,7 @@ def test_basic(limiter: RedisSlidingWindowRateLimiter) -> None:
         assert resp == [GrantedQuota(prefix="foo", granted=0, reached_quotas=quotas)]
 
 
+@pytest.mark.redis_db
 def test_multiple_windows(limiter: RedisSlidingWindowRateLimiter) -> None:
     quotas = [
         Quota(window_seconds=10, granularity_seconds=1, limit=10),
@@ -109,6 +112,7 @@ def test_multiple_windows(limiter: RedisSlidingWindowRateLimiter) -> None:
     assert resp == [GrantedQuota(prefix="foo", granted=5, reached_quotas=quotas[:1])]
 
 
+@pytest.mark.redis_db
 def test_conflicting_quotas(limiter: RedisSlidingWindowRateLimiter) -> None:
     quotas = [
         Quota(
