@@ -12,6 +12,7 @@ from functools import partial
 from io import StringIO
 from typing import (
     Any,
+    Dict,
     Generator,
     Mapping,
     Optional,
@@ -438,7 +439,7 @@ class NativeDriverReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
-        profile = result.profile
+        profile = cast(Optional[Dict[str, Any]], result.profile)
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
