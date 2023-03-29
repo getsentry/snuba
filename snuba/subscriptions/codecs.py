@@ -49,7 +49,6 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                 "result": {
                     "data": result["data"],
                     "meta": result["meta"],
-                    "totals": result["totals"],
                     "profile": result["profile"],
                     "trace_output": result["trace_output"],
                 },
