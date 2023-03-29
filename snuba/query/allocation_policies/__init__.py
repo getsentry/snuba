@@ -116,8 +116,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     * Every allocation policy takes a `storage_set_key` in its init. The storage_set_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_set_key it is serving. This is currently not used
-
-
     """
 
     def __init__(
