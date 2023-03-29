@@ -382,6 +382,18 @@ class ErrorEvent:
 
 @pytest.mark.redis_db
 class TestErrorsProcessor:
+
+    processor = ErrorsProcessor(
+        {
+            "environment": "environment",
+            "sentry:release": "release",
+            "sentry:dist": "dist",
+            "sentry:user": "user",
+            "transaction": "transaction_name",
+            "level": "level",
+        }
+    )
+
     def __get_timestamps(self) -> tuple[datetime, datetime]:
         timestamp = datetime.now() - timedelta(seconds=5)
         recieved = datetime.now() - timedelta(seconds=10)
@@ -455,17 +467,8 @@ class TestErrorsProcessor:
 
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
-        assert processor.process_message(payload, meta) == InsertBatch(
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
             [message.build_result(meta)], None
         )
 
@@ -497,21 +500,14 @@ class TestErrorsProcessor:
         payload[2]["data"]["tags"].append(["replayId", replay_id.hex])
 
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+
         result = message.build_result(meta)
         result["replay_id"] = str(replay_id)
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, replay_id.hex)
-        assert processor.process_message(payload, meta) == InsertBatch([result], None)
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
 
     def test_errors_replayid_tag_and_context(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -542,19 +538,12 @@ class TestErrorsProcessor:
         payload[2]["data"]["tags"].append(["replayId", replay_id.hex])
 
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+
         result = message.build_result(meta)
         result["replay_id"] = str(replay_id)
-        assert processor.process_message(payload, meta) == InsertBatch([result], None)
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
 
     def test_errors_replayid_invalid_tag(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -584,21 +573,14 @@ class TestErrorsProcessor:
         payload[2]["data"]["tags"].append(["replayId", invalid_replay_id])
 
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+
         result = message.build_result(meta)
         result = message.build_result(meta)
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, invalid_replay_id)
-        assert processor.process_message(payload, meta) == InsertBatch([result], None)
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
 
     def test_exception_main_thread_true(self) -> None:
         set_config("check_exception_main_thread", 1)
@@ -640,21 +622,13 @@ class TestErrorsProcessor:
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
 
         result = message.build_result(meta)
         result["exception_main_thread"] = True
 
-        assert processor.process_message(payload, meta) == InsertBatch([result], None)
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
 
     def test_exception_main_thread_false(self) -> None:
         set_config("check_exception_main_thread", 0)
@@ -696,16 +670,7 @@ class TestErrorsProcessor:
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
-        assert processor.process_message(payload, meta) == InsertBatch(
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
             [message.build_result(meta)], None
         )
