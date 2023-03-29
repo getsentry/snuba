@@ -127,7 +127,7 @@ def test_apply_thread_quota(
 
 def _build_test_query(
     select_expression: str,
-    allocation_policy: Optional[AllocationPolicy] = DEFAULT_PASSTHROUGH_POLICY,
+    allocation_policy: AllocationPolicy = DEFAULT_PASSTHROUGH_POLICY,
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors"))
     return (
@@ -306,7 +306,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert settings.get_resource_quota().max_threads == POLICY_THREADS
+    assert settings.get_resource_quota().max_threads == POLICY_THREADS  # type: ignore
     assert stats["max_threads"] == POLICY_THREADS
     assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
 

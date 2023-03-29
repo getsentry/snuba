@@ -57,6 +57,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         **kwargs: str,
     ) -> None:
         self._accepted_tenant_types = set(accepted_tenant_types)
+        self._storage_set_key = storage_set_key
 
     @classmethod
     def config_key(cls) -> str:
@@ -71,7 +72,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         AllocationPolicies are attached to the Table a query is executed against.
         In order to allow that comparison, this function is implemented here.
         """
-        return bool(self.__class__ == other.__class__)
+        return (
+            bool(self.__class__ == other.__class__)
+            and self._storage_set_key == other._storage_set_key
+            and self._accepted_tenant_types == other._accepted_tenant_types
+        )
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
@@ -114,11 +119,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    def __init__(
-        self, storage_set_key: StorageSetKey, accepted_tenant_types: list[str]
-    ) -> None:
-        pass
-
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         from snuba.state import get_config
 
