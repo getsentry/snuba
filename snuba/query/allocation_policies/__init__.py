@@ -57,6 +57,69 @@ class AllocationPolicyViolation(SerializableException):
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
+    """This class should be the centralized place for policy decisions regarding
+    resource usage of a clickhouse cluster. It is meant to live as a configurable item
+    on a storage.
+
+    Examples of policy decisions include:
+
+    * An organization_id may only scan this many bytes in an hour
+    * A a referrer that has scanned this many bytes has this many max_threads to run their query
+
+    To make your own allocation policy:
+
+        >>> class MyAllocationPolicy(AllocationPolicy):
+
+        >>>     def _get_quota_allowance(
+        >>>         self, tenant_ids: dict[str, str | int]
+        >>>     ) -> QuotaAllowance:
+        >>>         # before a query is run on clickhouse, make a decision whether it can be run and with
+        >>>         # how many threads
+        >>>         pass
+
+        >>>     def _update_quota_balance(
+        >>>         self,
+        >>>         tenant_ids: dict[str, str | int],
+        >>>         result_or_error: QueryResultOrError,
+        >>>     ) -> None:
+        >>>         # after the query has been run, update whatever this allocation policy
+        >>>         # keeps track of which will affect subsequent queries
+        >>>         pass
+
+    To use it:
+
+        >>> policy = MyAllocationPolicy(
+        >>>     StorageSetKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
+        >>> )
+        >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"})
+        >>> result = run_db_query()
+        >>> policy.update_quota_balance(
+        >>>     tenant_ids={"organization_id": 1234, "referrer": "myreferrer"},
+        >>>     QueryResultOrError(result=result)
+        >>> )
+
+    The allocation policy base class has two public methods:
+        * get_quota_allowance
+        * update_quota_balance
+
+    These functions can be used to modify the behaviour of ALL allocation policies, use with care.
+
+    **GOTCHAS**
+    -----------
+
+    * At time of writing (29-03-2023), not all allocation policy decisions are made in the allocation policy,
+        rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
+        are also policy decisions
+    * get_quota_allowance will throw an AllocationPolicyViolation if _get_quota_allowance().can_run is false.
+        this is to keep with the pattern in `db_query.py` which communicates error states with exceptions. There is no other
+        reason. For more information see snuba.web.db_query.db_query
+    * Every allocation policy takes a `storage_set_key` in its init. The storage_set_key is like a pseudo-tenant. In different
+        environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
+        knows which storage_set_key it is serving. This is currently not used
+
+
+    """
+
     def __init__(
         self,
         storage_set_key: StorageSetKey,
