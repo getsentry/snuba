@@ -81,7 +81,7 @@ def test_build_stream_loader() -> None:
     result_topic_spec = loader.get_subscription_result_topic_spec()
     assert (
         result_topic_spec is not None
-        and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS
+        and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS
     )
     assert_valid_policy_creator(loader.get_dead_letter_queue_policy_creator())
 
