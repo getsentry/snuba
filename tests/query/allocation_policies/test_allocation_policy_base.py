@@ -41,13 +41,13 @@ def test_passthrough_allows_queries() -> None:
 
 
 def test_raises_on_false_can_run():
-    class RejectingAllocationPolicy(PassthroughPolicy):
+    class RejectingEverythingAllocationPolicy(PassthroughPolicy):
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
             return QuotaAllowance(can_run=False, max_threads=1, explanation={})
 
     with pytest.raises(AllocationPolicyViolation):
-        RejectingAllocationPolicy(StorageSetKey("something"), []).get_quota_allowance(
-            {}
-        )
+        RejectingEverythingAllocationPolicy(
+            StorageSetKey("something"), []
+        ).get_quota_allowance({})

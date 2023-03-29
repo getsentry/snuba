@@ -1190,7 +1190,7 @@ class TestSnQLApi(BaseApiTest):
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
     def test_allocation_policy_violation(self) -> None:
-        class RejectAllocationPolicy(AllocationPolicy):
+        class RejectAllocationPolicy123(AllocationPolicy):
             def _get_quota_allowance(
                 self, tenant_ids: dict[str, str | int]
             ) -> QuotaAllowance:
@@ -1209,7 +1209,7 @@ class TestSnQLApi(BaseApiTest):
 
         with patch(
             "snuba.web.db_query._get_allocation_policy",
-            return_value=RejectAllocationPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+            return_value=RejectAllocationPolicy123("doesntmatter", ["a", "b", "c"]),  # type: ignore
         ):
             response = self.post(
                 "/discover/snql",
