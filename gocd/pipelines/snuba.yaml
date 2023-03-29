@@ -111,7 +111,13 @@ pipelines:
                                     --container-name="snuba-admin" \
                                     --container-name="transactions-consumer-new" \
                                     --container-name="transactions-subscriptions-executor" \
-                                    --container-name="transactions-subscriptions-scheduler"
+                                    --container-name="transactions-subscriptions-scheduler" \
+                                    && /devinfra/scripts/k8s/k8sdeploy.py \
+                                    --label-selector="service=snuba,is_canary=true" \
+                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --type="cronjob" \
+                                    --container-name="cleanup" \
+                                    --container-name="optimize"
                               - script: |
                                    /devinfra/scripts/canary/canarychecks.py \
                                      --wait-minutes=5
