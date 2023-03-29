@@ -53,10 +53,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def __init__(
         self,
         storage_set_key: StorageSetKey,
-        accepted_tenant_types: list[str],
+        required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
-        self._accepted_tenant_types = set(accepted_tenant_types)
+        self._required_tenant_types = set(required_tenant_types)
         self._storage_set_key = storage_set_key
 
     @classmethod
@@ -75,19 +75,19 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return (
             bool(self.__class__ == other.__class__)
             and self._storage_set_key == other._storage_set_key
-            and self._accepted_tenant_types == other._accepted_tenant_types
+            and self._required_tenant_types == other._required_tenant_types
         )
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
-        accepted_tenant_types = kwargs.pop("accepted_tenant_types", None)
+        required_tenant_types = kwargs.pop("required_tenant_types", None)
         storage_set_key = kwargs.pop("storage_set_key", None)
         assert isinstance(
-            accepted_tenant_types, list
-        ), "accepted_tenant_types must be a list of strings"
+            required_tenant_types, list
+        ), "required_tenant_types must be a list of strings"
         assert isinstance(storage_set_key, str)
         return cls(
-            accepted_tenant_types=accepted_tenant_types,
+            required_tenant_types=required_tenant_types,
             storage_set_key=StorageSetKey(storage_set_key),
             **kwargs,
         )
@@ -135,5 +135,5 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageSetKey("default.no_storage_set_key"), accepted_tenant_types=[]
+    StorageSetKey("default.no_storage_set_key"), required_tenant_types=[]
 )
