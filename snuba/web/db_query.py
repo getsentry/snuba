@@ -620,7 +620,14 @@ def _raw_query(
 def _get_allocation_policy(
     clickhouse_query: Union[Query, CompositeQuery[Table]]
 ) -> AllocationPolicy:
-    """FIXME: docstring, testing"""
+    """given a query, find the allocation policy in its from clause, in the case
+    of CompositeQuery, follow the from clause until something is querying from a table
+    and use that table's allocation policy.
+
+    **GOTCHAS**
+        - Does not handle joins, will return PassthroughPolicy
+        - In case of error, returns PassthroughPolicy, fails quietly (but logs to sentry)
+    """
     from_clause = clickhouse_query.get_from_clause()
     if isinstance(from_clause, Table):
         return from_clause.allocation_policy
