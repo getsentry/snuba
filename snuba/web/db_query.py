@@ -148,7 +148,7 @@ def update_query_metadata_and_stats(
             sql_anonymized=sql_anonymized,
             start_timestamp=start,
             end_timestamp=end,
-            stats=stats,
+            stats=dict(stats),
             status=status,
             request_status=request_status,
             profile=generate_profile(query),
