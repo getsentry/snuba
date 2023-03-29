@@ -11,6 +11,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
+    AllocationPolicy,
     PassthroughPolicy,
 )
 from snuba.query.composite import CompositeQuery
@@ -58,7 +59,7 @@ composite_query = CompositeQuery(
 )
 
 
-class BadJoinClause(JoinClause):
+class BadJoinClause(JoinClause[Table]):
     # the join clause functionality is not supported,
     # doesn't matter that the join clause is not valid
     # if we support join clauses + allocation_policies
@@ -67,7 +68,7 @@ class BadJoinClause(JoinClause):
         pass
 
 
-join_query: CompositeQuery = CompositeQuery(
+join_query = CompositeQuery(
     from_clause=BadJoinClause(
         left_node=mock.Mock(),
         right_node=mock.Mock(),
@@ -125,6 +126,7 @@ join_query: CompositeQuery = CompositeQuery(
     ],
 )
 def test__get_allocation_policy(
-    query: Union[ClickhouseQuery, CompositeQuery[Table]], expected_allocation_policy
+    query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    expected_allocation_policy: AllocationPolicy,
 ) -> None:
     assert _get_allocation_policy(query) == expected_allocation_policy
