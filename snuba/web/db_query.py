@@ -667,9 +667,9 @@ def db_query(
     ** GOTCHAS **
     --------------
 
-    * Whenever something goes wrong in this function, it is wrapped in a QueryException,
-        that exception neeeds to have whatever stats were collected in this function
-        because the caller writes that information to the querylog. The cause QueryException
+    * Whenever something goes wrong during the running of this function, it is wrapped in a QueryException,
+        that exception neeeds to have whatever stats were collected during this function's execution
+        because the caller writes that information to the querylog. The cause of the QueryException
         is also read at the very top level of this application (snuba/web/views.py) to decide
         what status code to send back to the service caller. Changing that mechanism would mean
         changing those layers as well
