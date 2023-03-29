@@ -259,6 +259,8 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
 
+# Dataset readiness states supported in this environment
+SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 

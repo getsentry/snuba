@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
+import rapidjson
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -27,14 +28,15 @@ class TestReplaysApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
-        replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
-        assert replays_storage is not None
-        write_raw_unprocessed_events(replays_storage, [self.event])
         self.next_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
 
     def test_default_json_encoder(self) -> None:
+        replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
+        assert replays_storage is not None
+        write_raw_unprocessed_events(replays_storage, [self.event])
+
         response = self.post(
             "/replays/snql",
             data=json.dumps(
@@ -64,5 +66,47 @@ class TestReplaysApi(BaseApiTest):
                     "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
                     "36e980a9-c602-4cde-9f5d-089f15b83b5f",
                 ],
+            }
+        ]
+
+    def test_sdk_user_title_nullability(self) -> None:
+        payload = rapidjson.loads(bytes(self.event["payload"]))
+        assert isinstance(payload, dict)
+
+        payload.pop("user")
+        payload.pop("sdk")
+        payload["tags"].pop("transaction")
+        self.event["payload"] = list(json.dumps(payload).encode())  # type: ignore
+
+        replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
+        assert replays_storage is not None
+        write_raw_unprocessed_events(replays_storage, [self.event])
+
+        response = self.post(
+            "/replays/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (replays)
+                    SELECT title, user, sdk_name, sdk_version
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 10 OFFSET 0
+                    """,
+                    "debug": True,
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+
+        assert data["data"] == [
+            {
+                "title": "",
+                "user": None,
+                "sdk_name": None,
+                "sdk_version": None,
             }
         ]
