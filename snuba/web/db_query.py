@@ -504,10 +504,6 @@ def _get_query_settings_from_config(
 
 
 def _raw_query(
-    # TODO: Passing the whole clickhouse query here is needed as long
-    # as the execute method depends on it. Otherwise we can make this
-    # file rely either entirely on clickhouse query or entirely on
-    # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -522,6 +518,10 @@ def _raw_query(
     trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
+    """
+    this function is responsible for running the clickhouse query and if there is any error, constructing the
+    QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
+    """
     clickhouse_query_settings = _get_query_settings_from_config(
         reader.get_query_settings_prefix()
     )
