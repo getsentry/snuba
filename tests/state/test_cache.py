@@ -71,6 +71,7 @@ def noop(value: int) -> None:
     return None
 
 
+@pytest.mark.redis_db
 def test_short_circuit(backend: Cache[bytes]) -> None:
     set_config("read_through_cache.short_circuit", 1)
     key = "key"
@@ -88,6 +89,7 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
         backend.get_readthrough(key, function, noop, 5) == value
 
 
+@pytest.mark.redis_db
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
@@ -104,6 +106,7 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
         backend.get_readthrough(key, function, noop, 5) == value
 
 
+@pytest.mark.redis_db
 def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
@@ -118,6 +121,7 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
 
+@pytest.mark.redis_db
 def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     key = "key"
 
@@ -131,6 +135,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         backend.get_readthrough(key, function, noop, 1)
 
 
+@pytest.mark.redis_db
 def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
     key = "key"
 
@@ -147,6 +152,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
     assert setter.result() == waiter.result()
 
 
+@pytest.mark.redis_db
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
 
@@ -184,6 +190,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         ),
     ],
 )
+@pytest.mark.redis_db
 def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
@@ -211,6 +218,7 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
         waiter_slow.result()
 
 
+@pytest.mark.redis_db
 def test_transient_error(backend: Cache[bytes]) -> None:
     key = "key"
 
@@ -242,6 +250,7 @@ def test_transient_error(backend: Cache[bytes]) -> None:
     assert waiter.result() == b"hello"
 
 
+@pytest.mark.redis_db
 def test_notify_queue_ttl() -> None:
     # Tests that waiting clients can be notified of the cache status
     # even with network delays. This test will break if the notify queue

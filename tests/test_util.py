@@ -1,11 +1,4 @@
-import pytest
-
 from snuba.clickhouse.escaping import escape_alias, escape_identifier
-
-
-@pytest.fixture
-def run_migrations() -> None:
-    pass
 
 
 def test_escape_identifier() -> None:

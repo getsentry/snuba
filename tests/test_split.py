@@ -27,7 +27,8 @@ from snuba.reader import Reader
 from snuba.web import QueryResult
 
 
-def setup_function(function) -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown(redis_db: None) -> None:
     state.set_config("use_split", 1)
 
 
@@ -53,6 +54,8 @@ split_specs = [
     "dataset_name, entity_name, id_column, project_column, timestamp_column",
     split_specs,
 )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_no_split(
     dataset_name: str,
     entity_name: str,
@@ -67,7 +70,7 @@ def test_no_split(
     )
 
     def do_query(
-        query: ClickhouseQuery,
+        clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
@@ -90,6 +93,7 @@ def test_no_split(
     strategy.execute(query, HTTPQuerySettings(), do_query)
 
 
+@pytest.mark.redis_db
 def test_set_limit_on_split_query():
     storage = get_entity(EntityKey.EVENTS).get_all_storages()[0]
     query = ClickhouseQuery(
@@ -103,7 +107,9 @@ def test_set_limit_on_split_query():
 
     query_run_count = 0
 
-    def do_query(query: ClickhouseQuery, query_settings: QuerySettings) -> QueryResult:
+    def do_query(
+        clickhouse_query: ClickhouseQuery, query_settings: QuerySettings
+    ) -> QueryResult:
         nonlocal query_run_count
         query_run_count += 1
         if query_run_count == 1:
@@ -125,7 +131,7 @@ def test_set_limit_on_split_query():
                 extra={},
             )
         else:
-            assert query.get_limit() == 2
+            assert clickhouse_query.get_limit() == 2
             return QueryResult({}, {})
 
     ColumnSplitQueryStrategy(
@@ -176,6 +182,8 @@ test_data_col = [
     "dataset_name, entity_name, id_column, project_column, timestamp_column, first_query_data, second_query_data",
     test_data_col,
 )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_col_split(
     dataset_name: str,
     entity_name: str,
@@ -186,7 +194,7 @@ def test_col_split(
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
     def do_query(
-        query: ClickhouseQuery,
+        clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
@@ -378,6 +386,7 @@ column_split_tests = [
     "id_column, project_column, timestamp_column, query, expected_result",
     column_split_tests,
 )
+@pytest.mark.redis_db
 def test_col_split_conditions(
     id_column: str, project_column: str, timestamp_column: str, query, expected_result
 ) -> None:
@@ -408,6 +417,7 @@ def test_col_split_conditions(
     ) == expected_result
 
 
+@pytest.mark.redis_db
 def test_time_split_ast() -> None:
     """
     Test that the time split transforms the query properly both on the old representation

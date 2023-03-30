@@ -107,6 +107,8 @@ test_data = [
 
 
 class TestOptimize:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date, current_time",
         test_data,
@@ -234,6 +236,7 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
 
+@pytest.mark.clickhouse_db
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.

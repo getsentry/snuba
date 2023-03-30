@@ -6,6 +6,7 @@ from typing import Callable, Optional, Sequence
 from arroyo import Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
+from arroyo.dlq import DlqLimit, DlqPolicy, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
@@ -76,6 +77,8 @@ class ConsumerBuilder:
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
     ) -> None:
+        self.__run_dlq_test = get_config(f"dlq_test_{storage_key.value}") == 1
+
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
@@ -235,7 +238,13 @@ class ConsumerBuilder:
             commit_retry_policy=self.__commit_retry_policy,
         )
 
-        return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
+        dlq_policy = None
+        if self.__run_dlq_test:
+            dlq_policy = DlqPolicy(NoopDlqProducer(), DlqLimit())
+
+        return StreamProcessor(
+            consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
+        )
 
     def build_streaming_strategy_factory(
         self,
