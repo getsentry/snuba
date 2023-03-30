@@ -346,6 +346,8 @@ def test_produce_result() -> None:
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
+        "profile": {},
+        "trace_output": "",
     }
 
     message = Message(
