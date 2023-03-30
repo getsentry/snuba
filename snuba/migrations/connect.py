@@ -116,4 +116,4 @@ def check_for_inactive_replicas() -> None:
                 )
 
     if inactive_replica_info:
-        raise InactiveClickhouseReplica("\n".join(set(inactive_replica_info)))
+        raise InactiveClickhouseReplica("\n".join(sorted(set(inactive_replica_info))))
