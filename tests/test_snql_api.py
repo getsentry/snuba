@@ -1181,3 +1181,49 @@ class TestSnQLApi(BaseApiTest):
         assert (
             response.status_code == 500
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
+
+    def test_events_discover_exception_main_thread(self) -> None:
+        query_discover = f"""
+            MATCH (discover)
+            SELECT event_id, project_id
+            WHERE project_id = {self.project_id}
+            AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+            AND timestamp < toDateTime('{self.next_time.isoformat()}')
+            AND exception_main_thread IS NULL
+        """
+        query_events = f"""
+            MATCH (events)
+            SELECT event_id, project_id
+            WHERE project_id = {self.project_id}
+            AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+            AND timestamp < toDateTime('{self.next_time.isoformat()}')
+            AND exception_main_thread IS NULL
+        """
+        response1 = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": query_discover,
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+        data1 = json.loads(response1.data)
+
+        response2 = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": query_events,
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+        data2 = json.loads(response2.data)
+
+        assert 1 == len(data1["data"]) == len(data2["data"])
+        assert data1["data"] == data2["data"]
