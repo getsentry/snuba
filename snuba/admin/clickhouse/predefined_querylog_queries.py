@@ -237,3 +237,55 @@ class ChangeInTotalByteScannedPercentage(QuerylogQuery):
         round(bytes_scanned_p1 / all_bytes_scanned_p1 * 100, 4) AS pct_bytes_scanned_p1,
         round(pct_bytes_scanned_p1 - pct_bytes_scanned_p0, 4) AS delta_pct
     """
+
+
+class DurationForReferrerByOrganizations(QuerylogQuery):
+    """For a given referrer, show the top organizations with the highest cumulative request duration over time."""
+
+    sql = """
+    SELECT time, organization, c
+    FROM (
+        SELECT
+            toStartOfTenMinutes(timestamp) AS time,
+            sum(duration_ms) AS c,
+            organization
+        FROM querylog_local
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - (1 * 3600))
+        AND time < now()
+        GROUP BY
+            organization,
+            time
+        ORDER BY
+            time ASC,
+            c DESC
+        LIMIT 5 BY time
+    )
+    ORDER BY c DESC
+    """
+
+
+class BytesScannedForReferrerByOrganization(QuerylogQuery):
+    """For a given referrer, show the top organizations with the highest cumulative bytes scanned over time. Duration is how many seconds ago to begin."""
+
+    sql = """
+    SELECT time, organization, c
+    FROM (
+        SELECT
+            toStartOfTenMinutes(timestamp) AS time,
+            sum(arraySum(clickhouse_queries.bytes_scanned)) AS c,
+            organization
+        FROM querylog_local
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - ({{duration}}))
+        AND time < now()
+        GROUP BY
+            organization,
+            time
+        ORDER BY
+            time ASC,
+            c DESC
+        LIMIT 5 BY time
+    )
+    ORDER BY c DESC
+    """
