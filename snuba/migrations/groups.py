@@ -61,56 +61,35 @@ class ReadinessState(Enum):
 
 
 class _MigrationGroup:
-    def __init__(
-        self, value: str, loader: GroupLoader, readiness_state: ReadinessState
-    ) -> None:
-        self.value = value
+    def __init__(self, loader: GroupLoader, readiness_state: ReadinessState) -> None:
         self.loader = loader
         self.readiness_state = readiness_state
 
 
 _REGISTERED_MIGRATION_GROUPS = {
-    MigrationGroup.SYSTEM: _MigrationGroup(
-        "system", SystemLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.EVENTS: _MigrationGroup(
-        "events", EventsLoader(), ReadinessState.COMPLETE
-    ),
+    MigrationGroup.SYSTEM: _MigrationGroup(SystemLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.EVENTS: _MigrationGroup(EventsLoader(), ReadinessState.COMPLETE),
     MigrationGroup.TRANSACTIONS: _MigrationGroup(
-        "transactions", TransactionsLoader(), ReadinessState.COMPLETE
+        TransactionsLoader(), ReadinessState.COMPLETE
     ),
-    MigrationGroup.DISCOVER: _MigrationGroup(
-        "discover", DiscoverLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.METRICS: _MigrationGroup(
-        "metrics", MetricsLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.OUTCOMES: _MigrationGroup(
-        "outcomes", OutcomesLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.SESSIONS: _MigrationGroup(
-        "sessions", SessionsLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.QUERYLOG: _MigrationGroup(
-        "querylog", QuerylogLoader(), ReadinessState.COMPLETE
-    ),
-    MigrationGroup.PROFILES: _MigrationGroup(
-        "profiles", ProfilesLoader(), ReadinessState.COMPLETE
-    ),
+    MigrationGroup.DISCOVER: _MigrationGroup(DiscoverLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.METRICS: _MigrationGroup(MetricsLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.OUTCOMES: _MigrationGroup(OutcomesLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.SESSIONS: _MigrationGroup(SessionsLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.QUERYLOG: _MigrationGroup(QuerylogLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.PROFILES: _MigrationGroup(ProfilesLoader(), ReadinessState.COMPLETE),
     MigrationGroup.FUNCTIONS: _MigrationGroup(
-        "functions", FunctionsLoader(), ReadinessState.COMPLETE
+        FunctionsLoader(), ReadinessState.COMPLETE
     ),
-    MigrationGroup.REPLAYS: _MigrationGroup(
-        "replays", ReplaysLoader(), ReadinessState.COMPLETE
-    ),
+    MigrationGroup.REPLAYS: _MigrationGroup(ReplaysLoader(), ReadinessState.COMPLETE),
     MigrationGroup.GENERIC_METRICS: _MigrationGroup(
-        "generic_metrics", GenericMetricsLoader(), ReadinessState.COMPLETE
+        GenericMetricsLoader(), ReadinessState.COMPLETE
     ),
     MigrationGroup.TEST_MIGRATION: _MigrationGroup(
-        "test_migration", TestMigrationLoader(), ReadinessState.LIMITED
+        TestMigrationLoader(), ReadinessState.LIMITED
     ),
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
-        "search_issues", SearchIssuesLoader(), ReadinessState.PARTIAL
+        SearchIssuesLoader(), ReadinessState.PARTIAL
     ),
 }
 
