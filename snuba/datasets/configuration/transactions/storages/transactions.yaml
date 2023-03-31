@@ -6,6 +6,8 @@ storage:
   key: transactions
   set_key: transactions
 
+readiness_state: complete
+
 schema:
   columns:
     [

@@ -13,7 +13,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.processor import InsertBatch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import set_config
 
 
 @dataclass
@@ -583,7 +582,6 @@ class TestErrorsProcessor:
         )
 
     def test_exception_main_thread_true(self) -> None:
-        set_config("check_exception_main_thread", 1)
         timestamp, recieved = self.__get_timestamps()
         message = ErrorEvent(
             event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
@@ -631,7 +629,6 @@ class TestErrorsProcessor:
         )
 
     def test_exception_main_thread_false(self) -> None:
-        set_config("check_exception_main_thread", 0)
         timestamp, recieved = self.__get_timestamps()
         message = ErrorEvent(
             event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
@@ -659,11 +656,11 @@ class TestErrorsProcessor:
                     },
                     {
                         "id": 2,
-                        "main": False,
+                        "main": True,
                     },
                     {
                         "id": 3,
-                        "main": True,
+                        "main": False,
                     },
                 ]
             },
@@ -671,6 +668,9 @@ class TestErrorsProcessor:
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
+        result = message.build_result(meta)
+        result["exception_main_thread"] = False
+
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], None
+            [result], None
         )

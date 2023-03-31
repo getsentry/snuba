@@ -4,6 +4,7 @@ name: querylog
 storage:
   key: querylog
   set_key: querylog
+readiness_state: partial
 schema:
   columns:
     [
