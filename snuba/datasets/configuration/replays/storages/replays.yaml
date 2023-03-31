@@ -4,6 +4,7 @@ name: replays
 storage:
   key: replays
   set_key: replays
+readiness_state: complete
 schema:
   columns:
     [

@@ -4,6 +4,7 @@ name: metrics_raw
 storage:
   key: metrics_raw
   set_key: metrics
+readiness_state: complete
 schema:
   columns:
     [

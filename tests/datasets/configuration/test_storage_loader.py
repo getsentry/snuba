@@ -32,6 +32,8 @@ storage:
   key: test-storage
   set_key: test-storage-set
 
+readiness_state: limited
+
 schema:
   columns:
     [
