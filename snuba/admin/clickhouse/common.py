@@ -29,9 +29,9 @@ def is_valid_node(
 ) -> bool:
     nodes = [
         cluster.get_query_node(),
+        *cluster.get_local_nodes(),
+        *cluster.get_distributed_nodes(),
     ]
-    if storage_name != "discover":
-        nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
 
     return any(node.host_name == host and node.port == port for node in nodes)
 
