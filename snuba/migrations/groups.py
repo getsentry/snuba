@@ -1,5 +1,6 @@
 from enum import Enum
 
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.group_loader import (
     DiscoverLoader,
     EventsLoader,
@@ -49,13 +50,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
 }
-
-
-class ReadinessState(Enum):
-    LIMITED = "limited"
-    DEPRECATE = "deprecate"
-    PARTIAL = "partial"
-    COMPLETE = "complete"
 
 
 class _MigrationGroup:
