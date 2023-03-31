@@ -2,7 +2,13 @@ from abc import abstractmethod
 from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies import ProcessingStrategy, ProcessingStrategyFactory
+from arroyo.processing.strategies import (
+    FilterStep,
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+    Reduce,
+    RunTaskInThreads,
+)
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
     DeadLetterQueue,
@@ -10,9 +16,6 @@ from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.processing.strategies.filter import FilterStep
-from arroyo.processing.strategies.reduce import Reduce
-from arroyo.processing.strategies.run_task import RunTaskInThreads
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
