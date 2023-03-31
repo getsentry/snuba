@@ -656,17 +656,20 @@ class TestErrorsProcessor:
                     },
                     {
                         "id": 2,
-                        "main": False,
+                        "main": True,
                     },
                     {
                         "id": 3,
-                        "main": True,
+                        "main": False,
                     },
                 ]
             },
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
+        result["exception_main_thread"] = False
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [message.build_result(meta)], None
