@@ -1,4 +1,5 @@
 migrations:
-- snuba/group_loader.py
+- snuba/migrations/group_loader.py
+- snuba/migrations/groups.py
 - snuba/snuba_migrations/**/*
 - snuba/migrations/system_migrations/*
