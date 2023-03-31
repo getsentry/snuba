@@ -373,7 +373,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
                         if main is None or id is None:
                             continue
 
-                        if id == thread_id:
+                        if id == thread_id and main is True:
                             ## if it's the main thread, mark it as such and stop it
                             exception_main_thread = True
                             break
