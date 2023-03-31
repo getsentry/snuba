@@ -3,40 +3,27 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
 from importlib import import_module
-from typing import Any, Dict, Sequence, Tuple
+from typing import Sequence
 
-from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
 
 
 class MigrationGroup(Enum):
-    SYSTEM = "system", "complete"
-    EVENTS = "events", "complete"
-    TRANSACTIONS = "transactions", "complete"
-    DISCOVER = "discover", "complete"
-    OUTCOMES = "outcomes", "complete"
-    METRICS = "metrics", "complete"
-    SESSIONS = "sessions", "complete"
-    QUERYLOG = "querylog", "complete"
-    PROFILES = "profiles", "complete"
-    FUNCTIONS = "functions", "complete"
-    REPLAYS = "replays", "complete"
-    GENERIC_METRICS = "generic_metrics", "complete"
-    TEST_MIGRATION = "test_migration", "limited"
-    SEARCH_ISSUES = "search_issues", "partial"
-
-    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> MigrationGroup:
-        obj = object.__new__(cls)
-        obj._value_ = args[0]
-        return obj
-
-    def __init__(self, value: str, readiness_state: str):
-        self._readiness_state_ = ReadinessState(readiness_state)
-
-    @property
-    def readiness_state(self) -> ReadinessState:
-        return self._readiness_state_
+    SYSTEM = "system"
+    EVENTS = "events"
+    TRANSACTIONS = "transactions"
+    DISCOVER = "discover"
+    OUTCOMES = "outcomes"
+    METRICS = "metrics"
+    SESSIONS = "sessions"
+    QUERYLOG = "querylog"
+    PROFILES = "profiles"
+    FUNCTIONS = "functions"
+    REPLAYS = "replays"
+    GENERIC_METRICS = "generic_metrics"
+    TEST_MIGRATION = "test_migration"
+    SEARCH_ISSUES = "search_issues"
 
 
 # Migration groups are mandatory by default. Specific groups can
