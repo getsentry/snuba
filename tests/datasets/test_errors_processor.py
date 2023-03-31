@@ -672,5 +672,5 @@ class TestErrorsProcessor:
         result["exception_main_thread"] = False
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], None
+            [result], None
         )
