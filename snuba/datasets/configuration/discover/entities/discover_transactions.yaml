@@ -244,7 +244,6 @@ storages:
               - exception_frames.colno
               - exception_frames.lineno
               - exception_frames.stack_level
-              - exception_main_thread
               - modules.name
               - modules.version
       subscriptables:
