@@ -4,6 +4,7 @@ name: generic_metrics_counters
 storage:
   key: generic_metrics_counters
   set_key: generic_metrics_counters
+readiness_state: complete
 schema:
   columns:
     [

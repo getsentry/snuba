@@ -4,6 +4,7 @@ name: outcomes_raw
 storage:
   key: outcomes_raw
   set_key: outcomes
+readiness_state: complete
 schema:
   columns:
     [
