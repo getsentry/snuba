@@ -546,7 +546,10 @@ class ReplaceGroupReplacement(Replacement):
             to_timestamp=self.to_timestamp,
         )
 
-        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+        return (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            % query_args
+        )
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return f"""\
