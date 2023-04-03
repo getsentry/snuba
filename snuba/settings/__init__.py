@@ -250,14 +250,8 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 # Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "querylog",
-    "profiles",
-    "functions",
     "test_migration",
-    "search_issues",
 }
-
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
-    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
