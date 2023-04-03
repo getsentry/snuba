@@ -4,6 +4,7 @@ name: profiles
 storage:
   key: profiles
   set_key: profiles
+readiness_state: complete
 schema:
   columns:
     [

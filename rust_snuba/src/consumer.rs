@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use log;
-
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, commit_offsets
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic};
@@ -15,7 +13,6 @@ use rust_arroyo::types::{Message, Topic};
 use pyo3::prelude::*;
 
 use crate::config;
-use crate::strategies::noop::Noop;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -39,25 +36,20 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     }
 
     fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
-        for row in message.payload.rows {
+        for row in message.payload().rows {
             let decoded_row = String::from_utf8_lossy(&row);
             log::debug!("insert: {:?}", decoded_row);
         }
 
-        self.next_step.submit(Message {
-            partition: message.partition,
-            offset: message.offset,
-            payload: (),
-            timestamp: message.timestamp,
-        })
+        self.next_step.submit(message.replace(()))
     }
 
     fn close(&mut self) {
-        self.next_step.close()
+        self.next_step.close();
     }
 
     fn terminate(&mut self) {
-        self.next_step.terminate()
+        self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
@@ -72,10 +64,25 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
 ) {
-    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw))
+    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw));
 }
 
 pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str) {
+    struct ConsumerStrategyFactory {
+        processor_config: config::MessageProcessorConfig,
+    }
+
+    impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
+        fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+            let transform_step = PythonTransformStep::new(
+                self.processor_config.clone(),
+                ClickhouseWriterStep::new(commit_offsets::new(Duration::from_secs(1))),
+            )
+            .unwrap();
+            Box::new(transform_step)
+        }
+    }
+
     env_logger::init();
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     // TODO: Support multiple storages
@@ -85,21 +92,6 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     let first_storage = &consumer_config.storages[0];
 
     log::info!("Starting consumer for {:?}", first_storage.name,);
-
-    struct ConsumerStrategyFactory {
-        processor_config: config::MessageProcessorConfig,
-    }
-
-    impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
-        fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let transform_step = PythonTransformStep::new(
-                self.processor_config.clone(),
-                ClickhouseWriterStep::new(Noop),
-            )
-            .unwrap();
-            Box::new(transform_step)
-        }
-    }
 
     let broker_config: HashMap<_, _> = consumer_config
         .raw_topic

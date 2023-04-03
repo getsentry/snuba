@@ -21,6 +21,7 @@ import simplejson as json
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings
 from snuba.redis import RedisClientKey, get_redis_client
@@ -354,7 +355,7 @@ def _record_query_delivery_callback(
         logger.warning("Could not record query due to error: %r", error)
 
 
-def record_query(query_metadata: Mapping[str, Any]) -> None:
+def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
     max_redis_queries = 200
     try:
         producer = _kafka_producer()

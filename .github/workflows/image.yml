@@ -11,7 +11,7 @@ jobs:
     env:
       IMG_CACHE: ghcr.io/getsentry/snuba:${{ matrix.arch }}-latest
       IMG_VERSIONED: ghcr.io/getsentry/snuba:${{ matrix.arch }}-${{ github.sha }}
-      BUILD_BASE: ${{ matrix.arch == 'arm64' && 'base' || 'build_admin_ui' }}
+      SHOULD_BUILD_ADMIN_UI: ${{ matrix.arch == 'arm64' && 'false' || 'true' }}
       NODE_VERSION: 19.x
     steps:
     - uses: actions/checkout@v3
@@ -40,7 +40,8 @@ jobs:
         docker buildx build \
             "${args[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg BUILD_BASE="$BUILD_BASE" \
+            --build-arg SHOULD_BUILD_ADMIN_UI="$SHOULD_BUILD_ADMIN_UI" \
+            --build-arg SHOULD_BUILD_RUST=false \
             --platform linux/${{ matrix.arch }} \
             --tag "$IMG_VERSIONED" \
             --target application \

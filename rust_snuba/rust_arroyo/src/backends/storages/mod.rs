@@ -1,5 +1,5 @@
 pub mod memory;
-use super::super::types::{Message, Partition, Topic};
+use super::super::types::{BrokerMessage, Partition, Topic};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
@@ -60,7 +60,7 @@ pub trait MessageStorage<TPayload: Clone> {
         &self,
         partition: &Partition,
         offset: u64,
-    ) -> Result<Option<Message<TPayload>>, ConsumeError>;
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError>;
 
     // Produce a single message to the provided partition.
     //

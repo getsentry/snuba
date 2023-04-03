@@ -82,6 +82,7 @@ def test_org_rate_limit_processor(unprocessed: Expression, org_id: int) -> None:
 
 
 @pytest.mark.parametrize("unprocessed, org_id", tests)
+@pytest.mark.redis_db
 def test_org_rate_limit_processor_overridden(
     unprocessed: Expression, org_id: int
 ) -> None:
@@ -104,6 +105,7 @@ def test_org_rate_limit_processor_overridden(
     assert rate_limiter.concurrent_limit == 10
 
 
+@pytest.mark.redis_db
 def test_namespaced_rate_limit() -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),

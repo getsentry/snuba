@@ -164,6 +164,11 @@ schema:
         },
     },
     {
+      name: exception_main_thread,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 8 },
+    },
+    {
       name: modules,
       type: Nested,
       args:

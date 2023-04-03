@@ -40,8 +40,6 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
     partition of data, defined by the `key` constructor param.
     """
 
-    KEY_TEMPLATE = "subscriptions:{}:{}"
-
     def __init__(
         self, client: RedisClientType, entity: EntityKey, partition_id: PartitionId
     ):

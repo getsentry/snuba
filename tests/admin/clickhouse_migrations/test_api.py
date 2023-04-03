@@ -31,6 +31,7 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.clickhouse_db
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
     with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
@@ -75,6 +76,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         ]
 
 
+@pytest.mark.clickhouse_db
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
@@ -135,6 +137,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     assert sorted_response == sorted_expected_json
 
 
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 @patch(
     "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",

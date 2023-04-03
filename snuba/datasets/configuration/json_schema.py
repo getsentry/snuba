@@ -11,25 +11,11 @@ import sentry_sdk
 
 TYPE_STRING = {"type": "string"}
 TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
-TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
-TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 
 def string_with_description(description: str) -> dict[str, str]:
     return {**TYPE_STRING, "description": description}
 
-
-FUNCTION_CALL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "type": {
-            "type": "string",
-            "description": "Name of FunctionCall class config key",
-        },
-        "args": {"type": "array", "items": {"type": "string"}, "description": ""},
-    },
-    "additionalProperties": False,
-}
 
 STREAM_LOADER_SCHEMA = {
     "type": "object",
@@ -105,11 +91,6 @@ STREAM_LOADER_SCHEMA = {
     },
     "additionalProperties": False,
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
-}
-
-NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA = {
-    "type": ["array", "null"],
-    "items": TYPE_STRING,
 }
 
 ######
@@ -480,6 +461,12 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
     },
 }
 
+READINESS_STATE_SCHEMA = {
+    "type": "string",
+    "enum": ["limited", "deprecate", "partial", "complete"],
+    "description": "The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with `limited` which only exposes the storage to CI and local development.",
+}
+
 STORAGE_AND_MAPPER = {
     "type": "object",
     "properties": {
@@ -553,6 +540,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "kind": {"const": "readable_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the readable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
@@ -563,11 +551,11 @@ V1_READABLE_STORAGE_SCHEMA = {
         "kind",
         "name",
         "storage",
+        "readiness_state",
         "schema",
     ],
     "additionalProperties": False,
 }
-
 
 V1_WRITABLE_STORAGE_SCHEMA = {
     "title": "Writable Storage Schema",
@@ -577,6 +565,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "kind": {"const": "writable_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
@@ -593,6 +582,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "kind",
         "name",
         "storage",
+        "readiness_state",
         "schema",
         "stream_loader",
     ],
@@ -609,6 +599,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "kind": {"const": "cdc_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "default_control_topic": TYPE_STRING,

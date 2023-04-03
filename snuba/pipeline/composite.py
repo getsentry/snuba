@@ -440,7 +440,11 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         for p in self.__composite_processors:
             p.process_query(query, query_settings)
 
-        return runner(query, query_settings, self.__cluster.get_reader())
+        return runner(
+            clickhouse_query=query,
+            query_settings=query_settings,
+            reader=self.__cluster.get_reader(),
+        )
 
 
 class CompositeExecutionPipeline(QueryExecutionPipeline):

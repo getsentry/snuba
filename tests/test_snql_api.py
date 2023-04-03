@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,12 +18,14 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None, redis_db: None) -> None:
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]

@@ -4,6 +4,7 @@ name: errors_ro
 storage:
   key: errors_ro
   set_key: events_ro
+readiness_state: complete
 schema:
   columns:
     [
@@ -200,6 +201,11 @@ schema:
                 },
               ],
           },
+      },
+      {
+        name: exception_main_thread,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 8 },
       },
       {
         name: sdk_integrations,

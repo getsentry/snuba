@@ -1,7 +1,7 @@
 pub mod broker;
 
 use super::{AssignmentCallbacks, Consumer, ConsumerError};
-use crate::types::{Message, Partition, Topic};
+use crate::types::{BrokerMessage, Partition, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
@@ -112,7 +112,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
     fn poll(
         &mut self,
         _timeout: Option<Duration>,
-    ) -> Result<Option<Message<TPayload>>, ConsumerError> {
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -143,7 +143,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
         let keys = self.subscription_state.offsets.keys();
         let mut new_offset: Option<(Partition, u64)> = None;
-        let mut ret_message: Option<Message<TPayload>> = None;
+        let mut ret_message: Option<BrokerMessage<TPayload>> = None;
         for partition in keys.collect::<Vec<_>>() {
             if self.paused.contains(partition) {
                 continue;
@@ -153,7 +153,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
             let message = self.broker.consume(partition, offset).unwrap();
             match message {
                 Some(msg) => {
-                    new_offset = Some((partition.clone(), msg.next_offset()));
+                    new_offset = Some((partition.clone(), msg.offset + 1));
                     ret_message = Some(msg);
                     break;
                 }
@@ -233,30 +233,30 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
         unimplemented!("Seek is not implemented");
     }
 
-    fn stage_positions(
+    fn stage_offsets(
         &mut self,
-        positions: HashMap<Partition, u64>,
+        offsets: HashMap<Partition, u64>,
     ) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
         let assigned_partitions: HashSet<&Partition> =
             self.subscription_state.offsets.keys().collect();
-        let requested_partitions: HashSet<&Partition> = positions.keys().collect();
+        let requested_partitions: HashSet<&Partition> = offsets.keys().collect();
         let diff = requested_partitions.difference(&assigned_partitions);
 
         if diff.count() > 0 {
             return Err(ConsumerError::UnassignedPartition);
         }
-        for (partition, position) in positions {
+        for (partition, offset) in offsets {
             self.subscription_state
                 .staged_positions
-                .insert(partition, position);
+                .insert(partition, offset);
         }
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -571,10 +571,10 @@ mod tests {
             },
             100,
         )]);
-        let stage_result = consumer.stage_positions(positions.clone());
+        let stage_result = consumer.stage_offsets(positions.clone());
         assert!(stage_result.is_ok());
 
-        let offsets = consumer.commit_positions();
+        let offsets = consumer.commit_offsetes();
         assert!(offsets.is_ok());
         assert_eq!(offsets.unwrap(), positions);
 
@@ -587,7 +587,7 @@ mod tests {
             100
         )]);
 
-        let stage_result = consumer.stage_positions(invalid_positions);
+        let stage_result = consumer.stage_offsets(invalid_positions);
         assert!(stage_result.is_err());
     }
 }
