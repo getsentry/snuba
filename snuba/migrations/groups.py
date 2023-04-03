@@ -68,7 +68,7 @@ _REGISTERED_MIGRATION_GROUPS = {
     MigrationGroup.METRICS: _MigrationGroup(MetricsLoader(), ReadinessState.COMPLETE),
     MigrationGroup.OUTCOMES: _MigrationGroup(OutcomesLoader(), ReadinessState.COMPLETE),
     MigrationGroup.SESSIONS: _MigrationGroup(SessionsLoader(), ReadinessState.COMPLETE),
-    MigrationGroup.QUERYLOG: _MigrationGroup(QuerylogLoader(), ReadinessState.COMPLETE),
+    MigrationGroup.QUERYLOG: _MigrationGroup(QuerylogLoader(), ReadinessState.PARTIAL),
     MigrationGroup.PROFILES: _MigrationGroup(ProfilesLoader(), ReadinessState.COMPLETE),
     MigrationGroup.FUNCTIONS: _MigrationGroup(
         FunctionsLoader(), ReadinessState.COMPLETE

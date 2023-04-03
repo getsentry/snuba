@@ -32,8 +32,8 @@ class DirectoryLoader(GroupLoader, ABC):
     represents the migration ID.
     """
 
-    def __init__(self, module: str) -> None:
-        self.__module = module
+    def __init__(self, module_path: str) -> None:
+        self.__module = module_path
 
     @abstractmethod
     def get_migrations(self) -> Sequence[str]:
