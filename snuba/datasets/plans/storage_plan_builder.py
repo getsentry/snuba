@@ -35,7 +35,7 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
-from snuba.util import with_span
+from snuba.utils.metrics.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them

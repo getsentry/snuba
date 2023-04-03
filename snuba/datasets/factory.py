@@ -10,8 +10,8 @@ from snuba.datasets.configuration.dataset_builder import build_dataset_from_conf
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import initialize_entity_factory
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.util import with_span
 from snuba.utils.config_component_factory import ConfigComponentFactory
+from snuba.utils.metrics.util import with_span
 from snuba.utils.serializable_exception import SerializableException
 
 

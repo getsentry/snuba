@@ -67,8 +67,8 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error

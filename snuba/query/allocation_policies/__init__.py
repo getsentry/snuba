@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, cast
 
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.state import get_config
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.serializable_exception import SerializableException
 from snuba.web import QueryException, QueryResult
@@ -188,7 +189,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
 class PassthroughPolicy(AllocationPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        from snuba.state import get_config
 
         max_threads = get_config("query_settings/max_threads", 8)
         assert isinstance(max_threads, int)

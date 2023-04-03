@@ -64,9 +64,10 @@ from snuba.state.rate_limit import (
     RateLimitStats,
     RateLimitStatsContainer,
 )
-from snuba.util import force_bytes, with_span
+from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import (
     SerializableException,
