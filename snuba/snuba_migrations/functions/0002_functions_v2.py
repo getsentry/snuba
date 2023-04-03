@@ -18,7 +18,7 @@ from snuba.migrations.operations import OperationTarget
 
 @dataclass(frozen=True)
 class NewColumn:
-    column: Column
+    column: Column[Modifiers]
     after: str
 
 
@@ -59,7 +59,7 @@ new_columns: Sequence[NewColumn] = [
     ),
 ]
 
-base_columns: List[Column] = [
+base_columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),
@@ -80,7 +80,7 @@ base_columns: List[Column] = [
     Column("retention_days", UInt(16)),
 ]
 
-materialized_columns: Sequence[Column] = base_columns + [
+materialized_columns: Sequence[Column[Modifiers]] = base_columns + [
     Column("count", AggregateFunction("count", [Float(64)])),
     Column(
         "percentiles",
