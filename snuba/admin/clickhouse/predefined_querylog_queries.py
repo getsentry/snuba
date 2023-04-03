@@ -251,7 +251,7 @@ class DurationForReferrerByOrganizations(QuerylogQuery):
             organization
         FROM querylog_local
         WHERE referrer = '{{referrer}}'
-        AND time > (now() - (1 * 3600))
+        AND time > (now() - ({{duration}}))
         AND time < now()
         GROUP BY
             organization,
