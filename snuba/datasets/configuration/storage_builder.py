@@ -27,6 +27,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.processor import MessageProcessor
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -52,6 +53,7 @@ WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
+ALLOCATION_POLICY = "allocation_policy"
 
 
 def build_storage_from_config(
@@ -88,6 +90,11 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if MANDATORY_CONDITION_CHECKERS in config
             else []
         ),
+        ALLOCATION_POLICY: AllocationPolicy.get_from_name(
+            config[ALLOCATION_POLICY]["name"]
+        ).from_kwargs(**config[ALLOCATION_POLICY].get("args", {}))
+        if ALLOCATION_POLICY in config
+        else {},
     }
 
 
