@@ -278,10 +278,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__state_name,
             )
         elif type_ == ReplacementType.REPLACE_GROUP:
-            processed = process_replace_group(
+            processed = ReplaceGroupReplacement.parse_message(
                 cast(ReplacementMessage[ReplaceGroupMessageBody], message),
-                self.__all_columns,
-                self.__state_name,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.EXCLUDE_GROUPS:
             processed = ExcludeGroupsReplacement.parse_message(
@@ -450,14 +449,12 @@ def _build_group_replacement(
 
 
 def _build_event_set_filter(
-    message: Mapping[str, Any], state_name: ReplacerState
-) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
-    event_ids = message["event_ids"]
-    if not event_ids:
-        return None
-
-    def get_timestamp_condition(msg_field: str, operator: str) -> str:
-        msg_value = message.get(msg_field)
+    project_id: int,
+    event_ids: Sequence[str],
+    from_timestamp: Optional[str],
+    to_timestamp: Optional[str],
+) -> Tuple[List[str], List[str], MutableMapping[str, str]]:
+    def get_timestamp_condition(msg_value: Optional[str], operator: str) -> str:
         if not msg_value:
             return ""
 
@@ -466,8 +463,8 @@ def _build_event_set_filter(
             f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
         )
 
-    from_condition = get_timestamp_condition("from_timestamp", ">=")
-    to_condition = get_timestamp_condition("to_timestamp", "<=")
+    from_condition = get_timestamp_condition(from_timestamp, ">=")
+    to_condition = get_timestamp_condition(to_timestamp, "<=")
 
     event_id_lhs = "event_id"
     event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
@@ -481,50 +478,106 @@ def _build_event_set_filter(
 
     query_args = {
         "event_ids": event_id_list,
-        "project_id": message["project_id"],
+        "project_id": str(project_id),
     }
 
     return prewhere, where, query_args
 
 
-def process_replace_group(
-    message: ReplacementMessage[ReplaceGroupMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
+@dataclass
+class ReplaceGroupReplacement(Replacement):
     """
     Merge individual events into new group. The old group will have to be
     manually excluded from search queries.
 
-    See docstring of process_exclude_groups for an explanation of how this is used.
+    See docstring of ExcludeGroupsReplacement for an explanation of how this is
+    used.
 
     Note that events merged this way cannot be cleanly unmerged by
     process_unmerge, as their group hashes possibly stand in no correlation to
     how the merging was done.
     """
 
-    event_ids = message.data["event_ids"]
-    if not event_ids:
+    event_ids: Sequence[str]
+    project_id: int
+    from_timestamp: Optional[str]
+    to_timestamp: Optional[str]
+    new_group_id: int
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
+    all_columns: Sequence[FlattenedColumn]
+
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[ReplaceGroupMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[ReplaceGroupReplacement]:
+        event_ids = message.data["event_ids"]
+        if not event_ids:
+            return None
+
+        return cls(
+            event_ids=event_ids,
+            project_id=message.data["project_id"],
+            from_timestamp=message.data.get("from_timestamp"),
+            to_timestamp=message.data.get("to_timestamp"),
+            new_group_id=message.data["new_group_id"],
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
+            all_columns=context.all_columns,
+        )
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return None
 
-    event_set_filter = _build_event_set_filter(message.data, state_name)
-    if event_set_filter is None:
-        return None
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
-    prewhere, where, query_args = event_set_filter
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-    project_id: int = message.data["project_id"]
-    query_time_flags = (None, project_id)
+    @cached_property
+    def _where_clause(self) -> str:
+        prewhere, where, query_args = _build_event_set_filter(
+            project_id=self.project_id,
+            event_ids=self.event_ids,
+            from_timestamp=self.from_timestamp,
+            to_timestamp=self.to_timestamp,
+        )
 
-    return _build_group_replacement(
-        message,
-        project_id,
-        full_where,
-        query_args,
-        query_time_flags,
-        all_columns,
-    )
+        return (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            % query_args
+        )
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+
+        all_columns = ", ".join(all_column_names)
+
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
 
 
 def process_delete_groups(
@@ -570,11 +623,12 @@ def process_tombstone_events(
 
     old_primary_hash = message.data.get("old_primary_hash")
 
-    event_set_filter = _build_event_set_filter(message.data, state_name)
-    if event_set_filter is None:
-        return None
-
-    prewhere, where, query_args = event_set_filter
+    prewhere, where, query_args = _build_event_set_filter(
+        project_id=message.data["project_id"],
+        event_ids=event_ids,
+        from_timestamp=message.data.get("from_timestamp"),
+        to_timestamp=message.data.get("to_timestamp"),
+    )
 
     if old_primary_hash:
         query_args["old_primary_hash"] = (
