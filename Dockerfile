@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.8.13
+ARG PYTHON_VERSION=3.8.16
 
 FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
 WORKDIR /usr/src/snuba
