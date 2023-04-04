@@ -5,13 +5,14 @@ import click
 
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
     check_clickhouse_connections,
     check_for_inactive_replicas,
 )
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -31,7 +32,9 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-        click.echo(group.value)
+
+        readiness_state = get_group_readiness_state(group)
+        click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
         for migration_id, status, blocking in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
@@ -52,6 +55,7 @@ def list() -> None:
 
 @migrations.command()
 @click.option("-g", "--group", default=None)
+@click.option("-r", "--readiness_state", default=None)
 @click.argument("through", default="all")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
@@ -60,6 +64,7 @@ def list() -> None:
 )
 def migrate(
     group: Optional[str],
+    readiness_state: Optional[ReadinessState],
     through: str,
     force: bool,
     fake: bool,
@@ -83,7 +88,13 @@ def migrate(
             if through != "all":
                 raise click.ClickException("Need migration group")
             migration_group = None
-        runner.run_all(through=through, force=force, fake=fake, group=migration_group)
+        runner.run_all(
+            through=through,
+            force=force,
+            fake=fake,
+            group=migration_group,
+            readiness_state=readiness_state,
+        )
     except MigrationError as e:
         raise click.ClickException(str(e))
 
