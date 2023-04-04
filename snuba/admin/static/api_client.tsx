@@ -1,3 +1,5 @@
+import { AllowedTools } from "./types";
+
 import {
   Config,
   ConfigKey,
@@ -51,6 +53,7 @@ interface Client {
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
+  getAllowedTools: () => Promise<AllowedTools>;
 }
 
 function Client() {
@@ -258,6 +261,13 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
+
+    getAllowedTools: () => {
+      const url = baseUrl + "tools";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
     },
   };
 }

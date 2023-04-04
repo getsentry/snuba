@@ -98,7 +98,7 @@ The `snuba migrations` CLI tool should be used to manage migrations.
 
 In order to add a new migration, first determine which migration group the new migration should be added to, and add an entry to that group in `migrations/groups.py` with the new migration identifier you have chosen. By convention we prefix migration IDs with a number matching the position of the migration in the group, i.e. the 4th migration in that group will be prefixed with `0004_`. Add a file which will contain the new migration at `/migrations/snuba_migrations/<group>/<migration_id>.py`.
 
-If you need to create a new group, add the group to `migrations.groups.MigrationGroup` and a loader for the group defining the path to the directory where that group's migrations will be located. Register these to `migrations.groups._REGISTERED_GROUPS` - note the position of the group in this list determines the order the migrations will be executed in.
+If you need to create a new group, add the group to `migrations.groups.MigrationGroup` and a loader to `migrations.group_loader` for the group defining the path to the directory where that group's migrations will be located. Register these to `migrations.groups._REGISTERED_MIGRATION_GROUPS` - note the position of the group in this list determines the order the migrations will be executed in. For a new MigrationGroup, the `readiness_state` should be set to `limited` which means the migrations will only be automatically executed in CI and the local environment.
 
 The new migration should contain a class called `Migration` which inherits from one of two types:
 `ClickhouseNodeMigration` or `CodeMigration`

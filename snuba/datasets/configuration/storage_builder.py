@@ -18,6 +18,7 @@ from snuba.datasets.configuration.utils import (
 )
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -40,6 +41,7 @@ WRITABLE_STORAGE = "writable_storage"
 STORAGE = "storage"
 STORAGE_KEY = "storage_key"
 SET_KEY = "set_key"
+READINESS_STATE = "readiness_state"
 SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
@@ -73,6 +75,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
+        READINESS_STATE: ReadinessState(config[READINESS_STATE]),
         SCHEMA: __build_storage_schema(config),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []

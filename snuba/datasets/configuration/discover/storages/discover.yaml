@@ -4,6 +4,7 @@ name: discover
 storage:
   key: discover
   set_key: discover
+readiness_state: complete
 schema:
   columns:
     [

@@ -41,7 +41,6 @@ from snuba.processor import (
     _hashify,
     _unicodify,
 )
-from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -332,8 +331,6 @@ class ErrorsProcessor(DatasetMessageProcessor):
         frame_stack_levels = []
         exception_main_thread = None
 
-        check_exception_main_thread = get_config("check_exception_main_thread", 0)
-
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
             stack_level = 0
             for stack in stacks:
@@ -364,10 +361,6 @@ class ErrorsProcessor(DatasetMessageProcessor):
                     frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
                     frame_stack_levels.append(stack_level)
 
-                ## do not check for the main thread if the config is set to False
-                if check_exception_main_thread != 1:
-                    continue
-
                 ## mark if at least one of the exceptions happened in the main thread
                 if thread_id is not None and exception_main_thread is not True:
                     for thread in threads:
@@ -380,7 +373,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
                         if main is None or id is None:
                             continue
 
-                        if id == thread_id:
+                        if id == thread_id and main is True:
                             ## if it's the main thread, mark it as such and stop it
                             exception_main_thread = True
                             break

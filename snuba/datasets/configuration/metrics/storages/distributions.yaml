@@ -4,6 +4,7 @@ name: metrics_distributions
 storage:
   key: metrics_distributions
   set_key: metrics
+readiness_state: complete
 schema:
   columns:
     [
