@@ -20,6 +20,7 @@ schema:
     { name: environment, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
     { name: release, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
     { name: dist, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
+    { name: timestamp, type: DateTime },
     { name: receive_timestamp, type: DateTime },
     { name: client_timestamp, type: DateTime },
     {
