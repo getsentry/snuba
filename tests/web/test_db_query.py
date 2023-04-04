@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from unittest import mock
 
 import pytest
 
@@ -13,6 +14,13 @@ from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
+from snuba.query.allocation_policies import (
+    DEFAULT_PASSTHROUGH_POLICY,
+    AllocationPolicy,
+    AllocationPolicyViolation,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
@@ -24,7 +32,7 @@ from snuba.web import QueryException
 from snuba.web.db_query import (
     _apply_thread_quota_to_clickhouse_query_settings,
     _get_query_settings_from_config,
-    raw_query,
+    db_query,
 )
 
 test_data = [
@@ -117,7 +125,10 @@ def test_apply_thread_quota(
     assert clickhouse_query_settings == expected_query_settings
 
 
-def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]:
+def _build_test_query(
+    select_expression: str,
+    allocation_policy: AllocationPolicy = DEFAULT_PASSTHROUGH_POLICY,
+) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors"))
     return (
         ClickhouseQuery(
@@ -125,6 +136,7 @@ def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
+                allocation_policy=allocation_policy,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -134,21 +146,7 @@ def _build_test_query(select_expression: str) -> tuple[ClickhouseQuery, Storage]
             ],
         ),
         storage,
-    )
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_raw_query_success() -> None:
-    query, storage = _build_test_query("count(distinct(project_id))")
-
-    query_metadata_list: list[ClickhouseQueryMetadata] = []
-    stats: dict[str, Any] = {}
-
-    result = raw_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        attribution_info=AttributionInfo(
+        AttributionInfo(
             app_id=AppID(key="key"),
             tenant_ids={},
             referrer="something",
@@ -156,6 +154,21 @@ def test_raw_query_success() -> None:
             feature=None,
             parent_api=None,
         ),
+    )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_success() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
         dataset_name="events",
         query_metadata_list=query_metadata_list,
         formatted_query=format_query(query),
@@ -178,24 +191,16 @@ def test_raw_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_raw_query_fail() -> None:
-    query, storage = _build_test_query("count(non_existent_column)")
+def test_db_query_fail() -> None:
+    query, storage, attribution_info = _build_test_query("count(non_existent_column)")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
-    exception_raised = False
-    try:
-        raw_query(
+    with pytest.raises(QueryException) as excinfo:
+        db_query(
             clickhouse_query=query,
             query_settings=HTTPQuerySettings(),
-            attribution_info=AttributionInfo(
-                app_id=AppID(key="key"),
-                tenant_ids={},
-                referrer="something",
-                team=None,
-                feature=None,
-                parent_api=None,
-            ),
+            attribution_info=attribution_info,
             dataset_name="events",
             query_metadata_list=query_metadata_list,
             formatted_query=format_query(query),
@@ -205,11 +210,159 @@ def test_raw_query_fail() -> None:
             trace_id="trace_id",
             robust=False,
         )
-    except QueryException as e:
-        exception_raised = True
-        assert len(query_metadata_list) == 1
-        assert query_metadata_list[0].status.value == "error"
-        assert e.extra["stats"] == stats
 
-        assert e.extra["sql"] is not None
-    assert exception_raised
+    assert len(query_metadata_list) == 1
+    assert query_metadata_list[0].status.value == "error"
+    assert excinfo.value.extra["stats"] == stats
+    assert excinfo.value.extra["sql"] is not None
+
+
+def test_db_query_with_rejecting_allocation_policy() -> None:
+    # this test does not need the db or a query because the allocation policy
+    # should reject the query before it gets to execution
+    class RejectAllocationPolicy(AllocationPolicy):
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation={"reason": "policy rejects all queries"},
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            return
+
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policy",
+        return_value=RejectAllocationPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+    ):
+        query_metadata_list: list[ClickhouseQueryMetadata] = []
+        stats: dict[str, Any] = {}
+        with pytest.raises(QueryException) as excinfo:
+            db_query(
+                clickhouse_query=mock.Mock(),
+                query_settings=HTTPQuerySettings(),
+                attribution_info=mock.Mock(),
+                dataset_name="events",
+                query_metadata_list=query_metadata_list,
+                formatted_query=mock.Mock(),
+                reader=mock.Mock(),
+                timer=Timer("foo"),
+                stats=stats,
+                trace_id="trace_id",
+                robust=False,
+            )
+        cause = excinfo.value.__cause__
+        assert isinstance(cause, AllocationPolicyViolation)
+        assert cause.extra_data["quota_allowance"]["explanation"]["reason"] == "policy rejects all queries"  # type: ignore
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_allocation_policy_threads_applied_to_query() -> None:
+    POLICY_THREADS = 4
+
+    class ThreadLimitPolicy(AllocationPolicy):
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=POLICY_THREADS,
+                explanation={"reason": "Throttle everything!"},
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            return
+
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        ThreadLimitPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+    )
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+    settings = HTTPQuerySettings()
+    settings.set_resource_quota(ResourceQuota(max_threads=420))
+    db_query(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert settings.get_resource_quota().max_threads == POLICY_THREADS  # type: ignore
+    assert stats["max_threads"] == POLICY_THREADS
+    assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_allocation_policy_updates_quota() -> None:
+    queries_run = 0
+    MAX_QUERIES_TO_RUN = 2
+
+    class CountQueryPolicy(AllocationPolicy):
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            can_run = True
+            if queries_run + 1 > MAX_QUERIES_TO_RUN:
+                can_run = False
+            return QuotaAllowance(
+                can_run=can_run,
+                max_threads=0,
+                explanation={"reason": f"can only run {queries_run} queries!"},
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            nonlocal queries_run
+            queries_run += 1
+
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        CountQueryPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+    )
+
+    def _run_query() -> None:
+        query_metadata_list: list[ClickhouseQueryMetadata] = []
+        stats: dict[str, Any] = {}
+        settings = HTTPQuerySettings()
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+
+    for _ in range(MAX_QUERIES_TO_RUN):
+        _run_query()
+    with pytest.raises(QueryException) as e:
+        _run_query()
+    assert isinstance(e.value.__cause__, AllocationPolicyViolation)

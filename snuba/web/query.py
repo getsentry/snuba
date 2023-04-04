@@ -33,9 +33,9 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import (
     QueryException,
@@ -44,7 +44,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import raw_query
+from snuba.web.db_query import db_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -193,6 +193,7 @@ def _run_query_pipeline(
         )
 
     record_missing_tenant_ids(request)
+
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
@@ -350,7 +351,7 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return raw_query(
+            return db_query(
                 clickhouse_query=clickhouse_query,
                 query_settings=query_settings,
                 attribution_info=attribution_info,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timedelta
 from hashlib import md5
@@ -12,6 +14,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
@@ -1181,3 +1188,47 @@ class TestSnQLApi(BaseApiTest):
         assert (
             response.status_code == 500
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
+
+    def test_allocation_policy_violation(self) -> None:
+        class RejectAllocationPolicy123(AllocationPolicy):
+            def _get_quota_allowance(
+                self, tenant_ids: dict[str, str | int]
+            ) -> QuotaAllowance:
+                return QuotaAllowance(
+                    can_run=False,
+                    max_threads=0,
+                    explanation={"reason": "policy rejects all queries"},
+                )
+
+            def _update_quota_balance(
+                self,
+                tenant_ids: dict[str, str | int],
+                result_or_error: QueryResultOrError,
+            ) -> None:
+                return
+
+        with patch(
+            "snuba.web.db_query._get_allocation_policy",
+            return_value=RejectAllocationPolicy123("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        ):
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover_events)
+                        SELECT quantile(0.95)(type)
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        LIMIT 1000""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
+            assert response.status_code == 429
+            assert (
+                response.json["error"]["message"]
+                == "Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}"
+            )
