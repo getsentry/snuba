@@ -15,6 +15,7 @@ pipelines:
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: a
             GKE_BASTION_ZONE: a
+            MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
@@ -108,7 +109,7 @@ pipelines:
                                     --label-selector="service=snuba-admin" \
                                     --container-name="snuba-admin" \
                                     "snuba-migrate" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
-                                    -- snuba migrations migrate --force
+                                    -- snuba migrations migrate -r ${MIGRATIONS_READINESS}
                               - plugin:
                                     options:
                                         script: |
