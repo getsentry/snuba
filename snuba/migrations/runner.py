@@ -65,7 +65,6 @@ class Runner:
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
         )
 
-        # TODO this should be a dist connection
         self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
