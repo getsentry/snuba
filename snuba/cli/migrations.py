@@ -55,7 +55,12 @@ def list() -> None:
 
 @migrations.command()
 @click.option("-g", "--group", default=None)
-@click.option("-r", "--readiness_state", default=None)
+@click.option(
+    "-r",
+    "--readiness_state",
+    type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
+    default=None,
+)
 @click.argument("through", default="all")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
