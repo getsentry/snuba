@@ -47,7 +47,7 @@ function App() {
     <div style={containerStyle}>
       <Header />
       <div style={bodyStyle}>
-        <Nav active={activeTab} navigate={navigate} />
+        <Nav active={activeTab} navigate={navigate} api={client} />
         {activeTab && <Body active={activeTab} api={client} />}
       </div>
     </div>

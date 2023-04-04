@@ -11,7 +11,11 @@ from flask.testing import FlaskClient
 from structlog.testing import CapturingLogger
 
 from snuba.admin.auth import _set_roles
-from snuba.admin.auth_roles import ROLES, generate_test_role
+from snuba.admin.auth_roles import (
+    ROLES,
+    generate_migration_test_role,
+    generate_tool_test_role,
+)
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.user import AdminUser
 from snuba.migrations.groups import MigrationGroup
@@ -27,9 +31,10 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.clickhouse_db
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
-    with patch("snuba.admin.auth.DEFAULT_ROLES", []):
+    with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
         response = admin_api.get("/migrations/groups")
 
     assert response.status_code == 200
@@ -38,8 +43,9 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "all"),
-            generate_test_role("generic_metrics", "non_blocking"),
+            generate_migration_test_role("system", "all"),
+            generate_migration_test_role("generic_metrics", "non_blocking"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/groups")
@@ -70,12 +76,14 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         ]
 
 
+@pytest.mark.clickhouse_db
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "non_blocking"),
-            generate_test_role("generic_metrics", "none"),
+            generate_migration_test_role("system", "non_blocking"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/system/list")
@@ -100,8 +108,9 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("test_migration", "non_blocking"),
-            generate_test_role("generic_metrics", "none"),
+            generate_migration_test_role("test_migration", "non_blocking"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/test_migration/list")
@@ -128,6 +137,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     assert sorted_response == sorted_expected_json
 
 
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 @patch(
     "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
@@ -144,9 +154,10 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "all"),
-            generate_test_role("generic_metrics", "none"),
-            generate_test_role("events", "non_blocking", True),
+            generate_migration_test_role("system", "all"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events", "non_blocking", True),
+            generate_tool_test_role("all"),
         ],
     ):
         # invalid action
@@ -279,10 +290,11 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
 
 def test_get_iam_roles(caplog: Any) -> None:
-    system_role = generate_test_role("system", "all")
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
-        [system_role],
+        [system_role, tool_role],
     ):
         iam_file = tempfile.NamedTemporaryFile()
         iam_file.write(
@@ -309,9 +321,15 @@ def test_get_iam_roles(caplog: Any) -> None:
                                 "group:team-sns@sentry.io",
                                 "user:test_user1@sentry.io",
                                 "user:test_user2@sentry.io",
-                                "user:test_user3@sentry.io",
                             ],
                             "role": "roles/owner",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/AllTools",
                         },
                     ]
                 }
@@ -327,7 +345,9 @@ def test_get_iam_roles(caplog: Any) -> None:
             assert user1.roles == [
                 ROLES["NonBlockingMigrationsExecutor"],
                 ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
                 system_role,
+                tool_role,
             ]
 
             user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
@@ -336,6 +356,15 @@ def test_get_iam_roles(caplog: Any) -> None:
             assert user2.roles == [
                 ROLES["TestMigrationsExecutor"],
                 system_role,
+                tool_role,
+            ]
+
+            user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
+            _set_roles(user3)
+
+            assert user3.roles == [
+                system_role,
+                tool_role,
             ]
 
         with patch(

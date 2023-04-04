@@ -4,6 +4,7 @@ name: org_metrics_counters
 storage:
   key: org_metrics_counters
   set_key: metrics
+readiness_state: complete
 schema:
   columns:
     [

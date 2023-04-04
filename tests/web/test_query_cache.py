@@ -59,6 +59,8 @@ def run_query() -> None:
     assert result.result["data"] == []
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_cache_retries_on_bad_query_id(
     monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
 ) -> None:

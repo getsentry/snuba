@@ -69,7 +69,11 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                     description=type(processor).__name__, op="processor"
                 ):
                     processor.process_query(query, query_settings)
-            return runner(query, query_settings, self.__cluster.get_reader())
+            return runner(
+                clickhouse_query=query,
+                query_settings=query_settings,
+                reader=self.__cluster.get_reader(),
+            )
 
         use_split = state.get_config("use_split", 1)
         if use_split:

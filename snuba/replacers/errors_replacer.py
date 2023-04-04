@@ -402,6 +402,9 @@ def _build_group_replacement(
     txn = message.data.get("transaction_id")
     if txn:
         if txn in SEEN_MERGE_TXN_CACHE:
+            logger.error(
+                "Skipping duplicate group replacement", extra={"project_id": project_id}
+            )
             return None
         else:
             SEEN_MERGE_TXN_CACHE.append(txn)

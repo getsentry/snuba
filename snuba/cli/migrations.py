@@ -51,13 +51,19 @@ def list() -> None:
 
 
 @migrations.command()
+@click.option("-g", "--group", default=None)
+@click.argument("through", default="all")
 @click.option("--force", is_flag=True)
-@click.option("--group", help="Migration group")
+@click.option("--fake", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
 def migrate(
-    force: bool, group: Optional[str] = None, log_level: Optional[str] = None
+    group: Optional[str],
+    through: str,
+    force: bool,
+    fake: bool,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     If group is specified, runs all the migrations for a group (including any pending
@@ -71,11 +77,13 @@ def migrate(
     runner = Runner()
 
     try:
-        if group is not None:
+        if group:
             migration_group = MigrationGroup(group)
         else:
+            if through != "all":
+                raise click.ClickException("Need migration group")
             migration_group = None
-        runner.run_all(force=force, group=migration_group)
+        runner.run_all(through=through, force=force, fake=fake, group=migration_group)
     except MigrationError as e:
         raise click.ClickException(str(e))
 
@@ -88,6 +96,7 @@ def migrate(
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
+@click.option("--yes", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
@@ -97,6 +106,7 @@ def run(
     force: bool,
     fake: bool,
     dry_run: bool,
+    yes: bool,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -120,7 +130,7 @@ def run(
         return
 
     try:
-        if fake:
+        if fake and not yes:
             click.confirm(
                 "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
                 abort=True,
@@ -138,6 +148,7 @@ def run(
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
+@click.option("--yes", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
@@ -147,6 +158,7 @@ def reverse(
     force: bool,
     fake: bool,
     dry_run: bool,
+    yes: bool,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -168,7 +180,7 @@ def reverse(
         return
 
     try:
-        if fake:
+        if fake and not yes:
             click.confirm(
                 "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
                 abort=True,
@@ -184,12 +196,14 @@ def reverse(
 @click.option("--group", help="Migration group")
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
+@click.option("--yes", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
 def reverse_in_progress(
     fake: bool,
     dry_run: bool,
+    yes: bool,
     group: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
@@ -213,7 +227,7 @@ def reverse_in_progress(
         return
 
     try:
-        if fake:
+        if fake and not yes:
             click.confirm(
                 "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
                 abort=True,

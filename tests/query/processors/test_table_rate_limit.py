@@ -56,6 +56,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("processor, query, limit_to_set, params", test_data)
+@pytest.mark.redis_db
 def test_table_rate_limit(
     processor: ClickhouseQueryProcessor,
     query: Query,

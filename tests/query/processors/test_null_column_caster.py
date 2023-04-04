@@ -8,6 +8,7 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -53,12 +54,14 @@ schema2 = TableSchema(
 Storage1 = ReadableTableStorage(
     storage_key=StorageKey.DISCOVER,
     storage_set_key=StorageSetKey.DISCOVER,
+    readiness_state=ReadinessState.LIMITED,
     schema=schema1,
 )
 
 Storage2 = ReadableTableStorage(
     storage_key=StorageKey.DISCOVER,
     storage_set_key=StorageSetKey.DISCOVER,
+    readiness_state=ReadinessState.LIMITED,
     schema=schema2,
 )
 

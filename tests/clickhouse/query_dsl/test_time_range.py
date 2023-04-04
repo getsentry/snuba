@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -10,6 +12,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 
 
+@pytest.mark.redis_db
 def test_get_time_range() -> None:
     """
     Test finding the time range of a query.

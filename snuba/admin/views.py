@@ -33,6 +33,11 @@ from snuba.admin.runtime_config import (
     ConfigType,
     get_config_type_from_value,
 )
+from snuba.admin.tool_policies import (
+    AdminTools,
+    check_tool_perms,
+    get_user_allowed_tools,
+)
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -40,7 +45,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.migrations.connect import check_for_inactive_replicas
-from snuba.migrations.errors import MigrationError
+from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
@@ -89,7 +94,15 @@ def health() -> Response:
     return Response("OK", 200)
 
 
+@application.route("/tools")
+def tools() -> Response:
+    return make_response(
+        jsonify({"tools": [t.value for t in get_user_allowed_tools(g.user)]}), 200
+    )
+
+
 @application.route("/migrations/groups")
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def migrations_groups() -> Response:
     group_policies = get_migration_group_policies(g.user)
     allowed_groups = group_policies.keys()
@@ -107,6 +120,7 @@ def migrations_groups() -> Response:
 
 @application.route("/migrations/<group>/list")
 @check_migration_perms
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def migrations_groups_list(group: str) -> Response:
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
@@ -130,6 +144,7 @@ def migrations_groups_list(group: str) -> Response:
     "/migrations/<group>/run/<migration_id>",
     methods=["POST"],
 )
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def run_migration(group: str, migration_id: str) -> Response:
     return run_or_reverse_migration(
         group=group, action="run", migration_id=migration_id
@@ -140,6 +155,7 @@ def run_migration(group: str, migration_id: str) -> Response:
     "/migrations/<group>/reverse/<migration_id>",
     methods=["POST"],
 )
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def reverse_migration(group: str, migration_id: str) -> Response:
     return run_or_reverse_migration(
         group=group, action="reverse", migration_id=migration_id
@@ -219,21 +235,29 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         return make_response(
             jsonify({"error": "clickhouse error: " + err.message}), 400
         )
+    except InactiveClickhouseReplica as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": "inactive replicas error: " + err.message}), 400
+        )
 
 
 @application.route("/clickhouse_queries")
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES])
 def clickhouse_queries() -> Response:
     res = [q.to_json() for q in SystemQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
 @application.route("/querylog_queries")
+@check_tool_perms(tools=[AdminTools.QUERYLOG])
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
 @application.route("/kafka")
+@check_tool_perms(tools=[AdminTools.KAFKA])
 def kafka_topics() -> Response:
     return make_response(jsonify(get_broker_data()), 200)
 
@@ -245,6 +269,7 @@ def kafka_topics() -> Response:
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
     try:
@@ -286,6 +311,7 @@ def clickhouse_system_query() -> Response:
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
 @application.route("/clickhouse_trace_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.QUERY_TRACING])
 def clickhouse_trace_query() -> Response:
     req = json.loads(request.data)
     try:
@@ -335,6 +361,7 @@ def clickhouse_trace_query() -> Response:
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.QUERYLOG])
 def clickhouse_querylog_query() -> Response:
     user = request.headers.get(USER_HEADER_KEY, "unknown")
     if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
@@ -391,6 +418,7 @@ def clickhouse_querylog_query() -> Response:
 
 
 @application.route("/clickhouse_querylog_schema", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.QUERYLOG])
 def clickhouse_querylog_schema() -> Response:
     try:
         result = describe_querylog_schema()
@@ -425,6 +453,7 @@ def clickhouse_querylog_schema() -> Response:
 
 
 @application.route("/configs", methods=["GET", "POST"])
+@check_tool_perms(tools=[AdminTools.CONFIGURATION])
 def configs() -> Response:
     if request.method == "POST":
         data = json.loads(request.data)
@@ -500,6 +529,7 @@ def configs() -> Response:
 
 
 @application.route("/all_config_descriptions", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CONFIGURATION])
 def all_config_descriptions() -> Response:
     return Response(
         json.dumps(state.get_all_config_descriptions()),
@@ -509,6 +539,7 @@ def all_config_descriptions() -> Response:
 
 
 @application.route("/configs/<path:config_key>", methods=["PUT", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CONFIGURATION])
 def config(config_key: str) -> Response:
     if request.method == "DELETE":
         user = request.headers.get(USER_HEADER_KEY)
@@ -597,6 +628,7 @@ def config(config_key: str) -> Response:
 
 
 @application.route("/config_auditlog")
+@check_tool_perms(tools=[AdminTools.AUDIT_LOG])
 def config_changes() -> Response:
     def serialize(
         key: str,
@@ -624,6 +656,7 @@ def config_changes() -> Response:
 
 
 @application.route("/clickhouse_nodes")
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
 def clickhouse_nodes() -> Response:
     return Response(
         json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
@@ -631,6 +664,7 @@ def clickhouse_nodes() -> Response:
 
 
 @application.route("/snuba_datasets")
+@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL])
 def snuba_datasets() -> Response:
     return Response(
         json.dumps(
@@ -640,6 +674,7 @@ def snuba_datasets() -> Response:
 
 
 @application.route("/snql_to_sql", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL])
 def snql_to_sql() -> Response:
     body = json.loads(request.data)
     body["debug"] = True

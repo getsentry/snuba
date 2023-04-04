@@ -10,6 +10,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
@@ -110,12 +111,14 @@ class ReadableTableStorage(ReadableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
+        readiness_state: ReadinessState,
         schema: Schema,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
     ) -> None:
         self.__storage_key = storage_key
+        self.__readiness_state = readiness_state
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
@@ -123,6 +126,9 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
+
+    def get_readiness_state(self) -> ReadinessState:
+        return self.__readiness_state
 
     def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
@@ -139,6 +145,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
+        readiness_state: ReadinessState,
         schema: Schema,
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
@@ -152,6 +159,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         super().__init__(
             storage_key,
             storage_set_key,
+            readiness_state,
             schema,
             query_processors,
             query_splitters,

@@ -6,7 +6,12 @@ from typing import Sequence
 from packaging import version
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, ClickhouseNode
+from snuba.clusters.cluster import (
+    CLUSTERS,
+    ClickhouseClientSettings,
+    ClickhouseNode,
+    UndefinedClickhouseCluster,
+)
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -77,10 +82,13 @@ def check_for_inactive_replicas() -> None:
     ]
 
     checked_nodes = set()
-
+    inactive_replica_info = []
     for storage_key in storage_keys:
         storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
+        try:
+            cluster = storage.get_cluster()
+        except UndefinedClickhouseCluster:
+            continue
 
         query_node = cluster.get_query_node()
         if storage_key == StorageKey.DISCOVER:
@@ -101,12 +109,11 @@ def check_for_inactive_replicas() -> None:
                 f"WHERE active_replicas < total_replicas AND database ='{conn.database}'",
             ).results
 
-            inactive_replica_info = []
             for table, total_replicas, active_replicas in tables_with_inactive:
                 inactive_replica_info.append(
                     f"Storage {storage_key.value} has inactive replicas for table {table} "
                     f"with {active_replicas} out of {total_replicas} replicas active."
                 )
 
-            if inactive_replica_info:
-                raise InactiveClickhouseReplica("\n".join(inactive_replica_info))
+    if inactive_replica_info:
+        raise InactiveClickhouseReplica("\n".join(sorted(set(inactive_replica_info))))

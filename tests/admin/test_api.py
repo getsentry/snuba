@@ -16,6 +16,7 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.redis_db
 def test_get_configs(admin_api: FlaskClient) -> None:
     response = admin_api.get("/configs")
     assert response.status_code == 200
@@ -44,6 +45,7 @@ def test_get_configs(admin_api: FlaskClient) -> None:
     ]
 
 
+@pytest.mark.redis_db
 def test_post_configs(admin_api: FlaskClient) -> None:
     # int
     response = admin_api.post(
@@ -98,6 +100,7 @@ def test_post_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
 
 
+@pytest.mark.redis_db
 def test_delete_configs(admin_api: FlaskClient) -> None:
     # delete a config and its description
     state.set_config("delete_this", "1")
@@ -141,6 +144,7 @@ def test_delete_configs(admin_api: FlaskClient) -> None:
     assert state.get_config_description("delete_this") == "description for this config"
 
 
+@pytest.mark.redis_db
 def test_config_descriptions(admin_api: FlaskClient) -> None:
     state.set_config_description("desc_test", "description test")
     state.set_config_description("another_test", "another description")
@@ -168,6 +172,8 @@ def get_node_for_table(
     raise Exception(f"{storage_name} does not have a local node")
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -200,6 +206,8 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     assert data[0]["name"] == "CurrentMerges"
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -214,6 +222,8 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert "<Debug> executeQuery" in data["trace_output"]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -229,6 +239,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
+@pytest.mark.clickhouse_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -244,6 +255,8 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     assert "validation" == data["error"]["type"]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
@@ -256,6 +269,7 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
     assert "column_names" in data and data["column_names"] == ["count()"]
 
 
+@pytest.mark.clickhouse_db
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -268,6 +282,8 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     assert "error" in data and data["error"]["message"].startswith("Invalid FROM")
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_describe(admin_api: FlaskClient) -> None:
     response = admin_api.get("/clickhouse_querylog_schema")
     assert response.status_code == 200
@@ -303,6 +319,7 @@ def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
     assert data["error"]["message"] == "dataset '' does not exist"
 
 
+@pytest.mark.redis_db
 def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
@@ -315,6 +332,8 @@ def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
     )
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (sessions)
@@ -330,3 +349,12 @@ def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
+
+
+def test_tools(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/tools")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert len(data["tools"]) > 0
+    assert "snql-to-sql" in data["tools"]
+    assert "all" in data["tools"]
