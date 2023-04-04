@@ -1,4 +1,3 @@
-import logging
 from dataclasses import replace
 from datetime import datetime
 from typing import MutableMapping, Optional, Set
@@ -18,7 +17,6 @@ from snuba.replacers.replacer_processor import ReplacerState
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
 CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"

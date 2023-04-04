@@ -380,6 +380,7 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
+        logger.error(f"Snuba health check failed! Tags: {metric_tags}")
     metrics.timing(
         "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
     )

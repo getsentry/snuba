@@ -56,7 +56,7 @@ def test_build_stream_loader() -> None:
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
-            "subscription_result_topic": "generic-metrics-sets-subscription-results",
+            "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_policy": {
                 "type": "produce",
                 "args": ["snuba-dead-letter-generic-metrics"],
@@ -81,7 +81,7 @@ def test_build_stream_loader() -> None:
     result_topic_spec = loader.get_subscription_result_topic_spec()
     assert (
         result_topic_spec is not None
-        and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS
+        and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS
     )
     assert_valid_policy_creator(loader.get_dead_letter_queue_policy_creator())
 
@@ -110,7 +110,7 @@ def test_stream_loader_processor_init_arg() -> None:
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
-            "subscription_result_topic": "generic-metrics-sets-subscription-results",
+            "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_policy": {
                 "type": "produce",
                 "args": ["snuba-dead-letter-generic-metrics"],
@@ -128,6 +128,7 @@ def test_invalid_storage() -> None:
         "kind": "readable_storage",
         "name": "",
         "storage": {"key": 1, "set_key": "x"},
+        "readiness_state": "limited",
         "schema": {"columns": []},
         "query_processors": [],
     }
@@ -142,6 +143,7 @@ def test_invalid_query_processor() -> None:
         "kind": "readable_storage",
         "name": "",
         "storage": {"key": "x", "set_key": "x"},
+        "readiness_state": "limited",
         "schema": {"columns": []},
         "query_processors": [5],
     }
@@ -156,6 +158,7 @@ def test_unexpected_key() -> None:
         "kind": "readable_storage",
         "name": "",
         "storage": {"key": "1", "set_key": "x"},
+        "readiness_state": "limited",
         "schema": {"columns": []},
         "query_processors": [],
         "extra": "",
@@ -170,6 +173,7 @@ def test_missing_required_key() -> None:
         "version": "v1",
         "name": "",
         "storage": {"key": "1", "set_key": "x"},
+        "readiness_state": "limited",
         "schema": {"columns": []},
         "query_processors": [],
     }
@@ -177,5 +181,40 @@ def test_missing_required_key() -> None:
         STORAGE_VALIDATORS["readable_storage"](config)
     assert (
         e.value.message
-        == "data must contain ['version', 'kind', 'name', 'storage', 'schema'] properties"
+        == "data must contain ['version', 'kind', 'name', 'storage', 'readiness_state', 'schema'] properties"
+    )
+
+
+def test_missing_readiness_state() -> None:
+    config = {
+        "version": "v1",
+        "kind": "readable_storage",
+        "name": "",
+        "storage": {"key": "1", "set_key": "x"},
+        "schema": {"columns": []},
+        "query_processors": [],
+    }
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert (
+        e.value.message
+        == "data must contain ['version', 'kind', 'name', 'storage', 'readiness_state', 'schema'] properties"
+    )
+
+
+def test_invalid_readiness_state() -> None:
+    config = {
+        "version": "v1",
+        "kind": "readable_storage",
+        "name": "",
+        "storage": {"key": "1", "set_key": "x"},
+        "readiness_state": "blah",
+        "schema": {"columns": []},
+        "query_processors": [],
+    }
+    with pytest.raises(JsonSchemaValueException) as e:
+        STORAGE_VALIDATORS["readable_storage"](config)
+    assert (
+        e.value.message
+        == "data.readiness_state must be one of ['limited', 'deprecate', 'partial', 'complete']"
     )
