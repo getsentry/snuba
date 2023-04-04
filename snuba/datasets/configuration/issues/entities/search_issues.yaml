@@ -163,9 +163,12 @@ query_processors:
   - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
 
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["project_id"]
+  - validator: TagConditionValidator
+    args: {}
 
 required_time_column: timestamp
