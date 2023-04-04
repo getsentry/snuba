@@ -15,7 +15,7 @@ from structlog.types import EventDict
 from structlog_sentry import SentryProcessor
 
 from snuba import settings
-from snuba.util import create_metrics
+from snuba.utils.metrics.util import create_metrics
 
 
 def add_severity_attribute(

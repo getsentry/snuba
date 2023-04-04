@@ -2,8 +2,6 @@ from typing import List, Optional
 
 import pytest
 
-from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToIPAddress,
@@ -28,7 +26,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request import Request
 
 errors_translators = TranslationMappers(
     columns=[
@@ -116,18 +113,23 @@ def test_storage_query_plan_builder(
     )
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
-    request = Request(
-        id="a",
-        original_body={"query": snql_query, "dataset": "transactions"},
-        query=query,
-        snql_anonymized=snql_anonymized,
-        query_settings=HTTPQuerySettings(referrer="r"),
-        attribution_info=AttributionInfo(
-            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
-        ),
-    )
     plan: ClickhouseQueryPlan = query_plan_builder.build_and_rank_plans(
-        query=query, settings=request.query_settings
+        query=query, settings=HTTPQuerySettings(referrer="r")
     )[0]
-
     assert plan.storage_set_key == expected_storage_set_key
+
+    # make sure that an allocation policy on the storage is applied to the
+    # from clause of the query. The query plan does not return the
+    # chosen storage so this complicated check exists to make sure the chosen storage's
+    # allocation policy exists on the data source
+    ch_from_clause = plan.query.get_from_clause()
+    correct_policy_assigned = False
+    for storage_conn in storage_connections:
+        storage = storage_conn.storage
+        table_name = storage.get_schema().get_data_source().get_table_name()  # type: ignore
+        if (
+            table_name == ch_from_clause.table_name
+            and ch_from_clause.allocation_policy == storage.get_allocation_policy()
+        ):
+            correct_policy_assigned = True
+    assert correct_policy_assigned
