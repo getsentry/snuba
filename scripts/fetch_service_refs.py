@@ -10,9 +10,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
-GO_SERVER_URL = os.environ.get(
-    "GO_SERVER_URL", "http://gocd-server.gocd.svc.cluster.local:8153/go"
-)
+GO_SERVER_URL = os.environ["GO_SERVER_URL"]
 
 
 def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
