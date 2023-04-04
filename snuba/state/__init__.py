@@ -36,7 +36,6 @@ kfk: Producer | None = None
 rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
-query_lock_prefix = "snuba-query-lock:"
 config_hash = "snuba-config"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
@@ -86,26 +85,6 @@ class MismatchedTypeException(Exception):
     key: str
     original_type: Type[Any]
     new_type: Type[Any]
-
-
-def get_concurrent(bucket: str) -> Any:
-    now = time.time()
-    bucket = "{}{}".format(ratelimit_prefix, bucket)
-    return rds.zcount(bucket, "({:f}".format(now), "+inf")
-
-
-def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
-    now = int(time.time())
-    bucket = "{}{}".format(ratelimit_prefix, bucket)
-    pipe = rds.pipeline(transaction=False)
-    rate_history_s = get_config("rate_history_sec", 3600)
-    assert rate_history_s is not None
-    for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
-        pipe.zcount(bucket, i, "({:f}".format(i + rollup))
-    return [c / float(rollup) for c in pipe.execute()]
-
-
-# Runtime Configuration
 
 
 class ConfigKeyCallable(Protocol):  # Necessary for typing the memoize
@@ -378,50 +357,3 @@ def flush_producer() -> None:
     if kfk is not None:
         messages_remaining = kfk.flush()
         logger.debug(f"{messages_remaining} querylog messages pending delivery")
-
-
-def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
-    try:
-        queries = []
-        for q in rds.lrange(queries_list, 0, -1):
-            try:
-                queries.append(json.loads(q))
-            except BaseException:
-                pass
-    except Exception as ex:
-        logger.exception(ex)
-
-    return queries
-
-
-def is_project_in_rollout_list(rollout_key: str, project_id: int) -> bool:
-    """
-    Helper function for doing selective rollouts by project ids. The config
-    value is assumed to be a string of the form `[project,project,...]`.
-
-    Returns `True` if `project_id` is present in the config.
-    """
-    project_rollout_setting = get_config(rollout_key, "")
-    assert isinstance(project_rollout_setting, str)
-    if project_rollout_setting:
-        # The expected format is [project,project,...]
-        project_rollout_setting = project_rollout_setting[1:-1]
-        if project_rollout_setting:
-            for p in project_rollout_setting.split(","):
-                if int(p.strip()) == project_id:
-                    return True
-    return False
-
-
-def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
-    """
-    Helper function for doing consistent incremental rollouts by project ids.
-    The config value is assumed to be an integer between 0 and 100.
-
-    Returns `True` if `project_id` falls within the rollout group.
-    """
-    project_rollout_percentage = get_config(rollout_key, 0)
-    assert isinstance(project_rollout_percentage, (int, float))
-    if project_rollout_percentage:
-        return project_id % 100 < project_rollout_percentage
-    return False
