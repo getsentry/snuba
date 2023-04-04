@@ -23,6 +23,25 @@
           "group:team-sns@sentry.io"
         ],
         "role": "roles/MigrationsReader"
+      },
+      {
+        "members": [
+          "user:dalitso.banda@sentry.io",
+          "user:enoch.tang@sentry.io",
+          "user:evan.hicks@sentry.io",
+          "user:fpacifici@sentry.io",
+          "user:john.yang@sentry.io",
+          "user:lyn@sentry.io",
+          "user:markus@sentry.io",
+          "user:matthew.cannizzaro@sentry.io",
+          "user:meredith@sentry.io",
+          "user:nikhar.saxena@sentry.io",
+          "user:oliver.newland@sentry.io",
+          "user:rahul.saini@sentry.io",
+          "user:riya.chakraborty@sentry.io",
+          "user:volo.kluev@sentry.io"
+        ],
+        "role": "roles/AllTools"
       }
     ]
   }
