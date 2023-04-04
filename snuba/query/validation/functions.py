@@ -1,4 +1,3 @@
-import logging
 from typing import Sequence
 
 from snuba import environment, state
@@ -8,7 +7,6 @@ from snuba.query.functions import is_valid_global_function
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "validation.functions")
 
 
