@@ -68,54 +68,82 @@ class _MigrationGroup:
 
 _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SYSTEM: _MigrationGroup(
-        SystemLoader(), {StorageSetKey.MIGRATIONS}, ReadinessState.COMPLETE
+        loader=SystemLoader(),
+        storage_sets_keys={StorageSetKey.MIGRATIONS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.EVENTS: _MigrationGroup(
-        EventsLoader(),
-        {StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC},
-        ReadinessState.COMPLETE,
+        loader=EventsLoader(),
+        storage_sets_keys={
+            StorageSetKey.EVENTS,
+            StorageSetKey.EVENTS_RO,
+            StorageSetKey.CDC,
+        },
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.TRANSACTIONS: _MigrationGroup(
-        TransactionsLoader(), {StorageSetKey.TRANSACTIONS}, ReadinessState.COMPLETE
+        loader=TransactionsLoader(),
+        storage_sets_keys={StorageSetKey.TRANSACTIONS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.DISCOVER: _MigrationGroup(
-        DiscoverLoader(), {StorageSetKey.DISCOVER}, ReadinessState.COMPLETE
+        loader=DiscoverLoader(),
+        storage_sets_keys={StorageSetKey.DISCOVER},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.METRICS: _MigrationGroup(
-        MetricsLoader(), {StorageSetKey.METRICS}, ReadinessState.COMPLETE
+        loader=MetricsLoader(),
+        storage_sets_keys={StorageSetKey.METRICS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.OUTCOMES: _MigrationGroup(
-        OutcomesLoader(), {StorageSetKey.OUTCOMES}, ReadinessState.COMPLETE
+        loader=OutcomesLoader(),
+        storage_sets_keys={StorageSetKey.OUTCOMES},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.SESSIONS: _MigrationGroup(
-        SessionsLoader(), {StorageSetKey.SESSIONS}, ReadinessState.COMPLETE
+        loader=SessionsLoader(),
+        storage_sets_keys={StorageSetKey.SESSIONS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.QUERYLOG: _MigrationGroup(
-        QuerylogLoader(), {StorageSetKey.QUERYLOG}, ReadinessState.PARTIAL
+        loader=QuerylogLoader(),
+        storage_sets_keys={StorageSetKey.QUERYLOG},
+        readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.PROFILES: _MigrationGroup(
-        ProfilesLoader(), {StorageSetKey.PROFILES}, ReadinessState.COMPLETE
+        loader=ProfilesLoader(),
+        storage_sets_keys={StorageSetKey.PROFILES},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.FUNCTIONS: _MigrationGroup(
-        FunctionsLoader(), {StorageSetKey.FUNCTIONS}, ReadinessState.COMPLETE
+        loader=FunctionsLoader(),
+        storage_sets_keys={StorageSetKey.FUNCTIONS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.REPLAYS: _MigrationGroup(
-        ReplaysLoader(), {StorageSetKey.REPLAYS}, ReadinessState.COMPLETE
+        loader=ReplaysLoader(),
+        storage_sets_keys={StorageSetKey.REPLAYS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GENERIC_METRICS: _MigrationGroup(
-        GenericMetricsLoader(),
-        {
+        loader=GenericMetricsLoader(),
+        storage_sets_keys={
             StorageSetKey.GENERIC_METRICS_SETS,
             StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
             StorageSetKey.GENERIC_METRICS_COUNTERS,
         },
-        ReadinessState.COMPLETE,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.TEST_MIGRATION: _MigrationGroup(
-        TestMigrationLoader(), set(), ReadinessState.LIMITED
+        loader=TestMigrationLoader(),
+        storage_sets_keys=set(),
+        readiness_state=ReadinessState.LIMITED,
     ),
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
-        SearchIssuesLoader(), {StorageSetKey.SEARCH_ISSUES}, ReadinessState.PARTIAL
+        loader=SearchIssuesLoader(),
+        storage_sets_keys={StorageSetKey.SEARCH_ISSUES},
+        readiness_state=ReadinessState.PARTIAL,
     ),
 }
 
@@ -124,9 +152,7 @@ class DuplicateStorageSetFoundInGroup(Exception):
     pass
 
 
-def build_storage_set_to_migration_group_mapping() -> Dict[
-    StorageSetKey, MigrationGroup
-]:
+def build_storage_set_to_group_mapping() -> Dict[StorageSetKey, MigrationGroup]:
     result = {}
     for migration_group, _migration_group in _REGISTERED_MIGRATION_GROUPS.items():
         for storage_set_key in _migration_group.storage_set_keys:
@@ -138,9 +164,9 @@ def build_storage_set_to_migration_group_mapping() -> Dict[
     return result
 
 
-STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[
+_STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[
     StorageSetKey, MigrationGroup
-] = build_storage_set_to_migration_group_mapping()
+] = build_storage_set_to_group_mapping()
 
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
@@ -150,5 +176,5 @@ def get_group_loader(group: MigrationGroup) -> GroupLoader:
 def get_group_readiness_state_from_storage_set(
     storage_set_key: StorageSetKey,
 ) -> ReadinessState:
-    migration_group = STORAGE_SET_TO_MIGRATION_GROUP_MAPPING[storage_set_key]
+    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING[storage_set_key]
     return _REGISTERED_MIGRATION_GROUPS[migration_group].readiness_state
