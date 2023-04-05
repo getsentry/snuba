@@ -56,6 +56,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.query.allocation_policies import AllocationPolicyViolation
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
@@ -66,8 +67,8 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
@@ -469,7 +470,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, RateLimitExceeded):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolation)):
             status = 429
             details = {
                 "type": "rate-limited",

@@ -35,7 +35,6 @@ class RequestSchema:
         query_schema: Schema,
         query_settings_schema: Schema,
         attribution_info_schema: Schema,
-        settings_class: Type[QuerySettings] = HTTPQuerySettings,
     ):
         self.__query_schema = query_schema
         self.__query_settings_schema = query_settings_schema
@@ -48,7 +47,6 @@ class RequestSchema:
             "definitions": {},
             "additionalProperties": False,
         }
-        self.__setting_class = settings_class
 
         for schema in itertools.chain(
             [
@@ -87,9 +85,7 @@ class RequestSchema:
     def build(cls, settings_class: Type[QuerySettings]) -> RequestSchema:
         generic_schema = SNQL_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMAS[settings_class]
-        return cls(
-            generic_schema, settings_schema, ATTRIBUTION_INFO_SCHEMA, settings_class
-        )
+        return cls(generic_schema, settings_schema, ATTRIBUTION_INFO_SCHEMA)
 
     def validate(self, value: MutableMapping[str, Any]) -> RequestParts:
         try:

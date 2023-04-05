@@ -166,19 +166,6 @@ def _boolify(s: Any) -> Optional[bool]:
     return None
 
 
-def _floatify(s: Any) -> Optional[float]:
-    if s is None:
-        return None
-
-    if isinstance(s, float):
-        return s
-
-    try:
-        return float(s)
-    except (ValueError, TypeError):
-        return None
-
-
 def _unicodify(s: Any) -> Optional[str]:
     if s is None:
         return None

@@ -10,7 +10,8 @@ from snuba.admin.clickhouse.migration_checks import (
     RunResult,
     StatusChecker,
 )
-from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
+from snuba.migrations.group_loader import DirectoryLoader, GroupLoader
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 

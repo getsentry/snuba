@@ -131,14 +131,5 @@ def enforce_retention(
 ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
 
 
-def escape_field(field: str) -> str:
-    """
-    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-    that we can always rebuild the tags from the map. When looking for tags with LIKE
-    there should be no issue. But there may be other cases.
-    """
-    return field.translate(ESCAPE_TRANSLATION)
-
-
 class EventTooOld(SerializableException):
     pass
