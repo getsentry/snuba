@@ -2,7 +2,7 @@ version: v1
 kind: dataset
 name: functions
 
-is_experimental: true
+is_experimental: false
 
 entities:
   - functions
