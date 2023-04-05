@@ -6,7 +6,7 @@ import rapidjson
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
-from arroyo.commit import IMMEDIATE
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -269,7 +269,7 @@ class SchedulerBuilder:
                 self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
             ),
             self.__build_strategy_factory(),
-            IMMEDIATE,
+            ONCE_PER_SECOND,
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
