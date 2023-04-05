@@ -401,7 +401,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__queue = ScheduledSubscriptionQueue()
 
         # Not a hard max
-        self.__max_buffer_size = 10000
+        self.__max_buffer_size = 80000
 
     def poll(self) -> None:
         # Remove completed tasks from the queue and raise if an exception occurred.
