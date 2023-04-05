@@ -37,9 +37,9 @@ def create_structure() -> None:
             `is_archived` AggregateFunction(max, UInt8)
         )
         ENGINE = AggregatingMergeTree()
-        PARTITION BY tuple()
-        PRIMARY KEY (project_id, timestamp, replay_id)
-        ORDER BY (project_id, timestamp, replay_id)
+        PARTITION BY tuple(toStartOfDay(end))
+        PRIMARY KEY (project_id, start, replay_id)
+        ORDER BY (project_id, start, replay_id)
     """
     )
     print("2", resp)
@@ -57,8 +57,8 @@ def create_structure() -> None:
             sumState(length(arrayFlatten(urls))) as len_urls,
             maxState(is_archived) as is_archived
         FROM replays_simplified
-        GROUP BY project_id, replay_start_timestamp, replay_id
-        ORDER BY project_id, replay_start_timestamp, replay_id
+        GROUP BY project_id, timestamp, replay_id
+        ORDER BY project_id, timestamp, replay_id
     """
     )
     print("3", resp)
