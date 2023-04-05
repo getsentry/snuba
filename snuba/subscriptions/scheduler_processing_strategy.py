@@ -500,4 +500,4 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     tick_subscription.tick_message.partition: tick_subscription.offset_to_commit
                 }
                 logger.info("Committing offset: %r", offset)
-                self.__commit(offset)
+                self.__commit(offset, force=True)
