@@ -120,12 +120,20 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
 }
 
 
+class DuplicateStorageSetFoundInGroup(Exception):
+    pass
+
+
 def build_storage_set_to_migration_group_mapping() -> Dict[
     StorageSetKey, MigrationGroup
 ]:
     result = {}
     for migration_group, _migration_group in _REGISTERED_MIGRATION_GROUPS.items():
         for storage_set_key in _migration_group.storage_set_keys:
+            if storage_set_key in result:
+                raise DuplicateStorageSetFoundInGroup(
+                    f"The storage_set={storage_set_key} is present in more than one MigrationGroup. Each storage_set should only reference one migration group."
+                )
             result[storage_set_key] = migration_group
     return result
 
