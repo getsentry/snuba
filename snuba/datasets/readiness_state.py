@@ -17,5 +17,5 @@ class ReadinessState(Enum):
         obj._value_ = args[0]
         return obj
 
-    def __init__(self, _: str, level: int):
+    def __init__(self, _: str, level: int = 0):
         self.level = level
