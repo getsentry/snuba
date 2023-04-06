@@ -261,6 +261,8 @@ if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
+READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 
 MAX_RESOLUTION_FOR_JITTER = 60
 

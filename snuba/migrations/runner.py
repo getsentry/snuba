@@ -21,7 +21,12 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
+from snuba.migrations.groups import (
+    OPTIONAL_GROUPS,
+    MigrationGroup,
+    get_group_loader,
+    get_readiness_state,
+)
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
@@ -33,15 +38,19 @@ DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
-
-    return [
-        group
-        for group in MigrationGroup
-        if not (
-            group in OPTIONAL_GROUPS
-            and group.value in settings.SKIPPED_MIGRATION_GROUPS
-        )
-    ]
+    groups = []
+    for group in MigrationGroup:
+        if group.value in settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED:
+            readiness_state = get_readiness_state(group)
+            if readiness_state.value in settings.SUPPORTED_STATES:
+                groups.append(group)
+        else:
+            if not (
+                group in OPTIONAL_GROUPS
+                and group.value in settings.SKIPPED_MIGRATION_GROUPS
+            ):
+                groups.append(group)
+    return groups
 
 
 class MigrationKey(NamedTuple):

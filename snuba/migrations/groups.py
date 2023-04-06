@@ -88,3 +88,7 @@ _REGISTERED_MIGRATION_GROUPS = {
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
     return _REGISTERED_MIGRATION_GROUPS[group].loader
+
+
+def get_readiness_state(group: MigrationGroup) -> ReadinessState:
+    return _REGISTERED_MIGRATION_GROUPS[group].readiness_state
