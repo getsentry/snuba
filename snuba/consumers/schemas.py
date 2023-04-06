@@ -3,7 +3,7 @@ from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_kafka_schemas
 import sentry_sdk
-from arroyo.processing.strategies.decoder.json import JsonCodec
+from arroyo.codecs.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
 
@@ -25,11 +25,11 @@ def get_schema(topic: Topic) -> Optional[Mapping[str, Any]]:
         return None
 
 
-_cache: MutableMapping[Topic, JsonCodec] = {}
+_cache: MutableMapping[Topic, JsonCodec[Any]] = {}
 
 
-def get_json_codec(topic: Topic) -> JsonCodec:
+def get_json_codec(topic: Topic) -> JsonCodec[Any]:
     if topic not in _cache:
-        _cache[topic] = JsonCodec(get_schema(topic))
+        _cache[topic] = JsonCodec(schema=get_schema(topic))
 
     return _cache[topic]

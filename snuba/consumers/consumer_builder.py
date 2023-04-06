@@ -240,7 +240,7 @@ class ConsumerBuilder:
 
         dlq_policy = None
         if self.__run_dlq_test:
-            dlq_policy = DlqPolicy(NoopDlqProducer(), DlqLimit())
+            dlq_policy = DlqPolicy(NoopDlqProducer(), DlqLimit(), None)
 
         return StreamProcessor(
             consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
