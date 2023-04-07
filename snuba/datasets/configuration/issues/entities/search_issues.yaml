@@ -32,6 +32,10 @@ schema:
             [ { name: key, type: String }, { name: value, type: String } ],
         },
     },
+    # These columns are added by the TagsExpanderProcessor
+    { name: tags_key, type: String},
+    { name: tags_value, type: String},
+    # -----------------------------------------------------
     { name: user, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_hash, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
     { name: user_id, type: String, args: { schema_modifiers: [ nullable ] } },
