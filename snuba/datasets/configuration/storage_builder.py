@@ -94,7 +94,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             config[ALLOCATION_POLICY]["name"]
         ).from_kwargs(**config[ALLOCATION_POLICY].get("args", {}))
         if ALLOCATION_POLICY in config
-        else {},
+        else None,
     }
 
 
