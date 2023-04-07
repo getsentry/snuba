@@ -41,6 +41,8 @@ schema:
     { name: user_id, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_name, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_email, type: String, args: { schema_modifiers: [ nullable ] } },
+    # column added by ColumnToIPAddress mapper
+    { name: ip_address, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [ nullable ] } },
     { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [ nullable ] } },
     { name: sdk_name, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
