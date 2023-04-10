@@ -47,8 +47,6 @@ pipelines:
                                     sentryio \
                                     "us.gcr.io/sentryio/snuba"
             - deploy-canary:
-                  approval:
-                      type: manual
                   fetch_materials: true
                   jobs:
                       create-sentry-release:
@@ -103,8 +101,6 @@ pipelines:
                                    /devinfra/scripts/canary/canarychecks.py \
                                      --wait-minutes=5
             - deploy:
-                  approval:
-                      type: manual
                   fetch_materials: true
                   jobs:
                       create-sentry-release:
