@@ -57,7 +57,7 @@ def list() -> None:
 @click.option("-g", "--group", default=None)
 @click.option(
     "-r",
-    "--readiness_state",
+    "--readiness-state",
     type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
     default=None,
 )
