@@ -10,6 +10,7 @@ from snuba import settings
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
@@ -255,6 +256,31 @@ def test_run_all_using_through() -> None:
         ).results
         == []
     )
+
+
+@pytest.mark.clickhouse_db
+def test_run_all_using_readiness() -> None:
+    """
+    Using "readiness_state" filtering groups by readiness state.
+    """
+    runner = Runner()
+
+    group = MigrationGroup.GENERIC_METRICS
+    all_generic_metrics = len(get_group_loader(group).get_migrations())
+    assert (
+        len(runner._get_pending_migrations_for_group(group=group))
+        == all_generic_metrics
+    )
+
+    # using different readiness wont change anything
+    runner.run_all(force=True, group=group, readiness_state=ReadinessState.LIMITED)
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (
+        all_generic_metrics
+    )
+
+    # using correct readiness state runs the migration
+    runner.run_all(force=True, group=group, readiness_state=ReadinessState.COMPLETE)
+    assert len(runner._get_pending_migrations_for_group(group=group)) == 0
 
 
 @pytest.mark.clickhouse_db
