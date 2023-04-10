@@ -15,7 +15,6 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyViolation,
     QueryResultOrError,
@@ -126,17 +125,16 @@ def test_apply_thread_quota(
 
 
 def _build_test_query(
-    select_expression: str,
-    allocation_policy: AllocationPolicy = DEFAULT_PASSTHROUGH_POLICY,
+    select_expression: str, allocation_policy: AllocationPolicy | None = None
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
-    storage = get_storage(StorageKey("errors"))
+    storage = get_storage(StorageKey("errors_ro"))
     return (
         ClickhouseQuery(
             from_clause=Table(
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policy=allocation_policy,
+                allocation_policy=allocation_policy or storage.get_allocation_policy(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -148,7 +146,7 @@ def _build_test_query(
         storage,
         AttributionInfo(
             app_id=AppID(key="key"),
-            tenant_ids={},
+            tenant_ids={"referrer": "something", "organization_id": 1234},
             referrer="something",
             team=None,
             feature=None,

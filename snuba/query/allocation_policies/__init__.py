@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.state import get_config
-from snuba.utils.registered_class import RegisteredClass
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import SerializableException
 from snuba.web import QueryException, QueryResult
 
@@ -204,4 +205,8 @@ class PassthroughPolicy(AllocationPolicy):
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
     StorageSetKey("default.no_storage_set_key"), required_tenant_types=[]
+)
+
+import_submodules_in_directory(
+    os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"
 )
