@@ -15,7 +15,11 @@ entity_contains_columns_tests = [
     pytest.param(
         "tests/datasets/configuration/entity_with_fixed_string.yaml",
         id="Validate Entity Columns",
-    )
+    ),
+    pytest.param(
+        "tests/datasets/configuration/entity_with_nested_field.yaml",
+        id="Validate nested columns",
+    ),
 ]
 
 

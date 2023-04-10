@@ -1,0 +1,27 @@
+version: v1
+kind: entity
+name: nested
+
+schema:
+- name: event_id
+  type: String
+- name: project_id
+  type: UInt
+  args:
+    size: 64
+- name: tags
+  type: Nested
+  args:
+    subcolumns:
+      - name: key,
+        type: String
+      - name: value
+        type: String
+storages:
+- storage: discover
+  is_writable: false
+required_time_column: event_id
+storage_selector:
+  selector: DefaultQueryStorageSelector
+query_processors: []
+validators: []
