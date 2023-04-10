@@ -20,7 +20,6 @@ schema:
     { name: environment, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
     { name: release, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
     { name: dist, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
-    { name: timestamp, type: DateTime },
     { name: receive_timestamp, type: DateTime },
     { name: client_timestamp, type: DateTime },
     {
@@ -32,17 +31,11 @@ schema:
             [ { name: key, type: String }, { name: value, type: String } ],
         },
     },
-    # These columns are added by the TagsExpanderProcessor
-    { name: tags_key, type: String},
-    { name: tags_value, type: String},
-    # -----------------------------------------------------
     { name: user, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_hash, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
     { name: user_id, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_name, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: user_email, type: String, args: { schema_modifiers: [ nullable ] } },
-    # column added by ColumnToIPAddress mapper
-    { name: ip_address, type: String, args: { schema_modifiers: [ nullable ] } },
     { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [ nullable ] } },
     { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [ nullable ] } },
     { name: sdk_name, type: String, args: { schema_modifiers: [ low_cardinality, nullable ] } },
@@ -170,12 +163,9 @@ query_processors:
   - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
 
-validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["project_id"]
-  - validator: TagConditionValidator
-    args: {}
 
 required_time_column: timestamp
