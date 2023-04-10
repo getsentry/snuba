@@ -15,15 +15,28 @@ pipelines:
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: a
             GKE_BASTION_ZONE: a
+            MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: master
                 destination: snuba
         stages:
+            - checks:
+                  approval:
+                      type: manual
+                  fetch_materials: true
+                  jobs:
+                      checks-migrations:
+                          timeout: 1800
+                          elastic_profile_id: snuba
+                          tasks:
+                              - script: |
+                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
+                                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
                   jobs:
@@ -96,7 +109,7 @@ pipelines:
                                     --label-selector="service=snuba-admin" \
                                     --container-name="snuba-admin" \
                                     "snuba-migrate" "ghcr.io/getsentry/snuba-ci:${GO_REVISION_SNUBA_REPO}" \
-                                    -- snuba migrations migrate --force
+                                    -- snuba migrations migrate -r ${MIGRATIONS_READINESS}
                               - plugin:
                                     options:
                                         script: |
