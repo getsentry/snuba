@@ -95,8 +95,8 @@ pipelines:
                                     --container-name="optimize"
 
             - migrate:
-                  approval:
-                      type: manual
+                #   approval:
+                #       type: manual
                   fetch_materials: true
                   jobs:
                       migrate:
