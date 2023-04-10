@@ -31,9 +31,15 @@ metrics = MetricsWrapper(environment.metrics, "replays.processor")
 ReplayEventDict = Mapping[Any, Any]
 RetentionDays = int
 
-# Limit for error_ids / trace_ids / urls array elements
-LIST_ELEMENT_LIMIT = 1000
+# Each segment spans a five second interval of time. These limits represent the upper-bounds
+# of what a reasonably behaved SDK should be able to record within that window. We set
+# conservative limits because each row is aggregated and can not be analyzed without loading every
+# item into memory.
+ERROR_ID_LIMIT = 10
 MAX_CLICK_EVENTS = 20
+TAG_LIMIT = 50
+TRACE_ID_LIMIT = 10
+URL_LIMIT = 10
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
@@ -41,14 +47,19 @@ USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 class ReplaysProcessor(DatasetMessageProcessor):
     def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
         return to_typed_list(
-            to_string, to_capped_list("urls", replay_event.get("urls"))
+            partial(to_visibly_capped_string, 256),
+            to_capped_list("urls", replay_event.get("urls"), URL_LIMIT),
         )
 
     def __process_trace_ids(self, trace_ids: Any) -> list[str]:
-        return to_typed_list(to_uuid, to_capped_list("trace_ids", trace_ids))
+        return to_typed_list(
+            to_uuid, to_capped_list("trace_ids", trace_ids, TRACE_ID_LIMIT)
+        )
 
     def __process_error_ids(self, error_ids: Any) -> list[str]:
-        return to_typed_list(to_uuid, to_capped_list("error_ids", error_ids))
+        return to_typed_list(
+            to_uuid, to_capped_list("error_ids", error_ids, ERROR_ID_LIMIT)
+        )
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -322,6 +333,17 @@ def to_capped_string(capacity: int, value: Any) -> str:
     return to_string(value)[:capacity]
 
 
+def to_visibly_capped_string(capacity: int, value: Any) -> str:
+    """Return a capped string with the last three characters displayed as elipses."""
+    assert capacity > 3
+
+    str_value = to_string(value)
+    if len(str_value) <= capacity:
+        return str_value
+    else:
+        return str_value[: capacity - 3] + "..."
+
+
 def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
     def inline(value: Any) -> str | None:
         for enum in enumeration:
@@ -332,9 +354,9 @@ def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
     return inline
 
 
-def to_capped_list(metric_name: str, value: Any) -> list[Any]:
+def to_capped_list(metric_name: str, value: Any, limit: int) -> list[Any]:
     """Return a list of values capped to the maximum allowable limit."""
-    return _capped_list(metric_name, default(list, maybe(_is_list, value)))
+    return _capped_list(metric_name, default(list, maybe(_is_list, value)), limit)
 
 
 def to_typed_list(callable: Callable[[Any], T], values: list[Any]) -> list[T]:
@@ -367,12 +389,12 @@ def _encode_utf8(value: str) -> str:
     return value.encode("utf8", errors="backslashreplace").decode("utf8")
 
 
-def _capped_list(metric_name: str, value: list[Any]) -> list[Any]:
+def _capped_list(metric_name: str, value: list[Any], limit: int) -> list[Any]:
     """Return a list with a maximum configured length."""
-    if len(value) > LIST_ELEMENT_LIMIT:
+    if len(value) > limit:
         metrics.increment(f'"{metric_name}" exceeded maximum length.')
 
-    return value[:LIST_ELEMENT_LIMIT]
+    return value[:limit]
 
 
 def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
@@ -409,7 +431,7 @@ def process_tags_object(value: Any) -> Tag:
         return Tag.empty_set()
 
     # Excess tags are trimmed.
-    tags = _capped_list("tags", normalize_tags(value))
+    tags = _capped_list("tags", normalize_tags(value), TAG_LIMIT)
 
     keys = []
     values = []

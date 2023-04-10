@@ -24,6 +24,7 @@ from snuba.datasets.processors.replays_processor import (
     to_typed_list,
     to_uint16,
     to_uuid,
+    to_visibly_capped_string,
 )
 from snuba.processor import InsertBatch
 
@@ -194,10 +195,10 @@ class ReplayEvent:
             "event_hash": self.event_hash or event_hash,
             "segment_id": self.segment_id,
             "trace_ids": list(
-                map(to_uuid, to_capped_list("trace_ids", self.trace_ids))
+                map(to_uuid, to_capped_list("trace_ids", self.trace_ids, 10))
             ),
             "error_ids": list(
-                map(to_uuid, to_capped_list("trace_ids", self.error_ids))
+                map(to_uuid, to_capped_list("trace_ids", self.error_ids, 10))
             ),
             "timestamp": maybe(to_datetime, self.timestamp),
             "replay_start_timestamp": maybe(to_datetime, self.replay_start_timestamp),
@@ -205,7 +206,7 @@ class ReplayEvent:
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
-            "urls": to_capped_list("urls", self.urls),
+            "urls": to_capped_list("urls", self.urls, 10),
             "is_archived": 1 if self.is_archived is True else None,
             "user_id": self.user_id,
             "user_name": self.user_name,
@@ -563,9 +564,9 @@ class TestReplaysProcessor:
 
     def test_to_capped_list(self) -> None:
         """Test "to_capped_list" function."""
-        assert to_capped_list("t", [1, 2]) == [1, 2]
-        assert len(to_capped_list("t", [1] * 10_000)) == 1000
-        assert to_capped_list("t", None) == []
+        assert to_capped_list("t", [1, 2], limit=3) == [1, 2]
+        assert len(to_capped_list("t", [1] * 10_000, limit=1000)) == 1000
+        assert to_capped_list("t", None, limit=1000) == []
 
     def test_to_typed_list(self) -> None:
         """Test "to_typed_list" function."""
@@ -589,6 +590,13 @@ class TestReplaysProcessor:
 
         with pytest.raises(ValueError):
             to_uuid("4")
+
+    def test_to_visibly_capped_string(self) -> None:
+        """Test "test_to_visibly_capped_string" function."""
+        assert to_visibly_capped_string(4, "1") == "1"
+        assert to_visibly_capped_string(6, "123456") == "123456"
+        assert to_visibly_capped_string(6, "1234567") == "123..."
+        pytest.raises(AssertionError, to_visibly_capped_string, 2, "test")
 
     def test_process_tags_object(self) -> None:
         """Test "process_tags_object" function."""
