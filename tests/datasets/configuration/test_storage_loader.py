@@ -50,6 +50,12 @@ query_processors:
       hash_map_name: hashmap
       killswitch: kill
 
+allocation_policy:
+  name: PassthroughPolicy
+  args:
+    storage_set_key: test-storage-set
+    required_tenant_types: ["some_tenant"]
+
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -61,6 +67,9 @@ query_processors:
             assert getattr(qp, "_MappingOptimizer__column_name") == "a"
             assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
             assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"
+            assert storage.get_allocation_policy()._required_tenant_types == {
+                "some_tenant"
+            }
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [
