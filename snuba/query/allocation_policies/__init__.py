@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
@@ -10,6 +11,8 @@ from snuba.state import get_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import SerializableException
 from snuba.web import QueryException, QueryResult
+
+logger = logging.getLogger("snuba.query.allocation_policy_base")
 
 
 @dataclass(frozen=True)
@@ -163,7 +166,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        allowance = self._get_quota_allowance(tenant_ids)
+        try:
+            allowance = self._get_quota_allowance(tenant_ids)
+        except Exception:
+            logger.exception(
+                "Allocation policy failed to get quota allowance, this is a bug, fix it"
+            )
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         if not allowance.can_run:
             raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
         return allowance
@@ -177,7 +186,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        return self._update_quota_balance(tenant_ids, result_or_error)
+        try:
+            return self._update_quota_balance(tenant_ids, result_or_error)
+        except Exception:
+            logger.exception(
+                "Allocation policy failed to update quota balance, this is a bug, fix it"
+            )
 
     @abstractmethod
     def _update_quota_balance(
