@@ -51,6 +51,8 @@ class IssueOccurrenceData(TypedDict, total=False):
     fingerprint: Sequence[str]
     issue_title: str
     subtitle: str
+    culprit: str
+    level: str
     resource_id: Optional[str]
     detection_time: float
 
@@ -223,6 +225,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "project_id": event["project_id"],
             "event_id": ensure_uuid(event["event_id"]),
             "search_title": event_occurrence_data["issue_title"],
+            "subtitle": event_occurrence_data.get("subtitle", None),
+            "culprit": event_occurrence_data.get("culprit", None),
+            "level": event_occurrence_data.get("level", None),
             "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": fingerprints,
             "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
