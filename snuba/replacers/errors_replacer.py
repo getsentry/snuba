@@ -234,6 +234,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 tags={"type": type_, "consumer_group": message.metadata.consumer_group},
             )
 
+        processed: Optional[Replacement]
+
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
             ReplacementType.START_MERGE,
