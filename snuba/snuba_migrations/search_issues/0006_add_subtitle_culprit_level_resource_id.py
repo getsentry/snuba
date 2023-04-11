@@ -10,7 +10,7 @@ from snuba.utils.schemas import String
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Adds `subtitle`, `culprit` and `level` columns.
+    Adds `resource_id`, `subtitle`, `culprit` and `level` columns.
 
     """
 
