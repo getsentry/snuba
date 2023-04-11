@@ -21,9 +21,6 @@ schema:
       { name: occurrence_type_id, type: UInt, args: { size: 16 } },
       { name: detection_timestamp, type: DateTime },
 
-      { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
-      { name: culprit, type: String, args: { schema_modifiers: [ nullable ] } },
-      { name: level, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: event_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
       { name: trace_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
       { name: platform, type: String },
