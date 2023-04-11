@@ -100,6 +100,7 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.NETWORK_ERROR: RequestStatus.NETWORK_TIMEOUT,
     ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: RequestStatus.INVALID_TYPING,
     ErrorCodes.TYPE_MISMATCH: RequestStatus.INVALID_TYPING,
+    ErrorCodes.NO_COMMON_TYPE: RequestStatus.INVALID_TYPING,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
 }
 
