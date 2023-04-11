@@ -71,23 +71,28 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]):
-        is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
         # TODO: This kind of killswitch should just be included with every allocation policy
+        is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
+        is_enforced = get_config(f"{self.rate_limit_prefix}.is_enforced", False)
         if not is_active:
-            return DEFAULT_PASSTHROUGH_POLICY._get_quota_allowance(tenant_ids)
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
-        if not ids_are_valid:
+        if not ids_are_valid and is_enforced:
             metrics.increment(
                 "db_request_rejected",
-                tags={"storage_set_key": self._storage_set_key.value},
+                tags={
+                    "storage_set_key": self._storage_set_key.value,
+                    "is_enforced": str(is_enforced),
+                },
             )
             return QuotaAllowance(
                 can_run=False, max_threads=0, explanation={"reason": why}
             )
-        # TODO: figure out an actually good number
         if "organization_id" in tenant_ids:
             org_scan_limit = get_config(
-                f"{self.rate_limit_prefix}.org_scan_limit", 10000
+                # TODO: figure out an actually good number
+                f"{self.rate_limit_prefix}.org_scan_limit",
+                10000,
             )
 
             timestamp, granted_quotas = self._rate_limiter.check_within_quotas(
@@ -116,9 +121,12 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             if granted_quota.granted <= 0:
                 metrics.increment(
                     "db_request_throttled",
-                    tags={"storage_set_key": self._storage_set_key.value},
+                    tags={
+                        "storage_set_key": self._storage_set_key.value,
+                        "is_enforced": str(is_enforced),
+                    },
                 )
-                if get_config(f"{self.rate_limit_prefix}.is_enforced", True):
+                if is_enforced:
                     num_threads = 1
                     explanation[
                         "reason"
@@ -132,6 +140,9 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
+        is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
+        if not is_active:
+            return
         if result_or_error.error:
             return
         query_result = result_or_error.query_result
