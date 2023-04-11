@@ -21,6 +21,8 @@ ENABLE_DEV_FEATURES = True
 # to explore the unrefined Expression structure
 PRETTY_FORMAT_EXPRESSIONS = True
 
+RAISE_ON_ALLOCATION_POLICY_FAILURES = True
+
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 

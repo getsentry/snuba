@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -66,13 +68,24 @@ def test_passes_through_on_error() -> None:
         ) -> None:
             raise ValueError("you messed up AGAIN")
 
-    # should not raise even though the implementation is buggy
-    assert (
-        BadlyWrittenAllocationPolicy(StorageSetKey("something"), [])
-        .get_quota_allowance({})
-        .can_run
-    )
+    with pytest.raises(AttributeError):
+        BadlyWrittenAllocationPolicy(
+            StorageSetKey("something"), []
+        ).get_quota_allowance({})
 
-    BadlyWrittenAllocationPolicy(StorageSetKey("something"), []).update_quota_balance(
-        None, None
-    )  # type: ignore
+    with pytest.raises(ValueError):
+        BadlyWrittenAllocationPolicy(StorageSetKey("something"), []).update_quota_balance(None, None)  # type: ignore
+
+    # should not raise even though the implementation is buggy (this is the production setting)
+    with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
+        assert (
+            BadlyWrittenAllocationPolicy(StorageSetKey("something"), [])
+            .get_quota_allowance({})
+            .can_run
+        )
+
+        BadlyWrittenAllocationPolicy(
+            StorageSetKey("something"), []
+        ).update_quota_balance(
+            None, None  # type: ignore
+        )

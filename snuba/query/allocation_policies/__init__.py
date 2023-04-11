@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
+from snuba import settings
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.state import get_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -172,6 +173,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         if not allowance.can_run:
             raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
@@ -192,6 +195,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
 
     @abstractmethod
     def _update_quota_balance(
