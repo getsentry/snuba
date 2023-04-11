@@ -23,6 +23,16 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     table_name=params[0],
                     column=Column(
+                        "resource_id",
+                        String(Modifiers(nullable=True)),
+                    ),
+                    after="fingerprint",
+                    target=params[1],
+                ),
+                operations.AddColumn(
+                    storage_set=StorageSetKey.SEARCH_ISSUES,
+                    table_name=params[0],
+                    column=Column(
                         "subtitle",
                         String(Modifiers(nullable=True)),
                     ),
@@ -61,6 +71,12 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         ops = [
             [
+                operations.DropColumn(
+                    StorageSetKey.SEARCH_ISSUES,
+                    table_name=params[0],
+                    column_name="resource_id",
+                    target=params[1],
+                ),
                 operations.DropColumn(
                     StorageSetKey.SEARCH_ISSUES,
                     table_name=params[0],
