@@ -22,6 +22,7 @@ schema:
       { name: detection_timestamp, type: DateTime },
 
 
+      { name: resource_id, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: culprit, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: level, type: String, args: { schema_modifiers: [ nullable ] } },
