@@ -343,6 +343,14 @@ class TestSearchIssuesMessageProcessor:
             "200.1",
         ]
 
+    def test_extract_resource_id(self, message_base):
+        resource_id = uuid.uuid4().hex
+        message_base["occurrence_data"]["resource_id"] = resource_id
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "resource_id" in insert_row and insert_row["resource_id"] == resource_id
+
     def test_extract_subtitle(self, message_base):
         sub = "Just according to keikaku. (Translator’s note: Keikaku means plan)"
         message_base["occurrence_data"]["subtitle"] = sub

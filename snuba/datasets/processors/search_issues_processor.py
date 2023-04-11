@@ -230,6 +230,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "level": event_occurrence_data.get("level", None),
             "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": fingerprints,
+            "resource_id": event_occurrence_data.get("resource_id", None),
             "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
