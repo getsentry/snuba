@@ -12,6 +12,7 @@ not coupled with other changes.
 # changes to these files here are allowed to be coupled with migrations
 ALLOWED_MIGRATIONS_GLOBS = [
     "snuba/migrations/groups.py",
+    "snuba/migrations/group_loader.py",
     "tests",
     "test_distributed_migrations",
     "test_initialization",
