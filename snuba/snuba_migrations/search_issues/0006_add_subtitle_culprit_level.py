@@ -44,7 +44,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     table_name=params[0],
                     column=Column(
                         "level",
-                        String(Modifiers(nullable=True)),
+                        String(Modifiers(low_cardinality=True, nullable=True)),
                     ),
                     after="culprit",
                     target=params[1],
