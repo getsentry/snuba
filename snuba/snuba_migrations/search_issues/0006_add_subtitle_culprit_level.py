@@ -26,7 +26,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         "subtitle",
                         String(Modifiers(nullable=True)),
                     ),
-                    after="search_message",
+                    after="search_title",
                     target=params[1],
                 ),
                 operations.AddColumn(
