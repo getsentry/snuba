@@ -2,6 +2,7 @@ from typing import List, Optional, Sequence
 
 import sentry_sdk
 
+from snuba import settings as snuba_settings
 from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
@@ -174,6 +175,17 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storage_connection = self.get_storage(query, settings)
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
+
+        # TODO: return error here?
+        from snuba.web import QueryException
+
+        assert isinstance(storage, ReadableTableStorage)
+        readiness_state = storage.get_readiness_state()
+        if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
+            raise QueryException(
+                f"Query plan could not be built because the selected storage={storage.get_storage_key().value} is not available in this environment."
+            )
+
         cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
