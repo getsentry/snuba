@@ -50,7 +50,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._rate_limiter = RedisSlidingWindowRateLimiter()
 
@@ -70,7 +70,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return False, "no organization_id for referrer {tenant_ids['referrer']}"
         return True, ""
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]):
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         # TODO: This kind of killswitch should just be included with every allocation policy
         is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
         is_enforced = get_config(f"{self.rate_limit_prefix}.is_enforced", False)
