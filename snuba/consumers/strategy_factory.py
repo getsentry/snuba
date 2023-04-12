@@ -10,12 +10,6 @@ from arroyo.processing.strategies import (
     RunTaskInThreads,
 )
 from arroyo.processing.strategies.commit import CommitOffsets
-from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
-    DeadLetterQueue,
-)
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
-)
 from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
@@ -73,12 +67,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
-        dead_letter_queue_policy_creator: Optional[
-            Callable[[], DeadLetterQueuePolicy]
-        ] = None,
     ) -> None:
         self.__prefilter = prefilter
-        self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
         self.__process_message = process_message
         self.__collector = collector
 
@@ -160,13 +150,5 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         if self.__prefilter is not None:
             strategy = FilterStep(self.__should_accept, strategy)
-
-        if self.__dead_letter_queue_policy_creator is not None:
-            # The DLQ Policy is instantiated here so it gets the correct
-            # metrics singleton in the init function of the policy
-            # It also ensures any producer/consumer is recreated on rebalance
-            strategy = DeadLetterQueue(
-                strategy, self.__dead_letter_queue_policy_creator()
-            )
 
         return strategy

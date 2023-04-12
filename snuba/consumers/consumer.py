@@ -28,6 +28,7 @@ import sentry_sdk
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
+from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
@@ -37,16 +38,6 @@ from arroyo.processing.strategies import (
     Reduce,
     RunTaskInThreads,
     TransformStep,
-)
-from arroyo.processing.strategies.dead_letter_queue import (
-    InvalidKafkaMessage,
-    InvalidMessages,
-)
-from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
-    DeadLetterQueue,
-)
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
 )
 from arroyo.types import (
     BaseValue,
@@ -491,22 +482,6 @@ MultistorageProcessedMessage = Sequence[
 ]
 
 
-def __invalid_kafka_message(
-    value: BrokerValue[KafkaPayload], consumer_group: str, err: Exception
-) -> InvalidKafkaMessage:
-    return InvalidKafkaMessage(
-        payload=value.payload.value,
-        timestamp=value.timestamp,
-        topic=value.partition.topic.name,
-        consumer_group=consumer_group,
-        partition=value.partition.index,
-        offset=value.offset,
-        headers=value.payload.headers,
-        key=value.payload.key,
-        reason=f"{err.__class__.__name__}: {err}",
-    )
-
-
 def process_message(
     processor: MessageProcessor,
     consumer_group: str,
@@ -560,9 +535,8 @@ def process_message(
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
-            raise InvalidMessages(
-                [__invalid_kafka_message(message.value, consumer_group, err)]
-            ) from err
+            value = message.value
+            raise InvalidMessage(value.partition, value.offset) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
@@ -716,7 +690,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
-        dead_letter_policy_creator: Optional[Callable[[], DeadLetterQueuePolicy]],
         slice_id: Optional[int],
         commit_log_config: Optional[CommitLogConfig] = None,
         replacements: Optional[Topic] = None,
@@ -744,7 +717,6 @@ class MultistorageConsumerProcessingStrategyFactory(
 
         self.__storages = storages
         self.__metrics = metrics
-        self.__dead_letter_policy_creator = dead_letter_policy_creator
 
         self.__process_message_fn = process_message_multistorage
 
@@ -804,11 +776,6 @@ class MultistorageConsumerProcessingStrategyFactory(
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
                 initializer=self.__initialize_parallel_transform,
-            )
-
-        if self.__dead_letter_policy_creator is not None:
-            inner_strategy = DeadLetterQueue(
-                inner_strategy, self.__dead_letter_policy_creator()
             )
 
         return TransformStep(
