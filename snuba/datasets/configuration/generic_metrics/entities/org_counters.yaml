@@ -86,4 +86,4 @@ query_processors:
 validators:
   - validator: GranularityValidator
     args:
-      minimum: 3600
+      minimum: 60
