@@ -4,6 +4,7 @@ import logging
 import time
 
 from snuba import environment
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
@@ -50,8 +51,13 @@ class ErrorsAllocationPolicy(AllocationPolicy):
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        storage_set_key: StorageSetKey,
+        required_tenant_types: list[str],
+        **kwargs: str,
+    ) -> None:
+        super().__init__(storage_set_key, required_tenant_types)
         self._rate_limiter = RedisSlidingWindowRateLimiter()
 
     @property
