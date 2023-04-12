@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 import pytest
-from arroyo.processing.strategies.dead_letter_queue import (
-    DeadLetterQueuePolicy,
-    ProduceInvalidMessagePolicy,
-)
 from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.configuration.storage_builder import (
-    STORAGE_VALIDATORS,
-    build_stream_loader,
-)
+from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
+from snuba.datasets.configuration.storage_builder import build_stream_loader
 from snuba.datasets.configuration.utils import DlqConfig, generate_dlq_config
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors import DatasetMessageProcessor
