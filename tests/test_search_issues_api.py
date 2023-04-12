@@ -83,12 +83,12 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
         response = self.post_query(
             f"""MATCH (search_issues)
-                                    SELECT count() AS count BY project_id
-                                    WHERE project_id = {evt["project_id"]}
-                                    AND timestamp >= toDateTime('{from_date}')
-                                    AND timestamp < toDateTime('{to_date}')
-                                    LIMIT 1000
-                                    """
+                SELECT count() AS count BY project_id
+                WHERE project_id = {evt["project_id"]}
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
         )
 
         data = json.loads(response.data)
@@ -138,12 +138,12 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         to_date = (now + timedelta(days=1)).isoformat()
         response = self.post_query(
             f"""MATCH (search_issues)
-                                            SELECT count() AS count BY project_id
-                                            WHERE project_id = 1
-                                            AND timestamp >= toDateTime('{from_date}')
-                                            AND timestamp < toDateTime('{to_date}')
-                                            LIMIT 1000
-                                            """
+                SELECT count() AS count BY project_id
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
         )
 
         data = json.loads(response.data)
@@ -157,21 +157,65 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             }
         ]
 
-        # the below uses the snuba_sdk which currently doesn't map "from_date" and "to_date"
-        # query params to new dataset timestamp columns
-        #
-        # query = {
-        #     "project": 1,
-        #     "selected_columns": [],
-        #     "groupby": "project_id",
-        #     "aggregations": [["count()", "", "count"]],
-        #     "conditions": [["group_id", "=", 3],
-        #                    # ["detection_timestamp", ">=", (now - timedelta(minutes=1)).timestamp()],
-        #                    # ["detection_timestamp", "<", (now + timedelta(minutes=1)).timestamp()]
-        #                    ],
-        #     "from_date": (now - timedelta(days=1)).isoformat(),
-        #     "to_date": (now + timedelta(days=1)).isoformat(),
-        # }
-        # response = self.post(json.dumps(query))
-        # result = json.loads(response.data)
-        # assert result["data"] == [{"count": 1, "project_id": 1}]
+    def test_eventstream_query_optional_columns(self) -> None:
+        now = datetime.now()
+
+        event_id = str(uuid.uuid4())
+        event = (
+            2,
+            "insert",
+            {
+                "project_id": 1,
+                "organization_id": 2,
+                "event_id": event_id,
+                "group_id": 3,
+                "retention_days": 90,
+                "primary_hash": str(uuid.uuid4()),
+                "datetime": datetime.utcnow().isoformat() + "Z",
+                "platform": "other",
+                "data": {
+                    "received": now.timestamp(),
+                },
+                "occurrence_data": {
+                    "id": str(uuid.uuid4()),
+                    "type": 1,
+                    "issue_title": "search me",
+                    "fingerprint": ["one", "two"],
+                    "detection_time": now.timestamp(),
+                    "resource_id": uuid.uuid4().hex,
+                    "subtitle": "my subtitle",
+                    "culprit": "my culprit",
+                    "level": "info",
+                },
+            },
+        )
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(event)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT project_id, event_id, resource_id, subtitle, culprit, level
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+            """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "project_id": 1,
+                "event_id": event[2]["event_id"].replace("-", ""),
+                "resource_id": event[2]["occurrence_data"]["resource_id"],
+                "subtitle": event[2]["occurrence_data"]["subtitle"],
+                "culprit": event[2]["occurrence_data"]["culprit"],
+                "level": event[2]["occurrence_data"]["level"],
+            }
+        ]
