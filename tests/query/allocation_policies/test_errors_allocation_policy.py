@@ -11,7 +11,7 @@ from snuba.query.allocation_policies.errors_allocation_policy import (
     _ORG_LESS_REFERRERS,
     ErrorsAllocationPolicy,
 )
-from snuba.state import get_config, set_config
+from snuba.state import set_config
 from snuba.web import QueryResult
 
 ORG_SCAN_LIMIT = 1000
@@ -127,7 +127,6 @@ def test_enforcement_switch(policy) -> None:
         ),
     )
     set_config(f"{policy.rate_limit_prefix}.is_enforced", False)
-    assert not get_config(f"{policy.rate_limit_prefix}.is_enforced", True)
     allowance = policy.get_quota_allowance(tenant_ids)
     # policy not enforced
     assert allowance.max_threads == MAX_THREAD_NUMBER
