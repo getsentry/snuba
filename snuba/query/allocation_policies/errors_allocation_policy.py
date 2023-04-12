@@ -127,7 +127,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 # reacts to such changes
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_limit_bytes_scanned),  # type: ignore
+                                limit=int(org_limit_bytes_scanned),
                                 prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
