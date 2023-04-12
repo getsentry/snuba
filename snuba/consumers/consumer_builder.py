@@ -247,7 +247,7 @@ class ConsumerBuilder:
             resolved_topic = Topic(dlq_topic_spec.get_physical_topic_name(slice_id))
 
             dlq_policy = DlqPolicy(
-                KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit()
+                KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit(), None
             )
         else:
             dlq_policy = None
