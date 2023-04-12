@@ -234,6 +234,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 tags={"type": type_, "consumer_group": message.metadata.consumer_group},
             )
 
+        processed: Optional[Replacement]
+
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
             ReplacementType.START_MERGE,
@@ -243,9 +245,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == ReplacementType.END_DELETE_GROUPS:
-            processed = process_delete_groups(
+            processed = DeleteGroupsReplacement.parse_message(
                 cast(ReplacementMessage[EndDeleteGroupsMessageBody], message),
-                self.__required_columns,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_MERGE:
             processed = process_merge(
@@ -580,36 +582,83 @@ class ReplaceGroupReplacement(Replacement):
         """
 
 
-def process_delete_groups(
-    message: ReplacementMessage[EndDeleteGroupsMessageBody],
-    required_columns: Sequence[str],
-) -> Optional[Replacement]:
-    group_ids = message.data["group_ids"]
-    if not group_ids:
-        return None
+@dataclass
+class DeleteGroupsReplacement(Replacement):
+    project_id: int
+    required_columns: Sequence[str]
+    timestamp: datetime
+    group_ids: Sequence[int]
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndDeleteGroupsMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[DeleteGroupsReplacement]:
 
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+        group_ids = message.data["group_ids"]
+        if not group_ids:
+            return None
 
-    query_args = {
-        "group_ids": ", ".join(str(gid) for gid in group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        assert all(isinstance(gid, int) for gid in group_ids)
 
-    query_time_flags = (EXCLUDE_GROUPS, message.data["project_id"], group_ids)
+        timestamp = datetime.strptime(
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    return _build_event_tombstone_replacement(
-        message, required_columns, where, query_args, query_time_flags
-    )
+        return cls(
+            required_columns=context.required_columns,
+            project_id=message.data["project_id"],
+            timestamp=timestamp,
+            group_ids=group_ids,
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
+        )
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return ExcludeGroups(group_ids=self.group_ids)
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
+
+    @cached_property
+    def _where_clause(self) -> str:
+        group_ids = ", ".join(str(gid) for gid in self.group_ids)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id IN ({group_ids})
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = ", ".join(self.required_columns)
+        select_columns = ", ".join(
+            map(lambda i: i if i != "deleted" else "1", self.required_columns)
+        )
+        return f"""\
+            INSERT INTO {table_name} ({required_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
 
 
 def process_tombstone_events(
