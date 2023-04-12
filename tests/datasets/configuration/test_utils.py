@@ -14,10 +14,7 @@ from snuba.datasets.configuration.storage_builder import (
     STORAGE_VALIDATORS,
     build_stream_loader,
 )
-from snuba.datasets.configuration.utils import (
-    DlqConfig,
-    generate_dlq_config,
-)
+from snuba.datasets.configuration.utils import DlqConfig, generate_dlq_config
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
