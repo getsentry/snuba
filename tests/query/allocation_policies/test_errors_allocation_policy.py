@@ -15,6 +15,8 @@ from snuba.state import get_config, set_config
 from snuba.web import QueryResult
 
 ORG_SCAN_LIMIT = 1000
+THROTTLED_THREAD_NUMBER = 1
+MAX_THREAD_NUMBER = 400
 
 
 @pytest.fixture(scope="function")
@@ -30,6 +32,10 @@ def _configure_policy(policy):
     set_config(f"{policy.rate_limit_prefix}.is_active", True)
     set_config(f"{policy.rate_limit_prefix}.is_enforced", True)
     set_config(f"{policy.rate_limit_prefix}.org_scan_limit", ORG_SCAN_LIMIT)
+    set_config(
+        f"{policy.rate_limit_prefix}.throttled_thread_number", THROTTLED_THREAD_NUMBER
+    )
+    set_config("query_settings/max_threads", MAX_THREAD_NUMBER)
 
 
 @pytest.mark.redis_db
@@ -42,7 +48,7 @@ def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
     }
     allowance = policy.get_quota_allowance(tenant_ids)
     assert allowance.can_run
-    assert allowance.max_threads == 8
+    assert allowance.max_threads == MAX_THREAD_NUMBER
     policy.update_quota_balance(
         tenant_ids,
         QueryResultOrError(
@@ -54,7 +60,7 @@ def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
     )
     allowance = policy.get_quota_allowance(tenant_ids)
     assert allowance.can_run
-    assert allowance.max_threads == 1
+    assert allowance.max_threads == THROTTLED_THREAD_NUMBER
 
 
 @pytest.mark.redis_db
@@ -79,11 +85,12 @@ def test_org_isolation(policy) -> None:
         "referrer": "some_referrer",
     }
     allowance = policy.get_quota_allowance(different_tenant_ids)
-    assert allowance.max_threads == 8
+    assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
 @pytest.mark.redis_db
 def test_killswitch(policy) -> None:
+    _configure_policy(policy)
     set_config(f"{policy.rate_limit_prefix}.is_active", False)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
@@ -100,11 +107,12 @@ def test_killswitch(policy) -> None:
     )
     allowance = policy.get_quota_allowance(tenant_ids)
     # policy is not active so no change
-    assert allowance.max_threads == 8
+    assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
 @pytest.mark.redis_db
 def test_enforcement_switch(policy) -> None:
+    _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
@@ -122,7 +130,7 @@ def test_enforcement_switch(policy) -> None:
     assert not get_config(f"{policy.rate_limit_prefix}.is_enforced", True)
     allowance = policy.get_quota_allowance(tenant_ids)
     # policy not enforced
-    assert allowance.max_threads == 8
+    assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
 @pytest.mark.redis_db

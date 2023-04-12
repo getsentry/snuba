@@ -10,7 +10,7 @@ from snuba import settings
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.state import get_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
-from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
@@ -55,11 +55,13 @@ class AllocationPolicyViolation(SerializableException):
         )
 
     @property
-    def quota_allowance(self):
-        return self.extra_data.get("quota_allowance", {})
+    def quota_allowance(self) -> dict[str, JsonSerializable]:
+        return cast(
+            "dict[str, JsonSerializable]", self.extra_data.get("quota_allowance", {})
+        )
 
     @property
-    def explanation(self) -> dict[str, Any]:
+    def explanation(self) -> dict[str, JsonSerializable]:
         return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
 
     def __str__(self) -> str:

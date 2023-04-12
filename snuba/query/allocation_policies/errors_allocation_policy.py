@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import cast
 
 from snuba import environment
 from snuba.clusters.storage_sets import StorageSetKey
@@ -80,6 +81,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         # TODO: This kind of killswitch should just be included with every allocation policy
         is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
         is_enforced = get_config(f"{self.rate_limit_prefix}.is_enforced", False)
+        throttled_thread_number = cast(
+            int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
+        )
+        max_threads = cast(int, get_config("query_settings/max_threads", 8))
         if not is_active:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
@@ -122,7 +127,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     ),
                 ]
             )
-            num_threads = 8
+            num_threads = max_threads
             explanation = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
@@ -134,13 +139,13 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     },
                 )
                 if is_enforced:
-                    num_threads = 1
+                    num_threads = throttled_thread_number
                     explanation[
                         "reason"
                     ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_scan_limit}"
 
             return QuotaAllowance(True, num_threads, explanation)
-        return QuotaAllowance(True, 8, {})
+        return QuotaAllowance(True, max_threads, {})
 
     def _update_quota_balance(
         self,
