@@ -136,6 +136,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     tags={
                         "storage_set_key": self._storage_set_key.value,
                         "is_enforced": str(is_enforced),
+                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )
                 if is_enforced:
