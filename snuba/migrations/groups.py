@@ -178,3 +178,7 @@ def get_group_readiness_state_from_storage_set(
 ) -> ReadinessState:
     migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING[storage_set_key]
     return _REGISTERED_MIGRATION_GROUPS[migration_group].readiness_state
+
+
+def get_group_readiness_state(group: MigrationGroup) -> ReadinessState:
+    return _REGISTERED_MIGRATION_GROUPS[group].readiness_state

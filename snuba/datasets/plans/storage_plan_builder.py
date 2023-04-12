@@ -24,6 +24,7 @@ from snuba.datasets.storage import (
     ReadableStorage,
     ReadableTableStorage,
 )
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -34,7 +35,7 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
-from snuba.util import with_span
+from snuba.utils.metrics.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -91,12 +92,16 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
 
 
 def get_query_data_source(
-    relational_source: RelationalSource, final: bool, sampling_rate: Optional[float]
+    relational_source: RelationalSource,
+    allocation_policy: AllocationPolicy,
+    final: bool,
+    sampling_rate: Optional[float],
 ) -> Table:
     assert isinstance(relational_source, TableSource)
     return Table(
         table_name=relational_source.get_table_name(),
         schema=relational_source.get_columns(),
+        allocation_policy=allocation_policy,
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
@@ -184,6 +189,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             clickhouse_query.set_from_clause(
                 get_query_data_source(
                     storage.get_schema().get_data_source(),
+                    allocation_policy=storage.get_allocation_policy(),
                     final=query.get_final(),
                     sampling_rate=query.get_sample(),
                 )

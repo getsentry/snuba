@@ -348,6 +348,11 @@ STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
+STORAGE_ALLOCATION_POLICY_SCHEMA = registered_class_schema(
+    "name",
+    "AllocationPolicy",
+    "Name of the AllocationPolicy used for allocating read resources per query on this storage.",
+)
 STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
     "processor",
     "ReplacerProcessor",
@@ -545,6 +550,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
     },
     "required": [
         "version",
@@ -571,6 +577,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",

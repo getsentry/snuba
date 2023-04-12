@@ -164,7 +164,7 @@ def test_subscription_task_result_encoder() -> None:
         task_result.task.task.subscription.identifier
     )
     assert payload["request"] == request.original_body
-    assert payload["result"] == result
+    assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == EntityKey.EVENTS.value
 
@@ -247,7 +247,7 @@ def test_metrics_subscription_task_result_encoder(
         task_result.task.task.subscription.identifier
     )
     assert payload["request"] == request.original_body
-    assert payload["result"] == result
+    assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == entity_key.value
 

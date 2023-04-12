@@ -401,7 +401,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__queue = ScheduledSubscriptionQueue()
 
         # Not a hard max
-        self.__max_buffer_size = 10000
+        self.__max_buffer_size = 80000
 
     def poll(self) -> None:
         # Remove completed tasks from the queue and raise if an exception occurred.
@@ -454,7 +454,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
             offset = {message.value.partition: message.value.payload.offset_to_commit}
-            logger.info("Committing offset: %r", offset)
+            logger.info("Committing offset - no subscriptions: %r", offset)
             self.__commit(offset)
             return
 
@@ -500,4 +500,4 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     tick_subscription.tick_message.partition: tick_subscription.offset_to_commit
                 }
                 logger.info("Committing offset: %r", offset)
-                self.__commit(offset)
+                self.__commit(offset, force=True)

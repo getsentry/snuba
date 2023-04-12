@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from glob import glob
 
 import sentry_sdk
@@ -12,10 +11,6 @@ from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableS
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.validator import StorageValidator
 from snuba.utils.config_component_factory import ConfigComponentFactory
-
-logger = logging.getLogger(__name__)
-
-USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
 
 class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
