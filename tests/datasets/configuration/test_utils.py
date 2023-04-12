@@ -14,7 +14,10 @@ from snuba.datasets.configuration.storage_builder import (
     STORAGE_VALIDATORS,
     build_stream_loader,
 )
-from snuba.datasets.configuration.utils import generate_policy_creator
+from snuba.datasets.configuration.utils import (
+    DlqConfig,
+    generate_dlq_config,
+)
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
@@ -25,21 +28,10 @@ from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
 
-def assert_valid_policy_creator(
-    policy_creator: Callable[[], DeadLetterQueuePolicy] | None
-) -> None:
-    assert policy_creator is not None
-    policy = policy_creator()
-    assert isinstance(policy, ProduceInvalidMessagePolicy)
-    policy.terminate()
-
-
-def test_generate_policy_creator() -> None:
-    assert_valid_policy_creator(
-        generate_policy_creator(
-            {"type": "produce", "args": [Topic.DEAD_LETTER_GENERIC_METRICS.value]}
-        )
-    )
+def test_generate_dlq_config() -> None:
+    assert generate_dlq_config(
+        {"type": "produce", "args": [Topic.DEAD_LETTER_GENERIC_METRICS.value]}
+    ) == DlqConfig(Topic.DEAD_LETTER_GENERIC_METRICS)
 
 
 def test_build_stream_loader() -> None:
@@ -83,7 +75,7 @@ def test_build_stream_loader() -> None:
         result_topic_spec is not None
         and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS
     )
-    assert_valid_policy_creator(loader.get_dead_letter_queue_policy_creator())
+    assert loader.get_dlq_config() == DlqConfig(topic=Topic.DEAD_LETTER_GENERIC_METRICS)
 
 
 def test_stream_loader_processor_init_arg() -> None:
