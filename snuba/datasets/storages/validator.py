@@ -27,7 +27,7 @@ class StorageValidator:
         group_readiness_state = get_group_readiness_state_from_storage_set(
             storage_set_key
         )
-        if storage_readiness_state.level > group_readiness_state.level:
+        if storage_readiness_state > group_readiness_state:
             raise IncompatibleReadinessStates(
                 f"The storage={storage_set_key} readiness state is greater than the corresponding migration group's readiness state."
             )

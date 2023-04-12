@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
 
 
 class ReadinessState(Enum):
-    LIMITED = "limited", 1
-    DEPRECATE = "deprecate", 2
-    PARTIAL = "partial", 3
-    COMPLETE = "complete", 4
+    LIMITED = "limited"
+    DEPRECATE = "deprecate"
+    PARTIAL = "partial"
+    COMPLETE = "complete"
 
-    def __new__(
-        cls: Any, *args: tuple[Any], **kwargs: dict[str, Any]
-    ) -> ReadinessState:
-        obj: ReadinessState = object.__new__(cls)
-        obj._value_ = args[0]
-        return obj
+    def __init__(self, _: str) -> None:
+        self.order = {"limited": 1, "deprecate": 2, "partial": 3, "complete": 4}
 
-    def __init__(self, _: str, level: int = 0):
-        self.level = level
+    def __gt__(self, other_rs: ReadinessState) -> bool:
+        return self.order[self.value] > self.order[other_rs.value]
+
+    def __lt__(self, other_rs: ReadinessState) -> bool:
+        return self.order[self.value] < self.order[other_rs.value]
