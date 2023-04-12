@@ -68,13 +68,13 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_dist",
-                target=OperationTarget.DISTRIBUTED,
+                table_name="search_issues_local",
+                target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name="search_issues_local",
-                target=OperationTarget.LOCAL,
+                table_name="search_issues_dist",
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
