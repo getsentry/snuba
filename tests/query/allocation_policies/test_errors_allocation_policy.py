@@ -31,7 +31,7 @@ def policy():
 def _configure_policy(policy):
     set_config(f"{policy.rate_limit_prefix}.is_active", True)
     set_config(f"{policy.rate_limit_prefix}.is_enforced", True)
-    set_config(f"{policy.rate_limit_prefix}.org_scan_limit", ORG_SCAN_LIMIT)
+    set_config(f"{policy.rate_limit_prefix}.org_limit_bytes_scanned", ORG_SCAN_LIMIT)
     set_config(
         f"{policy.rate_limit_prefix}.throttled_thread_number", THROTTLED_THREAD_NUMBER
     )

@@ -46,6 +46,8 @@ _ORG_LESS_REFERRERS = set(
     ]
 )
 
+UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
+
 
 class ErrorsAllocationPolicy(AllocationPolicy):
 
@@ -103,11 +105,11 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
         if "organization_id" in tenant_ids:
-            org_scan_limit = cast(
+            org_limit_bytes_scanned = cast(
                 int,
                 get_config(
                     # TODO: figure out an actually good number
-                    f"{self.rate_limit_prefix}.org_scan_limit",
+                    f"{self.rate_limit_prefix}.org_limit_bytes_scanned",
                     10000,
                 ),
             )
@@ -118,14 +120,14 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                         self.rate_limit_prefix,
                         # request a big number because we don't know how much we actually
                         # will use in this query. this doesn't use up any quota, we just want to know how much is left
-                        int(1e10),
+                        UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
                         [
                             Quota(
                                 # TODO: Make window configurable but I don't know exactly how the rate limiter
                                 # reacts to such changes
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_scan_limit),  # type: ignore
+                                limit=int(org_limit_bytes_scanned),  # type: ignore
                                 prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
@@ -146,10 +148,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 )
                 explanation[
                     "reason"
-                ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_scan_limit}"
+                ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 explanation["is_enforced"] = is_enforced
                 explanation["granted_quota"] = granted_quota.granted
-                explanation["limit"] = org_scan_limit
+                explanation["limit"] = org_limit_bytes_scanned
 
                 if is_enforced:
                     num_threads = throttled_thread_number
@@ -172,7 +174,9 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         if not bytes_scanned:
             logging.error("No bytes scanned in query_result")
             return
-        org_scan_limit = get_config(f"{self.rate_limit_prefix}.org_scan_limit", 10000)
+        org_limit_bytes_scanned = get_config(
+            f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
+        )
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
         self._rate_limiter.use_quotas(
@@ -184,7 +188,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                         Quota(
                             window_seconds=self.WINDOW_SECONDS,
                             granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=int(org_scan_limit),  # type: ignore
+                            limit=int(org_limit_bytes_scanned),  # type: ignore
                             prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
                         )
                     ],
