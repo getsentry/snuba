@@ -27,6 +27,7 @@ metrics = MetricsWrapper(environment.metrics, "errors_allocation_policy")
 # purposefully not in config because we don't want that to be easily changeable
 _ORG_LESS_REFERRERS = set(
     [
+        "subscription_executor",
         "weekly_reports.outcomes",
         "reports.key_errors",
         "weekly_reports.key_transactions.this_week",
@@ -38,7 +39,6 @@ _ORG_LESS_REFERRERS = set(
         "migration.backfill_perf_issue_events_issue_platform",
         "api.vroom",
         "replays.query.download_replay_segments",
-        "outcomes.timeseries",
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
         "reprocessing2.start_group_reprocessing",
@@ -73,7 +73,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             "organization_id" not in tenant_ids
             and tenant_ids.get("referrer", None) not in _ORG_LESS_REFERRERS
         ):
-            return False, "no organization_id for referrer {tenant_ids['referrer']}"
+            return False, f"no organization_id for referrer {tenant_ids['referrer']}"
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
@@ -83,7 +83,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         if not is_active:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
-        if not ids_are_valid and is_enforced:
+        if not ids_are_valid:
             metrics.increment(
                 "db_request_rejected",
                 tags={
@@ -91,9 +91,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     "is_enforced": str(is_enforced),
                 },
             )
-            return QuotaAllowance(
-                can_run=False, max_threads=0, explanation={"reason": why}
-            )
+            if is_enforced:
+                return QuotaAllowance(
+                    can_run=False, max_threads=0, explanation={"reason": why}
+                )
         if "organization_id" in tenant_ids:
             org_scan_limit = get_config(
                 # TODO: figure out an actually good number
@@ -146,8 +147,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
-        if not is_active:
+        if not get_config(f"{self.rate_limit_prefix}.is_active", True):
             return
         if result_or_error.error:
             return
@@ -177,7 +177,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             ],
             grants=[
                 GrantedQuota(
-                    "{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
                     granted=bytes_scanned,
                     reached_quotas=[],
                 )
