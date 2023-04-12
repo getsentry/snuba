@@ -55,6 +55,10 @@ class AllocationPolicyViolation(SerializableException):
         )
 
     @property
+    def quota_allowance(self):
+        return self.extra_data.get("quota_allowance", {})
+
+    @property
     def explanation(self) -> dict[str, Any]:
         return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
 

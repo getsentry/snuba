@@ -163,7 +163,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         self._rate_limiter.use_quotas(
             [
                 RequestedQuota(
-                    "{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
                     bytes_scanned,
                     [
                         Quota(
