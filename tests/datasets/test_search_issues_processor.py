@@ -388,6 +388,24 @@ class TestSearchIssuesMessageProcessor:
             with pytest.raises(ValueError):
                 self.process_message(message_base)
 
+    def test_extract_transaction_duration(self, message_base):
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
+
+        message_base["occurrence_data"]["transaction_duration"] = None
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
+
+        message_base["occurrence_data"]["transaction_duration"] = 1000
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 1000
+
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
             ensure_uuid("not_a_uuid")

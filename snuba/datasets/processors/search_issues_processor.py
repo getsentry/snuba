@@ -55,6 +55,7 @@ class IssueOccurrenceData(TypedDict, total=False):
     level: str
     resource_id: Optional[str]
     detection_time: float
+    transaction_duration: Optional[int]
 
 
 class IssueEventData(TypedDict, total=False):
@@ -237,6 +238,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
+            "transaction_duration": event_occurrence_data.get("transaction_duration")
+            if event_occurrence_data.get("transaction_duration")
+            else 0,
         }
 
         # optional fields
