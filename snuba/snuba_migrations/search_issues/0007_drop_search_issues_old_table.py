@@ -25,7 +25,7 @@ columns: List[Column[Modifiers]] = [
     Column("primary_hash", UUID()),
     Column("fingerprint", Array(String())),
     Column("occurrence_id", UUID()),
-    Column("occurrence_type_id", UInt(8)),
+    Column("occurrence_type_id", UInt(16)),
     Column("detection_timestamp", DateTime()),
     Column("event_id", UUID(Modifiers(nullable=True))),
     Column("trace_id", UUID(Modifiers(nullable=True))),
@@ -50,6 +50,7 @@ columns: List[Column[Modifiers]] = [
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
+    Column("deleted", UInt(8)),
     Column("message_timestamp", DateTime()),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
@@ -82,38 +83,52 @@ class Migration(migration.ClickhouseNodeMigration):
             [
                 operations.CreateTable(
                     storage_set=StorageSetKey.SEARCH_ISSUES,
-                    table_name=params[0],
+                    table_name=new_table,
                     columns=columns,
                     engine=table_engines.ReplacingMergeTree(
                         order_by="(project_id, toStartOfDay(receive_timestamp), primary_hash, cityHash64(occurrence_id))",
+                        version_column="deleted",
                         partition_by="(retention_days, toMonday(receive_timestamp))",
                         sample_by="cityHash64(occurrence_id)",
                         settings={"index_granularity": "8192"},
                         storage_set=StorageSetKey.SEARCH_ISSUES,
                         ttl="receive_timestamp + toIntervalDay(retention_days)",
                     ),
-                    target=params[1],
+                    target=target,
                 ),
                 operations.AddColumn(
                     storage_set=StorageSetKey.SEARCH_ISSUES,
-                    table_name=params[0],
+                    table_name=new_table,
                     column=Column(
                         "_tags_hash_map",
                         Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                     ),
                     after="tags.value",
-                    target=params[1],
+                    target=target,
                 ),
-                operations.ModifyColumn(
+                operations.DropTable(
                     storage_set=StorageSetKey.SEARCH_ISSUES,
-                    table_name=params[0],
-                    column=Column("occurrence_type_id", UInt(16)),
-                    target=params[1],
+                    table_name=old_table,
+                    target=target,
+                ),
+                operations.RenameTable(
+                    storage_set=StorageSetKey.SEARCH_ISSUES,
+                    old_table_name=old_table,
+                    new_table_name=new_table,
+                    target=target,
                 ),
             ]
-            for params in [
-                ("search_issues_dist", OperationTarget.DISTRIBUTED),
-                ("search_issues_local", OperationTarget.LOCAL),
+            for new_table, old_table, target in [
+                (
+                    "search_issues_local_new",
+                    "search_issues_local",
+                    OperationTarget.LOCAL,
+                ),
+                (
+                    "search_issues_dist_new",
+                    "search_issues_dist",
+                    OperationTarget.DISTRIBUTED,
+                ),
             ]
         ]
 
