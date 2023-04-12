@@ -61,6 +61,12 @@ def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
     allowance = policy.get_quota_allowance(tenant_ids)
     assert allowance.can_run
     assert allowance.max_threads == THROTTLED_THREAD_NUMBER
+    assert allowance.explanation == {
+        "reason": f"organization 123 is over the bytes scanned limit of {ORG_SCAN_LIMIT}",
+        "is_enforced": True,
+        "granted_quota": 0,
+        "limit": ORG_SCAN_LIMIT,
+    }
 
 
 @pytest.mark.redis_db

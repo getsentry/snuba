@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import cast
+from typing import Any, cast
 
 from snuba import environment
 from snuba.clusters.storage_sets import StorageSetKey
@@ -79,8 +79,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         # TODO: This kind of killswitch should just be included with every allocation policy
-        is_active = get_config(f"{self.rate_limit_prefix}.is_active", True)
-        is_enforced = get_config(f"{self.rate_limit_prefix}.is_enforced", False)
+        is_active = cast(bool, get_config(f"{self.rate_limit_prefix}.is_active", True))
+        is_enforced = cast(
+            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", False)
+        )
         throttled_thread_number = cast(
             int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
         )
@@ -101,10 +103,13 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
         if "organization_id" in tenant_ids:
-            org_scan_limit = get_config(
-                # TODO: figure out an actually good number
-                f"{self.rate_limit_prefix}.org_scan_limit",
-                10000,
+            org_scan_limit = cast(
+                int,
+                get_config(
+                    # TODO: figure out an actually good number
+                    f"{self.rate_limit_prefix}.org_scan_limit",
+                    10000,
+                ),
             )
 
             timestamp, granted_quotas = self._rate_limiter.check_within_quotas(
@@ -128,7 +133,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 ]
             )
             num_threads = max_threads
-            explanation = {}
+            explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
                 metrics.increment(
@@ -139,11 +144,15 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )
+                explanation[
+                    "reason"
+                ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_scan_limit}"
+                explanation["is_enforced"] = is_enforced
+                explanation["granted_quota"] = granted_quota.granted
+                explanation["limit"] = org_scan_limit
+
                 if is_enforced:
                     num_threads = throttled_thread_number
-                    explanation[
-                        "reason"
-                    ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_scan_limit}"
 
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, max_threads, {})
