@@ -14,6 +14,35 @@ from tests.helpers import write_unprocessed_events
 from tests.test_api import SimpleAPITest
 
 
+def base_insert_event(
+    now: datetime = datetime.now(),
+) -> Tuple[int, str, MutableMapping[str, Any]]:
+    return (
+        2,
+        "insert",
+        {
+            "project_id": 1,
+            "organization_id": 2,
+            "event_id": str(uuid.uuid4()),
+            "group_id": 3,
+            "retention_days": 90,
+            "primary_hash": str(uuid.uuid4()),
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "platform": "other",
+            "data": {
+                "received": now.timestamp(),
+            },
+            "occurrence_data": {
+                "id": str(uuid.uuid4()),
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": now.timestamp(),
+            },
+        },
+    )
+
+
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -104,33 +133,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
     def test_eventstream_endpoint(self) -> None:
         now = datetime.now()
-
-        event = (
-            2,
-            "insert",
-            {
-                "project_id": 1,
-                "organization_id": 2,
-                "event_id": str(uuid.uuid4()),
-                "group_id": 3,
-                "retention_days": 90,
-                "primary_hash": str(uuid.uuid4()),
-                "datetime": datetime.utcnow().isoformat() + "Z",
-                "platform": "other",
-                "data": {
-                    "received": now.timestamp(),
-                },
-                "occurrence_data": {
-                    "id": str(uuid.uuid4()),
-                    "type": 1,
-                    "issue_title": "search me",
-                    "fingerprint": ["one", "two"],
-                    "detection_time": now.timestamp(),
-                },
-            },
-        )
         response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(event)
+            "/tests/search_issues/eventstream", data=json.dumps(base_insert_event(now))
         )
         assert response.status_code == 200
 
@@ -160,37 +164,14 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_eventstream_query_optional_columns(self) -> None:
         now = datetime.now()
 
-        event_id = str(uuid.uuid4())
-        event = (
-            2,
-            "insert",
-            {
-                "project_id": 1,
-                "organization_id": 2,
-                "event_id": event_id,
-                "group_id": 3,
-                "retention_days": 90,
-                "primary_hash": str(uuid.uuid4()),
-                "datetime": datetime.utcnow().isoformat() + "Z",
-                "platform": "other",
-                "data": {
-                    "received": now.timestamp(),
-                },
-                "occurrence_data": {
-                    "id": str(uuid.uuid4()),
-                    "type": 1,
-                    "issue_title": "search me",
-                    "fingerprint": ["one", "two"],
-                    "detection_time": now.timestamp(),
-                    "resource_id": uuid.uuid4().hex,
-                    "subtitle": "my subtitle",
-                    "culprit": "my culprit",
-                    "level": "info",
-                },
-            },
-        )
+        insert_row = base_insert_event(now)
+        insert_row[2]["occurrence_data"]["resource_id"] = uuid.uuid4().hex
+        insert_row[2]["occurrence_data"]["subtitle"] = "my subtitle"
+        insert_row[2]["occurrence_data"]["culprit"] = "my culprit"
+        insert_row[2]["occurrence_data"]["level"] = "info"
+
         response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(event)
+            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
         )
         assert response.status_code == 200
 
@@ -212,10 +193,10 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert data["data"] == [
             {
                 "project_id": 1,
-                "event_id": event[2]["event_id"].replace("-", ""),
-                "resource_id": event[2]["occurrence_data"]["resource_id"],
-                "subtitle": event[2]["occurrence_data"]["subtitle"],
-                "culprit": event[2]["occurrence_data"]["culprit"],
-                "level": event[2]["occurrence_data"]["level"],
+                "event_id": insert_row[2]["event_id"].replace("-", ""),
+                "resource_id": insert_row[2]["occurrence_data"]["resource_id"],
+                "subtitle": insert_row[2]["occurrence_data"]["subtitle"],
+                "culprit": insert_row[2]["occurrence_data"]["culprit"],
+                "level": insert_row[2]["occurrence_data"]["level"],
             }
         ]
