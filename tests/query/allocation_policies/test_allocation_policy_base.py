@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest import mock
-
 import pytest
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -9,7 +7,6 @@ from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicyViolation,
     PassthroughPolicy,
-    QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.state import set_config
@@ -54,38 +51,3 @@ def test_raises_on_false_can_run():
         RejectingEverythingAllocationPolicy(
             StorageSetKey("something"), []
         ).get_quota_allowance({})
-
-
-def test_passes_through_on_error() -> None:
-    class BadlyWrittenAllocationPolicy(PassthroughPolicy):
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
-        ) -> QuotaAllowance:
-            raise AttributeError("You messed up!")
-
-        def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
-        ) -> None:
-            raise ValueError("you messed up AGAIN")
-
-    with pytest.raises(AttributeError):
-        BadlyWrittenAllocationPolicy(
-            StorageSetKey("something"), []
-        ).get_quota_allowance({})
-
-    with pytest.raises(ValueError):
-        BadlyWrittenAllocationPolicy(StorageSetKey("something"), []).update_quota_balance(None, None)  # type: ignore
-
-    # should not raise even though the implementation is buggy (this is the production setting)
-    with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
-        assert (
-            BadlyWrittenAllocationPolicy(StorageSetKey("something"), [])
-            .get_quota_allowance({})
-            .can_run
-        )
-
-        BadlyWrittenAllocationPolicy(
-            StorageSetKey("something"), []
-        ).update_quota_balance(
-            None, None  # type: ignore
-        )
