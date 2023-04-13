@@ -240,12 +240,6 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-# By default, allocation policies won't block requests from going through in a production
-# environment to not cause incidents unnecessarily. If something goes wrong with allocation
-# policy code, the request will still be able to go through (but it will create a dangerous
-# situation eventually)
-RAISE_ON_ALLOCATION_POLICY_FAILURES = False
-
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
