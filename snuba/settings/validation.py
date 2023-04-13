@@ -69,6 +69,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
         "snuba-dead-letter-generic-events",
+        "snuba-dead-letter-querylog",
         "snuba-generic-events-commit-log",
     }
 
