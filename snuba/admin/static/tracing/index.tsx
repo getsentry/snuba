@@ -23,11 +23,7 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
     !logLine.message.startsWith("Read")
   ) {
     return MessageCategory.housekeeping;
-  } else if (
-    component.match(
-      /^(default.(\S+) \(SelectExecutor\)|MergeTreeSelectProcessor)/
-    )
-  ) {
+  } else if (component.match(/\(SelectExecutor\)|MergeTreeSelectProcessor/)) {
     return MessageCategory.select_execution;
   } else if (
     component.match(/^InterpreterSelectQuery|AggregatingTransform|Aggregator/)
