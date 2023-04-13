@@ -250,9 +250,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__replacement_context,
             )
         elif type_ == ReplacementType.END_MERGE:
-            processed = process_merge(
+            processed = MergeReplacement.parse_message(
                 cast(ReplacementMessage[EndMergeMessageBody], message),
-                self.__all_columns,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_UNMERGE:
             processed = UnmergeGroupsReplacement.parse_message(
@@ -370,69 +370,6 @@ def _build_event_tombstone_replacement(
         "required_columns": ", ".join(required_columns),
         "select_columns": ", ".join(select_columns),
         "project_id": message.data["project_id"],
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        final_query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
-
-
-def _build_group_replacement(
-    message: Union[
-        ReplacementMessage[EndMergeMessageBody],
-        ReplacementMessage[ReplaceGroupMessageBody],
-    ],
-    project_id: int,
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: LegacyQueryTimeFlags,
-    all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    txn = message.data.get("transaction_id")
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
-            logger.error(
-                "Skipping duplicate group replacement", extra={"project_id": project_id}
-            )
-            return None
-        else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
-
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
-        all_column_names,
-    )
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": project_id,
     }
     final_query_args.update(query_args)
 
@@ -754,10 +691,8 @@ class ExcludeGroupsReplacement(Replacement):
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
-def process_merge(
-    message: ReplacementMessage[EndMergeMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
+@dataclass
+class MergeReplacement(Replacement):
     """
     Merge all events of one group into another group.
 
@@ -770,39 +705,102 @@ def process_merge(
         process_exclude_groups
     """
 
-    where = """\
-        PREWHERE group_id IN (%(previous_group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    project_id: int
+    previous_group_ids: Sequence[int]
+    new_group_id: int
+    timestamp: datetime
 
-    previous_group_ids = message.data["previous_group_ids"]
-    if not previous_group_ids:
-        return None
+    all_columns: Sequence[FlattenedColumn]
 
-    assert all(isinstance(gid, int) for gid in previous_group_ids)
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndMergeMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[MergeReplacement]:
+        project_id = message.data["project_id"]
+        previous_group_ids = message.data["previous_group_ids"]
+        if not previous_group_ids:
+            return None
 
-    query_args = {
-        "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        assert all(isinstance(gid, int) for gid in previous_group_ids)
 
-    project_id: int = message.data["project_id"]
-    query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
+        timestamp = datetime.strptime(
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    return _build_group_replacement(
-        message,
-        project_id,
-        where,
-        query_args,
-        query_time_flags,
-        all_columns,
-    )
+        # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+        # this is only for performance of the backlog.
+        txn = message.data.get("transaction_id")
+        if txn:
+            if txn in SEEN_MERGE_TXN_CACHE:
+                logger.error(
+                    "Skipping duplicate group replacement",
+                    extra={"project_id": project_id},
+                )
+                return None
+            else:
+                SEEN_MERGE_TXN_CACHE.append(txn)
+
+        return cls(
+            project_id=project_id,
+            previous_group_ids=previous_group_ids,
+            new_group_id=message.data["new_group_id"],
+            timestamp=timestamp,
+            all_columns=context.all_columns,
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
+        )
+
+    @cached_property
+    def _where_clause(self) -> str:
+        previous_group_ids = ", ".join(str(gid) for gid in self.previous_group_ids)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id IN ({previous_group_ids})
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        all_columns = ", ".join(all_column_names)
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> QueryTimeFlags:
+        return ExcludeGroups(group_ids=self.previous_group_ids)
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
 
 @dataclass(frozen=True)
