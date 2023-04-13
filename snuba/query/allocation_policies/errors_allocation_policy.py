@@ -47,6 +47,7 @@ _ORG_LESS_REFERRERS = set(
 )
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
+_RATE_LIMITER = RedisSlidingWindowRateLimiter()
 
 
 class ErrorsAllocationPolicy(AllocationPolicy):
@@ -61,7 +62,6 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         **kwargs: str,
     ) -> None:
         super().__init__(storage_set_key, required_tenant_types)
-        self._rate_limiter = RedisSlidingWindowRateLimiter()
 
     @property
     def rate_limit_prefix(self) -> str:
@@ -114,7 +114,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 ),
             )
 
-            timestamp, granted_quotas = self._rate_limiter.check_within_quotas(
+            timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
                     RequestedQuota(
                         self.rate_limit_prefix,
@@ -170,16 +170,18 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return
         query_result = result_or_error.query_result
         assert query_result is not None
-        bytes_scanned = query_result.result["profile"]["bytes"]  # type: ignore
-        if not bytes_scanned:
-            logging.error("No bytes scanned in query_result")
+        bytes_scanned = query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
+        if bytes_scanned is None:
+            logging.error("No bytes scanned in query_result %s", query_result)
+            return
+        if bytes_scanned == 0:
             return
         org_limit_bytes_scanned = get_config(
             f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
         )
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
-        self._rate_limiter.use_quotas(
+        _RATE_LIMITER.use_quotas(
             [
                 RequestedQuota(
                     f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
