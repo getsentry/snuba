@@ -36,7 +36,7 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
-from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.clickhouse.escaping import escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import (
@@ -266,12 +266,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__state_name,
             )
         elif type_ == ReplacementType.END_DELETE_TAG:
-            processed = process_delete_tag(
+            processed = DeleteTagReplacement.parse_message(
                 cast(ReplacementMessage[EndDeleteTagMessageBody], message),
-                self.__all_columns,
-                self.__tag_column_map,
-                self.__promoted_tags,
-                self.__schema,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
             processed = process_tombstone_events(
@@ -1004,97 +1001,118 @@ def process_unmerge_hierarchical(
     )
 
 
-def process_delete_tag(
-    message: ReplacementMessage[EndDeleteTagMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-    tag_column_map: Mapping[str, Mapping[str, str]],
-    promoted_tags: Mapping[str, Sequence[str]],
-    schema: WritableTableSchema,
-) -> Optional[Replacement]:
-    tag = message.data["tag"]
-    if not tag:
-        return None
+@dataclass
+class DeleteTagReplacement(Replacement):
+    project_id: int
+    tag: str
+    timestamp: datetime
+    tag_column_name: str
+    is_promoted: bool
+    all_columns: Sequence[FlattenedColumn]
+    schema: WritableTableSchema
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
-    assert isinstance(tag, str)
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
-    tag_column_name = tag_column_map["tags"].get(tag, tag)
-    is_promoted = tag in promoted_tags["tags"]
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndDeleteTagMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[DeleteTagReplacement]:
+        tag = message.data["tag"]
+        if not tag:
+            return None
 
-    # We cannot put the tag condition (which is what we are mutating) in the
-    # prewhere clause. This is because the prewhere clause is processed before
-    # the FINAL clause.
-    # So if we are trying to mutate a row that was mutated before but not merged
-    # yet, the PREWHERE would return the old row that has already been
-    # replaced.
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-        AND has(`tags.key`, %(tag_str)s)
-    """
+        assert isinstance(tag, str)
+        timestamp = datetime.strptime(
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
+        tag_column_name = context.tag_column_map["tags"].get(tag, tag)
+        is_promoted = tag in context.promoted_tags["tags"]
 
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+        return cls(
+            project_id=message.data["project_id"],
+            tag=tag,
+            timestamp=timestamp,
+            tag_column_name=tag_column_name,
+            is_promoted=is_promoted,
+            all_columns=context.all_columns,
+            schema=context.schema,
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
+        )
 
-    select_columns = []
-    for col in all_columns:
-        if is_promoted and col.flattened == tag_column_name:
-            # The promoted tag columns of events are non nullable, but those of
-            # errors are non nullable. We check the column against the schema
-            # to determine whether to write an empty string or NULL.
-            column_type = schema.get_data_source().get_columns().get(tag_column_name)
-            assert column_type is not None
-            is_nullable = column_type.type.has_modifier(Nullable)
-            if is_nullable:
-                select_columns.append("NULL")
+    @cached_property
+    def _where_clause(self) -> str:
+        tag_str = escape_string(self.tag)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+        return f"""\
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+            AND has(`tags.key`, {tag_str})
+        """
+
+    @cached_property
+    def _select_columns(self) -> Sequence[str]:
+        select_columns = []
+        for col in self.all_columns:
+            if self.is_promoted and col.flattened == self.tag_column_name:
+                # The promoted tag columns of events are non nullable, but those of
+                # errors are non nullable. We check the column against the schema
+                # to determine whether to write an empty string or NULL.
+                column_type = (
+                    self.schema.get_data_source()
+                    .get_columns()
+                    .get(self.tag_column_name)
+                )
+                assert column_type is not None
+                is_nullable = column_type.type.has_modifier(Nullable)
+                if is_nullable:
+                    select_columns.append("NULL")
+                else:
+                    select_columns.append("''")
+            elif col.flattened == "tags.key":
+                select_columns.append(
+                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
+                    % escape_string(self.tag)
+                )
+            elif col.flattened == "tags.value":
+                select_columns.append(
+                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
+                    % escape_string(self.tag)
+                )
             else:
-                select_columns.append("''")
-        elif col.flattened == "tags.key":
-            select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
-                % escape_string(tag)
-            )
-        elif col.flattened == "tags.value":
-            select_columns.append(
-                "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
-                % escape_string(tag)
-            )
-        else:
-            select_columns.append(col.escaped)
+                select_columns.append(col.escaped)
 
-    all_column_names = [col.escaped for col in all_columns]
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message.data["project_id"],
-        "tag_str": escape_string(tag),
-        "tag_column": escape_identifier(tag_column_name),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        return select_columns
 
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_columns = ", ".join(col.escaped for col in self.all_columns)
+        select_columns = ", ".join(self._select_columns)
 
-    query_time_flags = (NEEDS_FINAL, message.data["project_id"])
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
 
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> QueryTimeFlags:
+        return NeedsFinal()
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
