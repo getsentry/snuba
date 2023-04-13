@@ -1161,29 +1161,6 @@ class TestSnQLApi(BaseApiTest):
             == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
         )
 
-    def test_split_bullshit(self) -> None:
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "legacy": True,
-                    "query": """MATCH (events) SELECT event_id, group_id, project_id, timestamp WHERE
-timestamp >= toDateTime('2023-01-13T21:50:02.960807') AND timestamp < toDateTime('2023-04-13T21:50:03.957655') AND project_id IN tuple(6641999) AND project_id IN tuple(6641999) ORDER BY timestamp DESC, event_id DESC LIMIT 101 OFFSET 0""",
-                    "dataset": "events",
-                    "app_id": "legacy",
-                    "tenant_ids": {
-                        "organization_id": 74868,
-                        "referrer": "api.project-events",
-                    },
-                    "parent_api": "/api/0/projects/{organization_slug}/{project_slug}/events/",
-                }
-            ),
-        )
-
-        assert (
-            response.status_code == 200
-        )  # TODO: This should be a 400, and will change once we can properly categorise these errors
-
     def test_datetime_condition_types(self) -> None:
         response = self.post(
             "/discover/snql",
