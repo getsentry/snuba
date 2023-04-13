@@ -270,10 +270,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__replacement_context,
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
-            processed = process_tombstone_events(
+            processed = TombstoneEventsReplacement.parse_message(
                 cast(ReplacementMessage[TombstoneEventsMessageBody], message),
-                self.__required_columns,
-                self.__state_name,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.REPLACE_GROUP:
             processed = ReplaceGroupReplacement.parse_message(
@@ -336,51 +335,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             return True
 
         return False
-
-
-def _build_event_tombstone_replacement(
-    message: Union[
-        ReplacementMessage[EndDeleteGroupsMessageBody],
-        ReplacementMessage[TombstoneEventsMessageBody],
-    ],
-    required_columns: Sequence[str],
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: LegacyQueryTimeFlags,
-) -> Replacement:
-    select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "required_columns": ", ".join(required_columns),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message.data["project_id"],
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        final_query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
 
 
 def _build_event_set_filter(
@@ -594,40 +548,91 @@ class DeleteGroupsReplacement(Replacement):
         """
 
 
-def process_tombstone_events(
-    message: ReplacementMessage[TombstoneEventsMessageBody],
-    required_columns: Sequence[str],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    event_ids = message.data["event_ids"]
-    if not event_ids:
-        return None
+@dataclass
+class TombstoneEventsReplacement(Replacement):
+    event_ids: Sequence[str]
+    old_primary_hash: Optional[str]
+    project_id: int
+    from_timestamp: Optional[str]
+    to_timestamp: Optional[str]
 
-    old_primary_hash = message.data.get("old_primary_hash")
+    required_columns: Sequence[str]
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
-    prewhere, where, query_args = _build_event_set_filter(
-        project_id=message.data["project_id"],
-        event_ids=event_ids,
-        from_timestamp=message.data.get("from_timestamp"),
-        to_timestamp=message.data.get("to_timestamp"),
-    )
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[TombstoneEventsMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[TombstoneEventsReplacement]:
+        event_ids = message.data["event_ids"]
+        if not event_ids:
+            return None
 
-    if old_primary_hash:
-        query_args["old_primary_hash"] = (
-            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
-            if old_primary_hash
-            else "NULL"
+        return cls(
+            project_id=message.data["project_id"],
+            event_ids=event_ids,
+            old_primary_hash=message.data.get("old_primary_hash"),
+            from_timestamp=message.data.get("from_timestamp"),
+            to_timestamp=message.data.get("to_timestamp"),
+            required_columns=context.required_columns,
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
         )
 
-        prewhere.append("primary_hash = %(old_primary_hash)s")
+    @cached_property
+    def _where_clause(self) -> str:
+        prewhere, where, query_args = _build_event_set_filter(
+            project_id=self.project_id,
+            event_ids=self.event_ids,
+            from_timestamp=self.from_timestamp,
+            to_timestamp=self.to_timestamp,
+        )
 
-    query_time_flags = (None, message.data["project_id"])
+        if self.old_primary_hash:
+            query_args["old_primary_hash"] = "'%s'" % (
+                str(uuid.UUID(self.old_primary_hash)),
+            )
 
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            prewhere.append("primary_hash = %(old_primary_hash)s")
 
-    return _build_event_tombstone_replacement(
-        message, required_columns, full_where, query_args, query_time_flags
-    )
+        return (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            % query_args
+        )
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = ", ".join(self.required_columns)
+        select_columns = ", ".join(
+            map(lambda i: i if i != "deleted" else "1", self.required_columns)
+        )
+
+        return f"""\
+            INSERT INTO {table_name} ({required_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return None
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
 
 @dataclass

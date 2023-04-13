@@ -652,32 +652,31 @@ class TestReplacerProcess(BaseTest):
         replacement = self.replacer.process_message(self._wrap(message))
 
         old_primary_condition = (
-            " AND primary_hash = %(old_primary_hash)s" if old_primary_hash else ""
+            " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
+            if old_primary_hash
+            else ""
         )
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
-        )
-
-        expected = {
+        query_args = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
             "project_id": str(self.project_id),
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
+            "table_name": "foo",
         }
-        if old_primary_hash:
-            expected["old_primary_hash"] = "'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
 
-        assert replacement.query_args == expected
-        assert replacement.query_time_flags == (
-            None,
-            self.project_id,
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
+            % query_args
         )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
+            % query_args
+        )
+
+        assert replacement.get_query_time_flags() is None
 
     def test_replace_group_process(self) -> None:
         timestamp = datetime.now()
@@ -810,25 +809,27 @@ class TestReplacerProcess(BaseTest):
         )
 
         replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is not None
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
-        )
-        assert replacement.query_args == {
+        query_args = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
             "project_id": str(self.project_id),
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
+            "table_name": "foo",
         }
-        assert replacement.query_time_flags == (
-            None,
-            self.project_id,
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
+            % query_args
         )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
+            % query_args
+        )
+        assert replacement.get_query_time_flags() is None
 
     def test_delete_groups_process(self) -> None:
         timestamp = datetime.now()
