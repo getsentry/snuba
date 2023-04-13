@@ -21,6 +21,11 @@ ENABLE_DEV_FEATURES = True
 # to explore the unrefined Expression structure
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# By default, allocation policies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. But if you're testing the policy, it
+# should fail on bad code
+RAISE_ON_ALLOCATION_POLICY_FAILURES = True
+
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 
