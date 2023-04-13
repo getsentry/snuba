@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import logging
+import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
+from snuba import settings
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.state import get_config
-from snuba.utils.registered_class import RegisteredClass
-from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
+
+logger = logging.getLogger("snuba.query.allocation_policy_base")
 
 
 @dataclass(frozen=True)
@@ -50,7 +55,13 @@ class AllocationPolicyViolation(SerializableException):
         )
 
     @property
-    def explanation(self) -> dict[str, Any]:
+    def quota_allowance(self) -> dict[str, JsonSerializable]:
+        return cast(
+            "dict[str, JsonSerializable]", self.extra_data.get("quota_allowance", {})
+        )
+
+    @property
+    def explanation(self) -> dict[str, JsonSerializable]:
         return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
 
     def __str__(self) -> str:
@@ -162,7 +173,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        allowance = self._get_quota_allowance(tenant_ids)
+        try:
+            allowance = self._get_quota_allowance(tenant_ids)
+        except Exception:
+            logger.exception(
+                "Allocation policy failed to get quota allowance, this is a bug, fix it"
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         if not allowance.can_run:
             raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
         return allowance
@@ -176,7 +195,14 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        return self._update_quota_balance(tenant_ids, result_or_error)
+        try:
+            return self._update_quota_balance(tenant_ids, result_or_error)
+        except Exception:
+            logger.exception(
+                "Allocation policy failed to update quota balance, this is a bug, fix it"
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
 
     @abstractmethod
     def _update_quota_balance(
@@ -204,4 +230,8 @@ class PassthroughPolicy(AllocationPolicy):
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
     StorageSetKey("default.no_storage_set_key"), required_tenant_types=[]
+)
+
+import_submodules_in_directory(
+    os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"
 )

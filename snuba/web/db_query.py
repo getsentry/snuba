@@ -706,7 +706,9 @@ def db_query(
         quota_allowance = allocation_policy.get_quota_allowance(
             attribution_info.tenant_ids
         )
+        stats["quota_allowance"] = quota_allowance.to_dict()
     except AllocationPolicyViolation as e:
+        stats["quota_allowance"] = e.quota_allowance
         raise QueryException.from_args(
             "Query cannot be run due to allocation policy",
             extra={"stats": stats, "sql": formatted_query.get_sql(), "experiments": {}},
