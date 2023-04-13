@@ -260,10 +260,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__replacement_context,
             )
         elif type_ == ReplacementType.END_UNMERGE_HIERARCHICAL:
-            processed = process_unmerge_hierarchical(
+            processed = UnmergeHierarchicalReplacement.parse_message(
                 cast(ReplacementMessage[EndUnmergeHierarchicalMessageBody], message),
-                self.__all_columns,
-                self.__state_name,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_DELETE_TAG:
             processed = DeleteTagReplacement.parse_message(
@@ -918,87 +917,112 @@ def _convert_hash(
             return "'%s'" % _hashify(hash)
 
 
-def process_unmerge_hierarchical(
-    message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
-        all_column_names,
-    )
+@dataclass
+class UnmergeHierarchicalReplacement(Replacement):
+    project_id: int
+    timestamp: datetime
+    primary_hash: str
+    hierarchical_hash: str
+    previous_group_id: int
+    new_group_id: int
 
-    try:
-        timestamp = datetime.strptime(
-            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    all_columns: Sequence[FlattenedColumn]
+    state_name: ReplacerState
+
+    replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
+
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[UnmergeHierarchicalReplacement]:
+        try:
+            timestamp = datetime.strptime(
+                message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            )
+
+            primary_hash = message.data["primary_hash"]
+            assert isinstance(primary_hash, str)
+
+            hierarchical_hash = message.data["hierarchical_hash"]
+            assert isinstance(hierarchical_hash, str)
+
+            uuid.UUID(primary_hash)
+            uuid.UUID(hierarchical_hash)
+        except Exception as exc:
+            # TODO(markus): We're sacrificing consistency over uptime as long as
+            # this is in development. At some point this piece of code should be
+            # stable enough to remove this.
+            logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
+            return None
+
+        return cls(
+            project_id=message.data["project_id"],
+            timestamp=timestamp,
+            primary_hash=primary_hash,
+            hierarchical_hash=hierarchical_hash,
+            all_columns=context.all_columns,
+            state_name=context.state_name,
+            replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
+            previous_group_id=message.data["previous_group_id"],
+            new_group_id=message.data["new_group_id"],
         )
 
-        primary_hash = message.data["primary_hash"]
-        assert isinstance(primary_hash, str)
+    @cached_property
+    def _where_clause(self) -> str:
+        primary_hash = _convert_hash(self.primary_hash, self.state_name)
+        hierarchical_hash = _convert_hash(
+            self.hierarchical_hash, self.state_name, convert_types=True
+        )
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
-        hierarchical_hash = message.data["hierarchical_hash"]
-        assert isinstance(hierarchical_hash, str)
+        return f"""\
+            PREWHERE primary_hash = {primary_hash}
+            WHERE group_id = {self.previous_group_id}
+            AND has(hierarchical_hashes, {hierarchical_hash})
+            AND project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
 
-        uuid.UUID(primary_hash)
-        uuid.UUID(hierarchical_hash)
-    except Exception as exc:
-        # TODO(markus): We're sacrificing consistency over uptime as long as
-        # this is in development. At some point this piece of code should be
-        # stable enough to remove this.
-        logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        all_columns = ", ".join(all_column_names)
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return None
 
-    where = """\
-        PREWHERE primary_hash = %(primary_hash)s
-        WHERE group_id = %(previous_group_id)s
-        AND has(hierarchical_hashes, %(hierarchical_hash)s)
-        AND project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    def get_project_id(self) -> int:
+        return self.project_id
 
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message.data["previous_group_id"],
-        "project_id": message.data["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        "primary_hash": _convert_hash(primary_hash, state_name),
-        "hierarchical_hash": _convert_hash(
-            hierarchical_hash, state_name, convert_types=True
-        ),
-    }
-
-    # Sentry is expected to send an `exclude_groups` message after unsplit is
-    # done, and we can live with data inconsistencies while this is ongoing.
-    query_time_flags = (None, message.data["project_id"])
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
 
 @dataclass
