@@ -119,6 +119,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     **GOTCHAS**
     -----------
 
+    * Because allocation policies are attached to query objects, they have to be pickleable. Don't put non-pickleable members onto the allocation policy
     * At time of writing (29-03-2023), not all allocation policy decisions are made in the allocation policy,
         rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
         are also policy decisions

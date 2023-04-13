@@ -168,6 +168,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return
         if result_or_error.error:
             return
+        ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
+        if not ids_are_valid:
+            # we already logged the reason before the query
+            return
         query_result = result_or_error.query_result
         assert query_result is not None
         bytes_scanned = query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
