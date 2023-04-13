@@ -127,55 +127,6 @@ class Replacement(ReplacementBase):
         return False
 
 
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
-LegacyQueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
-
-
-@dataclass(frozen=True)
-class LegacyReplacement(Replacement):
-    # XXX: For the group_exclude message we need to be able to run a
-    # replacement without running any query.
-    count_query_template: Optional[str]
-    insert_query_template: Optional[str]
-    query_args: Mapping[str, Any]
-    query_time_flags: LegacyQueryTimeFlags
-    replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
-
-    def get_project_id(self) -> int:
-        return self.query_time_flags[1]
-
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
-        if self.query_time_flags[0] == NEEDS_FINAL:
-            return NeedsFinal()
-
-        if self.query_time_flags[0] == EXCLUDE_GROUPS:
-            return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
-
-        return None
-
-    def get_replacement_type(self) -> ReplacementType:
-        return self.replacement_type
-
-    def get_insert_query(self, table_name: str) -> Optional[str]:
-        if self.insert_query_template is None:
-            return None
-
-        args = {**self.query_args, "table_name": table_name}
-        return self.insert_query_template % args
-
-    def get_count_query(self, table_name: str) -> Optional[str]:
-        if self.count_query_template is None:
-            return None
-
-        args = {**self.query_args, "table_name": table_name}
-        return self.count_query_template % args
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
-
-
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
