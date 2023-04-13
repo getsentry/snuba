@@ -17,7 +17,7 @@ pipelines:
         materials:
             snuba_repo:
                 git: git@github.com:getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: master
                 destination: snuba
         stages:
@@ -47,7 +47,7 @@ pipelines:
                                     sentryio \
                                     "us.gcr.io/sentryio/snuba"
                               - script: |
-                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
+                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"` && \
                                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
