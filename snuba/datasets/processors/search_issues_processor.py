@@ -1,3 +1,4 @@
+import numbers
 import uuid
 from datetime import datetime
 from typing import (
@@ -55,13 +56,15 @@ class IssueOccurrenceData(TypedDict, total=False):
     level: str
     resource_id: Optional[str]
     detection_time: float
-    transaction_duration: Optional[int]
 
 
 class IssueEventData(TypedDict, total=False):
     # general data from event.data map
     received: float
     client_timestamp: float
+    timestamp: float
+    start_timestamp: float
+
     tags: Mapping[str, Any]
     user: Mapping[str, Any]  # user_hash, user_id, user_name, user_email, ip_address
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
@@ -186,6 +189,29 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             if trace_id is not None:
                 processed["trace_id"] = ensure_uuid(trace_id)
 
+    def __extract_timestamp(self, field: int) -> datetime:
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
+        if timestamp is None:
+            timestamp = datetime.utcnow()
+        return timestamp
+
+    def _process_transaction_duration(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        if isinstance(event_data.get("start_timestamp"), numbers.Number) and isinstance(
+            event_data.get("timestamp"), numbers.Number
+        ):
+            start_ts = self.__extract_timestamp(
+                int(event_data.get("start_timestamp", 0))
+            )
+            finish_ts = self.__extract_timestamp(int(event_data.get("timestamp", 0)))
+            duration_secs = (finish_ts - start_ts).total_seconds()
+            processed["transaction_duration"] = max(int(duration_secs * 1000), 0)
+        else:
+            processed["transaction_duration"] = 0
+
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
     ) -> Sequence[Mapping[str, Any]]:
@@ -238,9 +264,6 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
-            "transaction_duration": event_occurrence_data.get("transaction_duration")
-            if event_occurrence_data.get("transaction_duration")
-            else 0,
         }
 
         # optional fields
@@ -253,6 +276,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self._process_request_data(event_data, fields)  # http_method, http_referer
         self._process_sdk_data(event_data, fields)  # sdk_name, sdk_version
         self._process_contexts(event_data, fields)  # contexts.key, contexts.value
+
+        # start_timestamp, timestamp
+        self._process_transaction_duration(event_data, fields)
 
         return [
             {

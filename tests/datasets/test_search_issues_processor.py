@@ -1,7 +1,7 @@
 import copy
 import uuid
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, MutableMapping, Union
 
 import pytest
@@ -394,17 +394,22 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert insert_row["transaction_duration"] == 0
 
-        message_base["occurrence_data"]["transaction_duration"] = None
+        now = datetime.utcnow()
+        message_base["data"]["start_timestamp"] = int(
+            (now - timedelta(seconds=10)).timestamp()
+        )
+        message_base["data"]["timestamp"] = int(now.timestamp())
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 10 * 1000
+
+        message_base["data"]["start_timestamp"] = "shouldn't be valid"
+        message_base["data"]["timestamp"] = {"key": "val"}
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
         assert insert_row["transaction_duration"] == 0
-
-        message_base["occurrence_data"]["transaction_duration"] = 1000
-        processed = self.process_message(message_base)
-        self.assert_required_columns(processed)
-        insert_row = processed.rows[0]
-        assert insert_row["transaction_duration"] == 1000
 
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
