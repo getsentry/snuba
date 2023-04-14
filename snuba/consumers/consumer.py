@@ -536,6 +536,9 @@ def process_message(
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value
+            if state.get_config(f"disable_new_dlq_{snuba_logical_topic.name}", 0):
+                return None
+
             raise InvalidMessage(value.partition, value.offset) from err
 
     if isinstance(result, InsertBatch):
