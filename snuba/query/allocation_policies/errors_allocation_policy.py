@@ -28,7 +28,7 @@ metrics = MetricsWrapper(environment.metrics, "errors_allocation_policy")
 # purposefully not in config because we don't want that to be easily changeable
 _ORG_LESS_REFERRERS = set(
     [
-        "subscription_executor",
+        "subscriptions_executor",
         "weekly_reports.outcomes",
         "reports.key_errors",
         "weekly_reports.key_transactions.this_week",
@@ -45,6 +45,16 @@ _ORG_LESS_REFERRERS = set(
         "reprocessing2.start_group_reprocessing",
     ]
 )
+
+
+# subscriptions currently do not undergo rate limiting in any way.
+# having subscriptions be too slow means there is an incident
+_PASS_THROUGH_REFERRERS = set(
+    [
+        "subscriptions_executor",
+    ]
+)
+
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter()
@@ -104,6 +114,8 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
+        if tenant_ids["referrer"] in _PASS_THROUGH_REFERRERS:
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = cast(
                 int,
