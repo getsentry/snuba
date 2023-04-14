@@ -1060,14 +1060,17 @@ class DeleteTagReplacement(Replacement):
 
 _REPLACEMENT_BY_TYPE: Mapping[ReplacementType, Type[Replacement]] = dict(
     (cls.get_replacement_type(), cls)
-    for cls in [
-        DeleteGroupsReplacement,
-        MergeReplacement,
-        UnmergeGroupsReplacement,
-        UnmergeHierarchicalReplacement,
-        DeleteTagReplacement,
-        TombstoneEventsReplacement,
-        ReplaceGroupReplacement,
-        ExcludeGroupsReplacement,
-    ]
+    for cls in cast(
+        Sequence[Type[Replacement]],
+        [
+            DeleteGroupsReplacement,
+            MergeReplacement,
+            UnmergeGroupsReplacement,
+            UnmergeHierarchicalReplacement,
+            DeleteTagReplacement,
+            TombstoneEventsReplacement,
+            ReplaceGroupReplacement,
+            ExcludeGroupsReplacement,
+        ],
+    )
 )
