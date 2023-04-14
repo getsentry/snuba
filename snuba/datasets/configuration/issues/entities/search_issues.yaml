@@ -59,6 +59,7 @@ schema:
       type: String,
       args: { schema_modifiers: [ nullable ] },
     },
+    { name: transaction_duration, type: UInt, args: { size: 32 } },
 
     { name: message_timestamp, type: DateTime },
     { name: partition, type: UInt, args: { size: 16 } },

@@ -1,7 +1,7 @@
 import copy
 import uuid
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, MutableMapping, Union
 
 import pytest
@@ -387,6 +387,29 @@ class TestSearchIssuesMessageProcessor:
             message_base["data"]["contexts"]["trace"]["trace_id"] = invalid_trace_id
             with pytest.raises(ValueError):
                 self.process_message(message_base)
+
+    def test_extract_transaction_duration(self, message_base):
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
+
+        now = datetime.utcnow()
+        message_base["data"]["start_timestamp"] = int(
+            (now - timedelta(seconds=10)).timestamp()
+        )
+        message_base["data"]["timestamp"] = int(now.timestamp())
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 10 * 1000
+
+        message_base["data"]["start_timestamp"] = "shouldn't be valid"
+        message_base["data"]["timestamp"] = {"key": "val"}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
 
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
