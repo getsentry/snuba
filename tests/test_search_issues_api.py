@@ -200,3 +200,33 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                 "level": insert_row[2]["occurrence_data"]["level"],
             }
         ]
+
+    def test_eventstream_query_transaction_duration(self) -> None:
+        now = datetime.utcnow()
+        insert_row = base_insert_event(now)
+        insert_row[2]["data"]["start_timestamp"] = int(
+            (now - timedelta(seconds=10)).timestamp()
+        )
+        insert_row[2]["data"]["timestamp"] = int(now.timestamp())
+
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT project_id, transaction_duration
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+            """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [{"project_id": 1, "transaction_duration": 10000}]
