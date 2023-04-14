@@ -39,6 +39,11 @@ class ReplacementMessage(NamedTuple, Generic[T]):
 
 
 class Replacement(ABC):
+    @classmethod
+    @abstractmethod
+    def get_replacement_type(cls) -> ReplacementType:
+        raise NotImplementedError()
+
     @abstractmethod
     def get_insert_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()

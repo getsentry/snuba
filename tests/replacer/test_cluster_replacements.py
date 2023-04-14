@@ -173,7 +173,8 @@ class DummyReplacement(Replacement):
     def get_query_time_flags(self) -> QueryTimeFlags:
         return NeedsFinal()
 
-    def get_replacement_type(self) -> ReplacementType:
+    @classmethod
+    def get_replacement_type(cls) -> ReplacementType:
         # Arbitrary replacement type, no impact on tests
         return ReplacementType.EXCLUDE_GROUPS
 
