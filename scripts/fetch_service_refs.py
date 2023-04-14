@@ -19,7 +19,11 @@ MAX_FETCHES = 100
 def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
     # stage["result"] isn't populated if it isn't run
     # the other possible statuses are Unknown (not run yet), Cancelled, Failed
-    return all(stage["status"] == "Passed" for stage in pipeline["stages"])
+    return all(
+        stage["status"] == "Passed"
+        for stage in pipeline["stages"]
+        if stage["name"] != "migrate"
+    )
 
 
 # print the most recent passing sha for a repo
