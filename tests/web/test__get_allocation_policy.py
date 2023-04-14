@@ -99,7 +99,7 @@ join_query = CompositeQuery(
                     ),
                 ],
             ),
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            PassthroughPolicy("bimbam", StorageSetKey("flimflam"), []),
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
