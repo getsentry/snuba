@@ -49,7 +49,6 @@ from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,
-    ReplacementMessageMetadata,
     ReplacerProcessor,
     ReplacerState,
 )
@@ -101,10 +100,6 @@ class Replacement(ReplacementBase):
 
     @abstractmethod
     def get_replacement_type(self) -> ReplacementType:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
@@ -344,7 +339,6 @@ class ReplaceGroupReplacement(Replacement):
     to_timestamp: Optional[str]
     new_group_id: int
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
     all_columns: Sequence[FlattenedColumn]
 
     @classmethod
@@ -364,7 +358,6 @@ class ReplaceGroupReplacement(Replacement):
             to_timestamp=message.data.get("to_timestamp"),
             new_group_id=message.data["new_group_id"],
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
             all_columns=context.all_columns,
         )
 
@@ -376,9 +369,6 @@ class ReplaceGroupReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
     @cached_property
     def _where_clause(self) -> str:
@@ -427,7 +417,6 @@ class DeleteGroupsReplacement(Replacement):
     timestamp: datetime
     group_ids: Sequence[int]
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -452,7 +441,6 @@ class DeleteGroupsReplacement(Replacement):
             timestamp=timestamp,
             group_ids=group_ids,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -463,9 +451,6 @@ class DeleteGroupsReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
     @cached_property
     def _where_clause(self) -> str:
@@ -509,7 +494,6 @@ class TombstoneEventsReplacement(Replacement):
 
     required_columns: Sequence[str]
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -529,7 +513,6 @@ class TombstoneEventsReplacement(Replacement):
             to_timestamp=message.data.get("to_timestamp"),
             required_columns=context.required_columns,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     @cached_property
@@ -582,9 +565,6 @@ class TombstoneEventsReplacement(Replacement):
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
 
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
-
 
 @dataclass
 class ExcludeGroupsReplacement(Replacement):
@@ -607,7 +587,6 @@ class ExcludeGroupsReplacement(Replacement):
     project_id: int
     group_ids: Sequence[int]
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -622,7 +601,6 @@ class ExcludeGroupsReplacement(Replacement):
             project_id=message.data["project_id"],
             group_ids=message.data["group_ids"],
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -639,9 +617,6 @@ class ExcludeGroupsReplacement(Replacement):
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return None
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -669,7 +644,6 @@ class MergeReplacement(Replacement):
     all_columns: Sequence[FlattenedColumn]
 
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -708,7 +682,6 @@ class MergeReplacement(Replacement):
             timestamp=timestamp,
             all_columns=context.all_columns,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     @cached_property
@@ -755,9 +728,6 @@ class MergeReplacement(Replacement):
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
 
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
-
 
 @dataclass(frozen=True)
 class UnmergeGroupsReplacement(Replacement):
@@ -769,7 +739,6 @@ class UnmergeGroupsReplacement(Replacement):
     previous_group_id: int
     new_group_id: int
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -796,7 +765,6 @@ class UnmergeGroupsReplacement(Replacement):
             new_group_id=message.data["new_group_id"],
             all_columns=context.all_columns,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -807,9 +775,6 @@ class UnmergeGroupsReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
     @cached_property
     def _where_clause(self) -> str:
@@ -884,7 +849,6 @@ class UnmergeHierarchicalReplacement(Replacement):
     state_name: ReplacerState
 
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -920,7 +884,6 @@ class UnmergeHierarchicalReplacement(Replacement):
             all_columns=context.all_columns,
             state_name=context.state_name,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
             previous_group_id=message.data["previous_group_id"],
             new_group_id=message.data["new_group_id"],
         )
@@ -975,9 +938,6 @@ class UnmergeHierarchicalReplacement(Replacement):
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
 
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
-
 
 @dataclass
 class DeleteTagReplacement(Replacement):
@@ -989,7 +949,6 @@ class DeleteTagReplacement(Replacement):
     all_columns: Sequence[FlattenedColumn]
     schema: WritableTableSchema
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -1017,7 +976,6 @@ class DeleteTagReplacement(Replacement):
             all_columns=context.all_columns,
             schema=context.schema,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     @cached_property
@@ -1091,6 +1049,3 @@ class DeleteTagReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
