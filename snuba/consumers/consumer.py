@@ -28,7 +28,6 @@ import sentry_sdk
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
-from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
@@ -535,8 +534,10 @@ def process_message(
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
-            value = message.value
-            raise InvalidMessage(value.partition, value.offset) from err
+            # TODO: Temporarily turn off DLQ
+            # value = message.value
+            # raise InvalidMessage(value.partition, value.offset) from err
+            return None
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
