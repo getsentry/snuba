@@ -17,7 +17,7 @@ pipelines:
         materials:
             snuba_repo:
                 git: git@github.com:getsentry/snuba.git
-                shallow_clone: false
+                shallow_clone: true
                 branch: master
                 destination: snuba
         stages:
