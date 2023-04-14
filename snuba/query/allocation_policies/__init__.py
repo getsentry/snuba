@@ -153,7 +153,14 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self._name = name
         self._required_tenant_types = set(required_tenant_types)
         self._storage_set_key = storage_set_key
-        self._config_params: dict[str, AllocationPolicyConfig] = {}
+        self._config_params: dict[str, AllocationPolicyConfig] = {
+            "is_active": AllocationPolicyConfig(
+                "Whether or not this policy is active.", int, 1
+            ),
+            "is_enforced": AllocationPolicyConfig(
+                "Whether or not this policy is enforced.", int, 0
+            ),
+        }
 
     @classmethod
     def config_key(cls) -> str:

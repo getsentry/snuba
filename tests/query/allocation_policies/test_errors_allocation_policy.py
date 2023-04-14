@@ -160,5 +160,5 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
         str(err.value) == "bad_config is not a valid config for ErrorsAllocationPolicy!"
     )
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config("is_active", "bad_value")
+        policy.set_config("throttled_thread_number", "bad_value")
     assert str(err.value) == "'bad_value' (str) is not of expected type: int"

@@ -29,7 +29,7 @@ events_table_name = events_storage.get_table_writer().get_schema().get_table_nam
 events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
-    allocation_policy=PassthroughPolicy(StorageSetKey("flimflam"), []),
+    allocation_policy=PassthroughPolicy("bimbam", StorageSetKey("flimflam"), []),
     final=False,
     sampling_rate=None,
     mandatory_conditions=events_storage.get_schema()
@@ -84,7 +84,7 @@ join_query = CompositeQuery(
     [
         pytest.param(
             composite_query,
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            PassthroughPolicy("bimbam", StorageSetKey("flimflam"), []),
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -120,7 +120,7 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            PassthroughPolicy("bimbam", StorageSetKey("flimflam"), []),
             id="simple query uses table's allocation policy",
         ),
     ],

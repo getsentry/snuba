@@ -64,12 +64,18 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         **kwargs: str,
     ) -> None:
         super().__init__(name, storage_set_key, required_tenant_types)
-        self._config_params = {
-            "is_active": AllocationPolicyConfig("", int, 1),
-            "is_enforced": AllocationPolicyConfig("", int, 0),
-            "throttled_thread_number": AllocationPolicyConfig("", int, 1),
-            "org_limit_bytes_scanned": AllocationPolicyConfig("", int, 10000),
-        }
+        self._config_params.update(
+            {
+                "throttled_thread_number": AllocationPolicyConfig(
+                    "Number of threads any throttled query gets assigned.", int, 1
+                ),
+                "org_limit_bytes_scanned": AllocationPolicyConfig(
+                    "Number of bytes any org can scan in a 10 minute window.",
+                    int,
+                    10000,
+                ),
+            }
+        )
         self._name = self._name or self.__class__.__name__
 
     def _are_tenant_ids_valid(
