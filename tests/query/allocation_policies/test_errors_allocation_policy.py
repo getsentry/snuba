@@ -4,7 +4,9 @@ import pytest
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query.allocation_policies import (
+    AllocationPolicy,
     AllocationPolicyViolation,
+    InvalidPolicyConfig,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.errors_allocation_policy import (
@@ -20,21 +22,20 @@ MAX_THREAD_NUMBER = 400
 
 
 @pytest.fixture(scope="function")
-def policy():
+def policy() -> ErrorsAllocationPolicy:
     policy = ErrorsAllocationPolicy(
+        "ErrorsAllocationPolicy",
         storage_set_key=StorageSetKey("errors"),
         required_tenant_types=["referrer", "organization_id"],
     )
     return policy
 
 
-def _configure_policy(policy):
-    set_config(f"{policy.rate_limit_prefix}.is_active", True)
-    set_config(f"{policy.rate_limit_prefix}.is_enforced", True)
-    set_config(f"{policy.rate_limit_prefix}.org_limit_bytes_scanned", ORG_SCAN_LIMIT)
-    set_config(
-        f"{policy.rate_limit_prefix}.throttled_thread_number", THROTTLED_THREAD_NUMBER
-    )
+def _configure_policy(policy: AllocationPolicy) -> None:
+    policy.set_config("is_active", 1)
+    policy.set_config("is_enforced", 1)
+    policy.set_config("org_limit_bytes_scanned", ORG_SCAN_LIMIT)
+    policy.set_config("throttled_thread_number", THROTTLED_THREAD_NUMBER)
     set_config("query_settings/max_threads", MAX_THREAD_NUMBER)
 
 
@@ -95,9 +96,9 @@ def test_org_isolation(policy) -> None:
 
 
 @pytest.mark.redis_db
-def test_killswitch(policy) -> None:
+def test_killswitch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
-    set_config(f"{policy.rate_limit_prefix}.is_active", False)
+    policy.set_config("is_active", 0)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
@@ -117,7 +118,7 @@ def test_killswitch(policy) -> None:
 
 
 @pytest.mark.redis_db
-def test_enforcement_switch(policy) -> None:
+def test_enforcement_switch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
@@ -132,14 +133,14 @@ def test_enforcement_switch(policy) -> None:
             error=None,
         ),
     )
-    set_config(f"{policy.rate_limit_prefix}.is_enforced", False)
+    policy.set_config("is_enforced", 0)
     allowance = policy.get_quota_allowance(tenant_ids)
     # policy not enforced
     assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
 @pytest.mark.redis_db
-def test_reject_queries_without_tenant_ids(policy) -> None:
+def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     with pytest.raises(AllocationPolicyViolation):
         policy.get_quota_allowance(tenant_ids={"organization_id": 1234})
@@ -148,3 +149,16 @@ def test_reject_queries_without_tenant_ids(policy) -> None:
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
         policy.get_quota_allowance(tenant_ids={"referrer": referrer})
+
+
+@pytest.mark.redis_db
+def test_bad_config_keys(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config("bad_config", 1)
+    assert (
+        str(err.value) == "bad_config is not a valid config for ErrorsAllocationPolicy!"
+    )
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config("is_active", "bad_value")
+    assert str(err.value) == "'bad_value' (str) is not of expected type: int"

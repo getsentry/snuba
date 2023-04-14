@@ -9,10 +9,11 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
+    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.state import get_config
+from snuba.state import get_config as get_runtime_config
 from snuba.state.sliding_windows import (
     GrantedQuota,
     Quota,
@@ -57,15 +58,19 @@ class ErrorsAllocationPolicy(AllocationPolicy):
 
     def __init__(
         self,
+        name: str,
         storage_set_key: StorageSetKey,
         required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
-        super().__init__(storage_set_key, required_tenant_types)
-
-    @property
-    def rate_limit_prefix(self) -> str:
-        return self.__class__.__name__
+        super().__init__(name, storage_set_key, required_tenant_types)
+        self._config_params = {
+            "is_active": AllocationPolicyConfig("", int, 1),
+            "is_enforced": AllocationPolicyConfig("", int, 0),
+            "throttled_thread_number": AllocationPolicyConfig("", int, 1),
+            "org_limit_bytes_scanned": AllocationPolicyConfig("", int, 10000),
+        }
+        self._name = self._name or self.__class__.__name__
 
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
@@ -81,14 +86,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         # TODO: This kind of killswitch should just be included with every allocation policy
-        is_active = cast(bool, get_config(f"{self.rate_limit_prefix}.is_active", True))
-        is_enforced = cast(
-            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", False)
-        )
-        throttled_thread_number = cast(
-            int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
-        )
-        max_threads = cast(int, get_config("query_settings/max_threads", 8))
+        is_active = self.get_config("is_active")
+        is_enforced = self.get_config("is_enforced")
+        throttled_thread_number = self.get_config("throttled_thread_number")
+        max_threads = cast(int, get_runtime_config("query_settings/max_threads", 8))
         if not is_active:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
@@ -105,19 +106,13 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
         if "organization_id" in tenant_ids:
-            org_limit_bytes_scanned = cast(
-                int,
-                get_config(
-                    # TODO: figure out an actually good number
-                    f"{self.rate_limit_prefix}.org_limit_bytes_scanned",
-                    10000,
-                ),
-            )
+            # TODO: figure out an actually good number
+            org_limit_bytes_scanned = self.get_config("org_limit_bytes_scanned")
 
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
                     RequestedQuota(
-                        self.rate_limit_prefix,
+                        self._name,
                         # request a big number because we don't know how much we actually
                         # will use in this query. this doesn't use up any quota, we just want to know how much is left
                         UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
@@ -128,7 +123,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=int(org_limit_bytes_scanned),
-                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                                prefix_override=f"{self._name}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
                     ),
@@ -164,7 +159,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        if not get_config(f"{self.rate_limit_prefix}.is_active", True):
+        if not self.get_config("is_active"):
             return
         if result_or_error.error:
             return
@@ -180,29 +175,27 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
-        org_limit_bytes_scanned = get_config(
-            f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
-        )
+        org_limit_bytes_scanned = self.get_config("org_limit_bytes_scanned")
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
         _RATE_LIMITER.use_quotas(
             [
                 RequestedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self._name}-organization_id-{tenant_ids['organization_id']}",
                     bytes_scanned,
                     [
                         Quota(
                             window_seconds=self.WINDOW_SECONDS,
                             granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=int(org_limit_bytes_scanned),  # type: ignore
-                            prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                            limit=org_limit_bytes_scanned,
+                            prefix_override=f"{self._name}-organization_id-{tenant_ids['organization_id']}",
                         )
                     ],
                 )
             ],
             grants=[
                 GrantedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self._name}-organization_id-{tenant_ids['organization_id']}",
                     granted=bytes_scanned,
                     reached_quotas=[],
                 )

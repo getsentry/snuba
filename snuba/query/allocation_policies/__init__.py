@@ -8,7 +8,8 @@ from typing import Any, cast
 
 from snuba import settings
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.state import get_config
+from snuba.state import get_config as get_runtime_config
+from snuba.state import set_config as set_runtime_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
@@ -27,6 +28,17 @@ class QueryResultOrError:
 
     def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None
+
+
+@dataclass()
+class AllocationPolicyConfig:
+    description: str
+    type: type
+    default: Any
+
+
+class InvalidPolicyConfig(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -133,12 +145,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def __init__(
         self,
+        name: str,
         storage_set_key: StorageSetKey,
         required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
+        self._name = name
         self._required_tenant_types = set(required_tenant_types)
         self._storage_set_key = storage_set_key
+        self._config_params: dict[str, AllocationPolicyConfig] = {}
 
     @classmethod
     def config_key(cls) -> str:
@@ -172,6 +187,31 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             storage_set_key=StorageSetKey(storage_set_key),
             **kwargs,
         )
+
+    def config_params(self) -> dict[str, AllocationPolicyConfig]:
+        """What can be configured on this Allocation Policy."""
+        return self._config_params
+
+    def get_config(self, config: str) -> Any:
+        """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
+        config_params = self.config_params()[config]
+        return cast(
+            config_params.type,  # type: ignore
+            get_runtime_config(f"{self._name}.{config}", config_params.default),
+        )
+
+    def set_config(self, config: str, value: Any) -> Any:
+        """Sets a value of a config on this Allocation Policy."""
+        if config not in self.config_params():
+            raise InvalidPolicyConfig(
+                f"{config} is not a valid config for {self._name}!"
+            )
+        expected_type = self.config_params()[config].type
+        if not isinstance(value, expected_type):
+            raise InvalidPolicyConfig(
+                f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"
+            )
+        set_runtime_config(f"{self._name}.{config}", value)
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
@@ -217,7 +257,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 class PassthroughPolicy(AllocationPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 
-        max_threads = get_config("query_settings/max_threads", 8)
+        max_threads = get_runtime_config("query_settings/max_threads", 8)
         assert isinstance(max_threads, int)
         return QuotaAllowance(can_run=True, max_threads=max_threads, explanation={})
 
@@ -230,7 +270,9 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageSetKey("default.no_storage_set_key"), required_tenant_types=[]
+    "PassthroughPolicy",
+    StorageSetKey("default.no_storage_set_key"),
+    required_tenant_types=[],
 )
 
 import_submodules_in_directory(

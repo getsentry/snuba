@@ -228,6 +228,7 @@ schema:
 allocation_policy:
   name: ErrorsAllocationPolicy
   args:
+    name: ErrorsAllocationPolicy
     storage_set_key: events_ro
     required_tenant_types:
       - organzation_id
