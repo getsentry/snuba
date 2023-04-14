@@ -12,6 +12,7 @@ pipelines:
             GKE_BASTION_ZONE: b
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+            GOCD_ACCESS_TOKEN: "{{SECRET:[devinfra][gocd_access_token]}}"
             MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
