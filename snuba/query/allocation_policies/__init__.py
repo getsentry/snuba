@@ -201,6 +201,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def get_config(self, config: str) -> Any:
         """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
+        if config not in self.config_params():
+            raise InvalidPolicyConfig(
+                f"'{config}' is not a valid config for {self._name}!"
+            )
         config_params = self.config_params()[config]
         return cast(
             config_params.type,  # type: ignore
@@ -211,7 +215,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """Sets a value of a config on this Allocation Policy."""
         if config not in self.config_params():
             raise InvalidPolicyConfig(
-                f"{config} is not a valid config for {self._name}!"
+                f"'{config}' is not a valid config for {self._name}!"
             )
         expected_type = self.config_params()[config].type
         if not isinstance(value, expected_type):
@@ -219,6 +223,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"
             )
         set_runtime_config(f"{self._name}.{config}", value)
+
+    def is_active(self) -> bool:
+        return bool(self.get_config("is_active"))
+
+    def is_enforced(self) -> bool:
+        return bool(self.get_config("is_enforced"))
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:

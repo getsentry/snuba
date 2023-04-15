@@ -101,10 +101,19 @@ def test_bad_config_keys() -> None:
     policy = PassthroughPolicy("MyPassthroughPolicy", StorageSetKey("something"), [])
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("bad_config", 1)
-    assert str(err.value) == "bad_config is not a valid config for MyPassthroughPolicy!"
+    assert (
+        str(err.value) == "'bad_config' is not a valid config for MyPassthroughPolicy!"
+    )
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("is_active", "bad_value")
     assert str(err.value) == "'bad_value' (str) is not of expected type: int"
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("is_enforced", "bad_value")
     assert str(err.value) == "'bad_value' (str) is not of expected type: int"
+
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.get_config("does_not_exist")
+    assert (
+        str(err.value)
+        == "'does_not_exist' is not a valid config for MyPassthroughPolicy!"
+    )

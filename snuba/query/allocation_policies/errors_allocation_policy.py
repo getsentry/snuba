@@ -91,12 +91,10 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        # TODO: This kind of killswitch should just be included with every allocation policy
-        is_active = self.get_config("is_active")
-        is_enforced = self.get_config("is_enforced")
+        is_enforced = self.is_enforced()
         throttled_thread_number = self.get_config("throttled_thread_number")
         max_threads = cast(int, get_runtime_config("query_settings/max_threads", 8))
-        if not is_active:
+        if not self.is_active():
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
@@ -165,7 +163,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        if not self.get_config("is_active"):
+        if not self.is_active():
             return
         if result_or_error.error:
             return
