@@ -12,13 +12,14 @@ pipelines:
             GKE_BASTION_ZONE: b
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+            GOCD_ACCESS_TOKEN: "{{SECRET:[devinfra][gocd_access_token]}}"
             MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
                 git: git@github.com:getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: master
                 destination: snuba
         stages:
