@@ -108,6 +108,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 tags={
                     "storage_set_key": self._storage_set_key.value,
                     "is_enforced": str(is_enforced),
+                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
             if is_enforced:
@@ -192,32 +193,33 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
-        org_limit_bytes_scanned = get_config(
-            f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
-        )
-        # we can assume that the requested quota was granted (because it was)
-        # we just need to update the quota with however many bytes were consumed
-        _RATE_LIMITER.use_quotas(
-            [
-                RequestedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                    bytes_scanned,
-                    [
-                        Quota(
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=int(org_limit_bytes_scanned),  # type: ignore
-                            prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                        )
-                    ],
-                )
-            ],
-            grants=[
-                GrantedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                    granted=bytes_scanned,
-                    reached_quotas=[],
-                )
-            ],
-            timestamp=int(time.time()),
-        )
+        if "organization_id" in tenant_ids:
+            org_limit_bytes_scanned = get_config(
+                f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
+            )
+            # we can assume that the requested quota was granted (because it was)
+            # we just need to update the quota with however many bytes were consumed
+            _RATE_LIMITER.use_quotas(
+                [
+                    RequestedQuota(
+                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        bytes_scanned,
+                        [
+                            Quota(
+                                window_seconds=self.WINDOW_SECONDS,
+                                granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
+                                limit=int(org_limit_bytes_scanned),  # type: ignore
+                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                            )
+                        ],
+                    )
+                ],
+                grants=[
+                    GrantedQuota(
+                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        granted=bytes_scanned,
+                        reached_quotas=[],
+                    )
+                ],
+                timestamp=int(time.time()),
+            )
