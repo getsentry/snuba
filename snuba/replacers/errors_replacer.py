@@ -609,7 +609,6 @@ class MergeReplacement(Replacement):
 
     all_columns: Sequence[FlattenedColumn]
 
-
     @classmethod
     def parse_message(
         cls,
@@ -811,7 +810,6 @@ class UnmergeHierarchicalReplacement(Replacement):
 
     all_columns: Sequence[FlattenedColumn]
     state_name: ReplacerState
-
 
     @classmethod
     def parse_message(
