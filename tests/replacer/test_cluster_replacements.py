@@ -178,9 +178,6 @@ class DummyReplacement(Replacement):
         # Arbitrary replacement type, no impact on tests
         return ReplacementType.EXCLUDE_GROUPS
 
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return ReplacementMessageMetadata(0, 0, "")
-
     def get_project_id(self) -> int:
         return 1
 
@@ -210,7 +207,7 @@ def test_write_each_node(
         DummyMetricsBackend(),
     )
 
-    replacer.flush_batch([DummyReplacement()])
+    replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())])
 
     queries = test_cluster.get_queries()
     assert queries == expected_queries
@@ -235,7 +232,9 @@ def test_failing_query(
     )
 
     with pytest.raises(ServerExplodedException):
-        replacer.flush_batch([DummyReplacement()])
+        replacer.flush_batch(
+            [(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())]
+        )
 
 
 @pytest.mark.redis_db
@@ -256,7 +255,12 @@ def test_load_balancing(
         DummyMetricsBackend(),
     )
     replacement = DummyReplacement()
-    replacer.flush_batch([replacement, replacement])
+    replacer.flush_batch(
+        [
+            (ReplacementMessageMetadata(0, 0, ""), replacement),
+            (ReplacementMessageMetadata(0, 0, ""), replacement),
+        ]
+    )
 
     assert cluster.get_queries() == {
         "query_node": [
