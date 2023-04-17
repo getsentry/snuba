@@ -147,7 +147,17 @@ def test_reject_queries_without_tenant_ids(policy) -> None:
         policy.get_quota_allowance(tenant_ids={"referrer": "bloop"})
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
-        policy.get_quota_allowance(tenant_ids={"referrer": referrer})
+        tenant_ids = {"referrer": referrer}
+        policy.get_quota_allowance(tenant_ids)
+        policy.update_quota_balance(
+            tenant_ids,
+            QueryResultOrError(
+                query_result=QueryResult(
+                    result={"profile": {"bytes": ORG_SCAN_LIMIT}}, extra={}  # type: ignore
+                ),
+                error=None,
+            ),
+        )
 
 
 @pytest.mark.redis_db
@@ -172,24 +182,4 @@ def test_passthrough_subscriptions(policy) -> None:
     assert (
         policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
         == MAX_THREAD_NUMBER
-    )
-
-
-@pytest.mark.redis_db
-def test_org_less_referrers(policy) -> None:
-    _configure_policy(policy)
-    tenant_ids = {"referrer": list(_ORG_LESS_REFERRERS)[0]}
-    assert (
-        policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
-        == MAX_THREAD_NUMBER
-    )
-    # should not throw
-    policy.update_quota_balance(
-        tenant_ids,
-        QueryResultOrError(
-            query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT}}, extra={}  # type: ignore
-            ),
-            error=None,
-        ),
     )
