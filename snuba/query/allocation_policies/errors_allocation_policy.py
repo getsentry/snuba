@@ -115,9 +115,11 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
-        if tenant_ids["referrer"] in _PASS_THROUGH_REFERRERS:
+        referrer = tenant_ids.get("referrer", "no_referrer")
+        org_id = tenant_ids.get("organization_id", None)
+        if referrer in _PASS_THROUGH_REFERRERS:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
-        if "organization_id" in tenant_ids:
+        if org_id is not None:
             org_limit_bytes_scanned = cast(
                 int,
                 get_config(
@@ -141,7 +143,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=int(org_limit_bytes_scanned),
-                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{org_id}",
                             )
                         ],
                     ),
@@ -161,7 +163,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 )
                 explanation[
                     "reason"
-                ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_limit_bytes_scanned}"
+                ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 explanation["is_enforced"] = is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
