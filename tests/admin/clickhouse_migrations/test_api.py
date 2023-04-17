@@ -139,14 +139,6 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
-@patch(
-    "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-    {
-        "system",
-        "generic_metrics",
-        "events",
-    },
-)
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
     method = "run_migration" if action == "run" else "reverse_migration"
