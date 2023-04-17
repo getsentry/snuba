@@ -28,7 +28,7 @@ metrics = MetricsWrapper(environment.metrics, "errors_allocation_policy")
 # purposefully not in config because we don't want that to be easily changeable
 _ORG_LESS_REFERRERS = set(
     [
-        "subscription_executor",
+        "subscriptions_executor",
         "weekly_reports.outcomes",
         "reports.key_errors",
         "weekly_reports.key_transactions.this_week",
@@ -45,6 +45,16 @@ _ORG_LESS_REFERRERS = set(
         "reprocessing2.start_group_reprocessing",
     ]
 )
+
+
+# subscriptions currently do not undergo rate limiting in any way.
+# having subscriptions be too slow means there is an incident
+_PASS_THROUGH_REFERRERS = set(
+    [
+        "subscriptions_executor",
+    ]
+)
+
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter()
@@ -98,13 +108,18 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 tags={
                     "storage_set_key": self._storage_set_key.value,
                     "is_enforced": str(is_enforced),
+                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
             if is_enforced:
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
-        if "organization_id" in tenant_ids:
+        referrer = tenant_ids.get("referrer", "no_referrer")
+        org_id = tenant_ids.get("organization_id", None)
+        if referrer in _PASS_THROUGH_REFERRERS:
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+        if org_id is not None:
             org_limit_bytes_scanned = cast(
                 int,
                 get_config(
@@ -128,7 +143,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=int(org_limit_bytes_scanned),
-                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{org_id}",
                             )
                         ],
                     ),
@@ -148,7 +163,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 )
                 explanation[
                     "reason"
-                ] = f"organization {tenant_ids['organization_id']} is over the bytes scanned limit of {org_limit_bytes_scanned}"
+                ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 explanation["is_enforced"] = is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
@@ -180,32 +195,33 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
-        org_limit_bytes_scanned = get_config(
-            f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
-        )
-        # we can assume that the requested quota was granted (because it was)
-        # we just need to update the quota with however many bytes were consumed
-        _RATE_LIMITER.use_quotas(
-            [
-                RequestedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                    bytes_scanned,
-                    [
-                        Quota(
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=int(org_limit_bytes_scanned),  # type: ignore
-                            prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                        )
-                    ],
-                )
-            ],
-            grants=[
-                GrantedQuota(
-                    f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
-                    granted=bytes_scanned,
-                    reached_quotas=[],
-                )
-            ],
-            timestamp=int(time.time()),
-        )
+        if "organization_id" in tenant_ids:
+            org_limit_bytes_scanned = get_config(
+                f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
+            )
+            # we can assume that the requested quota was granted (because it was)
+            # we just need to update the quota with however many bytes were consumed
+            _RATE_LIMITER.use_quotas(
+                [
+                    RequestedQuota(
+                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        bytes_scanned,
+                        [
+                            Quota(
+                                window_seconds=self.WINDOW_SECONDS,
+                                granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
+                                limit=int(org_limit_bytes_scanned),  # type: ignore
+                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                            )
+                        ],
+                    )
+                ],
+                grants=[
+                    GrantedQuota(
+                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        granted=bytes_scanned,
+                        reached_quotas=[],
+                    )
+                ],
+                timestamp=int(time.time()),
+            )

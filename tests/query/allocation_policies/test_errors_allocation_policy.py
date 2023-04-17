@@ -147,4 +147,39 @@ def test_reject_queries_without_tenant_ids(policy) -> None:
         policy.get_quota_allowance(tenant_ids={"referrer": "bloop"})
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
-        policy.get_quota_allowance(tenant_ids={"referrer": referrer})
+        tenant_ids = {"referrer": referrer}
+        policy.get_quota_allowance(tenant_ids)
+        policy.update_quota_balance(
+            tenant_ids,
+            QueryResultOrError(
+                query_result=QueryResult(
+                    result={"profile": {"bytes": ORG_SCAN_LIMIT}}, extra={}  # type: ignore
+                ),
+                error=None,
+            ),
+        )
+
+
+@pytest.mark.redis_db
+def test_passthrough_subscriptions(policy) -> None:
+    _configure_policy(policy)
+    # currently subscriptions are not throttled due to them being on the critical path
+    # this test makes sure that no matter how much quota they consume, they are not throttled
+    tenant_ids = {"referrer": "subscriptions_executor", "organization_id": 1}
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
+        == MAX_THREAD_NUMBER
+    )
+    policy.update_quota_balance(
+        tenant_ids,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+            ),
+            error=None,
+        ),
+    )
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
+        == MAX_THREAD_NUMBER
+    )
