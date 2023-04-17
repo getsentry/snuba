@@ -105,8 +105,11 @@ class ExecuteNoneAction(MigrationAction):
 
 
 MIGRATIONS_RESOURCES = {
-    group.value: MigrationResource(group.value)
-    for group in get_active_migration_groups()
+    **{
+        group.value: MigrationResource(group.value)
+        for group in get_active_migration_groups()
+    },
+    **{group: MigrationResource(group) for group in settings.SKIPPED_MIGRATION_GROUPS},
 }
 
 
