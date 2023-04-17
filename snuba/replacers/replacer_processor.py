@@ -51,10 +51,6 @@ class Replacement(ABC):
     def should_write_every_node(self) -> bool:
         raise NotImplementedError()
 
-    @abstractmethod
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        raise NotImplementedError()
-
 
 R = TypeVar("R", bound=Replacement)
 

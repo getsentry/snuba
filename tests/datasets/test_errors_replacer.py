@@ -533,7 +533,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -572,7 +574,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -608,7 +612,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -649,7 +655,9 @@ class TestReplacerProcess(BaseTest):
 
         message = (2, ReplacementType.TOMBSTONE_EVENTS, message_kwargs)
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
 
         old_primary_condition = (
             " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
@@ -691,7 +699,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -728,7 +738,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -769,7 +781,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
 
         query_args = {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, hierarchical_hashes, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, exception_main_thread, sdk_integrations, modules.name, modules.version",
@@ -808,7 +822,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         query_args = {
@@ -843,7 +859,9 @@ class TestReplacerProcess(BaseTest):
             },
         )
 
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
         query_args = {
             "group_ids": "1, 2, 3",
@@ -879,16 +897,20 @@ class TestReplacerProcess(BaseTest):
                 "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             },
         )
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         set_config("replacements_bypass_projects", f"[{self.project_id + 1}]")
-        replacement = self.replacer.process_message(self._wrap(message))
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
         assert replacement is not None
 
         set_config(
             "replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]"
         )
-        replacement = self.replacer.process_message(self._wrap(message))
-        assert replacement is None
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is None
         delete_config("replacements_bypass_projects")
