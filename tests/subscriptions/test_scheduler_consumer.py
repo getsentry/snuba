@@ -17,7 +17,6 @@ from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
-from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
@@ -37,8 +36,8 @@ commit_codec = CommitCodec()
 
 
 @pytest.mark.redis_db
+@mock.patch("snuba.consumers.utils.get_partition_count", lambda _: 2)
 def test_scheduler_consumer() -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
@@ -134,8 +133,6 @@ def test_scheduler_consumer() -> None:
     scheduler._shutdown()
 
     assert mock_scheduler_producer.produce.call_count == 2
-
-    settings.TOPIC_PARTITION_COUNTS = {}
 
 
 def test_tick_time_shift() -> None:

@@ -6,7 +6,6 @@ from typing import Any, Optional, Sequence
 import click
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
-from confluent_kafka.admin import AdminClient
 
 from snuba import environment
 from snuba.datasets.entities.entity_key import EntityKey
@@ -14,10 +13,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.configuration_builder import (
-    build_kafka_producer_configuration,
-    get_default_kafka_configuration,
-)
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 logger = logging.getLogger(__name__)
@@ -154,15 +150,6 @@ def subscriptions_scheduler(
         assert (
             stale_threshold_seconds > delay_seconds
         ), "stale_threshold_seconds must be greater than delay_seconds"
-
-    default_topic = (
-        storage.get_table_writer().get_stream_loader().get_default_topic_spec().topic
-    )
-    kafka_config = get_default_kafka_configuration(default_topic)
-    admin_client = AdminClient({"bootstrap.servers": kafka_config["bootstrap.servers"]})
-    topic_metadata = admin_client.list_topics(topic=default_topic.value)
-    part_count = len(topic_metadata.topics[default_topic.value].partitions)
-    logger.info(f"{default_topic.value} partition count = {part_count}")
 
     stream_loader = storage.get_table_writer().get_stream_loader()
 

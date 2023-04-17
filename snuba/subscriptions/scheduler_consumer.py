@@ -13,6 +13,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import BrokerValue, Commit, Partition, Topic
 
 from snuba import settings
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
@@ -248,7 +249,9 @@ class SchedulerBuilder:
 
         self.__mode = mode
 
-        self.__partitions = stream_loader.get_default_topic_spec().partitions_number
+        self.__partitions = get_partition_count(
+            stream_loader.get_default_topic_spec().topic
+        )
 
         self.__consumer_group = consumer_group
         self.__followed_consumer_group = followed_consumer_group
