@@ -53,6 +53,7 @@ query_processors:
 allocation_policy:
   name: PassthroughPolicy
   args:
+    name: some_name
     storage_set_key: test-storage-set
     required_tenant_types: ["some_tenant"]
 

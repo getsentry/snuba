@@ -238,7 +238,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
 
     with mock.patch(
         "snuba.web.db_query._get_allocation_policy",
-        return_value=RejectAllocationPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        return_value=RejectAllocationPolicy("somename", "doesntmatter", ["a", "b", "c"]),  # type: ignore
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
@@ -290,7 +290,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        ThreadLimitPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        ThreadLimitPolicy("somename", "doesntmatter", ["a", "b", "c"]),  # type: ignore
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -344,7 +344,7 @@ def test_allocation_policy_updates_quota() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        CountQueryPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        CountQueryPolicy("somename", "doesntmatter", ["a", "b", "c"]),  # type: ignore
     )
 
     def _run_query() -> None:
