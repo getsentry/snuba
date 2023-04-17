@@ -1006,6 +1006,7 @@ class DeleteTagReplacement(Replacement):
     def get_project_id(self) -> int:
         return self.project_id
 
+    @classmethod
     def get_replacement_type(cls) -> ReplacementType:
         return ReplacementType.END_DELETE_TAG
 
