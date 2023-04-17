@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any, Optional, Sequence, Union
 
 import pytest
 import pytz
@@ -13,7 +14,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, ProcessedMessage
 from tests.helpers import write_processed_messages
 
 
@@ -232,10 +233,13 @@ class TestGroupedMessage:
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        ret = processor.process_message(self.INSERT_MSG, metadata)
+        ret: Union[
+            Optional[ProcessedMessage], Sequence[Any]
+        ] = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
             [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
         )
+        assert isinstance(ret, InsertBatch)
         write_processed_messages(self.storage, [ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
