@@ -19,6 +19,7 @@ from snuba.admin.clickhouse.querylog import (
         pytest.param(5, _MAX_CH_THREADS, id="over max"),
     ],
 )
+@pytest.mark.redis_db
 def test_get_clickhouse_threads(config_val: str | int, expected_threads: int) -> None:
     state.set_config("admin.querylog_threads", str(config_val))
     assert _get_clickhouse_threads() == expected_threads
@@ -30,6 +31,7 @@ def test_get_clickhouse_threads(config_val: str | int, expected_threads: int) ->
         pytest.param("invalid_value", BadThreadsValue, id="invalid_value"),
     ],
 )
+@pytest.mark.redis_db
 def test_get_clickhouse_threads_error(
     config_val: str | int, error: Type[Exception]
 ) -> None:
