@@ -249,10 +249,7 @@ mod tests {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from([(
-                        message.partition.clone(),
-                        message.offset,
-                    )]),
+                    positions: message.committable(),
                 }),
             }
         }

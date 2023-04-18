@@ -33,7 +33,7 @@ fn main() {
         let res = consumer.poll(None);
         match res.unwrap() {
             Some(x) => {
-                println!("MSG {}", x)
+                println!("MSG {:?}", x)
             }
             None => {}
         }

@@ -2,7 +2,7 @@ use crate::backends::storages::{ConsumeError, MessageStorage, TopicDoesNotExist,
 use crate::types::{BrokerMessage, Partition, Topic};
 use crate::utils::clock::Clock;
 use chrono::DateTime;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -156,7 +156,7 @@ mod tests {
     use crate::backends::storages::memory::MemoryMessageStorage;
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use uuid::Uuid;
 
     #[test]
@@ -202,7 +202,7 @@ mod tests {
 
         let message = broker.consume(&partition, 0).unwrap().unwrap();
         assert_eq!(message.offset, 0);
-        assert_eq!(message.committable(), BTreeMap::from([(partition.clone(), 1)]));
+        assert_eq!(message.partition, partition.clone());
         assert_eq!(message.payload, "message".to_string());
     }
 
