@@ -359,6 +359,23 @@ def get_total_migration_count() -> int:
 
 
 @pytest.mark.clickhouse_db
+def test_get_active_migration_groups() -> None:
+    settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
+    active_groups = get_active_migration_groups()
+    assert (
+        MigrationGroup.SEARCH_ISSUES not in active_groups
+    )  # should be skipped by SKIPPED_MIGRATION_GROUPS
+
+    settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED = {"search_issues"}
+    active_groups = get_active_migration_groups()
+    assert (
+        MigrationGroup.SEARCH_ISSUES in active_groups
+    )  # should be active by readiness_state
+
+    importlib.reload(settings)
+
+
+@pytest.mark.clickhouse_db
 def test_reverse_in_progress() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
