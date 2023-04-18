@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Generic, Optional, Sequence, Set, Type, TypeVar
 
 from snuba import settings
+from snuba.migrations.runner import get_active_migration_groups
 
 
 class Category(Enum):
@@ -104,7 +105,11 @@ class ExecuteNoneAction(MigrationAction):
 
 
 MIGRATIONS_RESOURCES = {
-    group: MigrationResource(group) for group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
+    **{
+        group.value: MigrationResource(group.value)
+        for group in get_active_migration_groups()
+    },
+    **{group: MigrationResource(group) for group in settings.SKIPPED_MIGRATION_GROUPS},
 }
 
 

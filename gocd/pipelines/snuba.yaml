@@ -136,7 +136,7 @@ pipelines:
                                     --label-selector="service=snuba-admin" \
                                     --container-name="snuba-admin" \
                                     "snuba-migrate" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                    -- snuba migrations migrate -r ${MIGRATIONS_READINESS}
+                                    -- snuba migrations list
                               - plugin:
                                     options:
                                         script: |
@@ -146,7 +146,7 @@ pipelines:
                                             --label-selector="service=snuba-admin" \
                                             --container-name="snuba-admin" \
                                             "snuba-migrate-reverse" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                            -- snuba migrations reverse-in-progress
+                                            -- snuba migrations list
                                     run_if: failed
                                     configuration:
                                         id: script-executor
