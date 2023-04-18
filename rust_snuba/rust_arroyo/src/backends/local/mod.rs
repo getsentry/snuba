@@ -301,7 +301,6 @@ mod tests {
     use crate::backends::Consumer;
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
-    use chrono::Utc;
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;
     use uuid::Uuid;

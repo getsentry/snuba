@@ -139,6 +139,7 @@ mod tests {
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::types::KafkaPayload;
+    use crate::types::{BrokerMessage, InnerMessage};
     use crate::processing::strategies::{
         CommitRequest, MessageRejected, ProcessingStrategy,
     };
@@ -192,13 +193,15 @@ mod tests {
         };
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
+        let message = Message{inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+            payload: payload_str.clone(),
+            partition: partition,
+            offset: 0,
+            timestamp: Utc::now(),
+        })};
+
         strategy
-            .submit(Message::new(
-                partition,
-                0,
-                KafkaPayload { key: None, headers: None, payload: Some(payload_str) },
-                Utc::now(),
-            ))
+            .submit(message)
             .unwrap();
     }
 }
