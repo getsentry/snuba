@@ -177,7 +177,6 @@ mod tests {
         assert_eq!(message.offset, 10);
         assert_eq!(message.payload, "payload");
         assert_eq!(message.timestamp, now);
-        assert_eq!(message.next_offset(), 11)
     }
 
     #[test]

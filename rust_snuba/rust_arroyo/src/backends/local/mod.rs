@@ -513,14 +513,12 @@ mod tests {
         assert!(msg1.is_some());
         let msg_content = msg1.unwrap();
         assert_eq!(msg_content.offset, 0);
-        assert_eq!(msg_content.next_offset(), 1);
         assert_eq!(msg_content.payload, "message1".to_string());
 
         let msg2 = consumer.poll(Some(Duration::from_millis(100))).unwrap();
         assert!(msg2.is_some());
         let msg_content = msg2.unwrap();
         assert_eq!(msg_content.offset, 1);
-        assert_eq!(msg_content.next_offset(), 2);
         assert_eq!(msg_content.payload, "message2".to_string());
 
         let ret = consumer.poll(Some(Duration::from_millis(100)));
