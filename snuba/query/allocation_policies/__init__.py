@@ -207,17 +207,27 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         pass
 
-    def config_params(self) -> dict[str, AllocationPolicyConfig]:
-        """What can be configured on this Allocation Policy."""
+    def configurable_params(self) -> dict[str, AllocationPolicyConfig]:
+        """What can be configured on this AllocationPolicy."""
         return {**self._default_config_params, **self._config_params()}
+
+    def config_values(self) -> dict[str, Any]:
+        """
+        Returns a dictionary representing the current values for all configurable
+        options on this AllocationPolicy.
+        """
+        return {
+            config_key: self.get_config(config_key)
+            for config_key in self.configurable_params()
+        }
 
     def get_config(self, config: str) -> Any:
         """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        if config not in self.config_params():
+        if config not in self.configurable_params():
             raise InvalidPolicyConfig(
                 f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
-        config_params = self.config_params()[config]
+        config_params = self.configurable_params()[config]
         return cast(
             config_params.type,  # type: ignore
             get_runtime_config(
@@ -227,11 +237,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def set_config(self, config: str, value: Any) -> Any:
         """Sets a value of a config on this Allocation Policy."""
-        if config not in self.config_params():
+        if config not in self.configurable_params():
             raise InvalidPolicyConfig(
                 f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
-        expected_type = self.config_params()[config].type
+        expected_type = self.configurable_params()[config].type
         if not isinstance(value, expected_type):
             raise InvalidPolicyConfig(
                 f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"

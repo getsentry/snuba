@@ -175,6 +175,32 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
+def test_config_values(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    assert set(policy.configurable_params().keys()) == set(
+        [
+            "is_enforced",
+            "is_active",
+            "org_limit_bytes_scanned",
+            "throttled_thread_number",
+        ]
+    )
+    assert policy.config_values() == {
+        "is_active": 1,
+        "is_enforced": 1,
+        "org_limit_bytes_scanned": ORG_SCAN_LIMIT,
+        "throttled_thread_number": THROTTLED_THREAD_NUMBER,
+    }
+    policy.set_config("org_limit_bytes_scanned", 100)
+    assert policy.config_values() == {
+        "is_active": 1,
+        "is_enforced": 1,
+        "org_limit_bytes_scanned": 100,
+        "throttled_thread_number": THROTTLED_THREAD_NUMBER,
+    }
+
+
+@pytest.mark.redis_db
 def test_passthrough_subscriptions(policy) -> None:
     _configure_policy(policy)
     # currently subscriptions are not throttled due to them being on the critical path
