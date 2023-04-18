@@ -98,7 +98,9 @@ def migrate(
             force=force,
             fake=fake,
             group=migration_group,
-            readiness_state=ReadinessState(readiness_state),
+            readiness_state=(
+                ReadinessState(readiness_state) if readiness_state else None
+            ),
         )
     except MigrationError as e:
         raise click.ClickException(str(e))
