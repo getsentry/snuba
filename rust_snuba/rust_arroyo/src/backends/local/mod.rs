@@ -572,7 +572,7 @@ mod tests {
         let stage_result = consumer.stage_offsets(positions.clone());
         assert!(stage_result.is_ok());
 
-        let offsets = consumer.commit_offsetes();
+        let offsets = consumer.commit_offsets();
         assert!(offsets.is_ok());
         assert_eq!(offsets.unwrap(), positions);
 
