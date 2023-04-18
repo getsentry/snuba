@@ -34,6 +34,17 @@ struct Callbacks<TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProcessorHandle {
+    shutdown_requested: Arc<AtomicBool>,
+}
+
+impl ProcessorHandle {
+    pub fn signal_shutdown(&mut self) {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
+    }
+}
+
 impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     // TODO: Having the initialization of the strategy here
     // means that ProcessingStrategy and ProcessingStrategyFactory
@@ -72,7 +83,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     consumer: Box<dyn Consumer<'a, TPayload> + 'a>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
-    pub shutdown_requested: Arc<AtomicBool>,
+    processor_handle: ProcessorHandle,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -89,7 +100,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             consumer,
             strategies,
             message: None,
-            shutdown_requested: Arc::new(AtomicBool::new(false)),
+            processor_handle: ProcessorHandle {shutdown_requested: Arc::new(AtomicBool::new(false))}
         }
     }
 
@@ -179,7 +190,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
     /// The main run loop, see class docstring for more information.
     pub fn run(&mut self) -> Result<(), RunError> {
-        while !self.shutdown_requested.load(Ordering::Relaxed) {
+        while !self.processor_handle.shutdown_requested.load(Ordering::Relaxed) {
             let ret = self.run_once();
             match ret {
                 Ok(()) => {}
@@ -201,8 +212,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         Ok(())
     }
 
-    pub fn signal_shutdown(&mut self) {
-        self.shutdown_requested.store(true, Ordering::Relaxed);
+    pub fn get_handle(&self) -> ProcessorHandle {
+        self.processor_handle.clone()
     }
 
     pub fn shutdown(&mut self) {

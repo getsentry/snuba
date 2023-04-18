@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
@@ -127,10 +126,10 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
         name: consumer_config.raw_topic.physical_topic_name.to_owned(),
     });
 
-    let shutdown_signal = processor.shutdown_requested.clone();
+    let mut handle = processor.get_handle();
 
     ctrlc::set_handler(move || {
-        shutdown_signal.store(true, Ordering::Relaxed);
+        handle.signal_shutdown();
     })
     .expect("Error setting Ctrl-C handler");
 
