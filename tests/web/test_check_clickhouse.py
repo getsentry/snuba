@@ -7,7 +7,7 @@ import pytest
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
-from snuba.web.views import check_clickhouse
+from snuba.web.views import check_clickhouse, filter_checked_storages
 
 
 class BadStorage(mock.MagicMock):
@@ -88,3 +88,16 @@ def test_dataset_undefined_storage_set(
     assert not check_clickhouse(ignore_experimental=True, metric_tags=metrics_tags)
     for v in metrics_tags.values():
         assert isinstance(v, str)
+
+
+@mock.patch(
+    "snuba.web.views.get_enabled_dataset_names",
+    return_value=["events", "experimental"],
+)
+@mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
+@pytest.mark.clickhouse_db
+def test_filter_checked_storages(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
+    storages = filter_checked_storages(ignore_experimental=True)
+    assert BadStorage() not in storages
+    errors_storage = get_dataset("events").get_all_entities()[0].get_all_storages()[0]
+    assert errors_storage in storages
