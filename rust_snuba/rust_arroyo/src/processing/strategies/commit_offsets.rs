@@ -71,7 +71,7 @@ pub fn new(commit_frequency: Duration) -> CommitOffsets {
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
     use crate::processing::strategies::{commit_offsets, CommitRequest, ProcessingStrategy};
-    use crate::types::{Message, Partition, Topic};
+    use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -92,25 +92,31 @@ mod tests {
             index: 1,
         };
         let timestamp = DateTime::from(SystemTime::now());
+
         let m1 = Message {
-            partition: partition1.clone(),
-            offset: 1000,
-            payload: KafkaPayload {
-                key: None,
-                headers: None,
-                payload: None,
-            },
-            timestamp,
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                partition: partition1.clone(),
+                offset: 1000,
+                payload: KafkaPayload {
+                    key: None,
+                    headers: None,
+                    payload: None,
+                },
+                timestamp,
+            }),
         };
+
         let m2 = Message {
-            partition: partition2.clone(),
-            offset: 2000,
-            payload: KafkaPayload {
-                key: None,
-                headers: None,
-                payload: None,
-            },
-            timestamp,
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                partition: partition2.clone(),
+                offset: 2000,
+                payload: KafkaPayload {
+                    key: None,
+                    headers: None,
+                    payload: None,
+                },
+                timestamp,
+            }),
         };
 
         let mut noop = commit_offsets::new(Duration::from_secs(1));
