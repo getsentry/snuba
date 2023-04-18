@@ -39,7 +39,7 @@ def _get_changes(globs: Sequence[str], workdir: str, to: str) -> str:
             "diff",
             "--diff-filter=AM",
             "--name-only",
-            to,
+            f"{to}...",
             "--",
             *globs,
             *[f":(exclude){allowed}" for allowed in ALLOWED_MIGRATIONS_GLOBS],

@@ -12,10 +12,12 @@ jobs:
         name: Checkout master for diffing
         with:
           ref: master
+          fetch-depth: 200
       - uses: actions/checkout@v3
         name: Checkout HEAD of code that may have migration changes
         with:
           clean: false
+          fetch-depth: 200
       - uses: actions/setup-python@v4
         with:
           python-version: 3.8
