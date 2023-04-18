@@ -3,6 +3,7 @@ pub mod strategies;
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -71,7 +72,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     consumer: Box<dyn Consumer<'a, TPayload> + 'a>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
-    shutdown_requested: bool,
+    pub shutdown_requested: Arc<AtomicBool>,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -88,7 +89,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             consumer,
             strategies,
             message: None,
-            shutdown_requested: false,
+            shutdown_requested: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -178,7 +179,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
     /// The main run loop, see class docstring for more information.
     pub fn run(&mut self) -> Result<(), RunError> {
-        while !self.shutdown_requested {
+        while !self.shutdown_requested.load(Ordering::Relaxed) {
             let ret = self.run_once();
             match ret {
                 Ok(()) => {}
@@ -201,7 +202,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     }
 
     pub fn signal_shutdown(&mut self) {
-        self.shutdown_requested = true;
+        self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
     pub fn shutdown(&mut self) {

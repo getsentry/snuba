@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, commit_offsets
+    commit_offsets, CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic};
@@ -125,6 +126,13 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     processor.subscribe(Topic {
         name: consumer_config.raw_topic.physical_topic_name.to_owned(),
     });
+
+    let shutdown_signal = processor.shutdown_requested.clone();
+
+    ctrlc::set_handler(move || {
+        shutdown_signal.store(true, Ordering::Relaxed);
+    })
+    .expect("Error setting Ctrl-C handler");
 
     processor.run().unwrap();
 }
