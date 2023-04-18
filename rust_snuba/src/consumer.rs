@@ -5,7 +5,7 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, commit_offsets
+    commit_offsets, CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic};
@@ -125,6 +125,13 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     processor.subscribe(Topic {
         name: consumer_config.raw_topic.physical_topic_name.to_owned(),
     });
+
+    let mut handle = processor.get_handle();
+
+    ctrlc::set_handler(move || {
+        handle.signal_shutdown();
+    })
+    .expect("Error setting Ctrl-C handler");
 
     processor.run().unwrap();
 }
