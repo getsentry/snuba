@@ -69,7 +69,7 @@ def list() -> None:
 )
 def migrate(
     group: Optional[str],
-    readiness_state: Optional[ReadinessState],
+    readiness_state: Optional[str],
     through: str,
     force: bool,
     fake: bool,
@@ -98,7 +98,7 @@ def migrate(
             force=force,
             fake=fake,
             group=migration_group,
-            readiness_state=readiness_state,
+            readiness_state=ReadinessState(readiness_state),
         )
     except MigrationError as e:
         raise click.ClickException(str(e))
