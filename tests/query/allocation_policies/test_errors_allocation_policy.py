@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyViolation,
@@ -24,8 +24,7 @@ MAX_THREAD_NUMBER = 400
 @pytest.fixture(scope="function")
 def policy() -> ErrorsAllocationPolicy:
     policy = ErrorsAllocationPolicy(
-        "ErrorsAllocationPolicy",
-        storage_set_key=StorageSetKey("errors"),
+        storage_key=StorageKey("errors"),
         required_tenant_types=["referrer", "organization_id"],
     )
     return policy

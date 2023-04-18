@@ -5,7 +5,7 @@ import time
 from typing import Any, cast
 
 from snuba import environment
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
@@ -58,12 +58,11 @@ class ErrorsAllocationPolicy(AllocationPolicy):
 
     def __init__(
         self,
-        name: str,
-        storage_set_key: StorageSetKey,
+        storage_key: StorageKey,
         required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
-        super().__init__(name, storage_set_key, required_tenant_types)
+        super().__init__(storage_key, required_tenant_types)
         self._config_params.update(
             {
                 "throttled_thread_number": AllocationPolicyConfig(
@@ -76,7 +75,6 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 ),
             }
         )
-        self._name = self._name or self.__class__.__name__
 
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
@@ -101,7 +99,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             metrics.increment(
                 "db_request_rejected",
                 tags={
-                    "storage_set_key": self._storage_set_key.value,
+                    "storage_key": self._storage_key.value,
                     "is_enforced": str(is_enforced),
                 },
             )
@@ -116,7 +114,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
                     RequestedQuota(
-                        self._name,
+                        self.runtime_config_prefix,
                         # request a big number because we don't know how much we actually
                         # will use in this query. this doesn't use up any quota, we just want to know how much is left
                         UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
@@ -127,7 +125,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=int(org_limit_bytes_scanned),
-                                prefix_override=f"{self._name}-organization_id-{tenant_ids['organization_id']}",
+                                prefix_override=f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
                     ),
@@ -140,7 +138,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 metrics.increment(
                     "db_request_throttled",
                     tags={
-                        "storage_set_key": self._storage_set_key.value,
+                        "storage_key": self._storage_key.value,
                         "is_enforced": str(is_enforced),
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
@@ -185,21 +183,21 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         _RATE_LIMITER.use_quotas(
             [
                 RequestedQuota(
-                    f"{self._name}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                     bytes_scanned,
                     [
                         Quota(
                             window_seconds=self.WINDOW_SECONDS,
                             granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                             limit=org_limit_bytes_scanned,
-                            prefix_override=f"{self._name}-organization_id-{tenant_ids['organization_id']}",
+                            prefix_override=f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                         )
                     ],
                 )
             ],
             grants=[
                 GrantedQuota(
-                    f"{self._name}-organization_id-{tenant_ids['organization_id']}",
+                    f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                     granted=bytes_scanned,
                     reached_quotas=[],
                 )

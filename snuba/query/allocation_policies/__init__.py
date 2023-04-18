@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, cast
 
 from snuba import settings
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -15,6 +15,8 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
+
+CAPMAN_PREFIX = "capman"
 
 
 @dataclass(frozen=True)
@@ -145,14 +147,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def __init__(
         self,
-        name: str,
-        storage_set_key: StorageSetKey,
+        storage_key: StorageKey,
         required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
-        self._name = name
         self._required_tenant_types = set(required_tenant_types)
-        self._storage_set_key = storage_set_key
+        self._storage_key = storage_key
         self._config_params: dict[str, AllocationPolicyConfig] = {
             "is_active": AllocationPolicyConfig(
                 "Whether or not this policy is active.", int, 1
@@ -161,6 +161,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "Whether or not this policy is enforced.", int, 0
             ),
         }
+
+    @property
+    def runtime_config_prefix(self) -> str:
+        return f"{CAPMAN_PREFIX}.{self._storage_key.value}.{self.__class__.__name__}"
 
     @classmethod
     def config_key(cls) -> str:
@@ -177,21 +181,21 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         return (
             bool(self.__class__ == other.__class__)
-            and self._storage_set_key == other._storage_set_key
+            and self._storage_key == other._storage_key
             and self._required_tenant_types == other._required_tenant_types
         )
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
         required_tenant_types = kwargs.pop("required_tenant_types", None)
-        storage_set_key = kwargs.pop("storage_set_key", None)
+        storage_key = kwargs.pop("storage_key", None)
         assert isinstance(
             required_tenant_types, list
         ), "required_tenant_types must be a list of strings"
-        assert isinstance(storage_set_key, str)
+        assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_set_key=StorageSetKey(storage_set_key),
+            storage_key=StorageKey(storage_key),
             **kwargs,
         )
 
@@ -203,26 +207,28 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
         if config not in self.config_params():
             raise InvalidPolicyConfig(
-                f"'{config}' is not a valid config for {self._name}!"
+                f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
         config_params = self.config_params()[config]
         return cast(
             config_params.type,  # type: ignore
-            get_runtime_config(f"{self._name}.{config}", config_params.default),
+            get_runtime_config(
+                f"{self.runtime_config_prefix}.{config}", config_params.default
+            ),
         )
 
     def set_config(self, config: str, value: Any) -> Any:
         """Sets a value of a config on this Allocation Policy."""
         if config not in self.config_params():
             raise InvalidPolicyConfig(
-                f"'{config}' is not a valid config for {self._name}!"
+                f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
         expected_type = self.config_params()[config].type
         if not isinstance(value, expected_type):
             raise InvalidPolicyConfig(
                 f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"
             )
-        set_runtime_config(f"{self._name}.{config}", value)
+        set_runtime_config(f"{self.runtime_config_prefix}.{config}", value)
 
     def is_active(self) -> bool:
         return bool(self.get_config("is_active"))
@@ -287,8 +293,7 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    "PassthroughPolicy",
-    StorageSetKey("default.no_storage_set_key"),
+    StorageKey("default.no_storage_key"),
     required_tenant_types=[],
 )
 
