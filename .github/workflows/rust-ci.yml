@@ -4,10 +4,10 @@ on:
     branches:
       - master
     paths:
-    - 'rust_snuba/**'
+      - "rust_snuba/**"
   pull_request:
     paths:
-    - 'rust_snuba/**'
+      - "rust_snuba/**"
 
 jobs:
   rust-linting:
@@ -20,3 +20,13 @@ jobs:
       - name: Run linter
         run: |
           make lint-rust
+  rust-tests:
+    name: "Tests - Rust"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout code
+      - name: Run tests
+        run: |
+          make test-rust

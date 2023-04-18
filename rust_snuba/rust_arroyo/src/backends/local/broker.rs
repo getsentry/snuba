@@ -2,7 +2,7 @@ use crate::backends::storages::{ConsumeError, MessageStorage, TopicDoesNotExist,
 use crate::types::{BrokerMessage, Partition, Topic};
 use crate::utils::clock::Clock;
 use chrono::DateTime;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error;
 use uuid::Uuid;
 
