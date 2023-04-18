@@ -1,6 +1,6 @@
 import importlib
 from datetime import datetime
-from typing import Generator
+from typing import Any, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -40,6 +40,14 @@ def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     _drop_all_tables()
     yield
     _drop_all_tables()
+
+
+@pytest.fixture(scope="function")
+def temp_settings() -> Any:
+    from snuba import settings
+
+    yield settings
+    importlib.reload(settings)
 
 
 @pytest.mark.clickhouse_db
@@ -359,20 +367,18 @@ def get_total_migration_count() -> int:
 
 
 @pytest.mark.clickhouse_db
-def test_get_active_migration_groups() -> None:
-    settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
+def test_get_active_migration_groups(temp_settings: Any) -> None:
+    temp_settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
     active_groups = get_active_migration_groups()
     assert (
         MigrationGroup.SEARCH_ISSUES not in active_groups
     )  # should be skipped by SKIPPED_MIGRATION_GROUPS
 
-    settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED = {"search_issues"}
+    temp_settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED = {"search_issues"}
     active_groups = get_active_migration_groups()
     assert (
         MigrationGroup.SEARCH_ISSUES in active_groups
     )  # should be active by readiness_state
-
-    importlib.reload(settings)
 
 
 @pytest.mark.clickhouse_db
