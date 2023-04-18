@@ -16,6 +16,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -1191,6 +1192,9 @@ class TestSnQLApi(BaseApiTest):
 
     def test_allocation_policy_violation(self) -> None:
         class RejectAllocationPolicy123(AllocationPolicy):
+            def _config_params(self) -> list[AllocationPolicyConfig]:
+                return []
+
             def _get_quota_allowance(
                 self, tenant_ids: dict[str, str | int]
             ) -> QuotaAllowance:
