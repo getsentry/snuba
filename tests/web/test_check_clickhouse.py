@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Sequence
+import importlib
+from typing import Any, Sequence
 from unittest import mock
 
 import pytest
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.readiness_state import ReadinessState
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.web.views import check_clickhouse, filter_checked_storages
 
 
@@ -32,6 +35,38 @@ class ExperimentalDataset(Dataset):
         return [BadEntity()]
 
 
+class NonExperimentalStorage(mock.MagicMock):
+    def get_cluster(self) -> None:
+        raise Exception("No cluster")
+
+    def get_readiness_state(self) -> ReadinessState:
+        return ReadinessState.DEPRECATE
+
+    def get_storage_key(self) -> Any:
+        class TempStorageKey(object):
+            value = "non_experimental_storage"
+
+        storage_key = TempStorageKey()
+        return storage_key
+
+
+class NonExperimentalEntity(mock.MagicMock):
+    def get_all_storages(self) -> Sequence[NonExperimentalStorage]:
+        return [NonExperimentalStorage(spec=ReadableTableStorage)]
+
+
+class NonExperimentalDataset(Dataset):
+    def __init__(self) -> None:
+        super().__init__(all_entities=[])
+
+    @classmethod
+    def is_experimental(cls) -> bool:
+        return False
+
+    def get_all_entities(self) -> Sequence[NonExperimentalEntity]:
+        return [NonExperimentalEntity()]
+
+
 class BadDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(all_entities=[])
@@ -49,7 +84,16 @@ def fake_get_dataset(name: str) -> Dataset:
         "events": get_dataset("events"),
         "experimental": ExperimentalDataset(),
         "bad": BadDataset(),
+        "non_experimental": NonExperimentalDataset(),
     }[name]
+
+
+@pytest.fixture(scope="function")
+def temp_settings() -> Any:
+    from snuba import settings
+
+    yield settings
+    importlib.reload(settings)
 
 
 @mock.patch(
@@ -92,12 +136,23 @@ def test_dataset_undefined_storage_set(
 
 @mock.patch(
     "snuba.web.views.get_enabled_dataset_names",
-    return_value=["events", "experimental"],
+    return_value=["events", "experimental", "non_experimental"],
 )
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
-def test_filter_checked_storages(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
+def test_filter_checked_storages(
+    mock1: mock.MagicMock, mock2: mock.MagicMock, temp_settings: Any
+) -> None:
+    temp_settings.SUPPORTED_STATES = {"limited", "partial", "complete"}
+    temp_settings.READINESS_STATE_STORAGES_ENABLED = {"non_experimental_storage"}
     storages = filter_checked_storages(ignore_experimental=True)
+
+    # check experimental dataset's storages is not in list
     assert BadStorage() not in storages
+
+    # checks errors storage is in list
     errors_storage = get_dataset("events").get_all_entities()[0].get_all_storages()[0]
     assert errors_storage in storages
+
+    # check that the storage with a non-supported readiness state is excluded in list
+    assert NonExperimentalStorage() not in storages
