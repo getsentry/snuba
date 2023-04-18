@@ -153,7 +153,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
         self._storage_key = storage_key
-        self._config_params: dict[str, AllocationPolicyConfig] = {
+        self._default_config_params: dict[str, AllocationPolicyConfig] = {
             "is_active": AllocationPolicyConfig(
                 "Whether or not this policy is active.", int, 1
             ),
@@ -199,9 +199,17 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             **kwargs,
         )
 
+    @abstractmethod
+    def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+        """
+        Define policy specific config params, these will be used along
+        with the default params of the base class.
+        """
+        pass
+
     def config_params(self) -> dict[str, AllocationPolicyConfig]:
         """What can be configured on this Allocation Policy."""
-        return self._config_params
+        return {**self._default_config_params, **self._config_params()}
 
     def get_config(self, config: str) -> Any:
         """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
@@ -278,6 +286,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
 
 class PassthroughPolicy(AllocationPolicy):
+    def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+        return {}
+
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 
         max_threads = get_runtime_config("query_settings/max_threads", 8)

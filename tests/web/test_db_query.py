@@ -16,6 +16,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    AllocationPolicyConfig,
     AllocationPolicyViolation,
     QueryResultOrError,
     QuotaAllowance,
@@ -220,6 +221,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     class RejectAllocationPolicy(AllocationPolicy):
+        def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+            return {}
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
@@ -274,6 +278,9 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
+        def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+            return {}
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
@@ -324,6 +331,9 @@ def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
 
     class CountQueryPolicy(AllocationPolicy):
+        def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+            return {}
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
