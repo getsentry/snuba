@@ -36,7 +36,7 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
-from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.clickhouse.escaping import escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import (
@@ -49,7 +49,6 @@ from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,
-    ReplacementMessageMetadata,
     ReplacerProcessor,
     ReplacerState,
 )
@@ -103,10 +102,6 @@ class Replacement(ReplacementBase):
     def get_replacement_type(self) -> ReplacementType:
         raise NotImplementedError()
 
-    @abstractmethod
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        raise NotImplementedError()
-
     def should_write_every_node(self) -> bool:
         project_rollout_setting = get_config("write_node_replacements_projects", "")
         if project_rollout_setting:
@@ -125,55 +120,6 @@ class Replacement(ReplacementBase):
             return True
 
         return False
-
-
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
-LegacyQueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
-
-
-@dataclass(frozen=True)
-class LegacyReplacement(Replacement):
-    # XXX: For the group_exclude message we need to be able to run a
-    # replacement without running any query.
-    count_query_template: Optional[str]
-    insert_query_template: Optional[str]
-    query_args: Mapping[str, Any]
-    query_time_flags: LegacyQueryTimeFlags
-    replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
-
-    def get_project_id(self) -> int:
-        return self.query_time_flags[1]
-
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
-        if self.query_time_flags[0] == NEEDS_FINAL:
-            return NeedsFinal()
-
-        if self.query_time_flags[0] == EXCLUDE_GROUPS:
-            return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
-
-        return None
-
-    def get_replacement_type(self) -> ReplacementType:
-        return self.replacement_type
-
-    def get_insert_query(self, table_name: str) -> Optional[str]:
-        if self.insert_query_template is None:
-            return None
-
-        args = {**self.query_args, "table_name": table_name}
-        return self.insert_query_template % args
-
-    def get_count_query(self, table_name: str) -> Optional[str]:
-        if self.count_query_template is None:
-            return None
-
-        args = {**self.query_args, "table_name": table_name}
-        return self.count_query_template % args
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
@@ -234,6 +180,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 tags={"type": type_, "consumer_group": message.metadata.consumer_group},
             )
 
+        processed: Optional[Replacement]
+
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
             ReplacementType.START_MERGE,
@@ -243,14 +191,14 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == ReplacementType.END_DELETE_GROUPS:
-            processed = process_delete_groups(
+            processed = DeleteGroupsReplacement.parse_message(
                 cast(ReplacementMessage[EndDeleteGroupsMessageBody], message),
-                self.__required_columns,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_MERGE:
-            processed = process_merge(
+            processed = MergeReplacement.parse_message(
                 cast(ReplacementMessage[EndMergeMessageBody], message),
-                self.__all_columns,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_UNMERGE:
             processed = UnmergeGroupsReplacement.parse_message(
@@ -258,24 +206,19 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__replacement_context,
             )
         elif type_ == ReplacementType.END_UNMERGE_HIERARCHICAL:
-            processed = process_unmerge_hierarchical(
+            processed = UnmergeHierarchicalReplacement.parse_message(
                 cast(ReplacementMessage[EndUnmergeHierarchicalMessageBody], message),
-                self.__all_columns,
-                self.__state_name,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.END_DELETE_TAG:
-            processed = process_delete_tag(
+            processed = DeleteTagReplacement.parse_message(
                 cast(ReplacementMessage[EndDeleteTagMessageBody], message),
-                self.__all_columns,
-                self.__tag_column_map,
-                self.__promoted_tags,
-                self.__schema,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
-            processed = process_tombstone_events(
+            processed = TombstoneEventsReplacement.parse_message(
                 cast(ReplacementMessage[TombstoneEventsMessageBody], message),
-                self.__required_columns,
-                self.__state_name,
+                self.__replacement_context,
             )
         elif type_ == ReplacementType.REPLACE_GROUP:
             processed = ReplaceGroupReplacement.parse_message(
@@ -340,114 +283,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return False
 
 
-def _build_event_tombstone_replacement(
-    message: Union[
-        ReplacementMessage[EndDeleteGroupsMessageBody],
-        ReplacementMessage[TombstoneEventsMessageBody],
-    ],
-    required_columns: Sequence[str],
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: LegacyQueryTimeFlags,
-) -> Replacement:
-    select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "required_columns": ", ".join(required_columns),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message.data["project_id"],
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        final_query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
-
-
-def _build_group_replacement(
-    message: Union[
-        ReplacementMessage[EndMergeMessageBody],
-        ReplacementMessage[ReplaceGroupMessageBody],
-    ],
-    project_id: int,
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: LegacyQueryTimeFlags,
-    all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    txn = message.data.get("transaction_id")
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
-            logger.error(
-                "Skipping duplicate group replacement", extra={"project_id": project_id}
-            )
-            return None
-        else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
-
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
-        all_column_names,
-    )
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": project_id,
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        final_query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
-
-
 def _build_event_set_filter(
     project_id: int,
     event_ids: Sequence[str],
@@ -504,7 +339,6 @@ class ReplaceGroupReplacement(Replacement):
     to_timestamp: Optional[str]
     new_group_id: int
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
     all_columns: Sequence[FlattenedColumn]
 
     @classmethod
@@ -524,7 +358,6 @@ class ReplaceGroupReplacement(Replacement):
             to_timestamp=message.data.get("to_timestamp"),
             new_group_id=message.data["new_group_id"],
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
             all_columns=context.all_columns,
         )
 
@@ -536,9 +369,6 @@ class ReplaceGroupReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
     @cached_property
     def _where_clause(self) -> str:
@@ -580,72 +410,160 @@ class ReplaceGroupReplacement(Replacement):
         """
 
 
-def process_delete_groups(
-    message: ReplacementMessage[EndDeleteGroupsMessageBody],
-    required_columns: Sequence[str],
-) -> Optional[Replacement]:
-    group_ids = message.data["group_ids"]
-    if not group_ids:
-        return None
+@dataclass
+class DeleteGroupsReplacement(Replacement):
+    project_id: int
+    required_columns: Sequence[str]
+    timestamp: datetime
+    group_ids: Sequence[int]
+    replacement_type: ReplacementType
 
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndDeleteGroupsMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[DeleteGroupsReplacement]:
 
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+        group_ids = message.data["group_ids"]
+        if not group_ids:
+            return None
 
-    query_args = {
-        "group_ids": ", ".join(str(gid) for gid in group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        assert all(isinstance(gid, int) for gid in group_ids)
 
-    query_time_flags = (EXCLUDE_GROUPS, message.data["project_id"], group_ids)
-
-    return _build_event_tombstone_replacement(
-        message, required_columns, where, query_args, query_time_flags
-    )
-
-
-def process_tombstone_events(
-    message: ReplacementMessage[TombstoneEventsMessageBody],
-    required_columns: Sequence[str],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    event_ids = message.data["event_ids"]
-    if not event_ids:
-        return None
-
-    old_primary_hash = message.data.get("old_primary_hash")
-
-    prewhere, where, query_args = _build_event_set_filter(
-        project_id=message.data["project_id"],
-        event_ids=event_ids,
-        from_timestamp=message.data.get("from_timestamp"),
-        to_timestamp=message.data.get("to_timestamp"),
-    )
-
-    if old_primary_hash:
-        query_args["old_primary_hash"] = (
-            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
-            if old_primary_hash
-            else "NULL"
+        timestamp = datetime.strptime(
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
-        prewhere.append("primary_hash = %(old_primary_hash)s")
+        return cls(
+            required_columns=context.required_columns,
+            project_id=message.data["project_id"],
+            timestamp=timestamp,
+            group_ids=group_ids,
+            replacement_type=message.action_type,
+        )
 
-    query_time_flags = (None, message.data["project_id"])
+    def get_project_id(self) -> int:
+        return self.project_id
 
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return ExcludeGroups(group_ids=self.group_ids)
 
-    return _build_event_tombstone_replacement(
-        message, required_columns, full_where, query_args, query_time_flags
-    )
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+    @cached_property
+    def _where_clause(self) -> str:
+        group_ids = ", ".join(str(gid) for gid in self.group_ids)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id IN ({group_ids})
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = ", ".join(self.required_columns)
+        select_columns = ", ".join(
+            map(lambda i: i if i != "deleted" else "1", self.required_columns)
+        )
+        return f"""\
+            INSERT INTO {table_name} ({required_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+
+@dataclass
+class TombstoneEventsReplacement(Replacement):
+    event_ids: Sequence[str]
+    old_primary_hash: Optional[str]
+    project_id: int
+    from_timestamp: Optional[str]
+    to_timestamp: Optional[str]
+
+    required_columns: Sequence[str]
+    replacement_type: ReplacementType
+
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[TombstoneEventsMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[TombstoneEventsReplacement]:
+        event_ids = message.data["event_ids"]
+        if not event_ids:
+            return None
+
+        return cls(
+            project_id=message.data["project_id"],
+            event_ids=event_ids,
+            old_primary_hash=message.data.get("old_primary_hash"),
+            from_timestamp=message.data.get("from_timestamp"),
+            to_timestamp=message.data.get("to_timestamp"),
+            required_columns=context.required_columns,
+            replacement_type=message.action_type,
+        )
+
+    @cached_property
+    def _where_clause(self) -> str:
+        prewhere, where, query_args = _build_event_set_filter(
+            project_id=self.project_id,
+            event_ids=self.event_ids,
+            from_timestamp=self.from_timestamp,
+            to_timestamp=self.to_timestamp,
+        )
+
+        if self.old_primary_hash:
+            query_args["old_primary_hash"] = "'%s'" % (
+                str(uuid.UUID(self.old_primary_hash)),
+            )
+
+            prewhere.append("primary_hash = %(old_primary_hash)s")
+
+        return (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            % query_args
+        )
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = ", ".join(self.required_columns)
+        select_columns = ", ".join(
+            map(lambda i: i if i != "deleted" else "1", self.required_columns)
+        )
+
+        return f"""\
+            INSERT INTO {table_name} ({required_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return None
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
 
 @dataclass
@@ -669,7 +587,6 @@ class ExcludeGroupsReplacement(Replacement):
     project_id: int
     group_ids: Sequence[int]
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -684,7 +601,6 @@ class ExcludeGroupsReplacement(Replacement):
             project_id=message.data["project_id"],
             group_ids=message.data["group_ids"],
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -702,17 +618,12 @@ class ExcludeGroupsReplacement(Replacement):
     def get_count_query(self, table_name: str) -> Optional[str]:
         return None
 
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
-
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
-def process_merge(
-    message: ReplacementMessage[EndMergeMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
+@dataclass
+class MergeReplacement(Replacement):
     """
     Merge all events of one group into another group.
 
@@ -725,39 +636,97 @@ def process_merge(
         process_exclude_groups
     """
 
-    where = """\
-        PREWHERE group_id IN (%(previous_group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    project_id: int
+    previous_group_ids: Sequence[int]
+    new_group_id: int
+    timestamp: datetime
 
-    previous_group_ids = message.data["previous_group_ids"]
-    if not previous_group_ids:
-        return None
+    all_columns: Sequence[FlattenedColumn]
 
-    assert all(isinstance(gid, int) for gid in previous_group_ids)
+    replacement_type: ReplacementType
 
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndMergeMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[MergeReplacement]:
+        project_id = message.data["project_id"]
+        previous_group_ids = message.data["previous_group_ids"]
+        if not previous_group_ids:
+            return None
 
-    query_args = {
-        "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        assert all(isinstance(gid, int) for gid in previous_group_ids)
 
-    project_id: int = message.data["project_id"]
-    query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
+        timestamp = datetime.strptime(
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    return _build_group_replacement(
-        message,
-        project_id,
-        where,
-        query_args,
-        query_time_flags,
-        all_columns,
-    )
+        # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+        # this is only for performance of the backlog.
+        txn = message.data.get("transaction_id")
+        if txn:
+            if txn in SEEN_MERGE_TXN_CACHE:
+                logger.error(
+                    "Skipping duplicate group replacement",
+                    extra={"project_id": project_id},
+                )
+                return None
+            else:
+                SEEN_MERGE_TXN_CACHE.append(txn)
+
+        return cls(
+            project_id=project_id,
+            previous_group_ids=previous_group_ids,
+            new_group_id=message.data["new_group_id"],
+            timestamp=timestamp,
+            all_columns=context.all_columns,
+            replacement_type=message.action_type,
+        )
+
+    @cached_property
+    def _where_clause(self) -> str:
+        previous_group_ids = ", ".join(str(gid) for gid in self.previous_group_ids)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id IN ({previous_group_ids})
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        all_columns = ", ".join(all_column_names)
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> QueryTimeFlags:
+        return ExcludeGroups(group_ids=self.previous_group_ids)
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
 
 @dataclass(frozen=True)
@@ -770,7 +739,6 @@ class UnmergeGroupsReplacement(Replacement):
     previous_group_id: int
     new_group_id: int
     replacement_type: ReplacementType
-    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -797,7 +765,6 @@ class UnmergeGroupsReplacement(Replacement):
             new_group_id=message.data["new_group_id"],
             all_columns=context.all_columns,
             replacement_type=message.action_type,
-            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -808,9 +775,6 @@ class UnmergeGroupsReplacement(Replacement):
 
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
-
-    def get_message_metadata(self) -> ReplacementMessageMetadata:
-        return self.replacement_message_metadata
 
     @cached_property
     def _where_clause(self) -> str:
@@ -872,180 +836,216 @@ def _convert_hash(
             return "'%s'" % _hashify(hash)
 
 
-def process_unmerge_hierarchical(
-    message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
-        all_column_names,
-    )
+@dataclass
+class UnmergeHierarchicalReplacement(Replacement):
+    project_id: int
+    timestamp: datetime
+    primary_hash: str
+    hierarchical_hash: str
+    previous_group_id: int
+    new_group_id: int
 
-    try:
+    all_columns: Sequence[FlattenedColumn]
+    state_name: ReplacerState
+
+    replacement_type: ReplacementType
+
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[UnmergeHierarchicalReplacement]:
+        try:
+            timestamp = datetime.strptime(
+                message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            )
+
+            primary_hash = message.data["primary_hash"]
+            assert isinstance(primary_hash, str)
+
+            hierarchical_hash = message.data["hierarchical_hash"]
+            assert isinstance(hierarchical_hash, str)
+
+            uuid.UUID(primary_hash)
+            uuid.UUID(hierarchical_hash)
+        except Exception as exc:
+            # TODO(markus): We're sacrificing consistency over uptime as long as
+            # this is in development. At some point this piece of code should be
+            # stable enough to remove this.
+            logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
+            return None
+
+        return cls(
+            project_id=message.data["project_id"],
+            timestamp=timestamp,
+            primary_hash=primary_hash,
+            hierarchical_hash=hierarchical_hash,
+            all_columns=context.all_columns,
+            state_name=context.state_name,
+            replacement_type=message.action_type,
+            previous_group_id=message.data["previous_group_id"],
+            new_group_id=message.data["new_group_id"],
+        )
+
+    @cached_property
+    def _where_clause(self) -> str:
+        primary_hash = _convert_hash(self.primary_hash, self.state_name)
+        hierarchical_hash = _convert_hash(
+            self.hierarchical_hash, self.state_name, convert_types=True
+        )
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE primary_hash = {primary_hash}
+            WHERE group_id = {self.previous_group_id}
+            AND has(hierarchical_hashes, {hierarchical_hash})
+            AND project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        all_columns = ", ".join(all_column_names)
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return None
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
+
+@dataclass
+class DeleteTagReplacement(Replacement):
+    project_id: int
+    tag: str
+    timestamp: datetime
+    tag_column_name: str
+    is_promoted: bool
+    all_columns: Sequence[FlattenedColumn]
+    schema: WritableTableSchema
+    replacement_type: ReplacementType
+
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[EndDeleteTagMessageBody],
+        context: ReplacementContext,
+    ) -> Optional[DeleteTagReplacement]:
+        tag = message.data["tag"]
+        if not tag:
+            return None
+
+        assert isinstance(tag, str)
         timestamp = datetime.strptime(
             message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
+        tag_column_name = context.tag_column_map["tags"].get(tag, tag)
+        is_promoted = tag in context.promoted_tags["tags"]
 
-        primary_hash = message.data["primary_hash"]
-        assert isinstance(primary_hash, str)
+        return cls(
+            project_id=message.data["project_id"],
+            tag=tag,
+            timestamp=timestamp,
+            tag_column_name=tag_column_name,
+            is_promoted=is_promoted,
+            all_columns=context.all_columns,
+            schema=context.schema,
+            replacement_type=message.action_type,
+        )
 
-        hierarchical_hash = message.data["hierarchical_hash"]
-        assert isinstance(hierarchical_hash, str)
+    @cached_property
+    def _where_clause(self) -> str:
+        tag_str = escape_string(self.tag)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+        return f"""\
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+            AND has(`tags.key`, {tag_str})
+        """
 
-        uuid.UUID(primary_hash)
-        uuid.UUID(hierarchical_hash)
-    except Exception as exc:
-        # TODO(markus): We're sacrificing consistency over uptime as long as
-        # this is in development. At some point this piece of code should be
-        # stable enough to remove this.
-        logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
-        return None
-
-    where = """\
-        PREWHERE primary_hash = %(primary_hash)s
-        WHERE group_id = %(previous_group_id)s
-        AND has(hierarchical_hashes, %(hierarchical_hash)s)
-        AND project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message.data["previous_group_id"],
-        "project_id": message.data["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        "primary_hash": _convert_hash(primary_hash, state_name),
-        "hierarchical_hash": _convert_hash(
-            hierarchical_hash, state_name, convert_types=True
-        ),
-    }
-
-    # Sentry is expected to send an `exclude_groups` message after unsplit is
-    # done, and we can live with data inconsistencies while this is ongoing.
-    query_time_flags = (None, message.data["project_id"])
-
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
-
-
-def process_delete_tag(
-    message: ReplacementMessage[EndDeleteTagMessageBody],
-    all_columns: Sequence[FlattenedColumn],
-    tag_column_map: Mapping[str, Mapping[str, str]],
-    promoted_tags: Mapping[str, Sequence[str]],
-    schema: WritableTableSchema,
-) -> Optional[Replacement]:
-    tag = message.data["tag"]
-    if not tag:
-        return None
-
-    assert isinstance(tag, str)
-    timestamp = datetime.strptime(
-        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-    )
-    tag_column_name = tag_column_map["tags"].get(tag, tag)
-    is_promoted = tag in promoted_tags["tags"]
-
-    # We cannot put the tag condition (which is what we are mutating) in the
-    # prewhere clause. This is because the prewhere clause is processed before
-    # the FINAL clause.
-    # So if we are trying to mutate a row that was mutated before but not merged
-    # yet, the PREWHERE would return the old row that has already been
-    # replaced.
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-        AND has(`tags.key`, %(tag_str)s)
-    """
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    select_columns = []
-    for col in all_columns:
-        if is_promoted and col.flattened == tag_column_name:
-            # The promoted tag columns of events are non nullable, but those of
-            # errors are non nullable. We check the column against the schema
-            # to determine whether to write an empty string or NULL.
-            column_type = schema.get_data_source().get_columns().get(tag_column_name)
-            assert column_type is not None
-            is_nullable = column_type.type.has_modifier(Nullable)
-            if is_nullable:
-                select_columns.append("NULL")
+    @cached_property
+    def _select_columns(self) -> Sequence[str]:
+        select_columns = []
+        for col in self.all_columns:
+            if self.is_promoted and col.flattened == self.tag_column_name:
+                # The promoted tag columns of events are non nullable, but those of
+                # errors are non nullable. We check the column against the schema
+                # to determine whether to write an empty string or NULL.
+                column_type = (
+                    self.schema.get_data_source()
+                    .get_columns()
+                    .get(self.tag_column_name)
+                )
+                assert column_type is not None
+                is_nullable = column_type.type.has_modifier(Nullable)
+                if is_nullable:
+                    select_columns.append("NULL")
+                else:
+                    select_columns.append("''")
+            elif col.flattened == "tags.key":
+                select_columns.append(
+                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
+                    % escape_string(self.tag)
+                )
+            elif col.flattened == "tags.value":
+                select_columns.append(
+                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
+                    % escape_string(self.tag)
+                )
             else:
-                select_columns.append("''")
-        elif col.flattened == "tags.key":
-            select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
-                % escape_string(tag)
-            )
-        elif col.flattened == "tags.value":
-            select_columns.append(
-                "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
-                % escape_string(tag)
-            )
-        else:
-            select_columns.append(col.escaped)
+                select_columns.append(col.escaped)
 
-    all_column_names = [col.escaped for col in all_columns]
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message.data["project_id"],
-        "tag_str": escape_string(tag),
-        "tag_column": escape_identifier(tag_column_name),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        return select_columns
 
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_columns = ", ".join(col.escaped for col in self.all_columns)
+        select_columns = ", ".join(self._select_columns)
 
-    query_time_flags = (NEEDS_FINAL, message.data["project_id"])
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
 
-    return LegacyReplacement(
-        count_query_template,
-        insert_query_template,
-        query_args,
-        query_time_flags,
-        replacement_type=message.action_type,
-        replacement_message_metadata=message.metadata,
-    )
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_query_time_flags(self) -> QueryTimeFlags:
+        return NeedsFinal()
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type

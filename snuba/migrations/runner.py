@@ -15,6 +15,7 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -25,7 +26,7 @@ from snuba.migrations.groups import (
     OPTIONAL_GROUPS,
     MigrationGroup,
     get_group_loader,
-    get_readiness_state,
+    get_group_readiness_state,
 )
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import OperationTarget, SqlOperation
@@ -41,7 +42,7 @@ def get_active_migration_groups() -> Sequence[MigrationGroup]:
     groups = []
     for group in MigrationGroup:
         if group.value in settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED:
-            readiness_state = get_readiness_state(group)
+            readiness_state = get_group_readiness_state(group)
             if readiness_state.value in settings.SUPPORTED_STATES:
                 groups.append(group)
         else:
@@ -160,6 +161,7 @@ class Runner:
         fake: bool = False,
         force: bool = False,
         group: Optional[MigrationGroup] = None,
+        readiness_state: Optional[ReadinessState] = None,
     ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
@@ -179,6 +181,13 @@ class Runner:
             pending_migrations = self._get_pending_migrations_for_group(
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
+
+        if readiness_state:
+            pending_migrations = [
+                m
+                for m in pending_migrations
+                if get_group_readiness_state(m.group) == readiness_state
+            ]
 
         use_through = False if through == "all" else True
 

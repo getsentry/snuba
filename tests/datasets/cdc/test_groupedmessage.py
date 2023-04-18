@@ -237,13 +237,13 @@ class TestGroupedMessage:
             [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
         )
         write_processed_messages(self.storage, [ret])
-        ret = (
+        results = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.INSERT)
             .execute("SELECT * FROM groupedmessage_local;")
             .results
         )
-        assert ret[0] == (
+        assert results[0] == (
             42,  # offset
             0,  # deleted
             2,  # project_id

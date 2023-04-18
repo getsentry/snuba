@@ -42,6 +42,13 @@
           "user:volo.kluev@sentry.io"
         ],
         "role": "roles/AllTools"
+      },
+      {
+        "members": [
+            "user:colton.allen@sentry.io",
+            "user:josh.ferge@sentry.io"
+        ],
+        "role": "roles/SnQLToSQL"
       }
     ]
   }
