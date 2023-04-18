@@ -35,7 +35,7 @@ class ExperimentalDataset(Dataset):
         return [BadEntity()]
 
 
-class NonExperimentalStorage(mock.MagicMock):
+class MockStorage(mock.MagicMock):
     def get_cluster(self) -> None:
         raise Exception("No cluster")
 
@@ -50,12 +50,12 @@ class NonExperimentalStorage(mock.MagicMock):
         return storage_key
 
 
-class NonExperimentalEntity(mock.MagicMock):
-    def get_all_storages(self) -> Sequence[NonExperimentalStorage]:
-        return [NonExperimentalStorage(spec=ReadableTableStorage)]
+class MockEntity(mock.MagicMock):
+    def get_all_storages(self) -> Sequence[MockStorage]:
+        return [MockStorage(spec=ReadableTableStorage)]
 
 
-class NonExperimentalDataset(Dataset):
+class MockDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(all_entities=[])
 
@@ -63,8 +63,8 @@ class NonExperimentalDataset(Dataset):
     def is_experimental(cls) -> bool:
         return False
 
-    def get_all_entities(self) -> Sequence[NonExperimentalEntity]:
-        return [NonExperimentalEntity()]
+    def get_all_entities(self) -> Sequence[MockEntity]:
+        return [MockEntity()]
 
 
 class BadDataset(Dataset):
@@ -84,7 +84,7 @@ def fake_get_dataset(name: str) -> Dataset:
         "events": get_dataset("events"),
         "experimental": ExperimentalDataset(),
         "bad": BadDataset(),
-        "non_experimental": NonExperimentalDataset(),
+        "mock": MockDataset(),
     }[name]
 
 
@@ -143,11 +143,15 @@ def test_dataset_undefined_storage_set(
 def test_filter_checked_storages(
     mock1: mock.MagicMock, mock2: mock.MagicMock, temp_settings: Any
 ) -> None:
-    temp_settings.SUPPORTED_STATES = {"limited", "partial", "complete"}
+    temp_settings.SUPPORTED_STATES = {
+        "limited",
+        "partial",
+        "complete",
+    }  # remove deprecate from supported states
     temp_settings.READINESS_STATE_STORAGES_ENABLED = {"non_experimental_storage"}
     storages = filter_checked_storages(ignore_experimental=True)
 
-    # check experimental dataset's storages is not in list
+    # check experimental dataset's storage is not in list
     assert BadStorage() not in storages
 
     # checks errors storage is in list
@@ -155,4 +159,4 @@ def test_filter_checked_storages(
     assert errors_storage in storages
 
     # check that the storage with a non-supported readiness state is excluded in list
-    assert NonExperimentalStorage() not in storages
+    assert MockStorage() not in storages
