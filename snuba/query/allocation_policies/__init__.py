@@ -17,6 +17,8 @@ from snuba.web import QueryException, QueryResult
 logger = logging.getLogger("snuba.query.allocation_policy_base")
 
 CAPMAN_PREFIX = "capman"
+IS_ACTIVE = "is_active"
+IS_ENFORCED = "is_enforced"
 
 
 @dataclass(frozen=True)
@@ -34,9 +36,11 @@ class QueryResultOrError:
 
 @dataclass()
 class AllocationPolicyConfig:
+    name: str
     description: str
     type: type
     default: Any
+    current_value: Any | None = None
 
 
 class InvalidPolicyConfig(Exception):
@@ -153,14 +157,20 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
         self._storage_key = storage_key
-        self._default_config_params: dict[str, AllocationPolicyConfig] = {
-            "is_active": AllocationPolicyConfig(
-                "Whether or not this policy is active.", int, 1
+        self._default_config_params = [
+            AllocationPolicyConfig(
+                name=IS_ACTIVE,
+                description="Whether or not this policy is active.",
+                type=int,
+                default=1,
             ),
-            "is_enforced": AllocationPolicyConfig(
-                "Whether or not this policy is enforced.", int, 0
+            AllocationPolicyConfig(
+                name=IS_ENFORCED,
+                description="Whether or not this policy is enforced.",
+                type=int,
+                default=0,
             ),
-        }
+        ]
 
     @property
     def runtime_config_prefix(self) -> str:
@@ -200,59 +210,70 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     @abstractmethod
-    def _config_params(self) -> dict[str, AllocationPolicyConfig]:
+    def _config_params(self) -> list[AllocationPolicyConfig]:
         """
         Define policy specific config params, these will be used along
         with the default params of the base class.
         """
         pass
 
-    def configurable_params(self) -> dict[str, AllocationPolicyConfig]:
-        """What can be configured on this AllocationPolicy."""
-        return {**self._default_config_params, **self._config_params()}
-
-    def config_values(self) -> dict[str, Any]:
+    def __raw_config_params(self) -> dict[str, AllocationPolicyConfig]:
         """
-        Returns a dictionary representing the current values for all configurable
-        options on this AllocationPolicy.
+        Returns a dictionary of configurable params on this AllocationPolicy.
+        The `current_value` is not guaranteed to be up to date on the config object.
         """
         return {
-            config_key: self.get_config(config_key)
-            for config_key in self.configurable_params()
+            config.name: config
+            for config in self._default_config_params + self._config_params()
         }
+
+    def config_params(self) -> dict[str, AllocationPolicyConfig]:
+        """
+        Returns a list of the configurable params of this AllocationPolicy
+        with up to date current values of the params.
+        """
+        configurable_params = self.__raw_config_params()
+        for param in configurable_params:
+            configurable_params[param].current_value = self.get_config(param)
+        return configurable_params
+
+    def __build_runtime_config_key(self, config: str) -> str:
+        return f"{self.runtime_config_prefix}.{config}"
 
     def get_config(self, config: str) -> Any:
         """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        if config not in self.configurable_params():
+        configurable_params = self.__raw_config_params()
+        if config not in configurable_params:
             raise InvalidPolicyConfig(
                 f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
-        config_params = self.configurable_params()[config]
+        config_params = configurable_params[config]
         return cast(
             config_params.type,  # type: ignore
             get_runtime_config(
-                f"{self.runtime_config_prefix}.{config}", config_params.default
+                self.__build_runtime_config_key(config), config_params.default
             ),
         )
 
     def set_config(self, config: str, value: Any) -> Any:
         """Sets a value of a config on this Allocation Policy."""
-        if config not in self.configurable_params():
+        configurable_params = self.__raw_config_params()
+        if config not in configurable_params:
             raise InvalidPolicyConfig(
                 f"'{config}' is not a valid config for {self.__class__.__name__}!"
             )
-        expected_type = self.configurable_params()[config].type
+        expected_type = configurable_params[config].type
         if not isinstance(value, expected_type):
             raise InvalidPolicyConfig(
                 f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"
             )
-        set_runtime_config(f"{self.runtime_config_prefix}.{config}", value)
+        set_runtime_config(self.__build_runtime_config_key(config), value)
 
     def is_active(self) -> bool:
-        return bool(self.get_config("is_active"))
+        return bool(self.get_config(IS_ACTIVE))
 
     def is_enforced(self) -> bool:
-        return bool(self.get_config("is_enforced"))
+        return bool(self.get_config(IS_ENFORCED))
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
@@ -296,8 +317,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    def _config_params(self) -> dict[str, AllocationPolicyConfig]:
-        return {}
+    def _config_params(self) -> list[AllocationPolicyConfig]:
+        return []
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 

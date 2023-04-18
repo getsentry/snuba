@@ -74,17 +74,21 @@ class ErrorsAllocationPolicy(AllocationPolicy):
     ) -> None:
         super().__init__(storage_key, required_tenant_types)
 
-    def _config_params(self) -> dict[str, AllocationPolicyConfig]:
-        return {
-            "throttled_thread_number": AllocationPolicyConfig(
-                "Number of threads any throttled query gets assigned.", int, 1
+    def _config_params(self) -> list[AllocationPolicyConfig]:
+        return [
+            AllocationPolicyConfig(
+                name="throttled_thread_number",
+                description="Number of threads any throttled query gets assigned.",
+                type=int,
+                default=1,
             ),
-            "org_limit_bytes_scanned": AllocationPolicyConfig(
-                "Number of bytes any org can scan in a 10 minute window.",
-                int,
-                10000,
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned",
+                description="Number of bytes any org can scan in a 10 minute window.",
+                type=int,
+                default=10000,
             ),
-        }
+        ]
 
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]

@@ -177,27 +177,16 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
 @pytest.mark.redis_db
 def test_config_values(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
-    assert set(policy.configurable_params().keys()) == set(
-        [
-            "is_enforced",
-            "is_active",
-            "org_limit_bytes_scanned",
-            "throttled_thread_number",
-        ]
-    )
-    assert policy.config_values() == {
-        "is_active": 1,
-        "is_enforced": 1,
-        "org_limit_bytes_scanned": ORG_SCAN_LIMIT,
-        "throttled_thread_number": THROTTLED_THREAD_NUMBER,
+    config_params = policy.config_params()
+    assert set(config_params.keys()) == {
+        "org_limit_bytes_scanned",
+        "throttled_thread_number",
+        "is_active",
+        "is_enforced",
     }
+    assert config_params["org_limit_bytes_scanned"].current_value == ORG_SCAN_LIMIT
     policy.set_config("org_limit_bytes_scanned", 100)
-    assert policy.config_values() == {
-        "is_active": 1,
-        "is_enforced": 1,
-        "org_limit_bytes_scanned": 100,
-        "throttled_thread_number": THROTTLED_THREAD_NUMBER,
-    }
+    assert policy.config_params()["org_limit_bytes_scanned"].current_value == 100
 
 
 @pytest.mark.redis_db
