@@ -59,6 +59,7 @@ _PASS_THROUGH_REFERRERS = set(
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter()
+DEFAULT_OVERRIDE_LIMIT = -1
 
 
 class ErrorsAllocationPolicy(AllocationPolicy):
@@ -79,14 +80,21 @@ class ErrorsAllocationPolicy(AllocationPolicy):
             AllocationPolicyConfig(
                 name="throttled_thread_number",
                 description="Number of threads any throttled query gets assigned.",
-                type=int,
+                value_type=int,
                 default=1,
             ),
             AllocationPolicyConfig(
                 name="org_limit_bytes_scanned",
                 description="Number of bytes any org can scan in a 10 minute window.",
-                type=int,
+                value_type=int,
                 default=10000,
+            ),
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned_override",
+                description="Number of bytes a specific org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_OVERRIDE_LIMIT,
+                params={"org_id": int},
             ),
         ]
 
@@ -127,10 +135,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         if referrer in _PASS_THROUGH_REFERRERS:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         if org_id is not None:
-            org_limit_bytes_scanned = org_limit_bytes_scanned = self.get_config(
-                "org_limit_bytes_scanned"
-            )
-
+            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id)
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
                     RequestedQuota(
@@ -144,7 +149,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                                 # reacts to such changes
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_limit_bytes_scanned),
+                                limit=org_limit_bytes_scanned,
                                 prefix_override=f"{self.runtime_config_prefix}-organization_id-{org_id}",
                             )
                         ],
@@ -198,7 +203,9 @@ class ErrorsAllocationPolicy(AllocationPolicy):
         if bytes_scanned == 0:
             return
         if "organization_id" in tenant_ids:
-            org_limit_bytes_scanned = self.get_config("org_limit_bytes_scanned")
+            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
+                tenant_ids.get("organization_id")
+            )
             # we can assume that the requested quota was granted (because it was)
             # we just need to update the quota with however many bytes were consumed
             _RATE_LIMITER.use_quotas(
@@ -210,7 +217,7 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                             Quota(
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_limit_bytes_scanned),
+                                limit=org_limit_bytes_scanned,
                                 prefix_override=f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
@@ -225,3 +232,15 @@ class ErrorsAllocationPolicy(AllocationPolicy):
                 ],
                 timestamp=int(time.time()),
             )
+
+    def __get_org_limit_bytes_scanned(self, org_id: Any) -> int:
+        """
+        Checks if org specific limit exists and returns that. Returns the "all" orgs
+        bytes scanned limit if specific one DNE.
+        """
+        org_limit_bytes_scanned = self.get_config(
+            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
+        )
+        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+            org_limit_bytes_scanned = self.get_config("org_limit_bytes_scanned")
+        return int(org_limit_bytes_scanned)

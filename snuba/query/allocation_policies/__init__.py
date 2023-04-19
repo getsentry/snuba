@@ -38,9 +38,9 @@ class QueryResultOrError:
 class AllocationPolicyConfig:
     name: str
     description: str
-    type: type
+    value_type: type
     default: Any
-    current_value: Any | None = None
+    params: dict[str, type] = {}
 
 
 class InvalidPolicyConfig(Exception):
@@ -161,13 +161,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
                 description="Whether or not this policy is active.",
-                type=int,
+                value_type=int,
                 default=1,
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Whether or not this policy is enforced.",
-                type=int,
+                value_type=int,
                 default=0,
             ),
         ]
@@ -217,57 +217,87 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         pass
 
-    def __raw_config_params(self) -> dict[str, AllocationPolicyConfig]:
-        """
-        Returns a dictionary of configurable params on this AllocationPolicy.
-        The `current_value` is not guaranteed to be up to date on the config object.
-        """
+    def config_params(self) -> dict[str, AllocationPolicyConfig]:
+        """Returns a dictionary of configurable params on this AllocationPolicy."""
         return {
             config.name: config
             for config in self._default_config_params + self._config_params()
         }
 
-    def config_params(self) -> dict[str, AllocationPolicyConfig]:
+    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
-        Returns a list of the configurable params of this AllocationPolicy
-        with up to date current values of the params.
+        Example return values:
+        - `capman.my_config`            # no params
+        - `capman.my_config.a:1,b:2`    # sorted params
         """
-        configurable_params = self.__raw_config_params()
-        for param in configurable_params:
-            configurable_params[param].current_value = self.get_config(param)
-        return configurable_params
+        parameters = "."
+        for param in sorted(list(params.keys())):
+            parameters += f"{param}:{params[param]},"
+        parameters = parameters[:-1]
+        return f"{self.runtime_config_prefix}.{config}{parameters}"
 
-    def __build_runtime_config_key(self, config: str) -> str:
-        return f"{self.runtime_config_prefix}.{config}"
+    def __validate_config_params(
+        self, config_key: str, params: dict[str, Any], value: Any = None
+    ) -> AllocationPolicyConfig:
+        configs = self.config_params()
 
-    def get_config(self, config: str) -> Any:
-        """Returns current value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        configurable_params = self.__raw_config_params()
-        if config not in configurable_params:
+        # config doesn't exist
+        if config_key not in configs:
             raise InvalidPolicyConfig(
-                f"'{config}' is not a valid config for {self.__class__.__name__}!"
+                f"'{config_key}' is not a valid config for {self.__class__.__name__}!"
             )
-        config_params = configurable_params[config]
+
+        config = configs[config_key]
+
+        # missing required parameters
+        if (
+            diff := {
+                key: config.params[key].__name__
+                for key in config.params
+                if key not in params
+            }
+        ) != dict():
+            raise InvalidPolicyConfig(
+                f"'{config_key}' missing required parameters: {diff} for {self.__class__.__name__}!"
+            )
+
+        # parameters aren't correct types
+        if params:
+            for param in params:
+                if not isinstance(params[param], config.params[param]):
+                    raise InvalidPolicyConfig(
+                        f"'{config_key}' parameter '{param}' needs to be of type"
+                        f" {config.params[param].__name__} (not {type(params[param]).__name__})"
+                        f" for {self.__class__.__name__}!"
+                    )
+
+        # value isn't correct type
+        if value is not None:
+            if not isinstance(value, config.value_type):
+                raise InvalidPolicyConfig(
+                    f"'{config_key}' value needs to be of type"
+                    f" {config.value_type.__name__} (not {type(value).__name__})"
+                    f" for {self.__class__.__name__}!"
+                )
+
+        return config
+
+    def get_config(self, config_key: str, params: dict[str, Any] = {}) -> Any:
+        """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
+        config = self.__validate_config_params(config_key, params)
         return cast(
-            config_params.type,  # type: ignore
+            config.value_type,  # type: ignore
             get_runtime_config(
-                self.__build_runtime_config_key(config), config_params.default
+                self.__build_runtime_config_key(config_key, params), config.default
             ),
         )
 
-    def set_config(self, config: str, value: Any) -> Any:
+    def set_config(
+        self, config_key: str, value: Any, params: dict[str, Any] = {}
+    ) -> None:
         """Sets a value of a config on this Allocation Policy."""
-        configurable_params = self.__raw_config_params()
-        if config not in configurable_params:
-            raise InvalidPolicyConfig(
-                f"'{config}' is not a valid config for {self.__class__.__name__}!"
-            )
-        expected_type = configurable_params[config].type
-        if not isinstance(value, expected_type):
-            raise InvalidPolicyConfig(
-                f"'{value}' ({type(value).__name__}) is not of expected type: {expected_type.__name__}"
-            )
-        set_runtime_config(self.__build_runtime_config_key(config), value)
+        self.__validate_config_params(config_key, params, value)
+        set_runtime_config(self.__build_runtime_config_key(config_key, params), value)
 
     def is_active(self) -> bool:
         return bool(self.get_config(IS_ACTIVE))
