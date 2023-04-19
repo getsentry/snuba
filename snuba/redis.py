@@ -5,13 +5,20 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
-from redis.client import StrictRedis
+from sentry_redis_tools.failover_redis import FailoverRedis
+
 from redis.cluster import ClusterNode, NodesManager, RedisCluster
 from redis.exceptions import BusyLoadingError, ConnectionError, RedisClusterException
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 
-RedisClientType = Union[StrictRedis, RedisCluster]
+# We use FailoverRedis as our default redis client for single-node deployments,
+# as its additions to StrictRedis are required to work correctly under GCP
+# memorystore. In case it isn't memorystore, there's not much harm in using
+# FailoverRedis anyway.
+SingleNodeRedis = FailoverRedis
+
+RedisClientType = Union[SingleNodeRedis, RedisCluster]
 
 
 class FailedClusterInitization(SerializableException):
@@ -87,7 +94,7 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
             reinitialize_steps=config["reinitialize_steps"],
         )
     else:
-        return StrictRedis(
+        return SingleNodeRedis(
             host=config["host"],
             port=config["port"],
             password=config["password"],
