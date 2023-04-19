@@ -123,6 +123,9 @@ pipelines:
             - migrate:
                   approval:
                       type: manual
+                      allow_only_on_success: true
+                      roles:
+                        - sns
                   fetch_materials: true
                   jobs:
                       migrate:
