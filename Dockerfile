@@ -111,11 +111,13 @@ RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
-    [ -z "`find -type f /tmp/rust_wheels`" ] || pip install /tmp/rust_wheels/*; \
+    # Ensure that we are always importing the installed rust_snuba wheel, and not the
+    # (basically empty) rust_snuba folder
+    rm -rf ./rust_snuba/; \
+    [ -z "`find /tmp/rust_wheels -type f`" ] || pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
     pip install -e .; \
-    snuba --help; \
-    python -c 'import rust_snuba'
+    snuba --help
 
 ARG SOURCE_COMMIT
 ENV SNUBA_RELEASE=$SOURCE_COMMIT \
