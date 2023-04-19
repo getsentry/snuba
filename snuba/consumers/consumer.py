@@ -500,6 +500,9 @@ def process_message(
         start = time.time()
 
         decoded = codec.decode(message.payload.value, validate=False)
+        decoded_headers = {
+            header[0]: header[1].decode("utf-8") for header in message.payload.headers
+        }
 
         if should_validate:
             with sentry_sdk.push_scope() as scope:
