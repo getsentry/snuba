@@ -270,7 +270,7 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.functions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_functions"]
+        return ["0001_functions", "0002_add_new_columns_to_raw_functions"]
 
 
 class GenericMetricsLoader(DirectoryLoader):
