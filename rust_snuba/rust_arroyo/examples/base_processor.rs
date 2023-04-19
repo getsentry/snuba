@@ -4,11 +4,10 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    commit_offsets, CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    commit_offsets, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Message, Partition, Topic};
-use std::collections::HashMap;
+use rust_arroyo::types::Topic;
 use std::time::Duration;
 
 struct TestFactory {}

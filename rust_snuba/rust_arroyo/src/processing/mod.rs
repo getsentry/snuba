@@ -257,7 +257,7 @@ mod tests {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: message.committable(),
+                    positions: HashMap::from_iter(message.committable().into_iter()),
                 }),
             }
         }

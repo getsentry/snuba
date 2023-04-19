@@ -86,5 +86,5 @@ async fn main() {
         name: "test_in".to_string(),
     });
     println!("running processor. transforming from test_in to test_out");
-    processor.run();
+    processor.run().unwrap();
 }
