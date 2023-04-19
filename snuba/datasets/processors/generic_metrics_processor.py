@@ -141,7 +141,11 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
                 GRANULARITY_ONE_DAY,
             ],
         }
-        return InsertBatch([processed], None)
+        return InsertBatch(
+            [processed],
+            origin_timestamp=None,
+            sentry_received_timestamp=metadata.headers["sentry_received_timestamp"],
+        )
 
 
 class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
