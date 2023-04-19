@@ -511,11 +511,11 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
+                    config = state.get_config(
+                        f"log_validate_schema_{snuba_logical_topic.name}", 1.0
+                    )
                     log_validate_sample_rate = float(
-                        state.get_config(
-                            f"log_validate_schema_{snuba_logical_topic.name}", 0
-                        )
-                        or 0.0
+                        config if config is not None else 1.0
                     )
                     sentry_sdk.set_tag("invalid_message_schema", "true")
                     if random.random() < log_validate_sample_rate:
