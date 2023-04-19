@@ -42,8 +42,8 @@ impl CommitOffsets {
                 .unwrap()
             || force
         {
-            info!("Performing a commit");
             if !self.partitions.is_empty() {
+                info!("Performing a commit {:?}", self.partitions);
                 let ret = Some(CommitRequest {
                     positions: self.partitions.clone(),
                 });
