@@ -44,7 +44,7 @@ class MockStorage(mock.MagicMock):
 
     def get_storage_key(self) -> Any:
         class TempStorageKey(object):
-            value = "non_experimental_storage"
+            value = "mock_storage"
 
         storage_key = TempStorageKey()
         return storage_key
@@ -136,7 +136,7 @@ def test_dataset_undefined_storage_set(
 
 @mock.patch(
     "snuba.web.views.get_enabled_dataset_names",
-    return_value=["events", "experimental", "non_experimental"],
+    return_value=["events", "experimental", "mock"],
 )
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
@@ -148,7 +148,7 @@ def test_filter_checked_storages(
         "partial",
         "complete",
     }  # remove deprecate from supported states
-    temp_settings.READINESS_STATE_STORAGES_ENABLED = {"non_experimental_storage"}
+    temp_settings.READINESS_STATE_STORAGES_ENABLED = {"mock_storage"}
     storages = filter_checked_storages(ignore_experimental=True)
 
     # check experimental dataset's storage is not in list
