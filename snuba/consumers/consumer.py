@@ -511,8 +511,15 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
+                    log_validate_sample_rate = float(
+                        state.get_config(
+                            f"log_validate_schema_{snuba_logical_topic.name}", 0
+                        )
+                        or 0.0
+                    )
                     sentry_sdk.set_tag("invalid_message_schema", "true")
-                    logger.warning(err, exc_info=True)
+                    if random.random() < log_validate_sample_rate:
+                        logger.warning(err, exc_info=True)
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
