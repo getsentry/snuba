@@ -17,7 +17,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.configuration.utils import parse_columns
-from snuba.query.allocation_policies import CAPMAN_PREFIX
 from snuba.utils.schemas import AggregateFunction
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -72,7 +71,7 @@ allocation_policy:
             }
             assert (
                 storage.get_allocation_policy().runtime_config_prefix
-                == f"{CAPMAN_PREFIX}.test-storage.PassthroughPolicy"
+                == "test-storage.PassthroughPolicy"
             )
 
     def test_column_parser(self) -> None:

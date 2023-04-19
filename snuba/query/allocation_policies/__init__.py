@@ -16,7 +16,7 @@ from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
 
-CAPMAN_PREFIX = "capman"
+CAPMAN_HASH = "capman"
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 
@@ -174,7 +174,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def runtime_config_prefix(self) -> str:
-        return f"{CAPMAN_PREFIX}.{self._storage_key.value}.{self.__class__.__name__}"
+        return f"{self._storage_key.value}.{self.__class__.__name__}"
 
     @classmethod
     def config_key(cls) -> str:
@@ -227,8 +227,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
         Example return values:
-        - `capman.my_config`            # no params
-        - `capman.my_config.a:1,b:2`    # sorted params
+        - `mystorage.MyAllocationPolicy.my_config`            # no params
+        - `mystorage.MyAllocationPolicy.my_config.a:1,b:2`    # sorted params
         """
         parameters = "."
         for param in sorted(list(params.keys())):
@@ -288,7 +288,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return cast(
             config.value_type,  # type: ignore
             get_runtime_config(
-                self.__build_runtime_config_key(config_key, params), config.default
+                key=self.__build_runtime_config_key(config_key, params),
+                default=config.default,
+                config_key=CAPMAN_HASH,
             ),
         )
 
@@ -297,7 +299,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         """Sets a value of a config on this Allocation Policy."""
         self.__validate_config_params(config_key, params, value)
-        set_runtime_config(self.__build_runtime_config_key(config_key, params), value)
+        set_runtime_config(
+            key=self.__build_runtime_config_key(config_key, params),
+            value=value,
+            config_key=CAPMAN_HASH,
+        )
 
     def is_active(self) -> bool:
         return bool(self.get_config(IS_ACTIVE))
