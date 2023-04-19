@@ -233,10 +233,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
         unimplemented!("Seek is not implemented");
     }
 
-    fn stage_offsets(
-        &mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<(), ConsumerError> {
+    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -581,7 +578,7 @@ mod tests {
                 topic: topic2,
                 index: 1,
             },
-            100
+            100,
         )]);
 
         let stage_result = consumer.stage_offsets(invalid_positions);

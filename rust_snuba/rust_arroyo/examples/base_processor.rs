@@ -4,7 +4,7 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, commit_offsets
+    commit_offsets, CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Partition, Topic};

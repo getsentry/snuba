@@ -1,20 +1,16 @@
-
-use futures::Future;
-use log::warn;
-use crate::backends::Producer;
 use crate::backends::kafka::producer::KafkaProducer;
 use crate::backends::kafka::types::KafkaPayload;
-use crate::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy,
-};
+use crate::backends::Producer;
+use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, TopicOrPartition};
+use futures::Future;
+use log::warn;
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
-use tokio::task::JoinHandle;
 use std::time::{Duration, Instant};
-
+use tokio::task::JoinHandle;
 
 pub struct ProduceFuture {
     pub producer: Arc<KafkaProducer>,
@@ -25,9 +21,9 @@ pub struct ProduceFuture {
 
 impl Future for ProduceFuture {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>, ) -> std::task::Poll<()> {
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> std::task::Poll<()> {
         self.producer.produce(&self.destination, &self.payload);
-        return std::task::Poll::Ready(())
+        return std::task::Poll::Ready(());
     }
 }
 pub struct Produce<TPayload: Clone + Send + Sync> {
@@ -40,7 +36,11 @@ pub struct Produce<TPayload: Clone + Send + Sync> {
 }
 
 impl Produce<KafkaPayload> {
-    pub fn new(producer: KafkaProducer, next_step: Box<dyn ProcessingStrategy<KafkaPayload>>, topic:TopicOrPartition) -> Self {
+    pub fn new(
+        producer: KafkaProducer,
+        next_step: Box<dyn ProcessingStrategy<KafkaPayload>>,
+        topic: TopicOrPartition,
+    ) -> Self {
         Produce {
             producer: Arc::new(producer),
             next_step,
@@ -52,11 +52,9 @@ impl Produce<KafkaPayload> {
     }
 }
 
-impl ProcessingStrategy<KafkaPayload>
-    for Produce< KafkaPayload>
-{
+impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
     fn poll(&mut self) -> Option<CommitRequest> {
-        while !self.queue.is_empty(){
+        while !self.queue.is_empty() {
             let (message, handle) = self.queue.pop_front().unwrap();
 
             if handle.is_finished() {
@@ -66,12 +64,11 @@ impl ProcessingStrategy<KafkaPayload>
                 // });
                 self.next_step.poll();
                 self.next_step.submit(new_message).unwrap()
-
-            }else{
+            } else {
                 break;
             }
         }
-        return None
+        return None;
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
@@ -79,7 +76,7 @@ impl ProcessingStrategy<KafkaPayload>
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
         if self.queue.len() >= self.max_queue_size {
-            return Err(MessageRejected)
+            return Err(MessageRejected);
         }
 
         let produce_fut = ProduceFuture {
@@ -108,7 +105,7 @@ impl ProcessingStrategy<KafkaPayload>
         let start = Instant::now();
         let mut remaining: Option<Duration> = None;
 
-        while !self.queue.is_empty(){
+        while !self.queue.is_empty() {
             if let Some(timeout) = timeout {
                 remaining = Some(timeout - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
@@ -121,10 +118,9 @@ impl ProcessingStrategy<KafkaPayload>
                 let new_message = message.clone();
                 self.next_step.poll();
                 self.next_step.submit(new_message).unwrap()
-            }else{
+            } else {
                 break;
             }
-
         }
 
         self.next_step.close();
@@ -139,10 +135,8 @@ mod tests {
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::types::KafkaPayload;
+    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
     use crate::types::{BrokerMessage, InnerMessage};
-    use crate::processing::strategies::{
-        CommitRequest, MessageRejected, ProcessingStrategy,
-    };
     use crate::types::{Message, Partition, Topic, TopicOrPartition};
     use chrono::Utc;
     use std::collections::VecDeque;
@@ -193,15 +187,19 @@ mod tests {
         };
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
-        let message = Message{inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-            payload: payload_str.clone(),
-            partition: partition,
-            offset: 0,
-            timestamp: Utc::now(),
-        })};
+        let message = Message {
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                payload: KafkaPayload {
+                    key: None,
+                    headers: None,
+                    payload: Some(payload_str.clone()),
+                },
+                partition: partition,
+                offset: 0,
+                timestamp: Utc::now(),
+            }),
+        };
 
-        strategy
-            .submit(message)
-            .unwrap();
+        strategy.submit(message).unwrap();
     }
 }

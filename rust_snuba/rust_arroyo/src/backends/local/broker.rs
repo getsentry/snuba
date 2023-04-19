@@ -156,7 +156,7 @@ mod tests {
     use crate::backends::storages::memory::MemoryMessageStorage;
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::HashMap;
     use uuid::Uuid;
 
     #[test]

@@ -9,17 +9,14 @@ pub struct CommitOffsets {
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl <T: Clone>ProcessingStrategy<T> for CommitOffsets {
+impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         for (partition, offset) in message.committable() {
-            self.partitions.insert(
-                partition,
-                offset
-            );
+            self.partitions.insert(partition, offset);
         }
         Ok(())
     }
@@ -124,10 +121,7 @@ mod tests {
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
         };
-        commit_req1.positions.insert(
-            partition1,
-            1001,
-        );
+        commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).expect("Failed to submit");
         assert_eq!(noop.poll(), None);
 
@@ -137,10 +131,7 @@ mod tests {
         let mut commit_req2 = CommitRequest {
             positions: Default::default(),
         };
-        commit_req2.positions.insert(
-            partition2,
-            2001,
-        );
+        commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).expect("Failed to submit");
         assert_eq!(noop.poll(), None);
         assert_eq!(noop.join(Some(Duration::from_secs(5))), Some(commit_req2))
