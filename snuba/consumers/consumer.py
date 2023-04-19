@@ -532,6 +532,7 @@ def process_message(
                 message.value.offset,
                 message.value.partition.index,
                 message.value.timestamp,
+                decoded_headers,
             ),
         )
     except Exception as err:
