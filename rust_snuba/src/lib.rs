@@ -3,16 +3,37 @@ mod consumer;
 mod strategies;
 mod types;
 
-use pyo3::prelude::*;
+use pyo3::{prelude::*};
 
+#[pymodule]
 fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    // let DSN
-    let sentry_dsn = Python::with_gil(|py| {
+    setup_sentry(_py);
+    m.add_function(wrap_pyfunction!(consumer::consumer, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_sentry, m)?)?;
+    Ok(())
+}
+
+#[pyfunction]
+pub fn setup_sentry(_py: Python<'_>) {
+    env_logger::init();
+    let sentry_dsn: Result<Option<String>, PyErr> = Python::with_gil(|py| {
         let snuba_settings = PyModule::import(py, "snuba.settings")?;
-        let dsn: Result<String, PyErr> = snuba_settings
-            .getattr("SENTRY_DSN")?
-            .extract();
-        dsn
+        let dsn: Result<&PyAny, PyErr> = snuba_settings
+            .getattr("SENTRY_DSN");
+
+        match dsn {
+            Ok(dsn) => {
+                log::info!("Sentry DSN: {:?}", dsn);
+                if dsn.is_none() {
+                    return Ok(None);
+                }
+                dsn.extract::<Option<String>>()
+            }
+            Err(_) => {
+                log::error!("Sentry DSN not found");
+                Ok(None)
+            },
+        }
     });
 
     match sentry_dsn {
@@ -23,12 +44,7 @@ fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
             }));
         }
         Err(_) => {
-            println!("Sentry DSN not found");
+            log::error!("Sentry DSN not found");
         },
     }
-
-
-
-    m.add_function(wrap_pyfunction!(consumer::consumer, m)?)?;
-    Ok(())
 }
