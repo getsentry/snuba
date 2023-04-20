@@ -14,6 +14,7 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
+CAPMAN_PREFIX = "capman"
 
 
 @dataclass(frozen=True)
@@ -147,6 +148,37 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @classmethod
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
+
+    def get_configs(self) -> list[dict[str, Any]]:
+        """Placeholder - doesn't actually do anything."""
+        return [
+            {
+                "key": "some key",
+                "value": "some value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {},
+            },
+            {
+                "key": "some other key",
+                "value": "some other value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {},
+            },
+        ]
+
+    def set_config(
+        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        """Placeholder - doesn't actually do anything."""
+        return {
+            "key": config_key,
+            "value": value,
+            "description": "Placeholder config. Will not actually be saved.",
+            "type": "placeholder",
+            "params": params,
+        }
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that

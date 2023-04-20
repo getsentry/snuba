@@ -26,7 +26,7 @@ class AdminTools(Enum):
     QUERYLOG = "querylog"
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
-    ALLOCATION_POLICIES = "allocation-policies"
+    CAPACITY_MANAGEMENT = "capacity-management"
 
 
 def get_user_allowed_tools(user: AdminUser) -> set[AdminTools]:

@@ -45,6 +45,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
@@ -698,8 +700,57 @@ def snql_to_sql() -> Response:
 
 
 @application.route("/allocation_policies")
-@check_tool_perms(tools=[AdminTools.ALLOCATION_POLICIES])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def allocation_policies() -> Response:
     return Response(
         json.dumps(get_allocation_policies()), 200, {"Content-Type": "application/json"}
     )
+
+
+@application.route("/allocation_policy_config", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_allocation_policy_config() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+    try:
+        storage, key, value = (
+            data["storage"],
+            data["key"],
+            data["value"],
+        )
+        assert isinstance(storage, str), "Invalid storage"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(value, str), "Invalid value"
+        assert key != "", "Key cannot be empty string"
+
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        config = policy.set_config(key, value, user)
+        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_configs(storage: str) -> Response:
+    try:
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        configs = policy.get_configs()
+        return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )

@@ -26,10 +26,6 @@ function CapacityManagement(props: { api: Client }) {
     });
   }
 
-  function loadConfigEditor() {
-    return RuntimeConfig({ api: api });
-  }
-
   return (
     <div>
       <p>Storage:</p>

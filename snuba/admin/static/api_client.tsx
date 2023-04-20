@@ -26,7 +26,10 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
-import { AllocationPolicy } from "./capacity_management/types";
+import {
+  AllocationPolicy,
+  AllocationPolicyConfig,
+} from "./capacity_management/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -57,6 +60,14 @@ interface Client {
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
   getAllocationPolicies: () => Promise<AllocationPolicy[]>;
+  getAllocationPolicyConfigs: (
+    storage: string
+  ) => Promise<AllocationPolicyConfig[]>;
+  setAllocationPolicyConfig: (
+    storage: string,
+    key: string,
+    value: string
+  ) => Promise<AllocationPolicyConfig>;
 }
 
 function Client() {
@@ -278,6 +289,34 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
+    },
+    getAllocationPolicyConfigs: (storage: string) => {
+      const url =
+        baseUrl + "allocation_policy_configs/" + +encodeURIComponent(storage);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setAllocationPolicyConfig: (
+      storage: string,
+      key: string,
+      value: string
+    ) => {
+      const url = baseUrl + "allocation_policy_config";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({ storage, key, value }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not set config";
+            throw new Error(errMsg);
+          });
+        }
+      });
     },
   };
 }

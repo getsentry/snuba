@@ -3,4 +3,11 @@ type AllocationPolicy = {
   allocation_policy: string;
 };
 
-export { AllocationPolicy };
+type AllocationPolicyConfig = {
+  key: string;
+  value: string;
+  description: string;
+  type: string;
+  params: object;
+};
+export { AllocationPolicy, AllocationPolicyConfig };
