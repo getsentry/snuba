@@ -43,7 +43,7 @@ from snuba.utils.metrics.util import with_span
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
-from snuba.web import QueryResult
+from snuba.web import QueryException, QueryResult
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
@@ -182,9 +182,17 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         assert isinstance(storage, ReadableTableStorage)
         readiness_state = storage.get_readiness_state()
         if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
-            raise StorageNotAvailable(
+            cause = StorageNotAvailable(
                 f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
             )
+            raise QueryException.from_args(
+                str(cause),
+                extra={
+                    "stats": {},
+                    "sql": "",
+                    "experiments": {},
+                },
+            ) from cause
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"

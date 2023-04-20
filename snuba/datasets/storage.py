@@ -19,6 +19,7 @@ from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.utils.serializable_exception import SerializableException
 
 
 class Storage(ABC):
@@ -205,5 +206,5 @@ class EntityStorageConnectionNotFound(Exception):
     pass
 
 
-class StorageNotAvailable(Exception):
+class StorageNotAvailable(SerializableException):
     pass
