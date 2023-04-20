@@ -230,3 +230,32 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert response.status_code == 200, data
         assert data["stats"]["consistent"]
         assert data["data"] == [{"project_id": 1, "transaction_duration": 10000}]
+
+    def test_eventstream_query_transaction_maps_to_tags(self) -> None:
+        transaction_name = "/api/im/the/best"
+        now = datetime.utcnow()
+        insert_row = base_insert_event(now)
+        insert_row[2]["data"]["tags"] = {"transaction": transaction_name}
+
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        for alias in ["transaction", "transaction_name"]:
+            response = self.post_query(
+                f"""MATCH (search_issues)
+                    SELECT project_id, {alias}
+                    WHERE project_id = 1
+                    AND timestamp >= toDateTime('{from_date}')
+                    AND timestamp < toDateTime('{to_date}')
+                """
+            )
+
+            data = json.loads(response.data)
+
+            assert response.status_code == 200, data
+            assert data["stats"]["consistent"]
+            assert data["data"] == [{"project_id": 1, f"{alias}": transaction_name}]
