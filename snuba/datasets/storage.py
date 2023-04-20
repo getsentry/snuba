@@ -205,5 +205,5 @@ class EntityStorageConnectionNotFound(Exception):
     pass
 
 
-class StorageNotFound(Exception):
+class StorageNotAvailable(Exception):
     pass
