@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use std::any::type_name;
 use std::cmp::Eq;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::Hash;
-use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct Topic {
@@ -43,7 +43,7 @@ pub struct BrokerMessage<T: Clone> {
     pub timestamp: DateTime<Utc>,
 }
 
-impl<T: Clone>BrokerMessage<T> {
+impl<T: Clone> BrokerMessage<T> {
     pub fn new(payload: T, partition: Partition, offset: u64, timestamp: DateTime<Utc>) -> Self {
         Self {
             payload,
@@ -63,25 +63,43 @@ impl<T: Clone>BrokerMessage<T> {
     }
 }
 
+impl<T: Clone> fmt::Display for BrokerMessage<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BrokerMessage(partition={} offset={})",
+            self.partition, self.offset
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnyMessage<T: Clone> {
     pub payload: T,
-    pub committable: BTreeMap<Partition, u64>
+    pub committable: BTreeMap<Partition, u64>,
 }
 
 impl<T: Clone> AnyMessage<T> {
     pub fn new(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
         Self {
-            payload, committable
+            payload,
+            committable,
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced>{
-        AnyMessage{payload: replacement, committable: self.committable}
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
+        AnyMessage {
+            payload: replacement,
+            committable: self.committable,
+        }
     }
 }
 
-
+impl<T: Clone> fmt::Display for AnyMessage<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "AnyMessage(committable={:?})", self.committable)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InnerMessage<T: Clone> {
@@ -89,52 +107,51 @@ pub enum InnerMessage<T: Clone> {
     AnyMessage(AnyMessage<T>),
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message<T: Clone> {
-    pub inner_message:  InnerMessage<T>,
+    pub inner_message: InnerMessage<T>,
 }
 
 impl<T: Clone> Message<T> {
     pub fn payload(&self) -> T {
         match &self.inner_message {
-            InnerMessage::BrokerMessage(BrokerMessage{payload, ..}) => payload.clone(),
-            InnerMessage::AnyMessage(AnyMessage{payload, ..}) => payload.clone(),
+            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload.clone(),
+            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload.clone(),
         }
     }
 
     pub fn committable(&self) -> BTreeMap<Partition, u64> {
         match &self.inner_message {
-            InnerMessage::BrokerMessage(BrokerMessage{partition, offset, ..}) => {
+            InnerMessage::BrokerMessage(BrokerMessage {
+                partition, offset, ..
+            }) => {
                 let mut map = BTreeMap::new();
                 // TODO: Get rid of the clone
                 map.insert(partition.clone(), offset + 1);
                 map
-            },
-            InnerMessage::AnyMessage(AnyMessage{committable, ..}) => {
-                committable.clone()
             }
+            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),
         }
-
     }
 
     pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
         match self.inner_message {
-            InnerMessage::BrokerMessage(inner) => {
-                Message{inner_message: InnerMessage::BrokerMessage(inner.replace(replacement))}
+            InnerMessage::BrokerMessage(inner) => Message {
+                inner_message: InnerMessage::BrokerMessage(inner.replace(replacement)),
             },
-            InnerMessage::AnyMessage(inner) => {
-                Message{inner_message: InnerMessage::AnyMessage(inner.replace(replacement))}
+            InnerMessage::AnyMessage(inner) => Message {
+                inner_message: InnerMessage::AnyMessage(inner.replace(replacement)),
             },
         }
     }
-
 }
 
 impl<T: Clone> fmt::Display for Message<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner_message {
-            InnerMessage::BrokerMessage(BrokerMessage{partition, offset, ..}) => {
+            InnerMessage::BrokerMessage(BrokerMessage {
+                partition, offset, ..
+            }) => {
                 write!(
                     f,
                     "Message<{}>(partition={}), offset={}",
@@ -142,24 +159,26 @@ impl<T: Clone> fmt::Display for Message<T> {
                     &partition,
                     &offset
                 )
-            },
-            InnerMessage::AnyMessage(AnyMessage{committable, ..}) => {
+            }
+            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
                 write!(
                     f,
                     "Message<{}>(committable={})",
                     type_name::<T>(),
-                    &committable.iter().map(|(k, v)| format!("{}:{}", k, v)).collect::<Vec<_>>().join(",")
+                    &committable
+                        .iter()
+                        .map(|(k, v)| format!("{}:{}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(",")
                 )
             }
         }
-
-
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Message, Partition, Topic};
+    use super::{BrokerMessage, Partition, Topic};
     use chrono::Utc;
     use std::collections::HashMap;
 
@@ -170,14 +189,13 @@ mod tests {
             name: "test".to_string(),
         };
         let part = Partition { topic, index: 10 };
-        let message = Message::new(part, 10, "payload".to_string(), now);
+        let message = BrokerMessage::new("payload".to_string(), part, 10, now);
 
         assert_eq!(message.partition.topic.name, "test");
         assert_eq!(message.partition.index, 10);
         assert_eq!(message.offset, 10);
         assert_eq!(message.payload, "payload");
         assert_eq!(message.timestamp, now);
-        assert_eq!(message.next_offset(), 11)
     }
 
     #[test]
@@ -189,11 +207,11 @@ mod tests {
             },
             index: 10,
         };
-        let message = Message::new(part, 10, "payload".to_string(), now);
+        let message = BrokerMessage::new("payload".to_string(), part, 10, now);
 
         assert_eq!(
             message.to_string(),
-            "Message<alloc::string::String>(partition=Partition(10 topic=Topic(test))), offset=10"
+            "BrokerMessage(partition=Partition(10 topic=Topic(test)) offset=10)"
         )
     }
 
@@ -242,13 +260,13 @@ mod tests {
         assert_ne!(&part as *const Partition, &part2 as *const Partition);
 
         let now = Utc::now();
-        let message = Message::new(part, 10, "payload".to_string(), now);
+        let message = BrokerMessage::new("payload".to_string(), part, 10, now);
         let message2 = message.clone();
 
         assert_eq!(message, message2);
         assert_ne!(
-            &message as *const Message<String>,
-            &message2 as *const Message<String>
+            &message as *const BrokerMessage<String>,
+            &message2 as *const BrokerMessage<String>
         );
     }
 }
