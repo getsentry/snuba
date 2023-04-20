@@ -211,7 +211,7 @@ mod tests {
 
         assert_eq!(
             message.to_string(),
-            "Message<alloc::string::String>(partition=Partition(10 topic=Topic(test))), offset=10"
+            "BrokerMessage(partition=Partition(10 topic=Topic(test)) offset=10)"
         )
     }
 
