@@ -67,7 +67,9 @@ pub fn new(commit_frequency: Duration) -> CommitOffsets {
 #[cfg(test)]
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
+    use crate::processing::strategies::commit_offsets::CommitOffsets;
     use crate::processing::strategies::{commit_offsets, CommitRequest, ProcessingStrategy};
+
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
@@ -123,17 +125,32 @@ mod tests {
         };
         commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).expect("Failed to submit");
-        assert_eq!(noop.poll(), None);
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            None
+        );
 
         sleep(Duration::from_secs(2));
-        assert_eq!(noop.poll(), Some(commit_req1));
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            Some(commit_req1)
+        );
 
         let mut commit_req2 = CommitRequest {
             positions: Default::default(),
         };
         commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).expect("Failed to submit");
-        assert_eq!(noop.poll(), None);
-        assert_eq!(noop.join(Some(Duration::from_secs(5))), Some(commit_req2))
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            None
+        );
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::join(
+                &mut noop,
+                Some(Duration::from_secs(5))
+            ),
+            Some(commit_req2)
+        );
     }
 }
