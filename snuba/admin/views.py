@@ -15,6 +15,7 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.clickhouse.capacity_management import get_allocation_policies
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -694,3 +695,11 @@ def snql_to_sql() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+
+
+@application.route("/allocation_policies")
+@check_tool_perms(tools=[AdminTools.ALLOCATION_POLICIES])
+def allocation_policies() -> Response:
+    return Response(
+        json.dumps(get_allocation_policies()), 200, {"Content-Type": "application/json"}
+    )

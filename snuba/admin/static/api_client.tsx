@@ -26,6 +26,8 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
+import { AllocationPolicy } from "./capacity_management/types";
+
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (
@@ -54,6 +56,7 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
+  getAllocationPolicies: () => Promise<AllocationPolicy[]>;
 }
 
 function Client() {
@@ -265,6 +268,13 @@ function Client() {
 
     getAllowedTools: () => {
       const url = baseUrl + "tools";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+
+    getAllocationPolicies: () => {
+      const url = baseUrl + "allocation_policies";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());

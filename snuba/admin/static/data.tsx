@@ -6,6 +6,7 @@ import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
 import Kafka from "./kafka";
 import QuerylogQueries from "./querylog";
+import CapacityManagement from "./capacity_management";
 
 function Placeholder(props: any) {
   return null;
@@ -14,6 +15,11 @@ function Placeholder(props: any) {
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Overview", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "capacity-management",
+    display: "🪫 Capacity Management",
+    component: CapacityManagement,
+  },
   {
     id: "snql-to-sql",
     display: "🌐 SnQL to SQL",
