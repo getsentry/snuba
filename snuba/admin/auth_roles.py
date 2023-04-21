@@ -169,7 +169,15 @@ ROLES = {
     ),
     "SnQLToSQL": Role(
         name="snql-to-snql",
-        actions={InteractToolAction([TOOL_RESOURCES["snql-to-sql"]])},
+        actions={
+            InteractToolAction([TOOL_RESOURCES["snql-to-sql"]])
+        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
+    ),
+    "Tracing": Role(
+        name="tracing",
+        actions={
+            InteractToolAction([TOOL_RESOURCES["tracing"]])
+        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
     ),
 }
 
