@@ -404,6 +404,7 @@ mod tests {
     #[tokio::test]
     async fn test_commit() {
         create_topic("test", 1).await;
+        sleep(Duration::from_millis(200));
 
         let configuration = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
