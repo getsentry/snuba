@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
 
-pub trait Metrics {
+pub trait MetricsClientTrait: Send + Sync  {
     fn counter(
         &self,
         key: &str,
@@ -34,12 +34,13 @@ pub trait Metrics {
     );
 }
 
+// #[derive( Clone)]
 pub struct MetricsClient {
     statsd_client: StatsdClient,
     prefix: String,
 }
 
-impl Metrics for MetricsClient {
+impl MetricsClientTrait for MetricsClient {
     fn counter(
         &self,
         key: &str,
@@ -142,7 +143,7 @@ impl MetricsClient {
 }
 
 lazy_static! {
-    static ref METRICS_CLIENT: RwLock<Option<Arc<MetricsClient>>> = RwLock::new(None);
+    static ref METRICS_CLIENT: RwLock<Option<Arc<dyn MetricsClientTrait>>> = RwLock::new(None);
 }
 
 const METRICS_MAX_QUEUE_SIZE: usize = 1024;
@@ -162,6 +163,9 @@ pub fn init<A: ToSocketAddrs>(prefix: &str, host: A) {
         prefix: String::from(prefix),
     };
     println!("Emitting metrics with prefix {}", metrics_client.prefix);
+    *METRICS_CLIENT.write() = Some(Arc::new(metrics_client));
+}
+pub fn configure_metrics(metrics_client: impl MetricsClientTrait + 'static){
     *METRICS_CLIENT.write() = Some(Arc::new(metrics_client));
 }
 
