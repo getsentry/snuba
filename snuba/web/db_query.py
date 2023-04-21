@@ -435,8 +435,15 @@ def execute_query_with_readthrough_caching(
         tags={"partition_id": reader.cache_partition_id or "default"},
     )
 
-    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+    # -----------------------------------------------------------------
+    # HACK (Volo): This is a hack experiment to see if we can
+    # turn off the cache (but not all of it for everything at once).
+    # and still survive.
 
+    # depending on the `stats` dict to be populated ahead of time
+    # is not great style, but it is done in _format_storage_query_and_run.
+    # This should be removed by 07-05-2023
+    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
     if state.get_config(f"bypass_readthrough_cache.{table_name}", False):
         return execute_query_with_rate_limits(
             clickhouse_query,
@@ -448,6 +455,7 @@ def execute_query_with_readthrough_caching(
             clickhouse_query_settings,
             robust,
         )
+    # -----------------------------------------------------------------
     else:
         return cache_partition.get_readthrough(
             query_id,
