@@ -92,6 +92,10 @@ impl <T: Clone, TResult: Clone>Reduce<T, TResult> {
     }
 
     fn flush(&mut self, force: bool) {
+        if self.batch_state.message_count == 0 {
+            return;
+        }
+
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
             || self.batch_state.batch_start_time.elapsed().unwrap_or_default() > self.max_batch_time;
 
