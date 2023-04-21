@@ -68,7 +68,7 @@ impl CommitOffsets {
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
     use crate::processing::strategies::commit_offsets::CommitOffsets;
-    use crate::processing::strategies::{commit_offsets, CommitRequest, ProcessingStrategy};
+    use crate::processing::strategies::{CommitRequest, ProcessingStrategy};
 
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::DateTime;
@@ -118,7 +118,7 @@ mod tests {
             }),
         };
 
-        let mut noop = commit_offsets::new(Duration::from_secs(1));
+        let mut noop = CommitOffsets::new(Duration::from_secs(1));
 
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),

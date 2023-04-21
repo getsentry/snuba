@@ -4,8 +4,9 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    commit_offsets, ProcessingStrategy, ProcessingStrategyFactory,
+    ProcessingStrategy, ProcessingStrategyFactory,
 };
+use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
 use std::time::Duration;
@@ -13,7 +14,7 @@ use std::time::Duration;
 struct TestFactory {}
 impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        Box::new(commit_offsets::new(Duration::from_secs(1)))
+        Box::new(CommitOffsets::new(Duration::from_secs(1)))
     }
 }
 
