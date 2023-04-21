@@ -71,7 +71,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         super().__init__(storage_set_key, required_tenant_types)
 
     @property
-    def metrics(self):
+    def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(environment.metrics, self.__class__.__name__)
 
     @property
