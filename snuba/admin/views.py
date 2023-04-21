@@ -209,6 +209,16 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 notify=True,
             )
 
+    def notify_error() -> None:
+        audit_log.record(
+            user or "",
+            AuditLogAction.RAN_MIGRATION_FAILED
+            if action == "run"
+            else AuditLogAction.REVERSED_MIGRATION_FAILED,
+            {"migration": str(migration_key), "force": force, "fake": fake},
+            notify=True,
+        )
+
     try:
         # temporarily redirect stdout to a buffer so we can return it
         with io.StringIO() as output:
@@ -225,17 +235,21 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
             return make_response(jsonify({"stdout": output.getvalue()}), 200)
 
     except KeyError as err:
+        notify_error()
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
     except MigrationError as err:
+        notify_error()
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "migration error: " + err.message}), 400)
     except ClickhouseError as err:
+        notify_error()
         logger.error(err, exc_info=True)
         return make_response(
             jsonify({"error": "clickhouse error: " + err.message}), 400
         )
     except InactiveClickhouseReplica as err:
+        notify_error()
         logger.error(err, exc_info=True)
         return make_response(
             jsonify({"error": "inactive replicas error: " + err.message}), 400
