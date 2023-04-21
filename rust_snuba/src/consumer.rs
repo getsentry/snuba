@@ -4,8 +4,10 @@ use std::time::Duration;
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::{
-    commit_offsets, CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic};
@@ -30,16 +32,20 @@ impl ClickhouseWriterStep {
         }
     }
 }
-impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
+impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
-        for row in message.payload().rows {
-            let decoded_row = String::from_utf8_lossy(&row);
-            log::debug!("insert: {:?}", decoded_row);
+    fn submit(&mut self, message: Message<Vec<BytesInsertBatch>>) -> Result<(), MessageRejected> {
+        for batch in message.payload() {
+            for row in batch.rows {
+                let decoded_row = String::from_utf8_lossy(&row);
+                log::debug!("insert: {:?}", decoded_row);
+            }
         }
+
+        log::info!("Insert {} rows", message.payload().len());
 
         self.next_step.submit(message.replace(()))
     }
@@ -70,13 +76,28 @@ pub fn consumer(
 pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
+        max_batch_size: usize,
+        max_batch_time: Duration,
     }
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+            let accumulator = |mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
+                acc.push(value);
+                acc
+            };
+
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
-                ClickhouseWriterStep::new(commit_offsets::new(Duration::from_secs(1))),
+                Reduce::new(
+                    Box::new(ClickhouseWriterStep::new(CommitOffsets::new(
+                        Duration::from_secs(1),
+                    ))),
+                    accumulator,
+                    Vec::new(),
+                    self.max_batch_size,
+                    self.max_batch_time,
+                ),
             )
             .unwrap();
             Box::new(transform_step)
@@ -85,6 +106,9 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
 
     env_logger::init();
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
+    let max_batch_size = consumer_config.max_batch_size;
+    let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
+
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
@@ -119,7 +143,11 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
         consumer,
-        Box::new(ConsumerStrategyFactory { processor_config }),
+        Box::new(ConsumerStrategyFactory {
+            processor_config,
+            max_batch_size,
+            max_batch_time,
+        }),
     );
 
     processor.subscribe(Topic {

@@ -31,6 +31,14 @@ impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
 }
 
 impl CommitOffsets {
+    pub fn new(commit_frequency: Duration) -> Self {
+        CommitOffsets {
+            partitions: Default::default(),
+            last_commit_time: SystemTime::now(),
+            commit_frequency,
+        }
+    }
+
     fn commit(&mut self, force: bool) -> Option<CommitRequest> {
         if SystemTime::now()
             > self
@@ -53,14 +61,6 @@ impl CommitOffsets {
         } else {
             None
         }
-    }
-}
-
-pub fn new(commit_frequency: Duration) -> CommitOffsets {
-    CommitOffsets {
-        partitions: Default::default(),
-        last_commit_time: SystemTime::now(),
-        commit_frequency,
     }
 }
 

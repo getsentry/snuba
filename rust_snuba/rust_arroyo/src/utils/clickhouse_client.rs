@@ -29,8 +29,7 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: String) -> Result<Response, Error> {
-        self
-            .client
+        self.client
             .post(self.url.clone())
             .headers(self.headers.clone())
             .body(body)

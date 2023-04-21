@@ -9,6 +9,8 @@ pub struct ConsumerConfig {
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
+    pub max_batch_size: usize,
+    pub max_batch_time_ms: u64,
 }
 
 #[derive(Deserialize)]
