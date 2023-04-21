@@ -29,7 +29,7 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: String) -> Result<Response, Error> {
-        let res = self
+        self
             .client
             .post(self.url.clone())
             .headers(self.headers.clone())
@@ -39,10 +39,7 @@ impl ClickhouseClient {
                 format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
             )])
             .send()
-            .await;
-
-        // println!("Response status {}", res.as_ref().unwrap().text());
-        return res;
+            .await
     }
 }
 

@@ -23,7 +23,7 @@ impl Future for ProduceFuture {
     type Output = ();
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> std::task::Poll<()> {
         self.producer.produce(&self.destination, &self.payload);
-        return std::task::Poll::Ready(());
+        std::task::Poll::Ready(())
     }
 }
 pub struct Produce<TPayload: Clone + Send + Sync> {
@@ -68,7 +68,8 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
                 break;
             }
         }
-        return None;
+        // TODO: This needs to handle commit request
+        None
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
@@ -82,14 +83,14 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         let produce_fut = ProduceFuture {
             producer: Arc::clone(&self.producer),
             destination: Arc::clone(&self.topic),
-            payload: message.payload().clone(),
+            payload: message.payload(),
             completed: false,
         };
         // spawn the future
         let handle = tokio::spawn(produce_fut);
 
         self.queue.push_back((message, handle));
-        return Ok(());
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -117,6 +118,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
             if handle.is_finished() {
                 let new_message = message.clone();
                 self.next_step.poll();
+                // TODO: Handle message rejected
                 self.next_step.submit(new_message).unwrap()
             } else {
                 break;
@@ -125,7 +127,8 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
 
         self.next_step.close();
         self.next_step.join(remaining);
-        return None;
+        // TODO: Handle commit request
+        None
     }
 }
 

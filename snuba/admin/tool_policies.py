@@ -22,7 +22,7 @@ class AdminTools(Enum):
     SNQL_TO_SQL = "snql-to-sql"
     SYSTEM_QUERIES = "system-queries"
     MIGRATIONS = "migrations"
-    QUERY_TRACING = "query-tracing"
+    QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
