@@ -45,7 +45,8 @@ pub struct Reduce<T, TResult> {
 }
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
     fn poll(&mut self) -> Option<CommitRequest> {
-        self.flush(false)
+        self.flush(false);
+        self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
@@ -57,12 +58,17 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         Ok(())
     }
 
-    fn close(&mut self) {}
+    fn close(&mut self) {
+        self.next_step.close();
+    }
 
-    fn terminate(&mut self) {}
+    fn terminate(&mut self) {
+        self.next_step.terminate();
+    }
 
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-        self.flush(true)
+    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+        self.flush(true);
+        self.next_step.join(timeout)
     }
 }
 
@@ -85,7 +91,7 @@ impl <T: Clone, TResult: Clone>Reduce<T, TResult> {
         }
     }
 
-    fn flush(&mut self, force: bool) -> Option<CommitRequest> {
+    fn flush(&mut self, force: bool) {
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
             || self.batch_state.batch_start_time.elapsed().unwrap_or_default() > self.max_batch_time;
 
@@ -109,8 +115,6 @@ impl <T: Clone, TResult: Clone>Reduce<T, TResult> {
                 }
             }
         }
-
-        None
     }
 }
 
