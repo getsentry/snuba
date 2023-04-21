@@ -49,6 +49,13 @@
             "user:josh.ferge@sentry.io"
         ],
         "role": "roles/SnQLToSQL"
+      },
+      {
+        "members": [
+            "user:colton.allen@sentry.io",
+            "user:josh.ferge@sentry.io"
+        ],
+        "role": "roles/Tracing"
       }
     ]
   }
