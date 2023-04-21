@@ -10,6 +10,7 @@ class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
     experiments: Mapping[str, Any]
+    exception_type: str
 
 
 class QueryException(SerializableException):
@@ -29,7 +30,9 @@ class QueryException(SerializableException):
     def extra(self) -> QueryExtraData:
         extra = self.extra_data.get("extra", None)
         if not extra:
-            return QueryExtraData(stats={}, sql="noquery", experiments={})
+            return QueryExtraData(
+                stats={}, sql="noquery", experiments={}, exception_type=""
+            )
         return cast(QueryExtraData, extra)
 
 

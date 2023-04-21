@@ -191,6 +191,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     "stats": {},
                     "sql": "",
                     "experiments": {},
+                    "exception_type": StorageNotAvailable.__name__,
                 },
             ) from cause
 

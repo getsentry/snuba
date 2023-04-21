@@ -207,7 +207,7 @@ class ClickhouseQueryMetadata:
         }
 
 
-@dataclass(frozen=True)
+@dataclass
 class SnubaQueryMetadata:
     """
     Metadata about a Snuba query for recording on the querylog dataset.
@@ -222,6 +222,9 @@ class SnubaQueryMetadata:
     query_list: MutableSequence[ClickhouseQueryMetadata]
     projects: Set[int]
     snql_anonymized: str
+    top_level_status: Optional[QueryStatus] = None
+    top_level_request_status: Optional[RequestStatus] = None
+    top_level_slo: Optional[SLO] = None
 
     def to_dict(self) -> snuba_queries_v1.Querylog:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -257,28 +260,39 @@ class SnubaQueryMetadata:
     def status(self) -> QueryStatus:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
-        return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
+        if not self.top_level_status:
+            self.top_level_status = (
+                self.query_list[-1].status if self.query_list else QueryStatus.ERROR
+            )
+        return self.top_level_status
 
     @property
     def request_status(self) -> RequestStatus:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
-        if not self.query_list:
-            return RequestStatus.ERROR
+        if not self.top_level_request_status:
+            print("it didnt catch")
+            if not self.query_list:
+                self.top_level_request_status = RequestStatus.ERROR
 
-        for query in self.query_list:
-            if query.request_status.status != RequestStatus.SUCCESS:
-                return query.request_status.status  # always return the worst case
+            for query in self.query_list:
+                if query.request_status.status != RequestStatus.SUCCESS:
+                    self.top_level_request_status = (
+                        query.request_status.status
+                    )  # always return the worst case
 
-        return RequestStatus.SUCCESS
+            self.top_level_request_status = RequestStatus.SUCCESS
+        return self.top_level_request_status
 
     @property
     def slo(self) -> SLO:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error and log it against.
-        if not self.query_list:
-            return SLO.AGAINST
+        if not self.top_level_slo:
+            if not self.query_list:
+                self.top_level_slo = SLO.AGAINST
 
-        # even one error counts the request against
-        failure = any(q.request_status.slo != SLO.FOR for q in self.query_list)
-        return SLO.AGAINST if failure else SLO.FOR
+            # even one error counts the request against
+            failure = any(q.request_status.slo != SLO.FOR for q in self.query_list)
+            self.top_level_slo = SLO.AGAINST if failure else SLO.FOR
+        return self.top_level_slo

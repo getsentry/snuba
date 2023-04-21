@@ -22,6 +22,7 @@ from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.storage import StorageNotAvailable
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -30,7 +31,12 @@ from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.querylog.query_metadata import (
+    SLO,
+    QueryStatus,
+    RequestStatus,
+    SnubaQueryMetadata,
+)
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.utils.metrics.gauge import Gauge
@@ -128,10 +134,31 @@ def parse_and_run_query(
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
         _set_query_final(request, error.extra)
+        update_query_metadata_from_exception(query_metadata, error)
         record_query(request, timer, query_metadata, error.extra)
         raise error
 
     return result
+
+
+def update_query_metadata_from_exception(
+    query_metadata: SnubaQueryMetadata, error: QueryException
+) -> None:
+    """
+    This function is responsible for updating the query_metadata the top level status and slo
+    according to the exception raised in the query pipeline.
+
+    Why is this necessary?
+    The SnubaQueryMetadata class determines its status and SLO based on its query_list.
+    However, if an exception was raised before db_query.py, the SLO will always count against
+    because query_list is empty. This is not the always the case. For example, the unavailable storage
+    exception (due to unsupported readiness_state) is raised very early in the query pipeline and
+    does not append to query list. However, it is still counts FOR the SLO.
+    """
+    if error.extra.get("exception_type") == StorageNotAvailable.__name__:
+        query_metadata.top_level_status = QueryStatus.ERROR
+        query_metadata.top_level_request_status = RequestStatus.INVALID_REQUEST
+        query_metadata.top_level_slo = SLO.FOR
 
 
 def _set_query_final(request: Request, extra: QueryExtraData) -> None:
@@ -236,6 +263,7 @@ def _dry_run_query_runner(
             "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
+            "exception_type": "",
         },
     )
 
@@ -345,6 +373,7 @@ def _format_storage_query_and_run(
                 stats=stats,
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
+                exception_type=QueryTooLongException.__name__,
             ),
         ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
