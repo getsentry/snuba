@@ -261,7 +261,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
         let offsets = positions
             .iter()
-            .map(|(part, offset)| (part.clone(), offset.clone()))
+            .map(|(part, offset)| (part.clone(), *offset))
             .collect();
         self.broker.commit(&self.group, offsets);
         self.subscription_state.staged_positions.clear();
