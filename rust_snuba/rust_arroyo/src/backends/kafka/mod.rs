@@ -404,7 +404,6 @@ mod tests {
     #[tokio::test]
     async fn test_commit() {
         create_topic("test", 1).await;
-        sleep(Duration::from_millis(200));
 
         let configuration = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
@@ -431,6 +430,7 @@ mod tests {
             consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
             if consumer.tell().unwrap().len() == 1 {
                 println!("Received assignment");
+                sleep(Duration::from_millis(200));
                 break;
             }
             sleep(Duration::from_millis(200));
