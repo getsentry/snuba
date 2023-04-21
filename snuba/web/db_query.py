@@ -435,10 +435,10 @@ def execute_query_with_readthrough_caching(
         tags={"partition_id": reader.cache_partition_id or "default"},
     )
 
-    return cache_partition.get_readthrough(
-        query_id,
-        partial(
-            execute_query_with_rate_limits,
+    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+
+    if state.get_config(f"bypass_readthrough_cache.{table_name}", False):
+        return execute_query_with_rate_limits(
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -447,11 +447,25 @@ def execute_query_with_readthrough_caching(
             stats,
             clickhouse_query_settings,
             robust,
-        ),
-        record_cache_hit_type=record_cache_hit_type,
-        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
-        timer=timer,
-    )
+        )
+    else:
+        return cache_partition.get_readthrough(
+            query_id,
+            partial(
+                execute_query_with_rate_limits,
+                clickhouse_query,
+                query_settings,
+                formatted_query,
+                reader,
+                timer,
+                stats,
+                clickhouse_query_settings,
+                robust,
+            ),
+            record_cache_hit_type=record_cache_hit_type,
+            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+            timer=timer,
+        )
 
 
 def _get_cache_wait_timeout(
