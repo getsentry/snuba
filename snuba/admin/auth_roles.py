@@ -78,6 +78,7 @@ class InteractToolAction(ToolAction):
 
 TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
+    "tracing": ToolResource("tracing"),
     "all": ToolResource("all"),
 }
 
