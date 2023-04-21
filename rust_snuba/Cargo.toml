@@ -27,3 +27,9 @@ glob = "0.3.1"
 pyo3 = { version = "0.18.1", features = ["chrono", "extension-module"] }
 ctrlc = "3.2.5"
 sentry = "0.31.0"
+
+# these are unofficial libs. haven't validated them yet
+dogstatsd = "0.8.0"
+cadence = "0.29.0"
+
+lazy_static = "1.4.0"

@@ -2,6 +2,7 @@ mod config;
 mod consumer;
 mod strategies;
 mod types;
+mod utils;
 
 use pyo3::prelude::*;
 
