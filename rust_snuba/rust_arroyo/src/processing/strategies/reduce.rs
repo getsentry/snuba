@@ -2,7 +2,6 @@ use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingSt
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
-use std::mem;
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
@@ -26,8 +25,7 @@ impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
     }
 
     fn add(&mut self, message: Message<T>) {
-        let mut tmp = None;
-        mem::swap(&mut tmp, &mut self.value);
+        let tmp = self.value.take();
         self.value = Some((self.accumulator)(tmp.unwrap(), message.payload()));
         self.message_count += 1;
 
