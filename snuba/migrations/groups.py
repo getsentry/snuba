@@ -14,6 +14,7 @@ from snuba.migrations.group_loader import (
     ReplaysLoader,
     SearchIssuesLoader,
     SessionsLoader,
+    SpansLoader,
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
@@ -35,6 +36,7 @@ class MigrationGroup(Enum):
     GENERIC_METRICS = "generic_metrics"
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
+    SPANS = "spans"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -49,6 +51,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
+    MigrationGroup.SPANS,
 }
 
 
@@ -83,6 +86,7 @@ _REGISTERED_MIGRATION_GROUPS = {
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         SearchIssuesLoader(), ReadinessState.PARTIAL
     ),
+    MigrationGroup.SPANS: _MigrationGroup(SpansLoader(), ReadinessState.LIMITED),
 }
 
 

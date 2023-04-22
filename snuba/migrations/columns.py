@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import Nullable, TypeModifier, TypeModifiers
 
@@ -14,7 +14,7 @@ class MigrationModifiers(TypeModifiers):
 
     nullable: bool = False
     low_cardinality: bool = False
-    default: Optional[str] = None
+    default: Union[None, str, int] = None
     materialized: Optional[str] = None
     codecs: Optional[Sequence[str]] = None
     ttl: Optional[str] = None
@@ -66,7 +66,7 @@ class WithCodecs(TypeModifier):
 
 @dataclass(frozen=True)
 class WithDefault(TypeModifier):
-    default: str
+    default: Union[None, str, int]
 
     def for_schema(self, content: str) -> str:
         return "{} DEFAULT {}".format(content, self.default)

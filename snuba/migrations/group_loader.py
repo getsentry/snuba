@@ -306,3 +306,11 @@ class SearchIssuesLoader(DirectoryLoader):
             "0004_rebuild_search_issues_with_version",
             "0005_search_issues_v2",
         ]
+
+
+class SpansLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.spans")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_spans_v1", "0002_spans_add_tags_materialization"]
