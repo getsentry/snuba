@@ -619,7 +619,7 @@ class TestReplaysProcessor:
 
     def test_to_capped_list(self) -> None:
         """Test "to_capped_list" function."""
-        assert to_capped_list("t", [1, 2], limit=3) == [1, 2]
+        assert to_capped_list("t", [1, 2], limit=2) == [1, 2]
         assert len(to_capped_list("t", [1] * 10_000, limit=1000)) == 1000
         assert to_capped_list("t", None, limit=1000) == []
 
