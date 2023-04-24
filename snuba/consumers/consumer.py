@@ -642,7 +642,7 @@ def build_multistorage_batch_writer(
                     replacement_topic_spec.topic,
                     override_params={
                         "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB
                     },
                 )
             ),
