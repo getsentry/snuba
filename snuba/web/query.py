@@ -262,7 +262,6 @@ def _dry_run_query_runner(
             "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
-            "exception_type": "",
         },
     )
 
