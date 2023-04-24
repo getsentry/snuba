@@ -116,7 +116,9 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
         return InsertBatch(
             [processed],
             origin_timestamp=None,
-            sentry_received_timestamp=metadata.headers["sentry_received_timestamp"],
+            sentry_received_timestamp=datetime.utcfromtimestamp(
+                message["sentry_received_timestamp"]
+            ),
         )
 
 
