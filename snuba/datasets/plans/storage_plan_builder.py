@@ -186,12 +186,12 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
             )
             raise QueryException.from_args(
-                str(cause),
+                exception_type=StorageNotAvailable.__name__,
+                message=str(cause),
                 extra={
                     "stats": {},
                     "sql": "",
                     "experiments": {},
-                    "exception_type": StorageNotAvailable.__name__,
                 },
             ) from cause
 

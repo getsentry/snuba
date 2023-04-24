@@ -154,7 +154,7 @@ def update_query_metadata_from_exception(
     exception (due to unsupported readiness_state) is raised very early in the query pipeline and
     does not append to query list. However, it is still counts FOR the SLO.
     """
-    if error.extra.get("exception_type") == StorageNotAvailable.__name__:
+    if error.exception_type == StorageNotAvailable.__name__:
         query_metadata.top_level_status = QueryStatus.ERROR
         query_metadata.top_level_request_status = RequestStatus.INVALID_REQUEST
         query_metadata.top_level_slo = SLO.FOR
@@ -367,12 +367,12 @@ def _format_storage_query_and_run(
         )
 
         raise QueryException.from_args(
+            cause.__class__.__name__,
             str(cause),
             extra=QueryExtraData(
                 stats=stats,
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
-                exception_type=QueryTooLongException.__name__,
             ),
         ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:

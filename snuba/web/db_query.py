@@ -595,6 +595,7 @@ def _raw_query(
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
+            cause.__class__.__name__,
             str(cause),
             {
                 "stats": stats,
@@ -710,6 +711,7 @@ def db_query(
     except AllocationPolicyViolation as e:
         stats["quota_allowance"] = e.quota_allowance
         raise QueryException.from_args(
+            AllocationPolicyViolation.__name__,
             "Query cannot be run due to allocation policy",
             extra={"stats": stats, "sql": formatted_query.get_sql(), "experiments": {}},
         ) from e

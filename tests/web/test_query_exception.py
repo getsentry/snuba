@@ -6,6 +6,7 @@ from snuba.web import QueryException
 
 def test_printable() -> None:
     e = QueryException.from_args(
+        "generic exception type",
         "the cause was coming from inside the house!",
         {"stats": {}, "sql": "fdsfsdaf", "experiments": {}},
     )

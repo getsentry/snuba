@@ -10,7 +10,6 @@ class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
     experiments: Mapping[str, Any]
-    exception_type: str
 
 
 class QueryException(SerializableException):
@@ -22,17 +21,32 @@ class QueryException(SerializableException):
     the cause of the exception.
     """
 
+    def __init__(
+        self,
+        exception_type: str | None = None,
+        message: str | None = None,
+        should_report: bool = True,
+        **extra_data: JsonSerializable,
+    ) -> None:
+        self.exception_type = exception_type
+        super().__init__(message, should_report, **extra_data)
+
     @classmethod
-    def from_args(cls, message: str, extra: QueryExtraData) -> "QueryException":
-        return cls(message=message, extra=cast(JsonSerializable, extra))
+    def from_args(
+        cls, exception_type: str, message: str, extra: QueryExtraData
+    ) -> "QueryException":
+
+        return cls(
+            exception_type=exception_type,
+            message=message,
+            extra=cast(JsonSerializable, extra),
+        )
 
     @property
     def extra(self) -> QueryExtraData:
         extra = self.extra_data.get("extra", None)
         if not extra:
-            return QueryExtraData(
-                stats={}, sql="noquery", experiments={}, exception_type=""
-            )
+            return QueryExtraData(stats={}, sql="noquery", experiments={})
         return cast(QueryExtraData, extra)
 
 

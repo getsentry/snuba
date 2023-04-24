@@ -279,6 +279,7 @@ class SnubaQueryMetadata:
                     self.top_level_request_status = (
                         query.request_status.status
                     )  # always return the worst case
+                    return self.top_level_request_status
 
             self.top_level_request_status = RequestStatus.SUCCESS
         return self.top_level_request_status
