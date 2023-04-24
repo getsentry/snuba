@@ -1,4 +1,4 @@
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import sentry_sdk
 
@@ -118,7 +118,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: List[EntityStorageConnection],
+        storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
