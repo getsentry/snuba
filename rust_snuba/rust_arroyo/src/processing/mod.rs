@@ -3,8 +3,8 @@ pub mod strategies;
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::mem::replace;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -100,7 +100,9 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             consumer,
             strategies,
             message: None,
-            processor_handle: ProcessorHandle {shutdown_requested: Arc::new(AtomicBool::new(false))}
+            processor_handle: ProcessorHandle {
+                shutdown_requested: Arc::new(AtomicBool::new(false)),
+            },
         }
     }
 
@@ -129,14 +131,16 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             match msg {
                 Ok(None) => {
                     self.message = None;
-                },
+                }
                 Ok(Some(inner)) => {
-                    self.message = Some(Message{inner_message: InnerMessage::BrokerMessage(inner)});
-                },
+                    self.message = Some(Message {
+                        inner_message: InnerMessage::BrokerMessage(inner),
+                    });
+                }
                 Err(e) => {
                     log::error!("poll error: {}", e);
-                    return Err(RunError::PollError)
-                },
+                    return Err(RunError::PollError);
+                }
             }
         }
 
@@ -190,7 +194,11 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
     /// The main run loop, see class docstring for more information.
     pub fn run(&mut self) -> Result<(), RunError> {
-        while !self.processor_handle.shutdown_requested.load(Ordering::Relaxed) {
+        while !self
+            .processor_handle
+            .shutdown_requested
+            .load(Ordering::Relaxed)
+        {
             let ret = self.run_once();
             match ret {
                 Ok(()) => {}
@@ -249,10 +257,7 @@ mod tests {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from([(
-                        message.partition.clone(),
-                        message.offset,
-                    )]),
+                    positions: HashMap::from_iter(message.committable().into_iter()),
                 }),
             }
         }
