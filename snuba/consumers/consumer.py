@@ -91,7 +91,7 @@ class CommitLogConfig(NamedTuple):
 class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
     origin_timestamp: Optional[datetime]
-    sentry_received_timestamp: Optional[datetime]
+    sentry_received_timestamp: Optional[datetime] = None
 
     def __reduce_ex__(
         self, protocol: SupportsIndex
