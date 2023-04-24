@@ -148,7 +148,6 @@ def update_query_metadata_from_exception(
     This function is responsible for updating the query_metadata the top level status and slo
     according to the exception raised in the query pipeline.
 
-    Why is this necessary?
     The SnubaQueryMetadata class determines its status and SLO based on its query_list.
     However, if an exception was raised before db_query.py, the SLO will always count against
     because query_list is empty. This is not the always the case. For example, the unavailable storage

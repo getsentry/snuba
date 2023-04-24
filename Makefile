@@ -80,5 +80,7 @@ test-rust:
 .PHONY: test-rust
 
 lint-rust:
+	cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings
 	cd rust_snuba && cargo clippy -- -D warnings
+
 .PHONY: lint-rust

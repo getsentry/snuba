@@ -271,7 +271,6 @@ class SnubaQueryMetadata:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
         if not self.top_level_request_status:
-            print("it didnt catch")
             if not self.query_list:
                 self.top_level_request_status = RequestStatus.ERROR
 
