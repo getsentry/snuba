@@ -28,7 +28,10 @@ impl<TPayload: Clone> TopicContent<TPayload> {
         }
     }
 
-    fn get_messages(&self, partition: &Partition) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
+    fn get_messages(
+        &self,
+        partition: &Partition,
+    ) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
         if !self.partition_meta.contains(partition) {
             return Err(ConsumeError::PartitionDoesNotExist);
         }
@@ -142,7 +145,7 @@ impl<TPayload: Clone> MessageStorage<TPayload> for MemoryMessageStorage<TPayload
             payload,
             partition.clone(),
             u64::try_from(offset).unwrap(),
-             timestamp,
+            timestamp,
         ));
         Ok(u64::try_from(offset).unwrap())
     }
@@ -153,7 +156,7 @@ mod tests {
     use super::MemoryMessageStorage;
     use super::TopicContent;
     use crate::backends::storages::MessageStorage;
-    use crate::types::{Message, Partition, Topic};
+    use crate::types::{BrokerMessage, Partition, Topic};
     use chrono::Utc;
 
     #[test]
@@ -209,7 +212,7 @@ mod tests {
             },
             index: 0,
         };
-        let res = topic.add_message(Message::new(p, 10, "payload".to_string(), now));
+        let res = topic.add_message(BrokerMessage::new("payload".to_string(), p, 10, now));
 
         let p0 = Partition {
             topic: Topic {

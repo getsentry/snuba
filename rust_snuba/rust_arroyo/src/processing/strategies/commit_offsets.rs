@@ -9,17 +9,14 @@ pub struct CommitOffsets {
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl <T: Clone>ProcessingStrategy<T> for CommitOffsets {
+impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         for (partition, offset) in message.committable() {
-            self.partitions.insert(
-                partition,
-                offset
-            );
+            self.partitions.insert(partition, offset);
         }
         Ok(())
     }
@@ -42,8 +39,8 @@ impl CommitOffsets {
                 .unwrap()
             || force
         {
-            info!("Performing a commit");
             if !self.partitions.is_empty() {
+                info!("Performing a commit {:?}", self.partitions);
                 let ret = Some(CommitRequest {
                     positions: self.partitions.clone(),
                 });
@@ -70,8 +67,10 @@ pub fn new(commit_frequency: Duration) -> CommitOffsets {
 #[cfg(test)]
 mod tests {
     use crate::backends::kafka::types::KafkaPayload;
+    use crate::processing::strategies::commit_offsets::CommitOffsets;
     use crate::processing::strategies::{commit_offsets, CommitRequest, ProcessingStrategy};
-    use crate::types::{Message, Partition, Topic};
+
+    use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::DateTime;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -92,25 +91,31 @@ mod tests {
             index: 1,
         };
         let timestamp = DateTime::from(SystemTime::now());
+
         let m1 = Message {
-            partition: partition1.clone(),
-            offset: 1000,
-            payload: KafkaPayload {
-                key: None,
-                headers: None,
-                payload: None,
-            },
-            timestamp,
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                partition: partition1.clone(),
+                offset: 1000,
+                payload: KafkaPayload {
+                    key: None,
+                    headers: None,
+                    payload: None,
+                },
+                timestamp,
+            }),
         };
+
         let m2 = Message {
-            partition: partition2.clone(),
-            offset: 2000,
-            payload: KafkaPayload {
-                key: None,
-                headers: None,
-                payload: None,
-            },
-            timestamp,
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                partition: partition2.clone(),
+                offset: 2000,
+                payload: KafkaPayload {
+                    key: None,
+                    headers: None,
+                    payload: None,
+                },
+                timestamp,
+            }),
         };
 
         let mut noop = commit_offsets::new(Duration::from_secs(1));
@@ -118,25 +123,34 @@ mod tests {
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
         };
-        commit_req1.positions.insert(
-            partition1,
-            1001,
-        );
+        commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).expect("Failed to submit");
-        assert_eq!(noop.poll(), None);
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            None
+        );
 
         sleep(Duration::from_secs(2));
-        assert_eq!(noop.poll(), Some(commit_req1));
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            Some(commit_req1)
+        );
 
         let mut commit_req2 = CommitRequest {
             positions: Default::default(),
         };
-        commit_req2.positions.insert(
-            partition2,
-            2001,
-        );
+        commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).expect("Failed to submit");
-        assert_eq!(noop.poll(), None);
-        assert_eq!(noop.join(Some(Duration::from_secs(5))), Some(commit_req2))
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            None
+        );
+        assert_eq!(
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::join(
+                &mut noop,
+                Some(Duration::from_secs(5))
+            ),
+            Some(commit_req2)
+        );
     }
 }

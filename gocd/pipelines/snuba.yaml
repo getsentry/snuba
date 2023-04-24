@@ -12,12 +12,14 @@ pipelines:
             GKE_BASTION_ZONE: b
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+            GOCD_ACCESS_TOKEN: "{{SECRET:[devinfra][gocd_access_token]}}"
+            MIGRATIONS_READINESS: complete
         group: snuba
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
                 git: git@github.com:getsentry/snuba.git
-                shallow_clone: true
+                shallow_clone: false
                 branch: master
                 destination: snuba
         stages:
@@ -46,6 +48,9 @@ pipelines:
                                     ${GO_REVISION_SNUBA_REPO} \
                                     sentryio \
                                     "us.gcr.io/sentryio/snuba"
+                              - script: |
+                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"` && \
+                                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
                   jobs:
@@ -68,7 +73,7 @@ pipelines:
                           tasks:
                               - script: |
                                     /devinfra/scripts/k8s/k8stunnel \
-                                    && /devinfra/scripts/k8s/k8sdeploy.py \
+                                    && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
@@ -108,9 +113,45 @@ pipelines:
                                     --container-name="transactions-consumer-new" \
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
-                                    && /devinfra/scripts/k8s/k8sdeploy.py \
+                                    --container-name="rust-querylog-consumer" \
+                                    && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"
+
+            - migrate:
+                  approval:
+                      type: manual
+                      allow_only_on_success: true
+                      roles:
+                        - role-deploy-snuba-migrations-operator
+                  fetch_materials: true
+                  jobs:
+                      migrate:
+                          timeout: 1200
+                          elastic_profile_id: snuba
+                          tasks:
+                              - script: |
+                                    /devinfra/scripts/k8s/k8stunnel \
+                                    && /devinfra/scripts/k8s/k8s-spawn-job.py \
+                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                                    --label-selector="service=snuba-admin" \
+                                    --container-name="snuba-admin" \
+                                    "snuba-migrate" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    -- snuba migrations migrate -r ${MIGRATIONS_READINESS}
+                              - plugin:
+                                    options:
+                                        script: |
+                                            /devinfra/scripts/k8s/k8stunnel \
+                                            && /devinfra/scripts/k8s/k8s-spawn-job.py \
+                                            --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                                            --label-selector="service=snuba-admin" \
+                                            --container-name="snuba-admin" \
+                                            "snuba-migrate-reverse" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                            -- snuba migrations reverse-in-progress
+                                    run_if: failed
+                                    configuration:
+                                        id: script-executor
+                                        version: 1

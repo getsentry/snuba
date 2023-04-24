@@ -44,19 +44,6 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
-# Migrations Groups that are allowed to be managed
-# in the snuba admin tool.
-ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
-    "search_issues",
-    "test_migration",
-    "events",
-    "transactions",
-}
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -240,6 +227,12 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# By default, allocation policies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with allocation
+# policy code, the request will still be able to go through (but it will create a dangerous
+# situation eventually)
+RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
@@ -261,6 +254,10 @@ if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+# [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
+# We expect to remove them after all storages and migration groups have been migrated.
+READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
+READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 
 MAX_RESOLUTION_FOR_JITTER = 60
 

@@ -172,13 +172,13 @@ class TestGroupassignee:
             [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=pytz.UTC)
         )
         write_processed_messages(self.storage, [ret])
-        ret = (
+        results = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM groupassignee_local;")
             .results
         )
-        assert ret[0] == (
+        assert results[0] == (
             42,  # offset
             0,  # deleted
             2,  # project_id
