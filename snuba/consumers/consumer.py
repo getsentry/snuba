@@ -521,6 +521,7 @@ def process_message(
                         < start - min_seconds_ago
                     ):
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
+                        sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
 
             # TODO: this is not the most efficient place to emit a metric, but
