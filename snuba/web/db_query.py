@@ -445,6 +445,7 @@ def execute_query_with_readthrough_caching(
     # This should be removed by 07-05-2023
     table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
     if state.get_config(f"bypass_readthrough_cache.{table_name}", False):
+        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(
             clickhouse_query,
             query_settings,
