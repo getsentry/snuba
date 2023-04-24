@@ -11,8 +11,11 @@ storage_set_name = StorageSetKey.SPANS
 local_table_name = "spans_local"
 dist_table_name = "spans_dist"
 
+UNKNOWN_SPAN_STATUS = 2
+
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
+    Column("transaction_id", UUID(Modifiers(nullable=True))),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
     Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
@@ -26,14 +29,13 @@ columns: List[Column[Modifiers]] = [
     Column("exclusive_time", Float(64)),
     Column("op", String(Modifiers(low_cardinality=True))),
     Column("group", UInt(64)),
-    Column("span_status", String(Modifiers(low_cardinality=True))),
+    Column("span_status", UInt(8)),
     Column("span_kind", String(Modifiers(low_cardinality=True))),
-    Column("name", String()),
     Column("description", String()),
-    Column("cleaned_description", String()),
-    Column("module", String(Modifiers(low_cardinality=True))),
+    Column("status", UInt(32, Modifiers(nullable=True))),
+    Column("module", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("action", String(Modifiers(low_cardinality=True, nullable=True))),
-    Column("domain", String(Modifiers(low_cardinality=True, nullable=True))),
+    Column("domain", String(Modifiers(nullable=True))),
     Column("user", String(Modifiers(nullable=True))),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column(
@@ -45,6 +47,7 @@ columns: List[Column[Modifiers]] = [
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
     Column("retention_days", UInt(16)),
+    Column("deleted", UInt(8)),
 ]
 
 
@@ -59,6 +62,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(project_id, segment_name, segment_id, timestamp)",
+                    version_column="deleted",
                     partition_by="(retention_days, toMonday(timestamp))",
                     sample_by="segment_id",
                     settings={"index_granularity": "8192"},
