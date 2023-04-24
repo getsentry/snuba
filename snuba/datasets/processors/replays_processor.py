@@ -47,7 +47,7 @@ USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 class ReplaysProcessor(DatasetMessageProcessor):
     def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
         return to_typed_list(
-            partial(to_visibly_capped_string, 256),
+            partial(to_visibly_capped_string, 128),
             to_capped_list("urls", replay_event.get("urls"), URL_LIMIT),
         )
 
