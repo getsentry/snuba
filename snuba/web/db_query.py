@@ -5,6 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
+from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -444,7 +445,7 @@ def execute_query_with_readthrough_caching(
     # is not great style, but it is done in _format_storage_query_and_run.
     # This should be removed by 07-05-2023
     table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-    if state.get_config(f"bypass_readthrough_cache.{table_name}", False):
+    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
         clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(
             clickhouse_query,
