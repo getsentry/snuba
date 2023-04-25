@@ -598,12 +598,7 @@ def _raw_query(
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
 
-        status = status or QueryStatus.ERROR
-        if request_status.status not in (
-            RequestStatus.TABLE_RATE_LIMITED,
-            RequestStatus.RATE_LIMITED,
-        ):
-            # Don't log rate limiting errors to avoid clutter
+        if request_status.status == RequestStatus.ERROR:
             logger.exception("Error running query: %s\n%s", sql, cause)
 
         with configure_scope() as scope:
@@ -611,7 +606,7 @@ def _raw_query(
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
         stats = update_with_status(
-            status=status,
+            status=status or QueryStatus.ERROR,
             request_status=request_status,
             error_code=error_code,
             triggered_rate_limiter=str(trigger_rate_limiter),
