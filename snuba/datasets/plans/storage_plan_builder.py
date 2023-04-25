@@ -179,21 +179,22 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         cluster = self.get_cluster(storage, query, settings)
 
         # Return failure if storage readiness state is not supported in current environment
-        assert isinstance(storage, ReadableTableStorage)
-        readiness_state = storage.get_readiness_state()
-        if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
-            cause = StorageNotAvailable(
-                f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
-            )
-            raise QueryException.from_args(
-                exception_type=StorageNotAvailable.__name__,
-                message=str(cause),
-                extra={
-                    "stats": {},
-                    "sql": "",
-                    "experiments": {},
-                },
-            ) from cause
+        if snuba_settings.READINESS_STATE_FAIL_QUERIES:
+            assert isinstance(storage, ReadableTableStorage)
+            readiness_state = storage.get_readiness_state()
+            if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
+                cause = StorageNotAvailable(
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
+                )
+                raise QueryException.from_args(
+                    exception_type=StorageNotAvailable.__name__,
+                    message=str(cause),
+                    extra={
+                        "stats": {},
+                        "sql": "",
+                        "experiments": {},
+                    },
+                ) from cause
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"
