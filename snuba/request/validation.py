@@ -78,19 +78,13 @@ def build_request(
         try:
             request_parts = schema.validate(body)
             if settings_class == HTTPQuerySettings:
-                query_settings: MutableMapping[str, bool | str | int] = {
+                query_settings: MutableMapping[str, bool | str] = {
                     **request_parts.query_settings,
                     "consistent": _consistent_override(
                         request_parts.query_settings.get("consistent", False), referrer
                     ),
                 }
                 query_settings["referrer"] = referrer
-                if (
-                    tenant_ids := request_parts.attribution_info.get("tenant_ids")
-                ) and tenant_ids.get("organization_id") is not None:
-                    query_settings["organization_id"] = int(
-                        tenant_ids["organization_id"]
-                    )
                 # TODO: referrer probably doesn't need to be passed in, it should be from the body
                 settings_obj: Union[HTTPQuerySettings, SubscriptionQuerySettings]
                 # the parameters accept either `str` or `bool` but we pass in `str | bool`
