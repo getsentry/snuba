@@ -34,9 +34,15 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(self, storage_set_key: StorageSetKey, schema: Schema):
+    def __init__(
+        self,
+        storage_set_key: StorageSetKey,
+        schema: Schema,
+        readiness_state: ReadinessState,
+    ):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
+        self.__readiness_state = readiness_state
 
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
@@ -46,6 +52,9 @@ class Storage(ABC):
 
     def get_schema(self) -> Schema:
         return self.__schema
+
+    def get_readiness_state(self) -> ReadinessState:
+        return self.__readiness_state
 
 
 class ReadableStorage(Storage):
@@ -116,26 +125,22 @@ class ReadableTableStorage(ReadableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
-        readiness_state: ReadinessState,
         schema: Schema,
+        readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policy: Optional[AllocationPolicy] = None,
     ) -> None:
         self.__storage_key = storage_key
-        self.__readiness_state = readiness_state
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policy = allocation_policy
-        super().__init__(storage_set_key, schema)
+        super().__init__(storage_set_key, schema, readiness_state)
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
-
-    def get_readiness_state(self) -> ReadinessState:
-        return self.__readiness_state
 
     def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
@@ -170,8 +175,8 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         super().__init__(
             storage_key,
             storage_set_key,
-            readiness_state,
             schema,
+            readiness_state,
             query_processors,
             query_splitters,
             mandatory_condition_checkers,

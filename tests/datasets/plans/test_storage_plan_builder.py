@@ -24,10 +24,10 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.web import QueryException
 
 errors_translators = TranslationMappers(
     columns=[
@@ -168,7 +168,7 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
 
     assert isinstance(query, Query)
     with pytest.raises(
-        QueryException,
+        QueryPlanException,
         match="The selected storage=errors is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
     ):
         query_plan_builder.build_and_rank_plans(

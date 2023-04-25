@@ -181,7 +181,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
         # Return failure if storage readiness state is not supported in current environment
         if snuba_settings.READINESS_STATE_FAIL_QUERIES:
-            assert isinstance(storage, ReadableTableStorage)
             readiness_state = storage.get_readiness_state()
             if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
                 cause = StorageNotAvailable(
