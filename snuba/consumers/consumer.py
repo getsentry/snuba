@@ -144,22 +144,37 @@ class InsertBatchWriter:
         latency_sum = 0.0
         max_end_to_end_latency: Optional[float] = None
         end_to_end_latency_sum = 0.0
+        max_sentry_received_latency: Optional[float] = None
+        sentry_received_latency_sum = 0.0
+
+        def update_latency(value: float, sum: float, max: Optional[float]) -> None:
+            sum += value
+            if max is None or value > max:
+                max = value
+
         for message in self.__messages:
             assert isinstance(message.value, BrokerValue)
+
             latency = write_finish - message.value.timestamp.timestamp()
-            latency_sum += latency
-            if max_latency is None or latency > max_latency:
-                max_latency = latency
-            if message.payload.origin_timestamp is not None:
-                end_to_end_latency = (
-                    write_finish - message.payload.origin_timestamp.timestamp()
+            update_latency(latency, latency_sum, max_latency)
+
+            origin_timestamp = message.payload.origin_timestamp
+            if origin_timestamp is not None:
+                end_to_end_latency = write_finish - origin_timestamp.timestamp()
+                update_latency(
+                    end_to_end_latency, end_to_end_latency_sum, max_end_to_end_latency
                 )
-                end_to_end_latency_sum += end_to_end_latency
-                if (
-                    max_end_to_end_latency is None
-                    or end_to_end_latency > max_end_to_end_latency
-                ):
-                    max_end_to_end_latency = end_to_end_latency
+
+            sentry_received_timestamp = message.payload.sentry_received_timestamp
+            if sentry_received_timestamp is not None:
+                sentry_received_latency = (
+                    write_finish - sentry_received_timestamp.timestamp()
+                )
+                update_latency(
+                    sentry_received_latency,
+                    sentry_received_latency_sum,
+                    max_sentry_received_latency,
+                )
 
         if max_latency is not None:
             self.__metrics.timing("max_latency_ms", max_latency * 1000)
@@ -173,6 +188,15 @@ class InsertBatchWriter:
             self.__metrics.timing(
                 "end_to_end_latency_ms",
                 (end_to_end_latency_sum / len(self.__messages)) * 1000,
+            )
+
+        if max_sentry_received_latency is not None:
+            self.__metrics.timing(
+                "max_sentry_received_latency_ms", max_sentry_received_latency * 1000
+            )
+            self.__metrics.timing(
+                "sentry_received_latency_ms",
+                (sentry_received_latency_sum / len(self.__messages)) * 1000,
             )
 
         self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
