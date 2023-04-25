@@ -119,8 +119,4 @@ mandatory_condition_checkers:
 stream_loader:
   processor:
     name: SpansMessageProcessor
-  default_topic: spans
-  commit_log_topic: snuba-spans-commit-log
-  subscription_scheduler_mode: global
-  subscription_scheduled_topic: scheduled-subscriptions-spans
-  subscription_result_topic: spans-subscription-results
+  default_topic: transactions

@@ -115,9 +115,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             "span_id"
         ]
         processed["is_segment"] = 1
-        parent_span_id = transaction_ctx.get("parent_span_id", default=0)
-        processed["parent_span_id"] = int(parent_span_id, 16)
-        processed["op"] = _unicodify(transaction_ctx.get("op", default=""))
+        parent_span_id = transaction_ctx.get("parent_span_id", 0)
+        processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
+        processed["op"] = _unicodify(transaction_ctx.get("op", ""))
         processed["group"] = int(transaction_ctx.get("hash", 0), 16)
         processed["segment_name"] = common_span_fields["segment_name"] = _unicodify(
             event_dict["data"].get("transaction") or ""
@@ -224,17 +224,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         processed_span.update(common_span_fields)
         processed_span["is_segment"] = 0
-        processed_span["op"] = _unicodify(span_dict.get("op", default=""))
-        processed_span["group"] = int(span_dict.get("hash", default=0), 16)
-        processed_span["exclusive_time"] = span_dict.get("exclusive_time", default=0)
+        processed_span["op"] = _unicodify(span_dict.get("op", ""))
+        processed_span["group"] = int(span_dict.get("hash", 0), 16)
+        processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
         processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
         processed_span["span_id"] = int(span_dict["span_id"], 16)
-        processed_span["parent_span_id"] = int(
-            span_dict.get("parent_span_id", default=0), 16
-        )
-        processed_span["description"] = _unicodify(
-            span_dict.get("description", default="")
-        )
+        processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
+        processed_span["description"] = _unicodify(span_dict.get("description", ""))
 
         start_timestamp = span_dict["start_timestamp"]
         end_timestamp = span_dict["timestamp"]
