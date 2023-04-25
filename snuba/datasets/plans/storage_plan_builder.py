@@ -28,6 +28,7 @@ from snuba.datasets.storage import (
 )
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -43,7 +44,7 @@ from snuba.utils.metrics.util import with_span
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryResult
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
@@ -186,14 +187,9 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 cause = StorageNotAvailable(
                     f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
                 )
-                raise QueryException.from_args(
+                raise QueryPlanException.from_args(
                     exception_type=StorageNotAvailable.__name__,
                     message=str(cause),
-                    extra={
-                        "stats": {},
-                        "sql": "",
-                        "experiments": {},
-                    },
                 ) from cause
 
         with sentry_sdk.start_span(

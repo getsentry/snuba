@@ -59,7 +59,7 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolation
-from snuba.query.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -509,12 +509,6 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
                 "type": "unknown",
                 "message": str(cause),
             }
-        elif isinstance(cause, StorageNotAvailable):
-            status = 400
-            details = {
-                "type": "storage-not-available",
-                "message": str(cause),
-            }
         else:
             raise  # exception should have been chained
 
@@ -522,6 +516,21 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             json.dumps(
                 {"error": details, "timing": timer.for_json(), **exception.extra}
             ),
+            status,
+            {"Content-Type": "application/json"},
+        )
+    except QueryPlanException as exception:
+        cause = exception.__cause__
+        if isinstance(cause, StorageNotAvailable):
+            status = 400
+            details = {
+                "type": "storage-not-available",
+                "message": str(cause),
+            }
+        else:
+            raise  # exception should have been chained
+        return Response(
+            json.dumps({"error": details, "timing": timer.for_json()}),
             status,
             {"Content-Type": "application/json"},
         )
