@@ -1,3 +1,4 @@
+import copy
 import logging
 import numbers
 import uuid
@@ -12,7 +13,6 @@ from snuba.datasets.events_format import (
     EventTooOld,
     enforce_retention,
     extract_extra_tags,
-    extract_http,
     extract_nested,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
@@ -105,18 +105,19 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["project_id"] = common_span_fields["project_id"] = event_dict[
             "project_id"
         ]
-        processed["transaction_id"] = event_dict["event_id"]
+        processed["transaction_id"] = str(uuid.UUID(event_dict["event_id"]))
 
         transaction_ctx = event_dict["data"]["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
+        parent_span_id = transaction_ctx.get("parent_span_id", 0)
+        processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
         processed["segment_id"] = common_span_fields["segment_id"] = processed[
             "span_id"
         ]
         processed["is_segment"] = 1
-        parent_span_id = transaction_ctx.get("parent_span_id", 0)
-        processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
+        processed["description"] = _unicodify(event_dict.get("description", ""))
         processed["op"] = _unicodify(transaction_ctx.get("op", ""))
         processed["group"] = int(transaction_ctx.get("hash", 0), 16)
         processed["segment_name"] = common_span_fields["segment_name"] = _unicodify(
@@ -157,9 +158,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         tags: Mapping[str, Any] = _as_dict_safe(event_dict["data"].get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
-        span_environment = tags.get("environment", "")
-        release = tags.get("sentry:release", event_dict.get("release"))
-        user = tags.get("sentry:user", "")
+        span_environment = _unicodify(tags.get("environment", ""))
+        release = _unicodify(tags.get("sentry:release", event_dict.get("release", "")))
+        user = _unicodify(tags.get("sentry:user", ""))
         processed["user"] = user
 
         common_span_fields["tags.key"] = ["environment", "release", "user"]
@@ -197,20 +198,19 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 )
 
     @staticmethod
-    def _process_request_data(
+    def _process_module(
         processed: MutableMapping[str, Any],
         event_dict: EventDict,
     ) -> None:
-        request = (
-            event_dict["data"].get(
-                "request", event_dict["data"].get("sentry.interfaces.Http", None)
-            )
-            or {}
-        )
-        http_data: MutableMapping[str, Any] = {}
-        extract_http(http_data, request)
-        processed["action"] = http_data["http_method"]
-        processed["description"] = http_data["http_url"]
+        """
+        TODO: This needs to be filled in once data from relay starts flowing in according to the
+        desired schema. For now we will set it to empty strings.
+        """
+        processed["module"] = ""
+        processed["action"] = ""
+        processed["domain"] = ""
+        processed["status"] = 0
+        processed["span_kind"] = ""
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
@@ -222,14 +222,18 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         """
         processed_span: MutableMapping[str, Any] = {}
 
-        processed_span.update(common_span_fields)
+        # Copy the common span fields into the processed span since common span field
+        # holds common tags which are mutable and we do not want them to be modified
+        # while processing different spans.
+        processed_span.update(copy.deepcopy(common_span_fields))
+        processed_span["transaction_id"] = None
+        processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
+        processed_span["span_id"] = int(span_dict["span_id"], 16)
+        processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
         processed_span["is_segment"] = 0
         processed_span["op"] = _unicodify(span_dict.get("op", ""))
         processed_span["group"] = int(span_dict.get("hash", 0), 16)
         processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
-        processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
-        processed_span["span_id"] = int(span_dict["span_id"], 16)
-        processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
         processed_span["description"] = _unicodify(span_dict.get("description", ""))
 
         start_timestamp = span_dict["start_timestamp"]
@@ -247,8 +251,22 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
         tags: Mapping[str, Any] = _as_dict_safe(span_dict.get("data", None))
         span_tag_keys, span_tag_values = extract_extra_tags(tags)
-        processed_span["tags.key"].append(span_tag_keys)
-        processed_span["tags.value"].append(span_tag_values)
+        processed_span["tags.key"].extend(span_tag_keys)
+        processed_span["tags.value"].extend(span_tag_values)
+
+        # TODO: The current data model does not allow us to set these values but they are needed
+        #  in order to write data to the spans table. Lets set them to the default values for now.
+        processed_span["status"] = 0
+        processed_span["span_kind"] = ""
+        processed_span["span_status"] = 0
+        processed_span["platform"] = ""
+        processed_span["user"] = ""
+        processed_span["measurements.key"] = []
+        processed_span["measurements.value"] = []
+        processed_span["module"] = ""
+        processed_span["action"] = ""
+        processed_span["domain"] = ""
+
         return processed_span
 
     def _process_spans(
@@ -283,7 +301,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         return processed_spans
 
     def process_message(
-        self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
+        self,
+        message: Tuple[int, str, Mapping[Any, Any]],
+        metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         event_dict, retention_days = self._structure_and_validate_message(message) or (
             None,
@@ -309,9 +329,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         self._process_base_event_values(processed, event_dict, common_span_fields)
         self._process_tags(processed, event_dict, common_span_fields)
         self._process_measurements(processed, event_dict)
-        self._process_request_data(processed, event_dict)
+        self._process_module(processed, event_dict)
         processed_rows.append(processed)
         processed_spans = self._process_spans(event_dict, common_span_fields)
         processed_rows.extend(processed_spans)
 
+        print(processed_rows)
         return InsertBatch(rows=processed_rows, origin_timestamp=None)

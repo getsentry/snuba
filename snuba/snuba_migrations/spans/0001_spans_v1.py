@@ -36,6 +36,7 @@ columns: List[Column[Modifiers]] = [
     Column("module", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("action", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("domain", String(Modifiers(nullable=True))),
+    Column("platform", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("user", String(Modifiers(nullable=True))),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column(
