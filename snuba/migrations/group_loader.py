@@ -317,5 +317,5 @@ class SpansLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_spans_v1",
-            "0002_spans_add_tags_materialization",
+            "0002_spans_add_tags_hashmap",
         ]
