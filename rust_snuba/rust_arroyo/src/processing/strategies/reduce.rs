@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_reduce() {
-        let submitted_messages = Arc::new(Vec::new());
+        let submitted_messages = Arc::new(Mutex::new(Vec::new()));
         let submitted_messages_clone = submitted_messages.clone();
 
         struct NextStep<T> {
