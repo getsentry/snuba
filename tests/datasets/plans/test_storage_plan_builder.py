@@ -48,6 +48,9 @@ errors_translators = TranslationMappers(
             None, "geo_region", None, "contexts", "geo.region", nullable=True
         ),
         ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
+        ColumnToMapping(
+            None, "geo_subdivision", None, "contexts", "geo.subdivision", nullable=True
+        ),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
