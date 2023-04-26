@@ -44,9 +44,9 @@ from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
+    SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
-    RequestStatus,
     Status,
     get_query_status_from_error_codes,
     get_request_status,
@@ -598,7 +598,7 @@ def _raw_query(
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
 
-        if request_status.status == RequestStatus.ERROR:
+        if request_status.slo == SLO.AGAINST:
             logger.exception("Error running query: %s\n%s", sql, cause)
 
         with configure_scope() as scope:
