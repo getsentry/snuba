@@ -3,7 +3,7 @@ mod consumer;
 mod strategies;
 mod types;
 
-use pyo3::{prelude::*};
+use pyo3::prelude::*;
 
 #[pymodule]
 fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -12,8 +12,11 @@ fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 }
 
 pub fn setup_sentry(sentry_dsn: String) {
-    let _guard = sentry::init((sentry_dsn, sentry::ClientOptions {
-        release: sentry::release_name!(),
-        ..Default::default()
-    }));
+    let _guard = sentry::init((
+        sentry_dsn,
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            ..Default::default()
+        },
+    ));
 }
