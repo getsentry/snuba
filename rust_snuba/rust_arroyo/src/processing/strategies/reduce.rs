@@ -1,12 +1,12 @@
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
-    accumulator: Arc<Mutex<dyn FnMut(TResult, T) -> TResult + Send + Sync>>,
+    accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: SystemTime,
     message_count: usize,
@@ -14,7 +14,7 @@ struct BatchState<T, TResult> {
 }
 
 impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
-    fn new(initial_value: TResult, accumulator: Arc<Mutex<dyn FnMut(TResult, T) -> TResult + Send + Sync>>) -> BatchState<T, TResult> {
+    fn new(initial_value: TResult, accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>) -> BatchState<T, TResult> {
         BatchState {
             value: Some(initial_value),
             accumulator,
@@ -27,7 +27,7 @@ impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
 
     fn add(&mut self, message: Message<T>) {
         let tmp = self.value.take();
-        self.value = Some((self.accumulator.lock().unwrap())(tmp.unwrap(), message.payload()));
+        self.value = Some((self.accumulator)(tmp.unwrap(), message.payload()));
         self.message_count += 1;
 
         for (partition, offset) in message.committable() {
@@ -38,7 +38,7 @@ impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
 
 pub struct Reduce<T, TResult> {
     next_step: Box<dyn ProcessingStrategy<TResult>>,
-    accumulator: Arc<Mutex<dyn FnMut(TResult, T) -> TResult + Send + Sync>>,
+    accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     initial_value: TResult,
     max_batch_size: usize,
     max_batch_time: Duration,
@@ -76,7 +76,7 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
 impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
     pub fn new(
         next_step: Box<dyn ProcessingStrategy<TResult>>,
-        accumulator: Arc<Mutex<dyn FnMut(TResult, T) -> TResult + Send + Sync>>,
+        accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_reduce() {
-        let submitted_messages = Arc::new(Mutex::new(Vec::new()));
+        let submitted_messages = Arc::new(Vec::new());
         let submitted_messages_clone = submitted_messages.clone();
 
         struct NextStep<T> {
