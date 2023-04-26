@@ -1,3 +1,5 @@
+import { ReactNode } from "react";
+
 type AllocationPolicy = {
   storage_name: string;
   allocation_policy: string;
@@ -10,4 +12,7 @@ type AllocationPolicyConfig = {
   type: string;
   params: object;
 };
-export { AllocationPolicy, AllocationPolicyConfig };
+
+type RowData = [ReactNode, ReactNode, ReactNode, ReactNode, ReactNode];
+
+export { AllocationPolicy, AllocationPolicyConfig, RowData };

@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
+
+import { Table } from "../table";
 import Client from "../api_client";
 import { AllocationPolicyConfig } from "./types";
+import { containerStyle, paragraphStyle } from "./styles";
+import { getReadonlyRow } from "./row_data";
 
 function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   const { api, storage } = props;
@@ -8,22 +12,28 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   const [configs, setConfigs] = useState<AllocationPolicyConfig[]>([]);
 
   useEffect(() => {
-    props.api.getAllocationPolicyConfigs(storage).then((res) => {
+    api.getAllocationPolicyConfigs(storage).then((res) => {
       setConfigs(res);
     });
   }, [storage]);
 
-  function configForm(config: AllocationPolicyConfig) {
-    return <p key={config.key}>Config key: {config.key}</p>;
-  }
-
   return (
-    <div>
-      {configs ? (
-        configs.map((config) => configForm(config))
-      ) : (
-        <p>No Configs</p>
-      )}
+    <div style={containerStyle}>
+      <p style={paragraphStyle}>These are the current configurations.</p>
+      <Table
+        headerData={["Key", "Value", "Description", "Type", "Actions"]}
+        rowData={configs.map((config) =>
+          getReadonlyRow(
+            config.key,
+            config.value,
+            config.description,
+            config.type,
+            false,
+            () => console.log("editing")
+          )
+        )}
+        columnWidths={[3, 5, 5, 1, 2]}
+      />
     </div>
   );
 }

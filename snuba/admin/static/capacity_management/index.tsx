@@ -12,7 +12,7 @@ function CapacityManagement(props: { api: Client }) {
     useState<AllocationPolicy>();
 
   useEffect(() => {
-    props.api.getAllocationPolicies().then((res) => {
+    api.getAllocationPolicies().then((res) => {
       setPolicies(res);
     });
   }, []);
@@ -27,27 +27,27 @@ function CapacityManagement(props: { api: Client }) {
 
   return (
     <div>
-      <p>Storage:</p>
-
-      <select
-        value={selectedStoragePolicy?.storage_name || ""}
-        onChange={(evt) => selectStorage(evt.target.value)}
-        style={selectStyle}
-      >
-        <option disabled value="">
-          Select a storage
-        </option>
-        {allocationPolicies.map((policy) => (
-          <option key={policy.storage_name} value={policy.storage_name}>
-            {policy.storage_name}
+      <p>
+        Storage:
+        <select
+          value={selectedStoragePolicy?.storage_name || ""}
+          onChange={(evt) => selectStorage(evt.target.value)}
+          style={selectStyle}
+        >
+          <option disabled value="">
+            Select a storage
           </option>
-        ))}
-      </select>
+          {allocationPolicies.map((policy) => (
+            <option key={policy.storage_name} value={policy.storage_name}>
+              {policy.storage_name}
+            </option>
+          ))}
+        </select>
+      </p>
 
       {selectedStoragePolicy ? (
         <div>
           <p>{selectedStoragePolicy.allocation_policy}</p>
-          <p>Configs:</p>
           <AllocationPolicyConfigs
             api={api}
             storage={selectedStoragePolicy.storage_name}
