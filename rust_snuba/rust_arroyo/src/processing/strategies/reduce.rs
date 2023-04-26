@@ -172,10 +172,10 @@ mod tests {
         let max_batch_time = Duration::from_secs(1);
 
         let initial_value = Vec::new();
-        let accumulator = Arc::new(Mutex::new(|mut acc: Vec<u64>, value: u64| {
+        let accumulator = Arc::new(|mut acc: Vec<u64>, value: u64| {
             acc.push(value);
             acc
-        }));
+        });
 
         let next_step = Box::new(NextStep{submitted: submitted_messages});
 
