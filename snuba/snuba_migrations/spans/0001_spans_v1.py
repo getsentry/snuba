@@ -89,11 +89,11 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=storage_set_name,
                 table_name=local_table_name,
-                target=OperationTarget.DISTRIBUTED,
+                target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=storage_set_name,
                 table_name=dist_table_name,
-                target=OperationTarget.LOCAL,
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
