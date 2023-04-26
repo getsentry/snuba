@@ -11,7 +11,7 @@ pub struct ConsumerConfig {
     pub replacements_topic: Option<TopicConfig>,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
-    pub env: Option<EnvConfig>
+    pub env: Option<EnvConfig>,
 }
 
 #[derive(Deserialize)]

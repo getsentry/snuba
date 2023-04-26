@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
@@ -14,9 +15,9 @@ use rust_arroyo::types::{Message, Topic};
 
 use pyo3::prelude::*;
 
-use crate::{config, setup_sentry};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
+use crate::{config, setup_sentry};
 
 struct ClickhouseWriterStep {
     next_step: Box<dyn ProcessingStrategy<()>>,
@@ -82,10 +83,11 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let accumulator = |mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
-                acc.push(value);
-                acc
-            };
+            let accumulator =
+                Arc::new(|mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
+                    acc.push(value);
+                    acc
+                });
 
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
@@ -115,8 +117,8 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     assert!(consumer_config.commit_log_topic.is_none());
 
     // setup sentry
-    if let Some(env) = consumer_config.env{
-        if let Some(dsn) = env.sentry_dsn{
+    if let Some(env) = consumer_config.env {
+        if let Some(dsn) = env.sentry_dsn {
             log::debug!("Using sentry dsn {:?}", dsn);
             setup_sentry(dsn);
         }
