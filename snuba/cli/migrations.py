@@ -58,6 +58,7 @@ def list() -> None:
 @click.option(
     "-r",
     "--readiness-state",
+    multiple=True,
     type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
     default=None,
 )
@@ -69,7 +70,7 @@ def list() -> None:
 )
 def migrate(
     group: Optional[str],
-    readiness_state: Optional[str],
+    readiness_state: Optional[Sequence[str]],
     through: str,
     force: bool,
     fake: bool,
@@ -98,8 +99,10 @@ def migrate(
             force=force,
             fake=fake,
             group=migration_group,
-            readiness_state=(
-                ReadinessState(readiness_state) if readiness_state else None
+            readiness_states=(
+                (ReadinessState(state) for state in readiness_state)
+                if readiness_state
+                else None
             ),
         )
     except MigrationError as e:
