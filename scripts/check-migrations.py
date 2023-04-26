@@ -13,6 +13,7 @@ not coupled with other changes.
 ALLOWED_MIGRATIONS_GLOBS = [
     "snuba/migrations/groups.py",
     "snuba/migrations/group_loader.py",
+    "snuba/settings/*",
     "tests",
     "test_distributed_migrations",
     "test_initialization",

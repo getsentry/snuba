@@ -64,7 +64,10 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.REPLAYEVENTS: {
+            "message.timestamp.type": "LogAppendTime",
+            "max.message.bytes": "15000000",
+        },
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
     }

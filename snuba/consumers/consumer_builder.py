@@ -124,7 +124,7 @@ class ConsumerBuilder:
                     bootstrap_servers=kafka_params.replacements_bootstrap_servers,
                     override_params={
                         "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB)
                     },
                 )
             )

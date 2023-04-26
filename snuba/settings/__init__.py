@@ -253,7 +253,7 @@ if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial"}
+SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()

@@ -5,5 +5,5 @@ from snuba.query.allocation_policies.bytes_scanned_window_policy import (
 )
 
 
-class ErrorsAllocationPolicy(BytesScannedWindowAllocationPolicy):
+class TransactionsAllocationPolicy(BytesScannedWindowAllocationPolicy):
     pass
