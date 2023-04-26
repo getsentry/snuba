@@ -14,7 +14,7 @@ use rust_arroyo::types::{Message, Topic};
 
 use pyo3::prelude::*;
 
-use crate::config;
+use crate::{config, setup_sentry};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -113,6 +113,15 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
     assert!(consumer_config.commit_log_topic.is_none());
+
+    // setup sentry
+    if let Some(env) = consumer_config.env{
+        if let Some(dsn) = env.sentry_dsn{
+            log::debug!("Using sentry dsn {:?}", dsn);
+            setup_sentry(dsn);
+        }
+    }
+
     let first_storage = &consumer_config.storages[0];
 
     log::info!("Starting consumer for {:?}", first_storage.name,);

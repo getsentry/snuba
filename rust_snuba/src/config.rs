@@ -11,6 +11,7 @@ pub struct ConsumerConfig {
     pub replacements_topic: Option<TopicConfig>,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
+    pub env: Option<EnvConfig>
 }
 
 #[derive(Deserialize)]
@@ -53,4 +54,10 @@ pub struct MessageProcessorConfig {
     pub python_class_name: String,
     pub python_module: String,
     // TODO: args support
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvConfig {
+    pub sentry_dsn: Option<String>,
 }

@@ -168,6 +168,11 @@ class TopicConfig:
 
 
 @dataclass(frozen=True)
+class EnvConfig:
+    sentry_dsn: Optional[str]
+
+
+@dataclass(frozen=True)
 class RustConsumerConfig:
     """
     Already resolved configuration for the Rust consumer
@@ -179,6 +184,7 @@ class RustConsumerConfig:
     replacements_topic: Optional[TopicConfig]
     max_batch_size: int
     max_batch_time_ms: int
+    env: Optional[EnvConfig]
 
 
 def _resolve_topic_config(
@@ -198,6 +204,11 @@ def _resolve_topic_config(
 
     broker = _get_default_topic_configuration(topic_spec.topic, slice_id)
     return TopicConfig(broker_config=broker, physical_topic_name=physical_topic_name)
+
+
+def _resolve_env_config() -> Optional[EnvConfig]:
+    sentry_dsn = settings.SENTRY_DSN
+    return EnvConfig(sentry_dsn=sentry_dsn)
 
 
 def resolve_consumer_config(
@@ -244,6 +255,8 @@ def resolve_consumer_config(
         "replacements topic", replacements_topic_spec, replacements_topic, slice_id
     )
 
+    resolved_env_config = _resolve_env_config()
+
     return RustConsumerConfig(
         storages=[
             resolve_storage_config(storage_name, storage)
@@ -254,6 +267,7 @@ def resolve_consumer_config(
         replacements_topic=resolved_replacements_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        env=resolved_env_config,
     )
 
 
