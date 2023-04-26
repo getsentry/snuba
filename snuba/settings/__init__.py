@@ -81,6 +81,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
+            "spans",
         },
         "single_node": True,
     },
@@ -247,10 +248,14 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "functions",
     "test_migration",
     "search_issues",
+    "spans",
 }
 
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
+
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
+    SKIPPED_MIGRATION_GROUPS.remove("spans")
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
