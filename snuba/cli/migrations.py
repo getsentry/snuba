@@ -32,7 +32,6 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
         for migration_id, status, blocking in group_migrations:
@@ -100,7 +99,7 @@ def migrate(
             fake=fake,
             group=migration_group,
             readiness_states=(
-                (ReadinessState(state) for state in readiness_state)
+                [ReadinessState(state) for state in readiness_state]
                 if readiness_state
                 else None
             ),
