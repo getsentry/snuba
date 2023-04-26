@@ -28,7 +28,6 @@ schema:
     },
     { name: geo_region, type: String, args: { schema_modifiers: [nullable] } },
     { name: geo_city, type: String, args: { schema_modifiers: [nullable] } },
-    { name: geo_subdivision, type: String, args: { schema_modifiers: [nullable] } },
     { name: http_method, type: String, args: { schema_modifiers: [nullable] } },
     {
       name: http_referer,
