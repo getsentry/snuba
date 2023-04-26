@@ -107,9 +107,6 @@ pipelines:
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"
-                              - script: |
-                                   /devinfra/scripts/canary/canarychecks.py \
-                                     --wait-minutes=5
             - deploy:
                   fetch_materials: true
                   jobs:
