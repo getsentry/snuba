@@ -16,10 +16,10 @@ from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
-from snuba.utils.serializable_exception import SerializableException
 
 
 class Storage(ABC):
@@ -211,5 +211,5 @@ class EntityStorageConnectionNotFound(Exception):
     pass
 
 
-class StorageNotAvailable(SerializableException):
+class StorageNotAvailable(QueryPlanException):
     pass

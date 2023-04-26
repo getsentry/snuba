@@ -520,12 +520,11 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             {"Content-Type": "application/json"},
         )
     except QueryPlanException as exception:
-        cause = exception.__cause__
-        if isinstance(cause, StorageNotAvailable):
+        if isinstance(exception, StorageNotAvailable):
             status = 400
             details = {
                 "type": "storage-not-available",
-                "message": str(cause),
+                "message": str(exception.message),
             }
         else:
             raise  # exception should have been chained
@@ -534,7 +533,6 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             status,
             {"Content-Type": "application/json"},
         )
-
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():

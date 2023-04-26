@@ -28,7 +28,6 @@ from snuba.datasets.storage import (
 )
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
-from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -184,13 +183,10 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             assert isinstance(storage, ReadableTableStorage)
             readiness_state = storage.get_readiness_state()
             if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
-                cause = StorageNotAvailable(
-                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state."
+                raise StorageNotAvailable(
+                    StorageNotAvailable.__name__,
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
                 )
-                raise QueryPlanException.from_args(
-                    exception_type=StorageNotAvailable.__name__,
-                    message=str(cause),
-                ) from cause
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"

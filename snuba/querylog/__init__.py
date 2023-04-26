@@ -11,19 +11,14 @@ from snuba.attribution.log import (
 )
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.exceptions import QueryPlanException
-from snuba.querylog.query_metadata import (
-    SLO,
-    QueryStatus,
-    RequestStatus,
-    SnubaQueryMetadata,
-    Status,
-)
+from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api")
+from snuba.querylog.query_metadata import get_request_status
 
 
 def _record_timer_metrics(
@@ -52,20 +47,20 @@ def _record_timer_metrics(
         "parent_api": parent_api,
         "dataset": query_metadata.dataset,
     }
-    if isinstance(result, QueryPlanException):
+    if isinstance(result, StorageNotAvailable):
         # The QueryPlanException is raised outside the query execution flow.
         # As a result, its status and SLO values are not based on its query_list
-        if result.exception_type == StorageNotAvailable.__name__:
-            tags = {
-                "status": QueryStatus.ERROR.value,
-                "request_status": RequestStatus.INVALID_REQUEST.value,
-                "slo": SLO.FOR.value,
-                "referrer": referrer,
-                "parent_api": parent_api,
-                "final": final,
-                "dataset": query_metadata.dataset,
-                "app_id": app_id,
-            }
+        status = get_request_status(result)
+        tags = {
+            "status": QueryStatus.ERROR.value,
+            "request_status": status.status.value,
+            "slo": status.slo.value,
+            "referrer": referrer,
+            "parent_api": parent_api,
+            "final": final,
+            "dataset": query_metadata.dataset,
+            "app_id": app_id,
+        }
 
     timer.send_metrics_to(
         metrics,
