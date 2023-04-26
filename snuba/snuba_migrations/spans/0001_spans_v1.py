@@ -19,7 +19,7 @@ columns: List[Column[Modifiers]] = [
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
     Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
-    Column("segment_id", UInt(64, Modifiers(default=0))),
+    Column("segment_id", UInt(64)),
     Column("is_segment", UInt(8)),
     Column("segment_name", String(Modifiers(default="''"))),
     Column("start_timestamp", DateTime()),
