@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-import RuntimeConfig from "../runtime_config";
 import { AllocationPolicy } from "./types";
 import { selectStyle } from "./styles";
+import AllocationPolicyConfigs from "./allocation_policy";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;
 
   const [allocationPolicies, setPolicies] = useState<AllocationPolicy[]>([]);
-  const [storage, setStorage] = useState<string>();
-  const [policy, setPolicy] = useState<string>();
+  const [selectedStoragePolicy, selectStoragePolicy] =
+    useState<AllocationPolicy>();
 
   useEffect(() => {
     props.api.getAllocationPolicies().then((res) => {
@@ -18,10 +18,9 @@ function CapacityManagement(props: { api: Client }) {
   }, []);
 
   function selectStorage(storage: string) {
-    setStorage(storage);
     allocationPolicies.map((policy) => {
       if (policy.storage_name == storage) {
-        setPolicy(policy.allocation_policy);
+        selectStoragePolicy(policy);
       }
     });
   }
@@ -31,7 +30,7 @@ function CapacityManagement(props: { api: Client }) {
       <p>Storage:</p>
 
       <select
-        value={storage || ""}
+        value={selectedStoragePolicy?.storage_name || ""}
         onChange={(evt) => selectStorage(evt.target.value)}
         style={selectStyle}
       >
@@ -45,11 +44,14 @@ function CapacityManagement(props: { api: Client }) {
         ))}
       </select>
 
-      {policy ? (
+      {selectedStoragePolicy ? (
         <div>
-          <p>{policy}</p>
+          <p>{selectedStoragePolicy.allocation_policy}</p>
           <p>Configs:</p>
-          <RuntimeConfig api={api} />
+          <AllocationPolicyConfigs
+            api={api}
+            storage={selectedStoragePolicy.storage_name}
+          />
         </div>
       ) : (
         <p>Storage not selected.</p>

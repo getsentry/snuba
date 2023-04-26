@@ -292,7 +292,7 @@ function Client() {
     },
     getAllocationPolicyConfigs: (storage: string) => {
       const url =
-        baseUrl + "allocation_policy_configs/" + +encodeURIComponent(storage);
+        baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
