@@ -86,7 +86,9 @@ _REGISTERED_MIGRATION_GROUPS = {
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         SearchIssuesLoader(), ReadinessState.PARTIAL
     ),
-    MigrationGroup.SPANS: _MigrationGroup(SpansLoader(), ReadinessState.LIMITED),
+    MigrationGroup.SPANS: _MigrationGroup(
+        loader=SpansLoader(), readiness_state=ReadinessState.LIMITED
+    ),
 }
 
 
