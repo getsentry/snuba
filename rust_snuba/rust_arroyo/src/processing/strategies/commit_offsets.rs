@@ -76,7 +76,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     #[test]
-    fn test_noop() {
+    fn test_commit_offsets() {
         env_logger::init();
         let partition1 = Partition {
             topic: Topic {
