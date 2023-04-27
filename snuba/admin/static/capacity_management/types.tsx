@@ -13,6 +13,24 @@ type AllocationPolicyConfig = {
   params: object;
 };
 
+type AllocationPolicyConfigParams = {
+  name: string;
+  type: string;
+};
+
+type AllocationPolicyParametrizedConfigDefinition = {
+  name: string;
+  type: string;
+  default: string;
+  params: AllocationPolicyConfigParams[];
+};
+
 type RowData = [ReactNode, ReactNode, ReactNode, ReactNode, ReactNode];
 
-export { AllocationPolicy, AllocationPolicyConfig, RowData };
+export {
+  AllocationPolicy,
+  AllocationPolicyConfig,
+  AllocationPolicyParametrizedConfigDefinition,
+  AllocationPolicyConfigParams,
+  RowData,
+};

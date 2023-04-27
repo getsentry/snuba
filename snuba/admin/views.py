@@ -707,6 +707,41 @@ def allocation_policies() -> Response:
     )
 
 
+@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_configs(storage: str) -> Response:
+    try:
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        configs = policy.get_configs()
+        return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route(
+    "/allocation_policy_parameterized_config_definitions/<path:storage>",
+    methods=["GET"],
+)
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_parameterized_config_definitions(storage: str) -> Response:
+    try:
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        config_definitions = policy.get_parameterized_config_definitions()
+        return Response(
+            json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
+        )
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
 @application.route("/allocation_policy_config", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_allocation_policy_config() -> Response:
@@ -733,21 +768,6 @@ def set_allocation_policy_config() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except Exception as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-
-@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage: str) -> Response:
-    try:
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        configs = policy.get_configs()
-        return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
     except Exception as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),

@@ -160,12 +160,28 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "params": {},
             },
             {
-                "key": "some other key",
+                "key": "some_parameterized_key",
                 "value": "some other value",
                 "description": "Placeholder config. Will not actually be saved.",
                 "type": "placeholder",
-                "params": {},
+                "params": {"c": 3, "d": 4},
             },
+        ]
+
+    def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
+        """
+        Placeholder - doesn't actually do anything.
+        This should return a list of configs that can be "added" to this policy.
+        The only configs falling under this def should be configs that have params.
+        """
+
+        return [
+            {
+                "name": "some_parameterized_key",
+                "type": "int",
+                "default": 10,
+                "params": [{"name": "c", "type": "int"}, {"name": "d", "type": "int"}],
+            }
         ]
 
     def set_config(

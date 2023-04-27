@@ -1,26 +1,17 @@
-import React, { ReactNode } from "react";
+import React from "react";
+import { AllocationPolicyConfig, RowData } from "./types";
 
-import { linkStyle } from "./styles";
-import { RowData } from "./types";
-
-function getReadonlyRow(
-  key: string,
-  value: string,
-  description: string,
-  type: string,
-  showActions: boolean,
-  edit: () => void
-): RowData {
+function getReadonlyRow(config: AllocationPolicyConfig): RowData {
   return [
-    <code style={{ wordBreak: "break-all" }}>{key}</code>,
-    <code style={{ wordBreak: "break-all" }}>{value}</code>,
-    description,
-    type,
-    showActions && (
-      <a style={linkStyle} onClick={() => edit()}>
-        edit
-      </a>
-    ),
+    <code style={{ wordBreak: "break-all" }}>{config.key}</code>,
+    <code style={{ wordBreak: "break-all" }}>
+      {Object.keys(config.params).length
+        ? JSON.stringify(config.params)
+        : "N/A"}
+    </code>,
+    <code style={{ wordBreak: "break-all" }}>{config.value}</code>,
+    config.description,
+    config.type,
   ];
 }
 
