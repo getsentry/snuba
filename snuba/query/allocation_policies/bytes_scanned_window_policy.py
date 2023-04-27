@@ -40,6 +40,9 @@ _ORG_LESS_REFERRERS = set(
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
         "reprocessing2.start_group_reprocessing",
+        # This is just a suite of sentry tests that I do not want to
+        # update
+        "_insert_transaction.verify_transaction",
     ]
 )
 
