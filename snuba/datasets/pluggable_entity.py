@@ -62,9 +62,10 @@ class PluggableEntity(Entity):
     subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
 
     def _get_builtin_validators(self) -> Sequence[QueryValidator]:
+        mappers = [s.translation_mappers for s in self.storages]
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns), self.validate_data_model
+                EntityColumnSet(self.columns), mappers, self.validate_data_model
             )
         ]
 
