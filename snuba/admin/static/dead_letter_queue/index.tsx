@@ -138,7 +138,9 @@ function DeadLetterQueue() {
               name="messagesToProcess"
               value={messagesToProcess}
               placeholder="Max messages to process"
-              onChange={(evt) => console.log(evt)}
+              onChange={(evt) => {
+                setMessagesToProcess(parseInt(evt.target.value, 10));
+              }}
             />
           </fieldset>
           <fieldset>
