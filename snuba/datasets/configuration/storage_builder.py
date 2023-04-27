@@ -77,8 +77,8 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
-        READINESS_STATE: ReadinessState(config[READINESS_STATE]),
         SCHEMA: __build_storage_schema(config),
+        READINESS_STATE: ReadinessState(config[READINESS_STATE]),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),

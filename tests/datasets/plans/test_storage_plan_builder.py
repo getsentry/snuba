@@ -1,4 +1,5 @@
-from typing import List, Optional
+import importlib
+from typing import Any, List, Optional
 
 import pytest
 
@@ -23,6 +24,7 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
@@ -133,3 +135,42 @@ def test_storage_query_plan_builder(
         ):
             correct_policy_assigned = True
     assert correct_policy_assigned
+
+
+@pytest.fixture(scope="function")
+def temp_settings() -> Any:
+    from snuba import settings
+
+    yield settings
+    importlib.reload(settings)
+
+
+def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
+    snql_query = """
+        MATCH (events)
+        SELECT col1
+        WHERE tags_key IN tuple('t1', 't2')
+            AND timestamp >= toDateTime('2021-01-01T00:00:00')
+            AND timestamp < toDateTime('2021-01-02T00:00:00')
+            AND project_id = 1
+    """
+    dataset = get_dataset("events")
+    storage_connections = get_entity(EntityKey.EVENTS).get_all_storage_connections()
+    selector = ErrorsQueryStorageSelector()
+    query_plan_builder = StorageQueryPlanBuilder(
+        storages=storage_connections,
+        selector=selector,
+        partition_key_column_name=None,
+    )
+    query, _ = parse_snql_query(str(snql_query), dataset)
+
+    temp_settings.SUPPORTED_STATES = {}  # remove all supported states
+
+    assert isinstance(query, Query)
+    with pytest.raises(
+        QueryPlanException,
+        match="The selected storage=errors is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+    ):
+        query_plan_builder.build_and_rank_plans(
+            query=query, settings=HTTPQuerySettings(referrer="r")
+        )
