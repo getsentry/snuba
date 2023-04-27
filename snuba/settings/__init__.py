@@ -258,6 +258,7 @@ SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
 READINESS_STATE_STORAGES_ENABLED: set[str] = set()
+READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
