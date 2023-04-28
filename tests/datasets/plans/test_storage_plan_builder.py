@@ -88,7 +88,7 @@ TEST_CASES = [
         get_entity(EntityKey.EVENTS).get_all_storage_connections(),
         ErrorsQueryStorageSelector(),
         None,
-        StorageSetKey.EVENTS,
+        StorageSetKey.EVENTS_RO,
         id="Multiple storages and selector",
     ),
 ]
@@ -169,7 +169,7 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
     assert isinstance(query, Query)
     with pytest.raises(
         QueryPlanException,
-        match="The selected storage=errors is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+        match="The selected storage=errors_ro is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
     ):
         query_plan_builder.build_and_rank_plans(
             query=query, settings=HTTPQuerySettings(referrer="r")

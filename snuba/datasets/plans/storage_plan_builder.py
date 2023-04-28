@@ -185,7 +185,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
                 raise StorageNotAvailable(
                     StorageNotAvailable.__name__,
-                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state. Current state is: {readiness_state.value}",
                 )
 
         with sentry_sdk.start_span(

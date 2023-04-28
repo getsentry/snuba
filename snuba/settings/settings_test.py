@@ -14,6 +14,7 @@ SENTRY_DSN = os.getenv("SENTRY_DSN")
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 ENABLE_DEV_FEATURES = True
+USE_READONLY_ERRORS_TABLE = True
 
 # Sometimes we want the raw structure of an expression
 # rather than the pretty formatted one. If you're debugging

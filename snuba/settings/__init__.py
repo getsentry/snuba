@@ -377,6 +377,8 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
+USE_READONLY_ERRORS_TABLE = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba import state
+from snuba import settings, state
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import (
     EntityStorageConnection,
@@ -21,7 +21,9 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", True)
+            state.get_config(
+                "enable_events_readonly_table", settings.USE_READONLY_ERRORS_TABLE
+            )
             and not query_settings.get_consistent()
         )
 
