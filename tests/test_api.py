@@ -195,6 +195,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": p,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
                             "granularity": rollup_mins * 60,
                             "from_date": self.base_time.isoformat(),
                             "to_date": (
@@ -226,6 +227,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": 1,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
                             "granularity": rollup_mins * 60,
                             "from_date": self.base_time.isoformat(),
                             "to_date": (
@@ -258,6 +260,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 60,
                         "selected_columns": ["time"],
                         "groupby": "time",
@@ -283,6 +286,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 60,
                         "selected_columns": ["time"],
                         "groupby": "time",
@@ -304,6 +308,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -322,6 +327,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -342,6 +348,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -363,6 +370,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": ["project_id"],
                         "aggregations": [["count()", "", "count"]],
                         "orderby": "-count",
@@ -385,6 +393,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": ["project_id"],
                         "totals": True,
                         "aggregations": [["count()", "", "count"]],
@@ -416,6 +425,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "aggregations": [["count()", "", "count"]],
                         "orderby": "-count",
                         "groupby": "environment",
@@ -437,6 +447,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": [
                             "project_id",
                             "received",
@@ -470,6 +481,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
@@ -492,6 +504,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [["message", "LIKE", "a mess%"]],
                         "orderby": "event_id",
@@ -511,6 +524,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [["message", "NOT LIKE", "a mess%"]],
                         "orderby": "event_id",
@@ -530,6 +544,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [["tags[environment]", "LIKE", "%es%"]],
                         "orderby": "event_id",
@@ -549,6 +564,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id", "received"],
                         "conditions": [["received", "=", str(self.base_time)]],
                         "orderby": "event_id",
@@ -569,6 +585,7 @@ class TestApi(SimpleAPITest):
                     {
                         "dataset": "events",
                         "project": [1, 2, 3],
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": [["isNull", ["group_id"], "null_group_id"]],
                         "groupby": ["group_id"],
                         "debug": True,
@@ -632,6 +649,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 4,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["message"],
                         "conditions": [[["isHandled", []], "=", 1]],
                         "orderby": ["message"],
@@ -652,6 +670,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 4,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["message"],
                         "conditions": [[["notHandled", []], "=", 1]],
                         "orderby": ["message"],
@@ -673,6 +692,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
@@ -694,6 +714,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "aggregations": [["count()", "", "count"]],
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
@@ -712,6 +733,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
@@ -744,6 +766,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [
                             [["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]
@@ -773,6 +796,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [
                             [["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]
@@ -799,6 +823,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [
                             [["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]
@@ -825,6 +850,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["event_id"],
                         "conditions": [["http_method", "=", "GET"]],
                         "limit": 1,
@@ -852,6 +878,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 3,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "project_id",
                         "aggregations": [["topK(4)", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
@@ -874,6 +901,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 3,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "project_id",
                         "aggregations": [["uniq", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
@@ -891,6 +919,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 3,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": ["project_id", "time"],
                         "aggregations": [["uniq", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
@@ -909,6 +938,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": ["project_id"],
                         "aggregations": [
                             ["count", "platform", "platforms"],
@@ -938,6 +968,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 3,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "project_id",
                         "aggregations": [
                             ["argMax", ["event_id", "timestamp"], "latest_event"]
@@ -960,6 +991,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "primary_hash",
                         "having": [["times_seen", ">", 1]],
                         "aggregations": [["count()", "", "times_seen"]],
@@ -978,6 +1010,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "primary_hash",
                         "having": [["times_seen", ">", 100]],
                         "aggregations": [["count()", "", "times_seen"]],
@@ -997,6 +1030,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "having": [["times_seen", ">", 1]],
                         "selected_columns": ["group_id"],
                         "groupby": "time",
@@ -1017,6 +1051,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
@@ -1038,6 +1073,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [
@@ -1062,6 +1098,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [
@@ -1085,6 +1122,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [["tags[os.rooted]", "=", "1"]],
@@ -1108,6 +1146,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -1130,6 +1169,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "sample": 1000,
                         "selected_columns": ["project_id"],
                         "from_date": self.base_time.isoformat(),
@@ -1147,6 +1187,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 2,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "sample": 0.1,
                         "selected_columns": ["project_id"],
                         "from_date": self.base_time.isoformat(),
@@ -1165,6 +1206,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": ["tags_key"],
                         "aggregations": [
@@ -1222,6 +1264,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "aggregations": [["topK(100)", "tags_key", "top"]],
                         "from_date": self.base_time.isoformat(),
@@ -1257,6 +1300,7 @@ class TestApi(SimpleAPITest):
                     "offset": 0,
                     "orderby": ["-timestamp.to_hour"],
                     "project": [1],
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "selected_columns": [
                         [
                             "coalesce",
@@ -1304,6 +1348,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "-count",
                         "limitby": [9, "tags_key"],
                         "project": [1],
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "dataset": "events",
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
@@ -1337,6 +1382,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "groupby": ["environment"],
                         "aggregations": [["count()", "", "count"]],
@@ -1358,6 +1404,7 @@ class TestApi(SimpleAPITest):
                 {
                     "from_date": self.base_time.isoformat(),
                     "project": [1],
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "conditions": [["platform", "NOT IN", [long_string]]],
                     "selected_columns": ["project_id"],
                     "to_date": (
@@ -1376,6 +1423,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -1400,6 +1448,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": 2,
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "selected_columns": ["platform"],
                     "from_date": self.base_time.isoformat(),
                     "to_date": (
@@ -1414,6 +1463,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": 1,
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "selected_columns": ["platform"],
                     "from_date": self.base_time.isoformat(),
                     "to_date": (
@@ -1429,6 +1479,7 @@ class TestApi(SimpleAPITest):
     def test_doesnt_select_deletions(self) -> None:
         query = {
             "project": 1,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
             "from_date": self.base_time.isoformat(),
@@ -1463,6 +1514,7 @@ class TestApi(SimpleAPITest):
     def test_selected_columns(self) -> None:
         query = {
             "project": 1,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "selected_columns": ["platform", "message"],
             "orderby": "platform",
             "from_date": self.base_time.isoformat(),
@@ -1476,6 +1528,7 @@ class TestApi(SimpleAPITest):
     def test_complex_selected_columns(self) -> None:
         query = {
             "project": 1,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "selected_columns": ["platform", ["notEmpty", ["exception_stacks.type"]]],
             "from_date": self.base_time.isoformat(),
             "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
@@ -1489,6 +1542,7 @@ class TestApi(SimpleAPITest):
         # Check that aliasing works too
         query = {
             "project": 1,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "selected_columns": [
                 "platform",
                 ["notEmpty", ["exception_stacks.type"], "type_not_empty"],
@@ -1510,6 +1564,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "selected_columns": ["environment", "time"],
                         "orderby": [["-substringUTF8", ["environment", 1, 3]], "time"],
                         "debug": True,
@@ -1535,6 +1590,7 @@ class TestApi(SimpleAPITest):
         # Test that requesting a Nullable(DateTime) column does not throw
         query = {
             "project": 1,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "selected_columns": ["received"],
             "from_date": self.base_time.isoformat(),
             "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
@@ -1546,6 +1602,7 @@ class TestApi(SimpleAPITest):
             "selected_columns": ["timestamp", "timestamp"],
             "limit": 3,
             "project": [1],
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "from_date": "2019-11-21T01:00:36",
             "to_date": "2019-11-26T01:00:36",
             "granularity": 3600,
@@ -1574,6 +1631,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1595,6 +1653,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1617,6 +1676,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1638,6 +1698,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1658,6 +1719,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1680,6 +1742,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1702,6 +1765,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1723,6 +1787,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (self.base_time + timedelta(minutes=59)).isoformat(),
                         "orderby": "tags[sentry:release]",
@@ -1756,6 +1821,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (self.base_time + timedelta(minutes=59)).isoformat(),
                         "orderby": "timestamp",
@@ -1783,6 +1849,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": (self.base_time - timedelta(days=100)).isoformat(),
                         "to_date": (self.base_time - timedelta(days=99)).isoformat(),
                         "orderby": "timestamp",
@@ -1809,6 +1876,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -1842,6 +1910,7 @@ class TestApi(SimpleAPITest):
         query = json.dumps(
             {
                 "project": 2,
+                "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 "aggregations": [["count()", "", "aggregate"]],
                 "consistent": True,
                 "debug": True,
@@ -1863,6 +1932,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": [2],
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "selected_columns": ["timestamp"],
                     "conditions": [
                         ["group_id", "IN", [2, 1]],
@@ -1885,6 +1955,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": 1,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "granularity": 3600,
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
@@ -1903,6 +1974,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": 1,
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "granularity": 3600,
                     "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
                     "from_date": self.base_time.isoformat(),
@@ -1934,6 +2006,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": [1],
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "dataset": "events",
                     "from_date": self.base_time.isoformat(),
                     "to_date": (
@@ -1958,6 +2031,7 @@ class TestApi(SimpleAPITest):
             json.dumps(
                 {
                     "project": 1,
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "granularity": 3600,
                     "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
                     "from_date": self.base_time.isoformat(),
@@ -2008,6 +2082,7 @@ class TestApi(SimpleAPITest):
 
         query = {
             "project": project_id,
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
             "selected_columns": [],
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
@@ -2064,6 +2139,7 @@ class TestApi(SimpleAPITest):
                 json.dumps(
                     {
                         "project": self.project_ids,
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": ["project_id"],
                         "selected_columns": [],
                         "aggregations": [["count()", "", "count"]],
@@ -2088,6 +2164,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": 1,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
                             "selected_columns": [
                                 "event_id",
                                 "title",
@@ -2134,6 +2211,7 @@ class TestApi(SimpleAPITest):
                     "offset": 0,
                     "orderby": ["-timestamp", "-event_id"],
                     "project": [1],
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "selected_columns": [
                         "event_id",
                         "group_id",
