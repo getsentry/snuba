@@ -16,6 +16,7 @@ UNKNOWN_SPAN_STATUS = 2
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_id", UUID(Modifiers(nullable=True))),
+    Column("transaction_op", String(Modifiers(nullable=True))),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
     Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
