@@ -388,7 +388,7 @@ def test_metrics_aggregate_processor(
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
     expected_set_result = (
-        AggregateInsertBatch(expected_set, None, None)
+        AggregateInsertBatch(expected_set, None, expected_sentry_received_timestamp)
         if expected_set is not None
         else None
     )
@@ -404,7 +404,9 @@ def test_metrics_aggregate_processor(
         )
 
         expected_counter_result = (
-            AggregateInsertBatch(expected_counter, None, None)
+            AggregateInsertBatch(
+                expected_counter, None, expected_sentry_received_timestamp
+            )
             if expected_counter is not None
             else None
         )
@@ -414,7 +416,9 @@ def test_metrics_aggregate_processor(
         )
 
         expected_distributions_result = (
-            AggregateInsertBatch(expected_distributions, None, None)
+            AggregateInsertBatch(
+                expected_distributions, None, expected_sentry_received_timestamp
+            )
             if expected_distributions is not None
             else None
         )
@@ -508,7 +512,9 @@ def test_metrics_polymorphic_processor(
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
-            AggregateInsertBatch(expected_output, None, None)
+            AggregateInsertBatch(
+                expected_output, None, expected_sentry_received_timestamp
+            )
             if expected_output is not None
             else None
         )
