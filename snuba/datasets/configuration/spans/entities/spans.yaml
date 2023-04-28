@@ -113,7 +113,6 @@ storage_selector:
 
 query_processors:
   [
-    { processor: TagsExpanderProcessor },
     { processor: BasicFunctionsProcessor },
     { processor: ReferrerRateLimiterProcessor },
     {
