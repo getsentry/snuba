@@ -242,10 +242,8 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "querylog",
     "profiles",
     "functions",
-    "test_migration",
     "search_issues",
 }
 
@@ -261,6 +259,7 @@ READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = {
     "profiles",
     "querylog",
     "search_issues",
+    "test_migration",
 }
 READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True
