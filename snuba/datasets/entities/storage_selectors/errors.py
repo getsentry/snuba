@@ -21,7 +21,7 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", False)
+            state.get_config("enable_events_readonly_table", True)
             and not query_settings.get_consistent()
         )
 
