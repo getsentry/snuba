@@ -71,6 +71,3 @@ class RateLimiterDelegate(QuerySettings):
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         self.__delegate.set_resource_quota(quota)
-
-    def get_organization_id(self) -> Optional[int]:
-        return self.__delegate.get_organization_id()

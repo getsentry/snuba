@@ -4,7 +4,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 import click
 
-import snuba.settings
+from snuba import settings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
@@ -72,6 +72,18 @@ from snuba.utils.streams.configuration_builder import _get_default_topic_configu
     help="The slice id for the storage",
 )
 @click.option(
+    "--max-batch-size",
+    default=settings.DEFAULT_MAX_BATCH_SIZE,
+    type=int,
+    help="Max number of messages to batch in memory before writing to Kafka.",
+)
+@click.option(
+    "--max-batch-time-ms",
+    default=settings.DEFAULT_MAX_BATCH_TIME_MS,
+    type=int,
+    help="Max length of time to buffer messages in memory before writing to Kafka.",
+)
+@click.option(
     "--log-level",
     "log_level",
     type=click.Choice(["error", "warn", "info", "debug", "trace"]),
@@ -90,10 +102,12 @@ def rust_consumer(
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
     slice_id: Optional[int],
+    max_batch_size: int,
+    max_batch_time_ms: int,
     log_level: str,
 ) -> None:
     """
-    Experimental alternative to`snuba consumer`
+    Experimental alternative to `snuba consumer`
     """
 
     consumer_config = resolve_consumer_config(
@@ -104,6 +118,8 @@ def rust_consumer(
         bootstrap_servers=bootstrap_servers,
         commit_log_bootstrap_servers=commit_log_bootstrap_servers,
         replacement_bootstrap_servers=replacement_bootstrap_servers,
+        max_batch_size=max_batch_size,
+        max_batch_time_ms=max_batch_time_ms,
         slice_id=slice_id,
     )
 
@@ -166,6 +182,8 @@ class RustConsumerConfig:
     raw_topic: TopicConfig
     commit_log_topic: Optional[TopicConfig]
     replacements_topic: Optional[TopicConfig]
+    max_batch_size: int
+    max_batch_time_ms: int
     env: Optional[EnvConfig]
 
 
@@ -189,7 +207,7 @@ def _resolve_topic_config(
 
 
 def _resolve_env_config() -> Optional[EnvConfig]:
-    sentry_dsn = snuba.settings.SENTRY_DSN
+    sentry_dsn = settings.SENTRY_DSN
     return EnvConfig(sentry_dsn=sentry_dsn)
 
 
@@ -203,6 +221,8 @@ def resolve_consumer_config(
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
     slice_id: Optional[int],
+    max_batch_size: int,
+    max_batch_time_ms: int,
 ) -> RustConsumerConfig:
     """
     Resolves the ClickHouse cluster and Kafka brokers, and the physical topic name
@@ -245,6 +265,8 @@ def resolve_consumer_config(
         raw_topic=resolved_raw_topic,
         commit_log_topic=resolved_commit_log_topic,
         replacements_topic=resolved_replacements_topic,
+        max_batch_size=max_batch_size,
+        max_batch_time_ms=max_batch_time_ms,
         env=resolved_env_config,
     )
 

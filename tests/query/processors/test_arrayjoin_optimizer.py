@@ -23,8 +23,10 @@ from snuba.query.conditions import (
     binary_condition,
     in_condition,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
     filter_key_values,
@@ -429,18 +431,23 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
-    entity = get_entity(query.get_from_clause().key)
+    from_clause = query.get_from_clause()
+    assert isinstance(from_clause, QueryEntity)
+    entity = get_entity(from_clause.key)
     storage = entity.get_writable_storage()
     assert storage is not None
+    assert isinstance(query, LogicalQuery)
     for p in entity.get_query_processors():
         p.process_query(query, request.query_settings)
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
-
     query_plan = StorageQueryPlanBuilder(
-        storages=entity.get_all_storage_connections(),
+        storages=list(entity.get_all_storage_connections()),
         selector=DefaultQueryStorageSelector(),
     ).build_and_rank_plans(query, request.query_settings)[0]
+
+    ArrayJoinKeyValueOptimizer("tags").process_query(
+        query_plan.query, request.query_settings
+    )
 
     return query_plan.query
 

@@ -161,7 +161,7 @@ class Runner:
         fake: bool = False,
         force: bool = False,
         group: Optional[MigrationGroup] = None,
-        readiness_state: Optional[ReadinessState] = None,
+        readiness_states: Optional[Sequence[ReadinessState]] = None,
     ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
@@ -182,11 +182,11 @@ class Runner:
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
-        if readiness_state:
+        if readiness_states:
             pending_migrations = [
                 m
                 for m in pending_migrations
-                if get_group_readiness_state(m.group) == readiness_state
+                if get_group_readiness_state(m.group) in readiness_states
             ]
 
         use_through = False if through == "all" else True

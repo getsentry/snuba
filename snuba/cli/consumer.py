@@ -192,7 +192,7 @@ def consumer(
         slice_id=slice_id,
     )
 
-    consumer = consumer_builder.build_base_consumer(slice_id)
+    consumer = consumer_builder.build_base_consumer()
 
     def handler(signum: int, frame: Any) -> None:
         consumer.signal_shutdown()
