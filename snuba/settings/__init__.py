@@ -261,7 +261,6 @@ READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = {
     "profiles",
     "querylog",
     "search_issues",
-    "test_migration",
 }
 READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True

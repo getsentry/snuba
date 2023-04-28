@@ -368,6 +368,8 @@ def get_total_migration_count() -> int:
 
 @pytest.mark.clickhouse_db
 def test_get_active_migration_groups(temp_settings: Any) -> None:
+    # This test is temporary until readiness_states are fully rolled out.
+    temp_settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED = {}
     temp_settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
     active_groups = get_active_migration_groups()
     assert (
@@ -451,13 +453,13 @@ def test_no_schema_differences() -> None:
 def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"test_migration"}):
         runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES LIKE 'querylog_local'").results == []
+    assert connection.execute("SHOW TABLES LIKE 'test_migration_local'").results == []
 
 
 @pytest.mark.clickhouse_db
