@@ -61,10 +61,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, segment_name, segment_id, end_timestamp)",
+                    order_by="(project_id, group, end_timestamp, cityHash64(span_id)",
                     version_column="deleted",
                     partition_by="(retention_days, toMonday(end_timestamp))",
-                    sample_by="segment_id",
+                    sample_by="cityHash64(span_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="end_timestamp + toIntervalDay(retention_days)",
