@@ -256,7 +256,13 @@ if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
-READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
+READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = {
+    "functions",
+    "profiles",
+    "querylog",
+    "search_issues",
+    "test_migration",
+}
 READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True
 
