@@ -75,7 +75,7 @@ TEST_CASES = [
         ErrorsQueryStorageSelector(),
         False,
         get_storage(StorageKey.ERRORS),
-        id="Errors storage selector",
+        id="Errors storage selector, readonly disabled",
     ),
     pytest.param(
         """
@@ -103,7 +103,7 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_connections, selector, use_readable, expected_storage",
+    "snql_query, dataset, storage_connections, selector, use_readonly_table, expected_storage",
     TEST_CASES,
 )
 @pytest.mark.redis_db
@@ -112,14 +112,13 @@ def test_query_storage_selector(
     dataset: Dataset,
     storage_connections: List[EntityStorageConnection],
     selector: QueryStorageSelector,
-    use_readable: bool,
+    use_readonly_table: bool,
     expected_storage: Storage,
 ) -> None:
     query, _ = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
 
-    if use_readable:
-        state.set_config("enable_events_readonly_table", True)
+    state.set_config("enable_events_readonly_table", use_readonly_table)
     selected_storage = selector.select_storage(
         query, HTTPQuerySettings(referrer="r"), storage_connections
     )
