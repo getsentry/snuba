@@ -77,6 +77,7 @@ class TestMetricsApiCounters(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_time = utc_yesterday_12_15() - timedelta(minutes=1)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
@@ -107,6 +108,8 @@ class TestMetricsApiCounters(BaseApiTest):
                                 "tags": self.default_tags,
                                 "metric_id": self.metric_id,
                                 "retention_days": RETENTION_DAYS,
+                                "sentry_received_timestamp": self.sentry_received_time.timestamp()
+                                + n,
                             }
                         ),
                         KafkaMessageMetadata(0, 0, self.base_time),
@@ -226,6 +229,9 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
+        self.sentry_received_timestamp = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        )
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
@@ -256,6 +262,8 @@ class TestOrgMetricsApiCounters(BaseApiTest):
                                     "timestamp": self.base_time.timestamp() + n,
                                     "metric_id": self.metric_id,
                                     "retention_days": RETENTION_DAYS,
+                                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                                    + n,
                                 }
                             ),
                             KafkaMessageMetadata(0, 0, self.base_time),
@@ -368,6 +376,9 @@ class TestMetricsApiSets(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
+            minutes=self.seconds
+        )
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
@@ -393,6 +404,8 @@ class TestMetricsApiSets(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 }
 
                 processed = processor.process_message(
@@ -467,6 +480,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
+            seconds=self.seconds
+        )
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
@@ -492,6 +508,8 @@ class TestMetricsApiDistributions(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 }
 
                 processed = processor.process_message(

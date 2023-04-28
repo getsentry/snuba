@@ -99,7 +99,7 @@ class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
             }
             for granularity in self.GRANULARITIES_SECONDS
         ]
-        return AggregateInsertBatch(processed, None)
+        return AggregateInsertBatch(processed, None, None)
 
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):

@@ -586,11 +586,13 @@ def _process_message_multistorage_work(
         return BytesInsertBatch(
             [values_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     elif isinstance(result, InsertBatch):
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     else:
         return result
