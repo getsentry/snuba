@@ -241,11 +241,7 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "profiles",
-    "functions",
-    "search_issues",
-}
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
