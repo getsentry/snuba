@@ -151,7 +151,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
-        readiness_state=ReadinessState.LIMITED,
+        readiness_state=ReadinessState.PARTIAL,
     ),
 }
 
