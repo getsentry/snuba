@@ -1917,16 +1917,9 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
-        errors_table_name = (
-            get_writable_storage(StorageKey.ERRORS)
-            .get_table_writer()
-            .get_schema()
-            .get_table_name()
-        )
-
         val = (
             "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`) FROM {errors_table_name} PREWHERE"
+            "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
         )
         assert result["sql"].startswith(val)
 
