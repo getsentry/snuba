@@ -8,6 +8,7 @@ import pytest
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
+from snuba.state import set_config
 
 
 @dataclass
@@ -330,7 +331,7 @@ class TransactionEvent:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestTransactionsProcessor:
+class TestSpansProcessor:
     @staticmethod
     def __get_timestamps() -> Tuple[float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
@@ -369,6 +370,7 @@ class TestTransactionsProcessor:
         )
 
     def test_all_clickhouse_columns_are_present(self) -> None:
+        set_config("spans_project_allowlist", "[1]")
         message = self.__get_transaction_event()
 
         meta = KafkaMessageMetadata(

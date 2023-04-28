@@ -5,9 +5,10 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
+import sqlparse
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba import environment
+from snuba import environment, state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
@@ -23,7 +24,6 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
-from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,47 @@ EventDict = MutableMapping[str, Any]
 SpanDict = MutableMapping[str, Any]
 CommonSpanDict = MutableMapping[str, Any]
 RetentionDays = int
+
+
+def is_project_in_allowlist(project_id: int) -> bool:
+    project_allowlist = state.get_config("span_project_allowlist", None)
+    if project_allowlist:
+        # The expected format is [project,project,...]
+        project_allowlist = project_allowlist[1:-1]
+        if project_allowlist:
+            rolled_out_projects = [int(p.strip()) for p in project_allowlist.split(",")]
+            if project_id in rolled_out_projects:
+                return True
+    return False
+
+
+def parse_query(query, is_savepoint):
+    """
+    TODO: This is a temporary solution to extract some useful data from spans until we have a proper
+          mechanism of upstream sending us the data we need.
+    """
+    result = ""
+    for token in query:
+        if isinstance(token, sqlparse.sql.Where):
+            result += parse_query(token, is_savepoint)
+        elif isinstance(token, sqlparse.sql.Parenthesis):
+            if token.value == "(%s)":
+                result += "(...)"
+                continue
+            result += parse_query(token, is_savepoint)
+        elif isinstance(token, sqlparse.sql.Comparison):
+            result += parse_query(token, is_savepoint)
+        elif isinstance(token, sqlparse.sql.IdentifierList) and "%s" in token.value:
+            result += "..."
+        elif (
+            isinstance(token, sqlparse.sql.Identifier)
+            and is_savepoint
+            and token.value.upper() != "RELEASE"
+        ):
+            result += "{savepoint identifier}"
+        else:
+            result += token.value
+    return result
 
 
 class SpansMessageProcessor(DatasetMessageProcessor):
@@ -101,10 +142,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         event_dict: EventDict,
         common_span_fields: CommonSpanDict,
     ) -> None:
-
-        processed["project_id"] = common_span_fields["project_id"] = event_dict[
-            "project_id"
-        ]
         processed["transaction_id"] = common_span_fields["transaction_id"] = str(
             uuid.UUID(event_dict["event_id"])
         )
@@ -205,19 +242,132 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 )
 
     @staticmethod
-    def _process_module(
+    def _process_module_details(
         processed: MutableMapping[str, Any],
         event_dict: EventDict,
     ) -> None:
         """
-        TODO: This needs to be filled in once data from relay starts flowing in according to the
-        desired schema. For now we will set it to empty strings.
+        TODO: For the top level span belonging to a transaction, we do not know how to fill these
+              values yet. For now lets just set them to their default values.
         """
         processed["module"] = ""
         processed["action"] = ""
         processed["domain"] = ""
         processed["status"] = 0
         processed["span_kind"] = ""
+
+    def _process_child_span_module_details(
+        self,
+        processed_span: MutableMapping[str, Any],
+        span_dict: SpanDict,
+    ) -> None:
+        """
+        TODO: This is a bit of a hack, but we need to extract some details from spans temporarily
+              until we get proper data from upstream. This code should be removed once we have
+              the proper data flowing through the pipeline.
+        """
+        op = span_dict.get("op", "")
+        description = span_dict.get("description", "")
+
+        # Op specific processing
+        if op != "db.redis" and op.startswith("db"):
+            parse_state = None
+            table = []
+
+            # This is wrong for so many reasons lol, but just something simple to pull some values out
+            raw_parsed = sqlparse.parse(description)[0]
+            processed_span["description"] = parse_query(
+                raw_parsed, "SAVEPOINT" in description.upper()
+            )
+            parsed = sqlparse.parse(processed_span["description"])[0]
+            operation = None
+            processed_span["op"] = parsed.tokens[0].value
+            for token in parsed.tokens:
+                if operation is None and token.is_keyword:
+                    operation = token.value
+                    if token.value == "FROM":
+                        operation = "SELECT"
+
+                if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
+                    continue
+                elif token.is_keyword:
+                    if token.value.lower() == "select":
+                        parse_state = "select"
+                    elif token.value.lower() == "into":
+                        parse_state = "insert"
+                    elif token.value.lower() == "delete from":
+                        parse_state = "delete"
+                    elif token.value.lower() == "update":
+                        parse_state = "update"
+                    elif token.value.lower() == "from":
+                        parse_state = "from"
+                    elif token.value.lower() == "order by":
+                        parse_state = "order"
+                    elif token.value.lower() == "limit":
+                        parse_state = "limit"
+                    else:
+                        parse_state = None
+                elif isinstance(token, sqlparse.sql.Where):
+                    condition = ""
+                    for t in token.tokens:
+                        if isinstance(t, sqlparse.sql.Comment) or t.is_keyword:
+                            continue
+
+                        condition += t.value
+
+                    processed_span["tags.key"].append("where")
+                    processed_span["tags.value"].append(condition)
+                else:
+                    if parse_state in {"from", "update", "delete"}:
+                        table = token.value
+                    elif parse_state == "insert":
+                        table = token.value
+                        parse_state = None
+                    elif parse_state == "select":
+                        processed_span["tags.key"].append("columns")
+                        processed_span["tags.value"].append(token.value)
+                    elif parse_state == "limit":
+                        processed_span["tags.key"].append("limit")
+                        processed_span["tags.value"].append(token.value)
+                    elif parse_state == "order":
+                        processed_span["tags.key"].append("order")
+                        processed_span["tags.value"].append(token.value)
+            if isinstance(table, str):
+                if "select" in table.lower():
+                    table = "join"
+                domain = table.replace('"', "").strip()
+                processed_span["domain"] = domain
+            processed_span["op"] = operation.upper() if operation else operation
+            processed_span["module"] = "db"
+            processed_span["platform"] = "postgres"  # Lying for now
+            return
+        elif op == "db.redis":
+            processed_span["module"] = "cache"
+            parsed = sqlparse.parse(description)[0]
+            operation = None
+            key = None
+            for token in parsed.tokens:
+                if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
+                    continue
+                elif operation is None:
+                    operation = token.value
+                elif key is None and ":" in token.value:
+                    key = token.value.replace("'", "")
+            processed_span["op"] = operation
+            processed_span["domain"] = key.split(":")[0] if key else ""
+            processed_span["platform"] = "redis"
+            return
+        elif op == "http.client":
+            processed_span["module"] = "http"
+            processed_span["op"] = span_dict["data"]["method"]
+            processed_span["status"] = int(span_dict["data"]["status_code"])
+            processed_span["description"] = str(span_dict["data"]["url"])
+            splitUrl = str(span_dict["data"].get("url", "")).split("/")
+            processed_span["domain"] = splitUrl[2] if len(splitUrl) > 2 else ""
+            return
+        else:
+            processed_span["module"] = "none"
+            return
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
@@ -261,18 +411,18 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span["tags.key"].extend(span_tag_keys)
         processed_span["tags.value"].extend(span_tag_values)
 
-        # TODO: The current data model does not allow us to set these values but they are needed
-        #  in order to write data to the spans table. Lets set them to the default values for now.
-        processed_span["status"] = 0
-        processed_span["span_kind"] = ""
-        processed_span["span_status"] = 0
-        processed_span["platform"] = ""
-        processed_span["user"] = ""
-        processed_span["measurements.key"] = []
-        processed_span["measurements.value"] = []
-        processed_span["module"] = ""
-        processed_span["action"] = ""
-        processed_span["domain"] = ""
+        self._process_child_span_module_details(processed_span, span_dict)
+
+        # The processing is of modules does not guarantee that all clickhouse columns would be
+        # setup. Just to be safe, lets setup all required clickhouse columns (which are not
+        # nullable) with their default values if they have not been setup yet.
+        processed_span["span_kind"] = processed_span.get("span_kind", "")
+        processed_span["span_status"] = processed_span.get("span_status", 0)
+        processed_span["measurements.key"] = processed_span.get("measurements.key", [])
+        processed_span["measurements.value"] = processed_span.get(
+            "measurements.value", []
+        )
+        processed_span["module"] = processed_span.get("module", "")
 
         return processed_span
 
@@ -280,29 +430,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         self, event_dict: EventDict, common_span_fields: CommonSpanDict
     ) -> MutableSequence[MutableMapping[str, Any]]:
         data = event_dict["data"]
-
-        try:
-            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
-            assert isinstance(max_spans_per_transaction, (int, float))
-        except Exception:
-            metrics.increment("bad_config.max_spans_per_transaction")
-            max_spans_per_transaction = 2000
-
-        num_processed = 0
-        processed_spans = []
-
+        processed_spans: MutableSequence[MutableMapping[str, Any]] = []
         for span in data.get("spans", []):
-            # The number of spans should not exceed 1000 as enforced by SDKs.
-            # As a safety precaution, enforce a hard limit on the number of
-            # spans we actually store .
-            if num_processed >= max_spans_per_transaction:
-                metrics.increment("too_many_spans")
-                break
-
             processed_span = self._process_span(span, common_span_fields)
-
             if processed_span is not None:
-                num_processed += 1
                 processed_spans.append(processed_span)
 
         return processed_spans
@@ -329,6 +460,15 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         processed: MutableMapping[str, Any] = {}
         processed.update(common_span_fields)
+
+        processed["project_id"] = common_span_fields["project_id"] = event_dict[
+            "project_id"
+        ]
+
+        # Reject events from projects that are not in the allowlist
+        if not is_project_in_allowlist(processed["project_id"]):
+            return None
+
         # The following helper functions should be able to be applied in any order.
         # At time of writing, there are no reads of the values in the `processed`
         # dictionary to inform values in other functions.
@@ -336,10 +476,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         self._process_base_event_values(processed, event_dict, common_span_fields)
         self._process_tags(processed, event_dict, common_span_fields)
         self._process_measurements(processed, event_dict)
-        self._process_module(processed, event_dict)
+        self._process_module_details(processed, event_dict)
         processed_rows.append(processed)
         processed_spans = self._process_spans(event_dict, common_span_fields)
         processed_rows.extend(processed_spans)
 
-        print(processed_rows)
         return InsertBatch(rows=processed_rows, origin_timestamp=None)
