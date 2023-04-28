@@ -1,14 +1,9 @@
-// use crate::utils::metrics::backends::MetricsBackend;
-
 use rust_arroyo::utils::metrics::{gauge, increment, init, time, MetricsClientTrait};
 use dogstatsd;
-use cadence::StatsdClient;
 
 use super::abstract_backend::MetricsBackend;
 pub struct DatadogMetricsBackend {
     client_sd: dogstatsd::Client,
-    host: String,
-    port: u16,
     tags: Vec<String>,
 }
 
@@ -37,8 +32,6 @@ impl DatadogMetricsBackend {
         let client = dogstatsd::Client::new(dogstatsd::Options::default()).unwrap();
         DatadogMetricsBackend {
             client_sd: client,
-            host,
-            port,
             tags
         }
     }
@@ -56,7 +49,7 @@ impl MetricsClientTrait for DatadogMetricsBackend {
 
         match value {
             Some(v) => {
-                for i in 0..v.abs() {
+                for _ in 0..v.abs() {
                     if v < 0 {
                         self.client_sd.decr(key, &tags_str).unwrap();
                     } else {
@@ -65,7 +58,7 @@ impl MetricsClientTrait for DatadogMetricsBackend {
                 }
             }
             None => {
-                self.client_sd.incr(key, tags_str);
+                self.client_sd.incr(key, tags_str).unwrap();
             }
         }
 
@@ -80,7 +73,8 @@ impl MetricsClientTrait for DatadogMetricsBackend {
         sample_rate: Option<f64>,
     ) {
         let tags_str: Vec<String> = tags.unwrap().iter().map(|(k, v)| format!("{}:{}", k, v)).collect();
-        self.client_sd.gauge(key, value.to_string(), tags_str).unwrap();
+        let res = self.client_sd.gauge(key, value.to_string(), tags_str).unwrap();
+        println!("ok = {:?}", res)
     }
 
     fn time(
@@ -91,6 +85,42 @@ impl MetricsClientTrait for DatadogMetricsBackend {
         sample_rate: Option<f64>,
     ) {
         let tags_str: Vec<String> = tags.unwrap().iter().map(|(k, v)| format!("{}:{}", k, v)).collect();
-        self.client_sd.timing(key, value.try_into().unwrap(), tags_str);
+        self.client_sd.timing(key, value.try_into().unwrap(), tags_str).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use dogstatsd::Options;
+    use rust_arroyo::utils::metrics::{configure_metrics, MetricsClientTrait, self};
+
+    use crate::utils::metrics::backends::{datadog::DatadogMetricsBackend};
+
+
+    #[test]
+    fn test_testing_backend() {
+
+        let custom_options = Options::new("0.0.0.0:9000", "0.0.0.0:8125", "analytics", vec!(String::new()));
+        // let client = dogstatsd::Client::new(dogstatsd::Options::default()).unwrap();
+        let client = dogstatsd::Client::new(custom_options).unwrap();
+        let client_tags: Vec<String> = Vec::new();
+        let testing_backend = DatadogMetricsBackend {
+            client_sd: client,
+            tags: client_tag
+        };
+
+        let mut tags: HashMap<&str, &str> = HashMap::new();
+        tags.insert("tag1", "value1");
+        tags.insert("tag2", "value2");
+
+        testing_backend.counter("test_counter", Some(1), Some(tags.clone()), None);
+        testing_backend.gauge("test_gauge", 1, Some(tags.clone()), None);
+        testing_backend.time("test_time", 1, Some(tags.clone()), None);
+
+        // check configure_metrics writes to METRICS
+        configure_metrics(testing_backend);
+        metrics::time("c", 30, Some(HashMap::from([("tag3", "value3")])), None);
     }
 }

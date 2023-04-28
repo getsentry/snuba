@@ -89,7 +89,9 @@ impl MetricsClientTrait for TestingMetricsBackend{
 mod tests {
     use std::collections::HashMap;
 
-    use rust_arroyo::utils::metrics::{configure_metrics, MetricsClientTrait};
+    use rust_arroyo::utils::metrics::{configure_metrics, MetricsClientTrait, self};
+
+    use crate::utils::metrics::backends::testing::METRICS;
 
 
     #[test]
@@ -103,7 +105,13 @@ mod tests {
         testing_backend.counter("test_counter", Some(1), Some(tags.clone()), None);
         testing_backend.gauge("test_gauge", 1, Some(tags.clone()), None);
         testing_backend.time("test_time", 1, Some(tags.clone()), None);
+        assert!(METRICS.lock().unwrap().contains_key("test_counter"));
+        assert!(METRICS.lock().unwrap().contains_key("test_gauge"));
+        assert!(METRICS.lock().unwrap().contains_key("test_time"));
 
+        // check configure_metrics writes to METRICS
         configure_metrics(testing_backend);
+        metrics::time("c", 30, Some(HashMap::from([("tag3", "value3")])), None);
+        assert!(METRICS.lock().unwrap().contains_key("c"));
     }
 }
