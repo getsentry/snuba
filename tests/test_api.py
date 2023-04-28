@@ -25,6 +25,7 @@ from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
@@ -2372,3 +2373,16 @@ class TestDeleteSubscriptionApi(BaseApiTest):
                 "type": "subscription",
             }
         }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestAPIErrorsRO(TestApi):
+    """
+    Run the tests again, but this time on the errors_ro table to ensure they are both
+    compatible.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("enable_events_readonly_table", 1)
