@@ -39,7 +39,7 @@ RetentionDays = int
 
 
 def is_project_in_allowlist(project_id: int) -> bool:
-    project_allowlist = state.get_config("span_project_allowlist", None)
+    project_allowlist = state.get_config("spans_project_allowlist", None)
     if project_allowlist:
         # The expected format is [project,project,...]
         project_allowlist = project_allowlist[1:-1]
@@ -340,7 +340,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed_span["op"] = operation.upper() if operation else operation
             processed_span["module"] = "db"
             processed_span["platform"] = "postgres"  # Lying for now
-            return
         elif op == "db.redis":
             processed_span["module"] = "cache"
             parsed = sqlparse.parse(description)[0]
@@ -356,18 +355,18 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed_span["op"] = operation
             processed_span["domain"] = key.split(":")[0] if key else ""
             processed_span["platform"] = "redis"
-            return
         elif op == "http.client":
             processed_span["module"] = "http"
-            processed_span["op"] = span_dict["data"]["method"]
-            processed_span["status"] = int(span_dict["data"]["status_code"])
-            processed_span["description"] = str(span_dict["data"]["url"])
-            splitUrl = str(span_dict["data"].get("url", "")).split("/")
-            processed_span["domain"] = splitUrl[2] if len(splitUrl) > 2 else ""
-            return
+            span_dict_data = span_dict.get("data", {})
+            processed_span["op"] = span_dict_data.get("method", "")
+            processed_span["status"] = int(span_dict_data.get("status_code", 0))
+            url = str(span_dict_data.get("url", ""))
+            processed_span["description"] = url
+            if url:
+                splitUrl = url.split("/")
+                processed_span["domain"] = splitUrl[2] if len(splitUrl) > 2 else ""
         else:
             processed_span["module"] = "none"
-            return
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
@@ -383,7 +382,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         # holds common tags which are mutable and we do not want them to be modified
         # while processing different spans.
         processed_span.update(copy.deepcopy(common_span_fields))
-        processed_span["transaction_id"] = None
         processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
         processed_span["span_id"] = int(span_dict["span_id"], 16)
         processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
@@ -469,16 +467,21 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         if not is_project_in_allowlist(processed["project_id"]):
             return None
 
-        # The following helper functions should be able to be applied in any order.
-        # At time of writing, there are no reads of the values in the `processed`
-        # dictionary to inform values in other functions.
-        # Ideally we keep continue that rule
-        self._process_base_event_values(processed, event_dict, common_span_fields)
-        self._process_tags(processed, event_dict, common_span_fields)
-        self._process_measurements(processed, event_dict)
-        self._process_module_details(processed, event_dict)
-        processed_rows.append(processed)
-        processed_spans = self._process_spans(event_dict, common_span_fields)
-        processed_rows.extend(processed_spans)
+        try:
+            # The following helper functions should be able to be applied in any order.
+            # At time of writing, there are no reads of the values in the `processed`
+            # dictionary to inform values in other functions.
+            # Ideally we keep continue that rule
+            self._process_base_event_values(processed, event_dict, common_span_fields)
+            self._process_tags(processed, event_dict, common_span_fields)
+            self._process_measurements(processed, event_dict)
+            self._process_module_details(processed, event_dict)
+            processed_rows.append(processed)
+            processed_spans = self._process_spans(event_dict, common_span_fields)
+            processed_rows.extend(processed_spans)
+        except Exception as e:
+            metrics.increment("message_processing_error")
+            logger.exception("Failed to process message: %r", message, exc_info=e)
+            return None
 
         return InsertBatch(rows=processed_rows, origin_timestamp=None)

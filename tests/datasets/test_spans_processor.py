@@ -16,7 +16,6 @@ class TransactionEvent:
     event_id: str
     trace_id: str
     span_id: str
-    group_ids: Sequence[int]
     transaction_name: str
     op: str
     start_timestamp: float
@@ -25,22 +24,11 @@ class TransactionEvent:
     dist: Optional[str]
     user_name: Optional[str]
     user_id: Optional[str]
-    user_email: Optional[str]
-    ipv6: Optional[str]
-    ipv4: Optional[str]
     environment: Optional[str]
     release: str
-    sdk_name: Optional[str]
-    sdk_version: Optional[str]
     http_method: Optional[str]
     http_referer: Optional[str]
-    geo: Mapping[str, str]
     status: str
-    transaction_source: Optional[str]
-    app_start_type: str = "warm"
-    has_app_ctx: bool = True
-    profile_id: Optional[str] = None
-    replay_id: Optional[str] = None
 
     def __post_init__(self):
         self.span1_start_timestamp = (
@@ -63,9 +51,7 @@ class TransactionEvent:
                 "project_id": 1,
                 "event_id": self.event_id,
                 "message": "/organizations/:orgId/issues/",
-                "group_id": None,
-                "group_ids": self.group_ids,
-                "retention_days": 23,
+                "retention_days": 30,
                 "data": {
                     "event_id": self.event_id,
                     "environment": self.environment,
@@ -78,8 +64,6 @@ class TransactionEvent:
                         "id": "legacy:2019-03-12",
                     },
                     "sdk": {
-                        "version": self.sdk_version,
-                        "name": self.sdk_name,
                         "packages": [{"version": "0.9.0", "name": "pypi:sentry-sdk"}],
                     },
                     "breadcrumbs": {
@@ -93,6 +77,18 @@ class TransactionEvent:
                             },
                         ],
                     },
+                    "contexts": {
+                        "trace": {
+                            "sampled": True,
+                            "trace_id": self.trace_id,
+                            "op": self.op,
+                            "type": "trace",
+                            "span_id": self.span_id,
+                            "status": self.status,
+                            "hash": "a" * 16,
+                            "exclusive_time": 1.2345,
+                        },
+                    },
                     "spans": [
                         {
                             "sampled": True,
@@ -105,7 +101,7 @@ class TransactionEvent:
                             "trace_id": self.trace_id,
                             "span_id": str(int(self.span_id, 16) + 1),
                             "data": {},
-                            "op": "http",
+                            "op": "http.client",
                             "hash": "b" * 16,
                             "exclusive_time": 0.1234,
                         },
@@ -152,19 +148,6 @@ class TransactionEvent:
                             "total.time": {"value": 172.286},
                         }
                     },
-                    "contexts": {
-                        "trace": {
-                            "sampled": True,
-                            "trace_id": self.trace_id,
-                            "op": self.op,
-                            "type": "trace",
-                            "span_id": self.span_id,
-                            "status": self.status,
-                            "hash": "a" * 16,
-                            "exclusive_time": 1.2345,
-                        },
-                        "experiments": {"test1": 1, "test2": 2},
-                    },
                     "tags": [
                         ["sentry:release", self.release],
                         ["sentry:user", self.user_id],
@@ -173,10 +156,6 @@ class TransactionEvent:
                     ],
                     "user": {
                         "username": self.user_name,
-                        "ip_address": self.ipv4 or self.ipv6,
-                        "id": self.user_id,
-                        "email": self.user_email,
-                        "geo": self.geo,
                     },
                     "request": {
                         "url": "http://127.0.0.1:/query",
@@ -258,17 +237,13 @@ class TransactionEvent:
                     (finish_timestamp - start_timestamp).total_seconds() * 1000
                 ),
                 "exclusive_time": 1.2345,
-                "op": "http",
+                "op": "http.client",
                 "group": "b" * 16,
                 "span_status": self.status,
                 "span_kind": "span",
                 "description": "GET /api/0/organizations/sentry/tags/?project=1",
                 "status": "ok",
                 "module": "sentry",
-                "action": "sentry.web.api",
-                "domain": "http",
-                "platform": self.platform,
-                "user": self.user_id,
                 "tags.key": ["environment", "release", "user", "random_key"],
                 "tags.value": [
                     self.environment,
@@ -304,12 +279,9 @@ class TransactionEvent:
                 "span_status": self.status,
                 "span_kind": "span",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
-                "status": "ok",
                 "module": "sentry",
-                "action": "sentry.web.api",
                 "domain": "http",
                 "platform": self.platform,
-                "user": self.user_id,
                 "tags.key": ["environment", "release", "user", "random_key"],
                 "tags.value": [
                     self.environment,
@@ -344,7 +316,6 @@ class TestSpansProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
-            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
@@ -353,20 +324,11 @@ class TestSpansProcessor:
             platform="python",
             dist="",
             user_name="me",
-            user_id="myself",
-            user_email="me@myself.com",
-            ipv4="127.0.0.1",
-            ipv6=None,
+            user_id="123",
             environment="prod",
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
             http_method="POST",
             http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
-            transaction_source="url",
-            profile_id="046852d24483455c8c44f0c8fbf496f9",
-            replay_id="d2731f8ed8934c6fa5253e450915aa12",
         )
 
     def test_all_clickhouse_columns_are_present(self) -> None:

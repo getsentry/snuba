@@ -65,81 +65,54 @@ schema:
   ]
 
 storages:
-  [
-    {
-      storage: spans,
-      is_writable: true,
-      translation_mappers:
-        {
-          columns:
-            [
-              {
-                mapper: ColumnToNullIf,
-                args: { from_table_name, from_col_name: "user" },
-              },
-            ],
-          subscriptables:
-            [
-              {
-                mapper: SubscriptableMapper,
-                args:
-                  {
-                    from_column_table,
-                    from_column_name: tags,
-                    to_nested_col_table,
-                    to_nested_col_name: tags,
-                  },
-              },
-              {
-                mapper: SubscriptableMapper,
-                args:
-                  {
-                    from_column_table,
-                    from_column_name: measurements,
-                    to_nested_col_table,
-                    to_nested_col_name: measurements,
-                    nullable: True,
-                  },
-              },
-            ],
-        }
-    }
-  ]
+  - storage: spans
+    is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: timestamp
+            to_table_name: null
+            to_col_name: end_timestamp
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: measurements
+            to_nested_col_table: null
+            to_nested_col_name: measurements
+            value_subcolumn_name: value
+            nullable: false
 
 storage_selector:
-  {
-    selector: DefaultQueryStorageSelector
-  }
+  selector: DefaultQueryStorageSelector
 
 query_processors:
-  [
-    { processor: BasicFunctionsProcessor },
-    { processor: ReferrerRateLimiterProcessor },
-    {
-      processor: ProjectReferrerRateLimiter,
-      args: { project_column: project_id },
-    },
-    {
-      processor: ProjectRateLimiterProcessor,
-      args: { project_column: project_id },
-    },
-    { processor: ResourceQuotaProcessor, args: { project_field: project_id } },
-  ]
+  - processor: BasicFunctionsProcessor
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
 
 validators:
-  [
-    {
-      validator: EntityRequiredColumnValidator,
-      args: { required_filter_columns: [project_id] },
-    },
-    {
-      validator: TagConditionValidator,
-      args: {}
-    },
-    {
-      validator: DatetimeConditionValidator,
-      args: {}
-    },
-  ]
-
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [project_id]
+  - validator: TagConditionValidator,
+  - validator: DatetimeConditionValidator
 required_time_column: end_timestamp
