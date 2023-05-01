@@ -271,102 +271,117 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         op = span_dict.get("op", "")
         description = span_dict.get("description", "")
 
-        # Op specific processing
-        if op != "db.redis" and op.startswith("db"):
-            parse_state = None
-            table = ""
+        do_application_logic = state.get_config(
+            "spans_process_application_logic", False
+        )
+        if do_application_logic:
+            # Op specific processing
+            if op != "db.redis" and op.startswith("db"):
+                parse_state = None
+                table = ""
 
-            # This is wrong for so many reasons lol, but just something simple to pull some values out
-            raw_parsed = sqlparse.parse(description)[0]
-            processed_span["description"] = parse_query(
-                raw_parsed, "SAVEPOINT" in description.upper()
-            )
-            parsed = sqlparse.parse(processed_span["description"])[0]
-            operation = None
-            processed_span["op"] = parsed.tokens[0].value
-            for token in parsed.tokens:
-                if operation is None and token.is_keyword:
-                    operation = token.value
-                    if token.value == "FROM":
-                        operation = "SELECT"
+                # This is wrong for so many reasons lol, but just something simple to pull some values out
+                raw_parsed = sqlparse.parse(description)[0]
+                processed_span["description"] = parse_query(
+                    raw_parsed, "SAVEPOINT" in description.upper()
+                )
+                parsed = sqlparse.parse(processed_span["description"])[0]
+                operation = None
+                processed_span["op"] = parsed.tokens[0].value
+                for token in parsed.tokens:
+                    if operation is None and token.is_keyword:
+                        operation = token.value
+                        if token.value == "FROM":
+                            operation = "SELECT"
 
-                if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
-                    continue
-                elif token.is_keyword:
-                    if token.value.lower() == "select":
-                        parse_state = "select"
-                    elif token.value.lower() == "into":
-                        parse_state = "insert"
-                    elif token.value.lower() == "delete from":
-                        parse_state = "delete"
-                    elif token.value.lower() == "update":
-                        parse_state = "update"
-                    elif token.value.lower() == "from":
-                        parse_state = "from"
-                    elif token.value.lower() == "order by":
-                        parse_state = "order"
-                    elif token.value.lower() == "limit":
-                        parse_state = "limit"
+                    if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
+                        continue
+                    elif token.is_keyword:
+                        if token.value.lower() == "select":
+                            parse_state = "select"
+                        elif token.value.lower() == "into":
+                            parse_state = "insert"
+                        elif token.value.lower() == "delete from":
+                            parse_state = "delete"
+                        elif token.value.lower() == "update":
+                            parse_state = "update"
+                        elif token.value.lower() == "from":
+                            parse_state = "from"
+                        elif token.value.lower() == "order by":
+                            parse_state = "order"
+                        elif token.value.lower() == "limit":
+                            parse_state = "limit"
+                        else:
+                            parse_state = None
+                    elif isinstance(token, sqlparse.sql.Where):
+                        condition = ""
+                        for t in token.tokens:
+                            if isinstance(t, sqlparse.sql.Comment) or t.is_keyword:
+                                continue
+
+                            condition += t.value
+
+                        processed_span["tags.key"].append("where")
+                        processed_span["tags.value"].append(condition)
                     else:
-                        parse_state = None
-                elif isinstance(token, sqlparse.sql.Where):
-                    condition = ""
-                    for t in token.tokens:
-                        if isinstance(t, sqlparse.sql.Comment) or t.is_keyword:
-                            continue
-
-                        condition += t.value
-
-                    processed_span["tags.key"].append("where")
-                    processed_span["tags.value"].append(condition)
-                else:
-                    if parse_state in {"from", "update", "delete"}:
-                        table = token.value
-                    elif parse_state == "insert":
-                        table = token.value
-                        parse_state = None
-                    elif parse_state == "select":
-                        processed_span["tags.key"].append("columns")
-                        processed_span["tags.value"].append(token.value)
-                    elif parse_state == "limit":
-                        processed_span["tags.key"].append("limit")
-                        processed_span["tags.value"].append(token.value)
-                    elif parse_state == "order":
-                        processed_span["tags.key"].append("order")
-                        processed_span["tags.value"].append(token.value)
-            if isinstance(table, str):
-                if "select" in table.lower():
-                    table = "join"
-                domain = table.replace('"', "").strip()
-                processed_span["domain"] = domain
-            processed_span["op"] = operation.upper() if operation else operation
-            processed_span["module"] = "db"
-            processed_span["platform"] = "postgres"  # Lying for now
-        elif op == "db.redis":
-            processed_span["module"] = "cache"
-            parsed = sqlparse.parse(description)[0]
-            operation = None
-            key = None
-            for token in parsed.tokens:
-                if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
-                    continue
-                elif key is None and ":" in token.value:
-                    key = token.value.replace("'", "")
-            processed_span["op"] = "unknown"
-            processed_span["domain"] = key.split(":")[0] if key else ""
-            processed_span["platform"] = "redis"
-        elif op == "http.client":
-            processed_span["module"] = "http"
-            span_dict_data = span_dict.get("data", {})
-            processed_span["op"] = span_dict_data.get("method", "")
-            processed_span["status"] = int(span_dict_data.get("status_code", 0))
-            url = str(span_dict_data.get("url", ""))
-            processed_span["description"] = url
-            if url:
-                split_url = url.split("/")
-                processed_span["domain"] = split_url[2] if len(split_url) > 2 else ""
+                        if parse_state in {"from", "update", "delete"}:
+                            table = token.value
+                        elif parse_state == "insert":
+                            table = token.value
+                            parse_state = None
+                        elif parse_state == "select":
+                            processed_span["tags.key"].append("columns")
+                            processed_span["tags.value"].append(token.value)
+                        elif parse_state == "limit":
+                            processed_span["tags.key"].append("limit")
+                            processed_span["tags.value"].append(token.value)
+                        elif parse_state == "order":
+                            processed_span["tags.key"].append("order")
+                            processed_span["tags.value"].append(token.value)
+                if isinstance(table, str):
+                    if "select" in table.lower():
+                        table = "join"
+                    domain = table.replace('"', "").strip()
+                    processed_span["domain"] = domain
+                processed_span["op"] = operation.upper() if operation else operation
+                processed_span["module"] = "db"
+                processed_span["platform"] = "postgres"  # Lying for now
+                processed_span["status"] = 0
+            elif op == "db.redis":
+                processed_span["module"] = "cache"
+                parsed = sqlparse.parse(description)[0]
+                operation = None
+                key = None
+                for token in parsed.tokens:
+                    if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
+                        continue
+                    elif key is None and ":" in token.value:
+                        key = token.value.replace("'", "")
+                processed_span["op"] = "unknown"
+                processed_span["domain"] = key.split(":")[0] if key else ""
+                processed_span["platform"] = "redis"
+                processed_span["status"] = 0
+            elif op == "http.client":
+                processed_span["module"] = "http"
+                span_dict_data = span_dict.get("data", {})
+                processed_span["op"] = span_dict_data.get("method", "")
+                processed_span["status"] = int(span_dict_data.get("status_code", 0))
+                url = str(span_dict_data.get("url", ""))
+                processed_span["description"] = url
+                if url:
+                    split_url = url.split("/")
+                    processed_span["domain"] = (
+                        split_url[2] if len(split_url) > 2 else ""
+                    )
+            else:
+                processed_span["module"] = "unknown"
         else:
-            processed_span["module"] = "none"
+            processed_span["op"] = op
+            processed_span["description"] = description
+            processed_span["module"] = "unknown"
+            processed_span["status"] = 0
+            processed_span["platform"] = ""
+            processed_span["domain"] = ""
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
