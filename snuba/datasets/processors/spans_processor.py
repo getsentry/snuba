@@ -1,6 +1,7 @@
 import copy
 import logging
 import numbers
+import random
 import uuid
 from datetime import datetime
 from typing import Any, Dict, Mapping, MutableMapping, MutableSequence, Optional, Tuple
@@ -50,7 +51,7 @@ def is_project_in_allowlist(project_id: int) -> bool:
     return False
 
 
-def parse_query(query: str, is_savepoint: bool) -> str:
+def parse_query(query: Any, is_savepoint: bool) -> str:
     """
     TODO: This is a temporary solution to extract some useful data from spans until we have a proper
           mechanism of upstream sending us the data we need.
@@ -362,8 +363,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             url = str(span_dict_data.get("url", ""))
             processed_span["description"] = url
             if url:
-                splitUrl = url.split("/")
-                processed_span["domain"] = splitUrl[2] if len(splitUrl) > 2 else ""
+                split_url = url.split("/")
+                processed_span["domain"] = split_url[2] if len(split_url) > 2 else ""
         else:
             processed_span["module"] = "none"
 
@@ -480,7 +481,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed_rows.extend(processed_spans)
         except Exception as e:
             metrics.increment("message_processing_error")
-            logger.exception("Failed to process message: %r", message, exc_info=e)
+            log_bad_span_pct = state.get_config(
+                "log_bad_span_message_percentage", default=0.0
+            )
+            if random.random() < float(log_bad_span_pct if log_bad_span_pct else 0.0):
+                logger.warning(
+                    "Failed to process span message", extra=message[2], exc_info=e
+                )
             return None
 
         return InsertBatch(rows=processed_rows, origin_timestamp=None)
