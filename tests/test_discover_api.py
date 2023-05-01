@@ -10,6 +10,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
@@ -1705,3 +1706,13 @@ class TestDiscoverAPIEntitySelection(TestDiscoverApi):
             return orig_post(data, "discover", referrer)
 
         self.post = fixed_entity_post
+
+
+class TestDiscoverAPIErrorsRO(TestDiscoverApi):
+    """
+    Override the original tests to always use the readonly table for discover_events.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("enable_events_readonly_table", 1)
