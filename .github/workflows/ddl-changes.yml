@@ -46,4 +46,5 @@ jobs:
           # a note added to the tag
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git fetch origin "refs/notes/*:refs/notes/*"         SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --label {{github.event.label.name}}
+          git fetch origin "refs/notes/*:refs/notes/*"
+          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --label {{github.event.label.name}}
