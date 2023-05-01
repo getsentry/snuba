@@ -305,6 +305,9 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
 
+# Enable spans ingestion
+ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
+
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
 PARALLEL_OPTIMIZE_JOB_START_TIME = 0
