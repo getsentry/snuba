@@ -2,7 +2,7 @@
 import argparse
 import subprocess
 from shutil import ExecError
-from typing import Optional, Sequence
+from typing import Sequence
 
 """
 This script is meant to be run in CI to check that migrations changes are
@@ -31,7 +31,7 @@ class CoupledMigrations(Exception):
     pass
 
 
-def _has_skip_label(label: Optional[str]) -> bool:
+def _has_skip_label(label: str) -> bool:
     # check the notes from the commit
     notes = subprocess.run(
         ["git", "notes", "show"],
@@ -45,7 +45,7 @@ def _has_skip_label(label: Optional[str]) -> bool:
     if SKIP_LABEL in notes.stdout:
         return True
 
-    if label == SKIP_LABEL:
+    if SKIP_LABEL in label:
         # add a note to the commit, so GOCD can see it
         add_notes_change = subprocess.run(
             ["git", "notes", "append", "-m", f"skipped migrations check: {SKIP_LABEL}"]
@@ -86,10 +86,11 @@ def _get_changes(globs: Sequence[str], workdir: str, to: str) -> str:
 
 
 def main(
-    to: str = "origin/master", workdir: str = ".", label: Optional[str] = None
+    to: str = "origin/master", workdir: str = ".", labels: Sequence[str] = []
 ) -> None:
-    if _has_skip_label(label):
-        return
+    for label in labels:
+        if _has_skip_label(label):
+            return
     migrations_changes = _get_migration_changes(workdir, to)
     has_migrations = len(migrations_changes.splitlines()) > 0
     if has_migrations:
@@ -104,6 +105,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--to", default="origin/master")
     parser.add_argument("--workdir", default=".")
-    parser.add_argument("--label")
+    parser.add_argument("--labels", nargs="*")
     args = parser.parse_args()
-    main(args.to, args.workdir, args.label)
+    print(
+        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}"
+    )
+    main(args.to, args.workdir, args.labels)
