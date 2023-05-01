@@ -10,15 +10,20 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
-GO_SERVER_URL = os.environ.get(
-    "GO_SERVER_URL", "http://gocd-server.gocd.svc.cluster.local:8153/go"
-)
+GO_SERVER_URL = os.environ["GO_SERVER_URL"]
+
+# the maximum number of times to fetch the pipeline history
+MAX_FETCHES = 100
 
 
 def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
     # stage["result"] isn't populated if it isn't run
     # the other possible statuses are Unknown (not run yet), Cancelled, Failed
-    return all(stage["status"] == "Passed" for stage in pipeline["stages"])
+    return all(
+        stage["status"] == "Passed"
+        for stage in pipeline["stages"]
+        if stage["name"] != "migrate"
+    )
 
 
 # print the most recent passing sha for a repo
@@ -31,8 +36,9 @@ def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
             """
         )
     fetch_url: Optional[str] = f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history"
-
-    while fetch_url:
+    fetches = 0
+    while fetch_url and fetches < MAX_FETCHES:
+        fetches += 1
         req = urllib.request.Request(
             fetch_url,
             headers={

@@ -15,6 +15,8 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
+from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -32,9 +34,15 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(self, storage_set_key: StorageSetKey, schema: Schema):
+    def __init__(
+        self,
+        storage_set_key: StorageSetKey,
+        schema: Schema,
+        readiness_state: ReadinessState,
+    ):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
+        self.__readiness_state = readiness_state
 
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
@@ -44,6 +52,9 @@ class Storage(ABC):
 
     def get_schema(self) -> Schema:
         return self.__schema
+
+    def get_readiness_state(self) -> ReadinessState:
+        return self.__readiness_state
 
 
 class ReadableStorage(Storage):
@@ -86,6 +97,9 @@ class ReadableStorage(Storage):
         """
         return []
 
+    def get_allocation_policy(self) -> AllocationPolicy:
+        return PassthroughPolicy(self.get_storage_set_key(), [])
+
 
 class WritableStorage(Storage):
     """
@@ -111,24 +125,22 @@ class ReadableTableStorage(ReadableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
-        readiness_state: ReadinessState,
         schema: Schema,
+        readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
+        allocation_policy: Optional[AllocationPolicy] = None,
     ) -> None:
         self.__storage_key = storage_key
-        self.__readiness_state = readiness_state
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
-        super().__init__(storage_set_key, schema)
+        self.__allocation_policy = allocation_policy
+        super().__init__(storage_set_key, schema, readiness_state)
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
-
-    def get_readiness_state(self) -> ReadinessState:
-        return self.__readiness_state
 
     def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
@@ -138,6 +150,9 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
+
+    def get_allocation_policy(self) -> AllocationPolicy:
+        return self.__allocation_policy or super().get_allocation_policy()
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -151,6 +166,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
+        allocation_policy: Optional[AllocationPolicy] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
@@ -159,11 +175,12 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         super().__init__(
             storage_key,
             storage_set_key,
-            readiness_state,
             schema,
+            readiness_state,
             query_processors,
             query_splitters,
             mandatory_condition_checkers,
+            allocation_policy,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(
@@ -194,5 +211,5 @@ class EntityStorageConnectionNotFound(Exception):
     pass
 
 
-class StorageNotFound(Exception):
+class StorageNotAvailable(QueryPlanException):
     pass

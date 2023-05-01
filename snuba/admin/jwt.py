@@ -1,13 +1,9 @@
 from typing import Any, Optional
 
 import requests
-import structlog
 
 from snuba import settings
 from snuba.admin.user import AdminUser
-
-logger = structlog.get_logger().bind(module=__name__)
-
 
 CERTS: Optional[Any] = None
 

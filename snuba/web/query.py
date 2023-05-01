@@ -27,15 +27,16 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import (
     QueryException,
@@ -44,7 +45,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import raw_query
+from snuba.web.db_query import db_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -125,10 +126,13 @@ def parse_and_run_query(
         )
         _set_query_final(request, result.extra)
         if not request.query_settings.get_dry_run():
-            record_query(request, timer, query_metadata, result.extra)
+            record_query(request, timer, query_metadata, result)
     except QueryException as error:
         _set_query_final(request, error.extra)
-        record_query(request, timer, query_metadata, error.extra)
+        record_query(request, timer, query_metadata, error)
+        raise error
+    except QueryPlanException as error:
+        record_query(request, timer, query_metadata, error)
         raise error
 
     return result
@@ -193,6 +197,7 @@ def _run_query_pipeline(
         )
 
     record_missing_tenant_ids(request)
+
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
@@ -339,6 +344,7 @@ def _format_storage_query_and_run(
         )
 
         raise QueryException.from_args(
+            cause.__class__.__name__,
             str(cause),
             extra=QueryExtraData(
                 stats=stats,
@@ -350,7 +356,7 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return raw_query(
+            return db_query(
                 clickhouse_query=clickhouse_query,
                 query_settings=query_settings,
                 attribution_info=attribution_info,

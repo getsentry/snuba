@@ -12,6 +12,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -56,7 +57,9 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query.exceptions import InvalidQueryException
+from snuba.datasets.storage import ReadableTableStorage, Storage, StorageNotAvailable
+from snuba.query.allocation_policies import AllocationPolicyViolation
+from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -66,8 +69,8 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
@@ -114,29 +117,41 @@ else:
             return False
 
 
+def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
+    if ignore_experimental:
+        datasets = [
+            get_dataset(name)
+            for name in get_enabled_dataset_names()
+            if not get_dataset(name).is_experimental()
+        ]
+    else:
+        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+
+    entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
+
+    storages: List[Storage] = []
+    for entity in entities:
+        entity_storages = entity.get_all_storages()
+        for storage in entity_storages:
+            assert isinstance(storage, ReadableTableStorage)
+            storage_name = storage.get_storage_key().value
+            if storage_name in settings.READINESS_STATE_STORAGES_ENABLED:
+                if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
+                    storages.append(storage)
+            else:
+                storages.append(storage)
+    return storages
+
+
 def check_clickhouse(
     ignore_experimental: bool = True, metric_tags: dict[str, Any] | None = None
 ) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
+    TODO: Eventually, when we fully migrate to readiness_states, we can remove is_experimental and DISABLED_DATASETS.
     """
     try:
-        if ignore_experimental:
-            datasets = [
-                get_dataset(name)
-                for name in get_enabled_dataset_names()
-                if not get_dataset(name).is_experimental()
-            ]
-        else:
-            datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-
-        entities = itertools.chain(
-            *[dataset.get_all_entities() for dataset in datasets]
-        )
-        storages = list(
-            itertools.chain(*[entity.get_all_storages() for entity in entities])
-        )
-
+        storages = filter_checked_storages(ignore_experimental)
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
@@ -469,7 +484,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, RateLimitExceeded):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolation)):
             status = 429
             details = {
                 "type": "rate-limited",
@@ -504,7 +519,20 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             status,
             {"Content-Type": "application/json"},
         )
-
+    except QueryPlanException as exception:
+        if isinstance(exception, StorageNotAvailable):
+            status = 400
+            details = {
+                "type": "storage-not-available",
+                "message": str(exception.message),
+            }
+        else:
+            raise  # exception should have been chained
+        return Response(
+            json.dumps({"error": details, "timing": timer.for_json()}),
+            status,
+            {"Content-Type": "application/json"},
+        )
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():

@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query import SelectedExpression
+from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -15,7 +16,7 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("test", ColumnSet([])),
+        Table("test", ColumnSet([]), allocation_policy=DEFAULT_PASSTHROUGH_POLICY),
         selected_columns=[
             SelectedExpression(name=s.alias, expression=s)
             for s in selected_columns or []

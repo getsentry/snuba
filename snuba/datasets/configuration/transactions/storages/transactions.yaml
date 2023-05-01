@@ -162,6 +162,14 @@ schema:
   dist_table_name: transactions_dist
   partition_format: [retention_days, date]
 
+allocation_policy:
+  name: TransactionsAllocationPolicy
+  args:
+    storage_set_key: transactions
+    required_tenant_types:
+      - organzation_id
+      - referrer
+
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: MappingColumnPromoter

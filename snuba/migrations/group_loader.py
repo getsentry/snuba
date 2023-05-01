@@ -270,7 +270,7 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.functions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_functions"]
+        return ["0001_functions", "0002_add_new_columns_to_raw_functions"]
 
 
 class GenericMetricsLoader(DirectoryLoader):
@@ -305,4 +305,17 @@ class SearchIssuesLoader(DirectoryLoader):
             "0003_search_issues_modify_occurrence_type_id_size",
             "0004_rebuild_search_issues_with_version",
             "0005_search_issues_v2",
+            "0006_add_subtitle_culprit_level_resource_id",
+            "0007_add_transaction_duration",
+        ]
+
+
+class SpansLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.spans")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_spans_v1",
+            "0002_spans_add_tags_hashmap",
         ]
