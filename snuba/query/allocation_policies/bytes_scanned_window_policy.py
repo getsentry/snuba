@@ -56,6 +56,7 @@ _SINGLE_THREAD_REFERRERS = set(
         "fetch_events_for_deletion",
         "delete-events-by-tag-value",
         "delete.fetch_last_group",
+        "forward-events",
     ]
 )
 
