@@ -24,7 +24,7 @@ ALLOWED_MIGRATIONS_GLOBS = [
 # changes to files here are migrations changes
 MIGRATIONS_GLOBS = ["snuba/snuba_migrations/*/[0-9]*.py"]
 
-SKIP_LABEL = "skip-migrations-check"
+SKIP_LABEL = "skip-check-migrations"
 
 
 class CoupledMigrations(Exception):
