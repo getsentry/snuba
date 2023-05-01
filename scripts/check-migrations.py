@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import os
 import subprocess
 from shutil import ExecError
 from typing import Sequence
@@ -34,9 +33,8 @@ class CoupledMigrations(Exception):
 
 def _has_skip_in_note() -> bool:
     # check the notes from the commit
-    head_sha = os.environ.get("HEAD_SHA")
     notes = subprocess.run(
-        ["git", "notes", "show", head_sha] if head_sha else ["git", "notes", "list"],
+        ["git", "notes", "show"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -50,27 +48,22 @@ def _has_skip_in_note() -> bool:
 
 
 def _has_skip_label(label: str) -> bool:
-    head_sha = os.environ.get("HEAD_SHA")
     if SKIP_LABEL in label:
         # add a note to the head commit, so GOCD can see it
-        if head_sha:
-            add_notes_change = subprocess.run(
-                [
-                    "git",
-                    "notes",
-                    "append",
-                    "-m",
-                    f"skipped migrations check: {SKIP_LABEL}",
-                    head_sha,
-                ]
-            )
-            if add_notes_change.returncode != 0:
-                raise ExecError(add_notes_change.stdout)
-            push_notes_change = subprocess.run(
-                ["git", "push", "origin", "refs/notes/*"]
-            )
-            if push_notes_change.returncode != 0:
-                raise ExecError(push_notes_change.stdout)
+        add_notes_change = subprocess.run(
+            [
+                "git",
+                "notes",
+                "append",
+                "-m",
+                f"skipped migrations check: {SKIP_LABEL}",
+            ]
+        )
+        if add_notes_change.returncode != 0:
+            raise ExecError(add_notes_change.stdout)
+        push_notes_change = subprocess.run(["git", "push", "origin", "refs/notes/*"])
+        if push_notes_change.returncode != 0:
+            raise ExecError(push_notes_change.stdout)
         return True
     return False
 
@@ -127,6 +120,6 @@ if __name__ == "__main__":
     parser.add_argument("--labels", nargs="*")
     args = parser.parse_args()
     print(
-        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}, HEAD_SHA: {os.environ.get('HEAD_SHA')}"
+        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}"
     )
     main(args.to, args.workdir, args.labels)
