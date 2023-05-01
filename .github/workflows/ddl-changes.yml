@@ -47,4 +47,4 @@ jobs:
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git fetch origin "refs/notes/*:refs/notes/*"
-          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --labels {{github.event.pull_request.labels.*.name}}
+          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --labels ${{github.event.pull_request.labels.*.name}}
