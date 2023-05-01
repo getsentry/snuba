@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import subprocess
 from shutil import ExecError
 from typing import Sequence
@@ -48,7 +49,14 @@ def _has_skip_label(label: str) -> bool:
     if SKIP_LABEL in label:
         # add a note to the commit, so GOCD can see it
         add_notes_change = subprocess.run(
-            ["git", "notes", "append", "-m", f"skipped migrations check: {SKIP_LABEL}"]
+            [
+                "git",
+                "notes",
+                "append",
+                "-m",
+                f"skipped migrations check: {SKIP_LABEL}",
+                os.environ.get("HEAD_SHA"),
+            ]
         )
         if add_notes_change.returncode != 0:
             raise ExecError(add_notes_change.stdout)
@@ -108,6 +116,6 @@ if __name__ == "__main__":
     parser.add_argument("--labels", nargs="*")
     args = parser.parse_args()
     print(
-        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}"
+        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}, HEAD_SHA: {os.environ.get('HEAD_SHA')}"
     )
     main(args.to, args.workdir, args.labels)
