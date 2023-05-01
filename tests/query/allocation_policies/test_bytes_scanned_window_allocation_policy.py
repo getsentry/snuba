@@ -183,3 +183,22 @@ def test_passthrough_subscriptions(policy) -> None:
         policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
         == MAX_THREAD_NUMBER
     )
+
+
+@pytest.mark.redis_db
+def test_single_thread_referrers(policy) -> None:
+    _configure_policy(policy)
+    # currently subscriptions are not throttled due to them being on the critical path
+    # this test makes sure that no matter how much quota they consume, they are not throttled
+    tenant_ids = {"referrer": "delete-events-from-file"}
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1
+    policy.update_quota_balance(
+        tenant_ids,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+            ),
+            error=None,
+        ),
+    )
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1

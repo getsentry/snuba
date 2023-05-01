@@ -47,6 +47,10 @@ _ORG_LESS_REFERRERS = set(
 )
 
 
+# referrers which do not serve the UI and are given low capacity by default
+_SINGLE_THREAD_REFERRERS = set(["delete-events-from-file"])
+
+
 # subscriptions currently do not undergo rate limiting in any way.
 # having subscriptions be too slow means there is an incident
 _PASS_THROUGH_REFERRERS = set(
@@ -89,6 +93,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if (
             "organization_id" not in tenant_ids
             and tenant_ids.get("referrer", None) not in _ORG_LESS_REFERRERS
+            and tenant_ids.get("referrer", None) not in _SINGLE_THREAD_REFERRERS
         ):
             return False, f"no organization_id for referrer {tenant_ids['referrer']}"
         return True, ""
@@ -123,6 +128,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+        if referrer in _SINGLE_THREAD_REFERRERS:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=1,
+                explanation={"reason": "low priority referrer"},
+            )
         if org_id is not None:
             org_limit_bytes_scanned = cast(
                 int,
