@@ -32,10 +32,11 @@ class CoupledMigrations(Exception):
     pass
 
 
-def _has_skip_label(label: str) -> bool:
+def _has_skip_in_note() -> bool:
     # check the notes from the commit
+    head_sha = os.environ.get("HEAD_SHA")
     notes = subprocess.run(
-        ["git", "notes", "show"],
+        ["git", "notes", "show", head_sha] if head_sha else ["git", "notes", "list"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -45,24 +46,31 @@ def _has_skip_label(label: str) -> bool:
             raise ExecError(notes.stdout)
     if SKIP_LABEL in notes.stdout:
         return True
+    return False
 
+
+def _has_skip_label(label: str) -> bool:
+    head_sha = os.environ.get("HEAD_SHA")
     if SKIP_LABEL in label:
-        # add a note to the commit, so GOCD can see it
-        add_notes_change = subprocess.run(
-            [
-                "git",
-                "notes",
-                "append",
-                "-m",
-                f"skipped migrations check: {SKIP_LABEL}",
-                os.environ.get("HEAD_SHA"),
-            ]
-        )
-        if add_notes_change.returncode != 0:
-            raise ExecError(add_notes_change.stdout)
-        push_notes_change = subprocess.run(["git", "push", "origin", "refs/notes/*"])
-        if push_notes_change.returncode != 0:
-            raise ExecError(push_notes_change.stdout)
+        # add a note to the head commit, so GOCD can see it
+        if head_sha:
+            add_notes_change = subprocess.run(
+                [
+                    "git",
+                    "notes",
+                    "append",
+                    "-m",
+                    f"skipped migrations check: {SKIP_LABEL}",
+                    head_sha,
+                ]
+            )
+            if add_notes_change.returncode != 0:
+                raise ExecError(add_notes_change.stdout)
+            push_notes_change = subprocess.run(
+                ["git", "push", "origin", "refs/notes/*"]
+            )
+            if push_notes_change.returncode != 0:
+                raise ExecError(push_notes_change.stdout)
         return True
     return False
 
@@ -99,6 +107,9 @@ def main(
     for label in labels:
         if _has_skip_label(label):
             return
+    if _has_skip_in_note():
+        return
+
     migrations_changes = _get_migration_changes(workdir, to)
     has_migrations = len(migrations_changes.splitlines()) > 0
     if has_migrations:
