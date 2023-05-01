@@ -76,7 +76,7 @@ def parse_query(query: Any, is_savepoint: bool) -> str:
         ):
             result += "{savepoint identifier}"
         else:
-            result += token
+            result += token.value
     return result
 
 

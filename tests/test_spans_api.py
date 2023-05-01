@@ -239,7 +239,7 @@ class TestSpansApi(BaseApiTest):
         response = self._post_query(
             f"""MATCH (spans)
                 SELECT count() AS aggregate
-                WHERE project_id IN (1, 2)
+                WHERE project_id = 1
                 AND end_timestamp >= toDateTime('{from_date}')
                 AND end_timestamp < toDateTime('{to_date}')
             """

@@ -331,7 +331,7 @@ class TestSpansProcessor:
             http_referer="tagstore.something",
         )
 
-    def test_all_clickhouse_columns_are_present(self) -> None:
+    def test_required_clickhouse_columns_are_present(self) -> None:
         set_config("spans_project_allowlist", "[1]")
         message = self.__get_transaction_event()
 
