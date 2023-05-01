@@ -264,7 +264,7 @@ class TestSpansApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert data["data"][0]["aggregate"] == 0, data
 
-    def test_get_group_sorted_by_exclusive_time(self):
+    def test_get_group_sorted_by_exclusive_time(self) -> None:
         """
         Gets details about spans for a given group sorted by exclusive time
         """
@@ -285,7 +285,7 @@ class TestSpansApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 2, data
 
-    def test_get_all_spans_belonging_to_trace_id(self):
+    def test_get_all_spans_belonging_to_trace_id(self) -> None:
         """
         Gets all spans belonging to a given trace id
         """

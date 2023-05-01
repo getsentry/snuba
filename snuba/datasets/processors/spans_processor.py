@@ -50,7 +50,7 @@ def is_project_in_allowlist(project_id: int) -> bool:
     return False
 
 
-def parse_query(query, is_savepoint):
+def parse_query(query: str, is_savepoint: bool) -> str:
     """
     TODO: This is a temporary solution to extract some useful data from spans until we have a proper
           mechanism of upstream sending us the data we need.
@@ -75,7 +75,7 @@ def parse_query(query, is_savepoint):
         ):
             result += "{savepoint identifier}"
         else:
-            result += token.value
+            result += token
     return result
 
 
@@ -273,7 +273,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         # Op specific processing
         if op != "db.redis" and op.startswith("db"):
             parse_state = None
-            table = []
+            table = ""
 
             # This is wrong for so many reasons lol, but just something simple to pull some values out
             raw_parsed = sqlparse.parse(description)[0]
@@ -349,11 +349,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             for token in parsed.tokens:
                 if isinstance(token, sqlparse.sql.Comment) or token.is_whitespace:
                     continue
-                elif operation is None:
-                    operation = token.value
                 elif key is None and ":" in token.value:
                     key = token.value.replace("'", "")
-            processed_span["op"] = operation
+            processed_span["op"] = "unknown"
             processed_span["domain"] = key.split(":")[0] if key else ""
             processed_span["platform"] = "redis"
         elif op == "http.client":
@@ -439,7 +437,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
     def process_message(
         self,
-        message: Tuple[int, str, Mapping[Any, Any]],
+        message: Tuple[int, str, Dict[Any, Any]],
         metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         event_dict, retention_days = self._structure_and_validate_message(message) or (
