@@ -33,7 +33,6 @@ class CoupledMigrations(Exception):
 
 def _has_skip_label(label: Optional[str]) -> bool:
     # check the notes from the commit
-    subprocess.run(["git", "fetch", "origin", "refs/notes/*:refs/notes/*"])
     notes = subprocess.run(
         ["git", "notes", "show"],
         stdout=subprocess.PIPE,
@@ -41,9 +40,7 @@ def _has_skip_label(label: Optional[str]) -> bool:
         text=True,
     )
     if notes.returncode != 0:
-        if "no note found" in notes.stderr:
-            pass
-        else:
+        if "no note found" not in notes.stderr:
             raise ExecError(notes.stdout)
     if SKIP_LABEL in notes.stdout:
         return True
