@@ -48,7 +48,16 @@ _ORG_LESS_REFERRERS = set(
 
 
 # referrers which do not serve the UI and are given low capacity by default
-_SINGLE_THREAD_REFERRERS = set(["delete-events-from-file"])
+_SINGLE_THREAD_REFERRERS = set(
+    [
+        "delete-events-from-file",
+        "delete-event-user-data",
+        "scrub-nodestore",
+        "fetch_events_for_deletion",
+        "delete-events-by-tag-value",
+        "delete.fetch_last_group",
+    ]
+)
 
 
 # subscriptions currently do not undergo rate limiting in any way.
