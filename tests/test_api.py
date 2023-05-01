@@ -1965,16 +1965,9 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
-        errors_table_name = (
-            get_writable_storage(StorageKey.ERRORS)
-            .get_table_writer()
-            .get_schema()
-            .get_table_name()
-        )
-
         val = (
             "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`) FROM {errors_table_name} PREWHERE"
+            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
         )
         assert result["sql"].startswith(val)
 
