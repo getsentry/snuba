@@ -20,11 +20,6 @@ jobs:
         with:
           clean: false
           fetch-depth: 200
-        run: |
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git fetch origin "refs/notes/*:refs/notes/*"
-
       - uses: actions/setup-python@v4
         with:
           python-version: 3.8
@@ -49,4 +44,6 @@ jobs:
           # Check that the migration is not coupled with other changes
           # If the label skip-check-migrations is present, the check is skipped and
           # a note added to the tag
-          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --label {{github.event.label.name}}
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git fetch origin "refs/notes/*:refs/notes/*"         SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --label {{github.event.label.name}}
