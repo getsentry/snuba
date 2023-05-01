@@ -59,6 +59,13 @@ class Topic(Enum):
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
+    # at time of writing (2022-05-09) lz4 was chosen because it
+    # compresses quickly. If more compression is needed at the cost of
+    # performance, zstd can be used instead. Recording the query
+    # is part of the API request, therefore speed is important
+    # perf-testing: https://indico.fnal.gov/event/16264/contributions/36466/attachments/22610/28037/Zstd__LZ4.pdf
+    default_config = {"compression.type": "lz4"}
+
     config = {
         Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
         Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
@@ -71,4 +78,4 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
     }
-    return config.get(topic, {})
+    return {**default_config, **config.get(topic, {})}
