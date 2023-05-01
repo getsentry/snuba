@@ -40,6 +40,8 @@ jobs:
           cmd: python scripts/ddl-changes.py
 
       - name: Check migrations are not coupled with other changes
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Check that the migration is not coupled with other changes
           # If the label skip-check-migrations is present, the check is skipped and
