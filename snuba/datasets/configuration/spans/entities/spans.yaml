@@ -113,6 +113,8 @@ validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: [project_id]
-  - validator: TagConditionValidator,
+  - validator: TagConditionValidator
+    args: {}
   - validator: DatetimeConditionValidator
+    args: {}
 required_time_column: end_timestamp

@@ -44,13 +44,14 @@ class TestSpansApi(BaseApiTest):
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.minutes = 180
         self.skew = timedelta(minutes=self.minutes)
+        self.trace_id = "7400045b25c443b885914600aa83ad04"
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
-        self.generate_fizzbuzz_events()
         state.set_config("spans_project_allowlist", [1])
+        self.generate_fizzbuzz_events()
 
         yield
 
@@ -73,7 +74,6 @@ class TestSpansApi(BaseApiTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    trace_id = "7400045b25c443b885914600aa83ad04"
                     span_id = f"8841662216cc598b{tock}"[-16:]
                     processed = (
                         self.storage.get_table_writer()
@@ -130,7 +130,7 @@ class TestSpansApi(BaseApiTest):
                                         },
                                         "contexts": {
                                             "trace": {
-                                                "trace_id": trace_id,
+                                                "trace_id": self.trace_id,
                                                 "span_id": span_id,
                                                 "op": "http",
                                                 "status": "0",
@@ -151,7 +151,7 @@ class TestSpansApi(BaseApiTest):
                                         "spans": [
                                             {
                                                 "op": "http.client",
-                                                "trace_id": trace_id,
+                                                "trace_id": self.trace_id,
                                                 "span_id": str(int(span_id, 16) + 2),
                                                 "parent_span_id": span_id,
                                                 "same_process_as_parent": True,
@@ -192,7 +192,7 @@ class TestSpansApi(BaseApiTest):
                                                 "parent_span_id": str(
                                                     int(span_id, 16) + 1
                                                 ),
-                                                "trace_id": trace_id,
+                                                "trace_id": self.trace_id,
                                                 "span_id": str(int(span_id, 16) + 2),
                                                 "data": {},
                                                 "op": "db",
@@ -210,26 +210,97 @@ class TestSpansApi(BaseApiTest):
                         events.append(processed)
         write_processed_messages(self.storage, events)
 
-    def test_count_of_project(self) -> None:
+    def _post_query(
+        self,
+        query: str,
+        turbo: bool = False,
+        consistent: bool = True,
+        debug: bool = True,
+    ) -> Any:
+        return self.app.post(
+            "/spans/snql",
+            data=json.dumps(
+                {
+                    "query": query,
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+            headers={"referer": "test"},
+        )
+
+    def test_count_for_project(self) -> None:
         """
         Test total counts are correct
         """
         from_date = (self.base_time - self.skew).isoformat()
         to_date = (self.base_time + self.skew).isoformat()
-        response = self.post(
-            json.dumps(
-                {
-                    "dataset": "spans",
-                    "project": 1,
-                    "conditions": [
-                        ["end_timestamp", ">", from_date],
-                        ["end_timestamp", "<=", to_date],
-                    ],
-                    "aggregations": [["count()", "", "aggregate"]],
-                    "orderby": "end_timestamp",
-                }
-            ),
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT count() AS aggregate
+                WHERE project_id IN (1, 2)
+                AND end_timestamp >= toDateTime('{from_date}')
+                AND end_timestamp < toDateTime('{to_date}')
+            """
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-        assert len(data["data"]) > 1, data
+        assert data["data"][0]["aggregate"] > 10, data
+
+        # No count for project 2 even though data was being sent to the processor because the
+        # allowlist does not allow the project
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT count() AS aggregate
+                WHERE project_id = 2
+                AND end_timestamp >= toDateTime('{from_date}')
+                AND end_timestamp < toDateTime('{to_date}')
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert data["data"][0]["aggregate"] == 0, data
+
+    def test_get_group_sorted_by_exclusive_time(self):
+        """
+        Gets details about spans for a given group sorted by exclusive time
+        """
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT transaction_id, segment_name, description, user, domain, span_id,
+                sum(exclusive_time) AS exclusive_time
+                BY transaction_id, segment_name, description, user, domain, span_id
+                WHERE project_id = 1
+                AND end_timestamp >= toDateTime('{from_date}')
+                AND end_timestamp < toDateTime('{to_date}')
+                ORDER BY exclusive_time DESC
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) > 2, data
+
+    def test_get_all_spans_belonging_to_trace_id(self):
+        """
+        Gets all spans belonging to a given trace id
+        """
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT span_id, description, start_timestamp, end_timestamp, op
+                WHERE project_id = 1
+                AND end_timestamp >= toDateTime('{from_date}')
+                AND end_timestamp < toDateTime('{to_date}')
+                AND trace_id = '{self.trace_id}'
+                ORDER BY start_timestamp DESC
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) > 2, data

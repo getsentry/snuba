@@ -163,7 +163,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         )
         processed["transaction_op"] = processed["op"]
 
-        processed["group"] = int(transaction_ctx.get("hash", 0), 16)
+        span_hash = transaction_ctx.get("hash", None)
+        processed["group"] = 0 if not span_hash else int(span_hash, 16)
         processed["segment_name"] = common_span_fields["segment_name"] = _unicodify(
             event_dict["data"].get("transaction") or ""
         )
