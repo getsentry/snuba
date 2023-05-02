@@ -106,10 +106,17 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     })
                 }
             }
-        })
-        .unwrap();
+        });
 
-        self.next_step.submit(message.replace(result))
+        match result {
+            Ok(data) => self.next_step.submit(message.replace(data)),
+            Err(_) => {
+                log::error!("Invalid message");
+                Ok(())
+            },
+        }
+
+
     }
 
     fn close(&mut self) {
