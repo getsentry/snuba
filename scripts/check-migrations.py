@@ -35,8 +35,12 @@ class CoupledMigrations(Exception):
     pass
 
 
-def _get_head_sha() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+def _get_head_sha(workdir: str) -> str:
+    return (
+        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workdir)
+        .decode()
+        .strip()
+    )
 
 
 def _pr_has_skip_label(commit_sha: str) -> bool:
@@ -78,8 +82,8 @@ def _pr_has_skip_label(commit_sha: str) -> bool:
     return False
 
 
-def _head_commit_pr_has_skip_label() -> bool:
-    head_sha = _get_head_sha()
+def _head_commit_pr_has_skip_label(workdir: str) -> bool:
+    head_sha = _get_head_sha(workdir)
     print("Checking if PR for commit", head_sha, "has skip label")
     return _pr_has_skip_label(head_sha)
 
@@ -118,7 +122,7 @@ def main(
             if SKIP_LABEL in label:
                 return
 
-    if _head_commit_pr_has_skip_label():
+    if _head_commit_pr_has_skip_label(workdir):
         return
 
     migrations_changes = _get_migration_changes(workdir, to)
