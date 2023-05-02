@@ -4,6 +4,7 @@ import { COLORS } from "../theme";
 type Topic = {
   logicalTopic: string;
   physicalTopic: string;
+  slice: number | null;
   storage: string;
 };
 
@@ -11,46 +12,55 @@ const dlq_topics: Topic[] = [
   {
     logicalTopic: "snuba-dead-letter-metrics-sets",
     physicalTopic: "snuba-dead-letter-metrics-sets",
+    slice: null,
     storage: "generic_metrics_sets_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-metrics-counters",
     physicalTopic: "snuba-dead-letter-metrics-counters",
+    slice: null,
     storage: "generic_metrics_counters_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-metrics-distributions",
     physicalTopic: "snuba-dead-letter-metrics-distributions",
+    slice: null,
     storage: "generic_metrics_distributions_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-generic-metrics-sets",
     physicalTopic: "snuba-dead-letter-generic-metrics-sets",
+    slice: null,
     storage: "generic_metrics_sets_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-generic-metrics-counters",
     physicalTopic: "snuba-dead-letter-generic-metrics-counters",
+    slice: null,
     storage: "generic_metrics_counters_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-generic-metrics-distributions",
     physicalTopic: "snuba-dead-letter-generic-metrics-distributions",
+    slice: null,
     storage: "generic_metrics_distributions_raw",
   },
   {
     logicalTopic: "snuba-dead-letter-replays",
     physicalTopic: "snuba-dead-letter-replays",
+    slice: null,
     storage: "replays",
   },
   {
     logicalTopic: "snuba-dead-letter-generic-events",
     physicalTopic: "snuba-dead-letter-generic-events",
+    slice: null,
     storage: "search_issues",
   },
   {
     logicalTopic: "snuba-dead-letter-querylog",
     physicalTopic: "snuba-dead-letter-querylog",
+    slice: null,
     storage: "querylog",
   },
 ];
@@ -91,7 +101,7 @@ function DeadLetterQueue() {
               <option
                 key={topic.logicalTopic}
                 value={topic.logicalTopic}
-              >{`${topic.physicalTopic} (${topic.logicalTopic})`}</option>
+              >{`${topic.logicalTopic} (slice: ${topic.slice})`}</option>
             ))}
           </select>
         </fieldset>
@@ -102,6 +112,9 @@ function DeadLetterQueue() {
             </div>
             <div>
               Physical topic: <code>{topic.physicalTopic}</code>
+            </div>
+            <div>
+              Slice: <code>null</code>
             </div>
             <div>
               Storage: <code>{topic.storage}</code>
