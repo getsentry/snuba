@@ -310,6 +310,10 @@ jobs:
         working-directory: sentry
         run: |
           make test-snuba
+
+      - name: Run acceptance tests
+        run: |
+          make test-acceptance
   self-hosted-end-to-end:
     needs: [snuba-image]
     runs-on: ubuntu-latest
