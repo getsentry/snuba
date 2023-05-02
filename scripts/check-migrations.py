@@ -28,7 +28,7 @@ ALLOWED_MIGRATIONS_GLOBS = [
 MIGRATIONS_GLOBS = ["snuba/snuba_migrations/*/[0-9]*.py"]
 
 SKIP_LABEL = "skip-check-migrations"
-BASE_REF = "master"
+BASE_REF = "gocd_tests"
 
 
 class CoupledMigrations(Exception):
