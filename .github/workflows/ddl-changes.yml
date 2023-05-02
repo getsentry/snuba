@@ -42,9 +42,5 @@ jobs:
       - name: Check migrations are not coupled with other changes
         run: |
           # Check that the migration is not coupled with other changes
-          # If the label skip-check-migrations is present, the check is skipped and
-          # a note added to the tag
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git fetch origin "refs/notes/*:refs/notes/*"
+          # If the label skip-check-migrations is present, the check is skipped
           SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --labels ${{join(github.event.pull_request.labels.*.name, '')}}
