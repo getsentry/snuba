@@ -2,7 +2,7 @@
 import argparse
 import subprocess
 from shutil import ExecError
-from typing import Sequence
+from typing import Optional, Sequence
 
 """
 This script is meant to be run in CI to check that migrations changes are
@@ -95,11 +95,12 @@ def _get_changes(globs: Sequence[str], workdir: str, to: str) -> str:
 
 
 def main(
-    to: str = "origin/master", workdir: str = ".", labels: Sequence[str] = []
+    to: str = "origin/master", workdir: str = ".", labels: Optional[Sequence[str]] = []
 ) -> None:
-    for label in labels:
-        if _has_skip_label(label):
-            return
+    if labels:
+        for label in labels:
+            if _has_skip_label(label):
+                return
     if _has_skip_in_note():
         return
 
