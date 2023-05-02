@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import subprocess
 from shutil import ExecError
 from typing import Optional, Sequence
+
+import requests
 
 """
 This script is meant to be run in CI to check that migrations changes are
@@ -25,47 +28,60 @@ ALLOWED_MIGRATIONS_GLOBS = [
 MIGRATIONS_GLOBS = ["snuba/snuba_migrations/*/[0-9]*.py"]
 
 SKIP_LABEL = "skip-check-migrations"
+BASE_REF = "master"
 
 
 class CoupledMigrations(Exception):
     pass
 
 
-def _has_skip_in_note() -> bool:
-    # check the notes from the commit
-    notes = subprocess.run(
-        ["git", "notes", "show"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+def _get_head_sha() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+
+
+def _pr_has_skip_label(commit_sha: str) -> bool:
+    GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+    if not GITHUB_TOKEN:
+        print("GITHUB_TOKEN not set. Skipping github PR labels check.")
+        return False
+
+    # get the PR from the commit using the github api
+    # and check its labels
+    # see: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#list-pull-requests-associated-with-a-commit
+    pull_request_url = (
+        "https://api.github.com/repos/getsentry/snuba/commits/" + commit_sha + "/pulls"
     )
-    if notes.returncode != 0:
-        if "no note found" not in notes.stderr:
-            raise ExecError(notes.stdout)
-    if SKIP_LABEL in notes.stdout:
-        return True
+
+    # Make the request
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"token {GITHUB_TOKEN}",
+        # A user agent is required.
+        # https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
+        "User-Agent": "getsentry/gocd-agent",
+    }
+    response = requests.get(pull_request_url, headers=headers)
+
+    # check associated merged PR labels
+    if response.status_code == 200:
+        pulls = response.json()
+        for pull in pulls:
+            if pull["merged_at"] is None or pull["base"]["ref"] != BASE_REF:
+                continue
+            labels = pull["labels"]
+            for label in labels:
+                if SKIP_LABEL in label["name"]:
+                    return True
+    else:
+        print("Error checking github:", response.status_code)
+
     return False
 
 
-def _has_skip_label(label: str) -> bool:
-    if SKIP_LABEL in label:
-        # add a note to the head commit, so GOCD can see it
-        add_notes_change = subprocess.run(
-            [
-                "git",
-                "notes",
-                "append",
-                "-m",
-                f"skipped migrations check: {SKIP_LABEL}",
-            ]
-        )
-        if add_notes_change.returncode != 0:
-            raise ExecError(add_notes_change.stdout)
-        push_notes_change = subprocess.run(["git", "push", "origin", "refs/notes/*"])
-        if push_notes_change.returncode != 0:
-            raise ExecError(push_notes_change.stdout)
-        return True
-    return False
+def _head_commit_pr_has_skip_label() -> bool:
+    head_sha = _get_head_sha()
+    print("Checking if PR for commit", head_sha, "has skip label")
+    return _pr_has_skip_label(head_sha)
 
 
 def _get_migration_changes(workdir: str, to: str) -> str:
@@ -99,9 +115,10 @@ def main(
 ) -> None:
     if labels:
         for label in labels:
-            if _has_skip_label(label):
+            if SKIP_LABEL in label:
                 return
-    if _has_skip_in_note():
+
+    if _head_commit_pr_has_skip_label():
         return
 
     migrations_changes = _get_migration_changes(workdir, to)
