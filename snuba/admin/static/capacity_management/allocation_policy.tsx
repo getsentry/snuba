@@ -54,7 +54,8 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   }
 
   function saveConfig(config: AllocationPolicyConfig) {
-    console.log("saving " + config.key + " as " + config.value);
+    console.log("saving...");
+    console.log(config);
   }
 
   return (
