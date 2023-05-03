@@ -4,7 +4,7 @@ from typing import Any, MutableMapping, Optional
 import sentry_kafka_schemas
 import sentry_sdk
 from sentry_kafka_schemas.codecs import Codec
-from sentry_kafka_schemas.codecs.json import JsonCodec, T
+from sentry_kafka_schemas.codecs.json import JsonCodec
 
 from snuba.utils.streams.topics import Topic
 
@@ -26,15 +26,7 @@ def _get_codec_impl(topic: Topic) -> Optional[Codec[Any]]:
         return None
 
 
-class NoopCodec(JsonCodec[T]):
-    def __init__(self):
-        pass
-
-    def validate(self, data: T) -> None:
-        pass
-
-
-_NOOP_CODEC = NoopCodec()
+_NOOP_CODEC = JsonCodec(json_schema=None)
 _cache: MutableMapping[Topic, Codec[Any]] = {}
 
 
