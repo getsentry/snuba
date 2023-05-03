@@ -7,9 +7,9 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolation,
     QueryResultOrError,
 )
-from snuba.query.allocation_policies.errors_allocation_policy import (
+from snuba.query.allocation_policies.bytes_scanned_window_policy import (
     _ORG_LESS_REFERRERS,
-    ErrorsAllocationPolicy,
+    BytesScannedWindowAllocationPolicy,
 )
 from snuba.state import set_config
 from snuba.web import QueryResult
@@ -21,7 +21,7 @@ MAX_THREAD_NUMBER = 400
 
 @pytest.fixture(scope="function")
 def policy():
-    policy = ErrorsAllocationPolicy(
+    policy = BytesScannedWindowAllocationPolicy(
         storage_set_key=StorageSetKey("errors"),
         required_tenant_types=["referrer", "organization_id"],
     )
@@ -39,7 +39,7 @@ def _configure_policy(policy):
 
 
 @pytest.mark.redis_db
-def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
+def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
     # 1. if you scan the limit of bytes, you get throttled to one thread
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
@@ -183,3 +183,20 @@ def test_passthrough_subscriptions(policy) -> None:
         policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
         == MAX_THREAD_NUMBER
     )
+
+
+@pytest.mark.redis_db
+def test_single_thread_referrers(policy) -> None:
+    _configure_policy(policy)
+    tenant_ids = {"referrer": "delete-events-from-file"}
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1
+    policy.update_quota_balance(
+        tenant_ids,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+            ),
+            error=None,
+        ),
+    )
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1

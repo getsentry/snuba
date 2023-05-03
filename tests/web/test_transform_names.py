@@ -91,7 +91,7 @@ def test_transform_column_names() -> None:
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
-                {"tenant_type": "tenant_id"},
+                {"organization_id": 123, "referrer": "r"},
                 "blah",
                 None,
                 None,

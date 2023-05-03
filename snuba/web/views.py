@@ -57,9 +57,9 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import ReadableTableStorage, Storage
+from snuba.datasets.storage import ReadableTableStorage, Storage, StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolation
-from snuba.query.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -519,7 +519,20 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             status,
             {"Content-Type": "application/json"},
         )
-
+    except QueryPlanException as exception:
+        if isinstance(exception, StorageNotAvailable):
+            status = 400
+            details = {
+                "type": "storage-not-available",
+                "message": str(exception.message),
+            }
+        else:
+            raise  # exception should have been chained
+        return Response(
+            json.dumps({"error": details, "timing": timer.for_json()}),
+            status,
+            {"Content-Type": "application/json"},
+        )
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():

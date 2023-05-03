@@ -81,6 +81,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
+            "spans",
         },
         "single_node": True,
     },
@@ -247,10 +248,14 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "functions",
     "test_migration",
     "search_issues",
+    "spans",
 }
 
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
+
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
+    SKIPPED_MIGRATION_GROUPS.remove("spans")
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
@@ -258,6 +263,7 @@ SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
 READINESS_STATE_STORAGES_ENABLED: set[str] = set()
+READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -298,6 +304,9 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
+
+# Enable spans ingestion
+ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.

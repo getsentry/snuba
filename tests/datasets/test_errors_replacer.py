@@ -99,6 +99,7 @@ class TestReplacer(BaseTest):
             "groupby": ["group_id"],
             "from_date": self.from_time.isoformat(),
             "to_date": self.to_time.isoformat(),
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
         }
 
         if group_id:
@@ -115,6 +116,7 @@ class TestReplacer(BaseTest):
             ],
             "from_date": self.from_time.isoformat(),
             "to_date": self.to_time.isoformat(),
+            "tenant_ids": {"referrer": "r", "organization_id": 1234},
         }
 
         data = json.loads(self.post(json.dumps(args)).data)["data"]

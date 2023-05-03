@@ -27,6 +27,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
@@ -125,10 +126,13 @@ def parse_and_run_query(
         )
         _set_query_final(request, result.extra)
         if not request.query_settings.get_dry_run():
-            record_query(request, timer, query_metadata, result.extra)
+            record_query(request, timer, query_metadata, result)
     except QueryException as error:
         _set_query_final(request, error.extra)
-        record_query(request, timer, query_metadata, error.extra)
+        record_query(request, timer, query_metadata, error)
+        raise error
+    except QueryPlanException as error:
+        record_query(request, timer, query_metadata, error)
         raise error
 
     return result
@@ -340,6 +344,7 @@ def _format_storage_query_and_run(
         )
 
         raise QueryException.from_args(
+            cause.__class__.__name__,
             str(cause),
             extra=QueryExtraData(
                 stats=stats,

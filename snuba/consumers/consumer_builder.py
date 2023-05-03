@@ -78,6 +78,7 @@ class ConsumerBuilder:
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
     ) -> None:
+        self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
@@ -124,7 +125,7 @@ class ConsumerBuilder:
                     bootstrap_servers=kafka_params.replacements_bootstrap_servers,
                     override_params={
                         "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB)
                     },
                 )
             )
@@ -312,12 +313,10 @@ class ConsumerBuilder:
         if self.replacements_producer:
             self.replacements_producer.flush()
 
-    def build_base_consumer(
-        self, slice_id: Optional[int] = None
-    ) -> StreamProcessor[KafkaPayload]:
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.build_streaming_strategy_factory(slice_id), slice_id
+            self.build_streaming_strategy_factory(self.slice_id), self.slice_id
         )
