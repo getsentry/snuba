@@ -22,7 +22,7 @@ pipelines:
             snuba_repo:
                 git: https://github.com/getsentry/snuba.git
                 shallow_clone: false
-                branch: gocd_tests
+                branch: gocd_tests # for non master image sha have to be hardcoded
                 destination: snuba
         stages:
             - checks:
