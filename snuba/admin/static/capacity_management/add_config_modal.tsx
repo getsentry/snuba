@@ -9,14 +9,12 @@ import {
 } from "./types";
 
 function AddConfigModal(props: {
-  api: Client;
   currentlyAdding: boolean;
   setCurrentlyAdding: (currentlyAdding: boolean) => void;
   parameterizedConfigDefinitions: AllocationPolicyParametrizedConfigDefinition[];
   saveConfig: (config: AllocationPolicyConfig) => void;
 }) {
   const {
-    api,
     currentlyAdding,
     setCurrentlyAdding,
     parameterizedConfigDefinitions,

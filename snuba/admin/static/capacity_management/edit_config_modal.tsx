@@ -6,7 +6,6 @@ import Modal from "react-bootstrap/Modal";
 import { AllocationPolicyConfig } from "./types";
 
 function EditConfigModal(props: {
-  api: Client;
   currentlyEditing: boolean;
   currentConfig: AllocationPolicyConfig;
   setCurrentlyEditing: (currentlyEditing: boolean) => void;
@@ -14,7 +13,6 @@ function EditConfigModal(props: {
   saveConfig: (config: AllocationPolicyConfig) => void;
 }) {
   const {
-    api,
     currentlyEditing,
     currentConfig,
     setCurrentlyEditing,

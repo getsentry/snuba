@@ -70,8 +70,14 @@ interface Client {
   setAllocationPolicyConfig: (
     storage: string,
     key: string,
-    value: string
+    value: string,
+    params: object
   ) => Promise<AllocationPolicyConfig>;
+  deleteAllocationPolicyConfig: (
+    storage: string,
+    key: string,
+    params: object
+  ) => Promise<void>;
 }
 
 function Client() {
@@ -313,19 +319,41 @@ function Client() {
     setAllocationPolicyConfig: (
       storage: string,
       key: string,
-      value: string
+      value: string,
+      params: object
     ) => {
       const url = baseUrl + "allocation_policy_config";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ storage, key, value }),
+        body: JSON.stringify({ storage, key, value, params }),
       }).then((res) => {
         if (res.ok) {
           return Promise.resolve(res.json());
         } else {
           return res.json().then((err) => {
             let errMsg = err?.error || "Could not set config";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+    deleteAllocationPolicyConfig: (
+      storage: string,
+      key: string,
+      params: object
+    ) => {
+      const url = baseUrl + "allocation_policy_config";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+        body: JSON.stringify({ storage, key, params }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not delete config";
             throw new Error(errMsg);
           });
         }

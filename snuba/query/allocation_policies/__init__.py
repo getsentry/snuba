@@ -196,6 +196,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             "params": params,
         }
 
+    def delete_config(
+        self, config_key: str, user: str | None, params: dict[str, Any] = {}
+    ) -> None:
+        """Placeholder - doesn't actually do anything."""
+        pass
+
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
         AllocationPolicies are attached to the Table a query is executed against.

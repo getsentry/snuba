@@ -51,11 +51,18 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
 
   function deleteConfig(config: AllocationPolicyConfig) {
     console.log("deleting " + config.key);
+    api.deleteAllocationPolicyConfig(storage, config.key, config.params);
   }
 
   function saveConfig(config: AllocationPolicyConfig) {
-    console.log("saving...");
-    console.log(config);
+    api
+      .setAllocationPolicyConfig(
+        storage,
+        config.key,
+        config.value,
+        config.params
+      )
+      .then((res) => console.log(res));
   }
 
   return (
@@ -67,7 +74,6 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
         crossOrigin="anonymous"
       />
       <EditConfigModal
-        api={api}
         currentlyEditing={currentlyEditing}
         currentConfig={currentConfig}
         setCurrentlyEditing={setCurrentlyEditing}
@@ -75,7 +81,6 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
         saveConfig={saveConfig}
       />
       <AddConfigModal
-        api={api}
         currentlyAdding={addingNew}
         setCurrentlyAdding={setAddingNew}
         parameterizedConfigDefinitions={parameterizedConfigDefinitions}

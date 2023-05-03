@@ -742,25 +742,23 @@ def get_allocation_policy_parameterized_config_definitions(storage: str) -> Resp
         )
 
 
-@application.route("/allocation_policy_config", methods=["POST"])
+@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_allocation_policy_config() -> Response:
     data = json.loads(request.data)
     user = request.headers.get(USER_HEADER_KEY)
+
     try:
-        storage, key, value = (
-            data["storage"],
-            data["key"],
-            data["value"],
-        )
+        storage, key = (data["storage"], data["key"])
+
+        params = data.get("params", {})
+
         assert isinstance(storage, str), "Invalid storage"
         assert isinstance(key, str), "Invalid key"
-        assert isinstance(value, str), "Invalid value"
+        assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
 
         policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        config = policy.set_config(key, value, user)
-        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
     except (KeyError, AssertionError) as exc:
         return Response(
@@ -774,3 +772,34 @@ def set_allocation_policy_config() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+
+    if request.method == "DELETE":
+        try:
+            policy.delete_config(key, user, params)
+            return Response("", 200)
+        except Exception as exception:
+            return Response(
+                json.dumps({"error": {"message": str(exception)}}, indent=4),
+                400,
+                {"Content-Type": "application/json"},
+            )
+    else:
+        try:
+            value = data["value"]
+            assert isinstance(value, str), "Invalid value"
+            config = policy.set_config(key, value, user, params)
+            return Response(
+                json.dumps(config), 200, {"Content-Type": "application/json"}
+            )
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+        except Exception as exception:
+            return Response(
+                json.dumps({"error": {"message": str(exception)}}, indent=4),
+                400,
+                {"Content-Type": "application/json"},
+            )
