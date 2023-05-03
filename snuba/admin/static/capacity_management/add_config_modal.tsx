@@ -7,6 +7,7 @@ import {
   AllocationPolicyConfig,
   AllocationPolicyParametrizedConfigDefinition,
 } from "./types";
+import FormGroup from "react-bootstrap/esm/FormGroup";
 
 function AddConfigModal(props: {
   currentlyAdding: boolean;
@@ -59,9 +60,19 @@ function AddConfigModal(props: {
     });
   }
 
+  function setValue(value: string) {
+    buildConfig((prev) => {
+      return { ...prev, value: value };
+    });
+  }
+
   function cancelAdding() {
     selectDefinition(undefined);
     setCurrentlyAdding(false);
+  }
+
+  function inputType(type: string) {
+    return type == "int" || type == "float" ? "number" : "text";
   }
 
   return (
@@ -88,24 +99,32 @@ function AddConfigModal(props: {
         <br />
 
         {selectedDefinition ? (
-          <Form.Group>
-            {selectedDefinition.params.map((param) => (
-              <>
-                <Form.Label key={param.name + "_label"}>
-                  {param.name + " (" + param.type + ")"}
-                </Form.Label>
-                <Form.Control
-                  key={param.name + "_input"}
-                  type={
-                    param.type == "int" || param.type == "float"
-                      ? "number"
-                      : "text"
-                  }
-                  onChange={(e) => updateParam(param.name, e.target.value)}
-                />
-              </>
-            ))}
-          </Form.Group>
+          <>
+            Params:
+            <Form.Group>
+              {selectedDefinition.params.map((param) => (
+                <>
+                  <Form.Label key={param.name + "_label"}>
+                    {param.name + " (" + param.type + ")"}
+                  </Form.Label>
+                  <Form.Control
+                    key={param.name + "_input"}
+                    type={inputType(param.type)}
+                    onChange={(e) => updateParam(param.name, e.target.value)}
+                  />
+                </>
+              ))}
+            </Form.Group>
+            <br />
+            <FormGroup>
+              <Form.Label>Value: </Form.Label>
+              <Form.Control
+                type={inputType(selectedDefinition.type)}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={selectedDefinition.default}
+              />
+            </FormGroup>
+          </>
         ) : null}
       </Modal.Body>
       <Modal.Footer>
