@@ -350,12 +350,9 @@ function Client() {
         body: JSON.stringify({ storage, key, params }),
       }).then((res) => {
         if (res.ok) {
-          return Promise.resolve(res.json());
+          return;
         } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not delete config";
-            throw new Error(errMsg);
-          });
+          throw new Error("Could not delete config");
         }
       });
     },

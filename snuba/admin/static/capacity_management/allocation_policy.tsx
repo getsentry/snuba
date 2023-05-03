@@ -49,9 +49,29 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
     setCurrentConfig(config);
   }
 
-  function deleteConfig(config: AllocationPolicyConfig) {
-    console.log("deleting " + config.key);
-    api.deleteAllocationPolicyConfig(storage, config.key, config.params);
+  function deleteConfig(toDelete: AllocationPolicyConfig) {
+    api
+      .deleteAllocationPolicyConfig(storage, toDelete.key, toDelete.params)
+      .then(() =>
+        setConfigs(
+          configs.filter((config) => {
+            return (
+              config.key != toDelete.key ||
+              !isEqualsJson(toDelete.params, config.params)
+            );
+          })
+        )
+      );
+  }
+
+  // Shallow compare json https://stackoverflow.com/a/65425828
+  function isEqualsJson(obj1: any, obj2: any) {
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+    return (
+      keys1.length === keys2.length &&
+      Object.keys(obj1).every((key) => obj1[key] == obj2[key])
+    );
   }
 
   function saveConfig(config: AllocationPolicyConfig) {
@@ -63,6 +83,17 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
         config.params
       )
       .then((res) => console.log(res));
+  }
+
+  function addConfig(config: AllocationPolicyConfig) {
+    api
+      .setAllocationPolicyConfig(
+        storage,
+        config.key,
+        config.value,
+        config.params
+      )
+      .then((res) => setConfigs((configs) => [...configs, res]));
   }
 
   return (
@@ -84,7 +115,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
         currentlyAdding={addingNew}
         setCurrentlyAdding={setAddingNew}
         parameterizedConfigDefinitions={parameterizedConfigDefinitions}
-        saveConfig={saveConfig}
+        saveConfig={addConfig}
       />
       <div style={containerStyle}>
         <p style={paragraphStyle}>These are the current configurations.</p>
