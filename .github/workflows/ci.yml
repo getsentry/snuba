@@ -312,8 +312,16 @@ jobs:
           make test-snuba
 
       - name: Run acceptance tests
+        working-directory: sentry
         run: |
           make test-acceptance
+
+      - name: Run relay tests
+        working-directory: sentry
+        run:
+          make test-relay-integration
+
+
   self-hosted-end-to-end:
     needs: [snuba-image]
     runs-on: ubuntu-latest
