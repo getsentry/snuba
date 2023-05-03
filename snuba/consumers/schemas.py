@@ -26,7 +26,7 @@ def _get_codec_impl(topic: Topic) -> Optional[Codec[Any]]:
         return None
 
 
-_NOOP_CODEC = JsonCodec(json_schema=None)
+_NOOP_CODEC: Codec[Any] = JsonCodec(json_schema=None)
 _cache: MutableMapping[Topic, Codec[Any]] = {}
 
 
