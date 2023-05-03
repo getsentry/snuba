@@ -1,4 +1,3 @@
-import Client from "../api_client";
 import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
@@ -7,7 +6,7 @@ import {
   AllocationPolicyConfig,
   AllocationPolicyParametrizedConfigDefinition,
 } from "./types";
-import FormGroup from "react-bootstrap/esm/FormGroup";
+import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {
   currentlyAdding: boolean;

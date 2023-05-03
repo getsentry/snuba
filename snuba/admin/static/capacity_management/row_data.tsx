@@ -1,7 +1,6 @@
 import React from "react";
 import { AllocationPolicyConfig, RowData } from "./types";
-import { linkStyle } from "./styles";
-import Button from "react-bootstrap/esm/Button";
+import Button from "react-bootstrap/Button";
 
 function getReadonlyRow(
   config: AllocationPolicyConfig,
