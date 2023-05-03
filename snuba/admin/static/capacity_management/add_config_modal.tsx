@@ -59,8 +59,13 @@ function AddConfigModal(props: {
     });
   }
 
+  function cancelAdding() {
+    selectDefinition(undefined);
+    setCurrentlyAdding(false);
+  }
+
   return (
-    <Modal show={currentlyAdding} onHide={() => setCurrentlyAdding(false)}>
+    <Modal show={currentlyAdding} onHide={cancelAdding}>
       <Modal.Header closeButton>
         <Modal.Title>Adding a new config:</Modal.Title>
       </Modal.Header>
@@ -104,10 +109,19 @@ function AddConfigModal(props: {
         ) : null}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={() => setCurrentlyAdding(false)}>
+        <Button variant="secondary" onClick={cancelAdding}>
           Close
         </Button>
-        <Button variant="primary" onClick={saveChanges}>
+        <Button
+          variant="primary"
+          onClick={saveChanges}
+          disabled={
+            selectedDefinition == undefined ||
+            (selectedDefinition &&
+              Object.keys(config.params).length !=
+                Object.keys(selectedDefinition.params).length)
+          }
+        >
           Save Changes
         </Button>
       </Modal.Footer>
