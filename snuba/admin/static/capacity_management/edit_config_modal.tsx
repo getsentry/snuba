@@ -1,28 +1,38 @@
 import Client from "../api_client";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import { AllocationPolicyConfig } from "./types";
 
-function ConfigModal(props: {
+function EditConfigModal(props: {
   api: Client;
   currentlyEditing: boolean;
   currentConfig: AllocationPolicyConfig;
   setCurrentlyEditing: (currentlyEditing: boolean) => void;
+  deleteConfig: (config: AllocationPolicyConfig) => void;
+  saveConfig: (config: AllocationPolicyConfig) => void;
 }) {
-  const { api, currentlyEditing, currentConfig, setCurrentlyEditing } = props;
+  const {
+    api,
+    currentlyEditing,
+    currentConfig,
+    setCurrentlyEditing,
+    deleteConfig,
+    saveConfig,
+  } = props;
 
   const [value, updateValue] = useState("");
 
   function saveChanges() {
-    console.log(value);
+    currentConfig.value = value;
+    saveConfig(currentConfig);
     setCurrentlyEditing(false);
   }
 
-  function deleteConfig() {
+  function confirmDeleteConfig() {
     if (window.confirm(`Are you sure you want to delete this config?`)) {
-      console.log("Deleted " + currentConfig.key);
+      deleteConfig(currentConfig);
     }
     setCurrentlyEditing(false);
   }
@@ -61,9 +71,11 @@ function ConfigModal(props: {
           >
             Close
           </Button>
-          <Button variant="warning" onClick={deleteConfig}>
-            Delete
-          </Button>
+          {Object.keys(currentConfig.params).length ? (
+            <Button variant="warning" onClick={confirmDeleteConfig}>
+              Delete
+            </Button>
+          ) : null}
           <Button variant="primary" onClick={saveChanges}>
             Save Changes
           </Button>
@@ -73,4 +85,4 @@ function ConfigModal(props: {
   );
 }
 
-export default ConfigModal;
+export default EditConfigModal;
