@@ -1,6 +1,8 @@
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+from typing import Iterator
 from unittest.mock import call, patch
 
 import pytest
@@ -25,6 +27,20 @@ from tests.helpers import write_processed_messages
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
+@contextmanager
+def retry(retries: int) -> Iterator[None]:
+    # Needed for the multinode clickhouse cluster tests
+    remaining = retries
+
+    try:
+        yield
+    except Exception:
+        if remaining == 0:
+            raise
+        time.sleep(0.5)
+        remaining -= 1
+
+
 @pytest.mark.parametrize(
     "tracker",
     [
@@ -44,15 +60,18 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
-    assert len(tracker.get_all_partitions()) == 0
-    assert len(tracker.get_completed_partitions()) == 0
+    with retry(5):
+        assert len(tracker.get_all_partitions()) == 0
+        assert len(tracker.get_completed_partitions()) == 0
+
     with pytest.raises(NoOptimizedStateException):
         tracker.get_partitions_to_optimize()
 
     tracker.update_all_partitions(["Partition 1", "Partition 2"])
     tracker.update_completed_partitions("Partition 1")
-    assert tracker.get_completed_partitions() == {"Partition 1"}
-    assert tracker.get_partitions_to_optimize() == {"Partition 2"}
+    with retry(5):
+        assert tracker.get_completed_partitions() == {"Partition 1"}
+        assert tracker.get_partitions_to_optimize() == {"Partition 2"}
 
     tracker.update_completed_partitions("Partition 2")
     assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
@@ -63,8 +82,9 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     assert len(partitions_to_optimize) == 0
 
     tracker.delete_all_states()
-    assert len(tracker.get_all_partitions()) == 0
-    assert len(tracker.get_completed_partitions()) == 0
+    with retry(5):
+        assert len(tracker.get_all_partitions()) == 0
+        assert len(tracker.get_completed_partitions()) == 0
 
 
 @pytest.mark.clickhouse_db
