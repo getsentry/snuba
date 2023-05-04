@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
 from snuba import settings
@@ -41,7 +41,7 @@ class AllocationPolicyConfig:
     description: str
     value_type: type
     default: Any
-    params: dict[str, type] = {}
+    params: dict[str, type] = field(default_factory=dict)
 
     def __to_base_dict(self) -> dict[str, Any]:
         return {
