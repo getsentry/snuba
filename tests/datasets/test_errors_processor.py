@@ -76,6 +76,7 @@ class ErrorEvent:
                         "country_code": "XY",
                         "region": "fake_region",
                         "city": "fake_city",
+                        "subdivision": "fake_subdivision",
                     },
                 },
                 "request": {
@@ -311,6 +312,7 @@ class ErrorEvent:
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
+                "geo.subdivision",
             ],
             "contexts.value": [
                 "3.7.6",
@@ -321,6 +323,7 @@ class ErrorEvent:
                 "XY",
                 "fake_region",
                 "fake_city",
+                "fake_subdivision",
             ],
             "partition": meta.partition,
             "offset": meta.offset,
@@ -418,7 +421,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
         )
 
     def test_errors_basic(self) -> None:
@@ -460,7 +468,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=uuid.uuid4(),
         )
 
@@ -491,7 +504,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=None,
         )
         replay_id = uuid.uuid4()
@@ -529,7 +547,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=replay_id,
         )
 
@@ -564,7 +587,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=None,
         )
         invalid_replay_id = "imnotavaliduuid"
@@ -600,7 +628,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=None,
             threads={
                 "values": [
@@ -647,7 +680,12 @@ class TestErrorsProcessor:
             ip_address="127.0.0.1",
             user_id="myself",
             username="me",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             replay_id=None,
             threads={
                 "values": [

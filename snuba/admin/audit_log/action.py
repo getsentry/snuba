@@ -11,6 +11,8 @@ class AuditLogAction(Enum):
     REVERSED_MIGRATION_STARTED = "reversed.migration.started"
     RAN_MIGRATION_COMPLETED = "ran.migration.completed"
     REVERSED_MIGRATION_COMPLETED = "reversed.migration.completed"
+    RAN_MIGRATION_FAILED = "ran.migration.failed"
+    REVERSED_MIGRATION_FAILED = "reversed.migration.failed"
 
 
 RUNTIME_CONFIG_ACTIONS = [
@@ -24,4 +26,6 @@ MIGRATION_ACTIONS = [
     AuditLogAction.REVERSED_MIGRATION_STARTED,
     AuditLogAction.RAN_MIGRATION_COMPLETED,
     AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+    AuditLogAction.RAN_MIGRATION_FAILED,
+    AuditLogAction.REVERSED_MIGRATION_FAILED,
 ]

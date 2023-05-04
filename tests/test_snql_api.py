@@ -22,8 +22,28 @@ from snuba.query.allocation_policies import (
 )
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
+
+
+class RejectAllocationPolicy123(AllocationPolicy):
+    def _config_params(self) -> list[AllocationPolicyConfig]:
+        return []
+
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=False,
+            max_threads=0,
+            explanation={"reason": "policy rejects all queries"},
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
 
 
 @pytest.mark.clickhouse_db
@@ -38,6 +58,7 @@ class TestSnQLApi(BaseApiTest):
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.org_id = self.event["organization_id"]
+        self.group_id = self.event["group_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -68,6 +89,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -121,6 +143,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": False,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -149,6 +172,7 @@ class TestSnQLApi(BaseApiTest):
                         self.base_time.isoformat(),
                         self.next_time.isoformat(),
                     ),
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -169,6 +193,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -189,6 +214,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -203,7 +229,8 @@ class TestSnQLApi(BaseApiTest):
                     WHERE project_id = {self.project_id}
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -228,6 +255,7 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY avg_count ASC
                     LIMIT 1000"""
                     % (self.base_time.isoformat(), self.next_time.isoformat()),
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -252,6 +280,7 @@ class TestSnQLApi(BaseApiTest):
                         self.base_time.isoformat(),
                         self.next_time.isoformat(),
                     ),
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -274,6 +303,7 @@ class TestSnQLApi(BaseApiTest):
                             AND timestamp < toDateTime('{self.next_time.isoformat()}')
                             AND project_id IN tuple({self.project_id})
                             LIMIT 5""",
+                            "tenant_ids": {"referrer": "r", "organization_id": 123},
                         }
                     ),
                 ).data
@@ -308,6 +338,7 @@ class TestSnQLApi(BaseApiTest):
                         AND timestamp < toDateTime('{self.next_time.isoformat()}')
                         AND project_id IN tuple({self.project_id})
                         LIMIT 5""",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -335,6 +366,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('2022-01-01')
                     ORDER BY timestamp DESC, event_id DESC
                     LIMIT 1""",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -359,6 +391,7 @@ class TestSnQLApi(BaseApiTest):
                     LIMIT 21
                     OFFSET 0
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -381,6 +414,7 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY last_seen DESC
                     LIMIT 1000
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -402,6 +436,7 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY last_seen DESC
                     LIMIT 1000
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -419,6 +454,7 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     AND environment = '\\\\\\' \\n \\\\n \\\\'
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -441,6 +477,7 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     LIMIT 50""",
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -457,6 +494,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     AND project_id IN tuple({self.project_id})
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -478,6 +516,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     AND project_id IN tuple({self.project_id})
                     """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -505,7 +544,8 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     AND finish_ts >= toDateTime('{self.base_time.isoformat()}')
                     AND finish_ts < toDateTime('{self.next_time.isoformat()}')
-                    LIMIT 1 BY count"""
+                    LIMIT 1 BY count""",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -531,6 +571,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": False,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -551,6 +592,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": False,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -574,6 +616,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": False,
                     "debug": False,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -597,7 +640,8 @@ class TestSnQLApi(BaseApiTest):
                         project_id IN tuple({self.project_id})
                     ORDER BY time ASC
                     LIMIT 10000
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -625,7 +669,8 @@ class TestSnQLApi(BaseApiTest):
                         project_id IN tuple({self.project_id})
                     ORDER BY time ASC
                     LIMIT 10000
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -652,7 +697,8 @@ class TestSnQLApi(BaseApiTest):
                         project_id IN tuple({self.project_id})
                     ORDER BY array_spans_exclusive_time DESC
                     LIMIT 10
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -685,7 +731,8 @@ class TestSnQLApi(BaseApiTest):
                         project_id IN tuple({self.project_id}) AND
                         app_start_type = 'warm.prewarmed'
                     LIMIT 10
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -717,7 +764,8 @@ class TestSnQLApi(BaseApiTest):
                         finish_ts < toDateTime('{self.next_time.isoformat()}') AND
                         project_id IN tuple({self.project_id})
                     LIMIT 10
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -742,6 +790,7 @@ class TestSnQLApi(BaseApiTest):
                     "feature": "test",
                     "app_id": "default",
                     "parent_api": "some/endpoint",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -763,6 +812,7 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "app_id": "default",
                     "parent_api": "some/endpoint",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -803,6 +853,7 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "app_id": "something-good",
                     "parent_api": "some/endpoint",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -829,6 +880,7 @@ class TestSnQLApi(BaseApiTest):
                     AND project_id IN tuple({self.project_id})
                     """,
                     "app_id": "something-cool",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -857,6 +909,7 @@ class TestSnQLApi(BaseApiTest):
                     "team": "sns",
                     "feature": "test",
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -888,6 +941,7 @@ class TestSnQLApi(BaseApiTest):
                     "dataset": "discover",
                     "team": "sns",
                     "feature": "test",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -913,7 +967,8 @@ class TestSnQLApi(BaseApiTest):
                     org_id = 1 AND
                     project_id IN tuple(123)
                 LIMIT 1 OFFSET 0
-                """
+                """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -938,7 +993,8 @@ class TestSnQLApi(BaseApiTest):
                     AND gm.project_id = {self.project_id}
                     AND e.timestamp >= toDateTime('2021-01-01')
                     AND e.timestamp < toDateTime('2021-01-02')
-                    """
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -1049,6 +1105,7 @@ class TestSnQLApi(BaseApiTest):
                     "dataset": "events",
                     "team": "sns",
                     "feature": "test",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -1071,6 +1128,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -1092,6 +1150,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -1182,6 +1241,7 @@ class TestSnQLApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
@@ -1191,26 +1251,6 @@ class TestSnQLApi(BaseApiTest):
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
     def test_allocation_policy_violation(self) -> None:
-        class RejectAllocationPolicy123(AllocationPolicy):
-            def _config_params(self) -> list[AllocationPolicyConfig]:
-                return []
-
-            def _get_quota_allowance(
-                self, tenant_ids: dict[str, str | int]
-            ) -> QuotaAllowance:
-                return QuotaAllowance(
-                    can_run=False,
-                    max_threads=0,
-                    explanation={"reason": "policy rejects all queries"},
-                )
-
-            def _update_quota_balance(
-                self,
-                tenant_ids: dict[str, str | int],
-                result_or_error: QueryResultOrError,
-            ) -> None:
-                return
-
         with patch(
             "snuba.web.db_query._get_allocation_policy",
             return_value=RejectAllocationPolicy123(
@@ -1238,3 +1278,43 @@ class TestSnQLApi(BaseApiTest):
                 response.json["error"]["message"]
                 == "Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}"
             )
+
+    def test_tags_key_column(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (events)
+                    SELECT count() AS `count`
+                    BY tags_key
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    AND group_id IN tuple({self.group_id})
+                    ORDER BY count DESC""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "tagstore.__get_tag_keys",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestSnQLApiErrorsRO(TestSnQLApi):
+    """
+    Run the tests again, but this time on the errors_ro table to ensure they are both
+    compatible.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("enable_events_readonly_table", 1)

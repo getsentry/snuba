@@ -264,6 +264,38 @@ storages:
                     nullable: True,
                   },
               },
+              {
+                mapper: ColumnToMapping,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "geo_subdivision",
+                    to_nested_col_table_name,
+                    to_nested_col_name: "contexts",
+                    to_nested_mapping_key: "geo.subdivision",
+                    nullable: True,
+                  },
+              },
+              {
+                mapper: ColumnToFunctionOnColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "tags_key",
+                    to_function_name: "arrayJoin",
+                    to_function_column: "tags.key",
+                  },
+              },
+              {
+                mapper: ColumnToFunctionOnColumn,
+                args:
+                  {
+                    from_table_name,
+                    from_col_name: "tags_value",
+                    to_function_name: "arrayJoin",
+                    to_function_column: "tags.value",
+                  },
+              }
             ],
           subscriptables:
             [
@@ -329,7 +361,6 @@ query_processors:
           time_parse_columns: [start_ts, finish_ts, timestamp],
         },
     },
-    { processor: TagsExpanderProcessor },
     { processor: BasicFunctionsProcessor },
     { processor: ApdexProcessor },
     { processor: FailureRateProcessor },

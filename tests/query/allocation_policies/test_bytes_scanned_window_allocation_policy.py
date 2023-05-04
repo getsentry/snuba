@@ -9,9 +9,9 @@ from snuba.query.allocation_policies import (
     InvalidPolicyConfig,
     QueryResultOrError,
 )
-from snuba.query.allocation_policies.errors_allocation_policy import (
+from snuba.query.allocation_policies.bytes_scanned_window_policy import (
     _ORG_LESS_REFERRERS,
-    ErrorsAllocationPolicy,
+    BytesScannedWindowAllocationPolicy,
 )
 from snuba.state import set_config
 from snuba.web import QueryResult
@@ -22,8 +22,8 @@ MAX_THREAD_NUMBER = 400
 
 
 @pytest.fixture(scope="function")
-def policy() -> ErrorsAllocationPolicy:
-    policy = ErrorsAllocationPolicy(
+def policy() -> AllocationPolicy:
+    policy = BytesScannedWindowAllocationPolicy(
         storage_key=StorageKey("errors"),
         required_tenant_types=["referrer", "organization_id"],
     )
@@ -39,7 +39,7 @@ def _configure_policy(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
+def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
     # 1. if you scan the limit of bytes, you get throttled to one thread
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
@@ -70,7 +70,7 @@ def test_consume_quota(policy: ErrorsAllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_org_isolation(policy) -> None:
+def test_org_isolation(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
 
     tenant_ids: dict[str, int | str] = {
@@ -147,7 +147,7 @@ def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
         policy.get_quota_allowance(tenant_ids={"referrer": "bloop"})
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
-        tenant_ids = {"referrer": referrer}
+        tenant_ids: dict[str, str | int] = {"referrer": referrer}
         policy.get_quota_allowance(tenant_ids)
         policy.update_quota_balance(
             tenant_ids,
@@ -184,17 +184,20 @@ def test_config_values(policy: AllocationPolicy) -> None:
         "is_active",
         "is_enforced",
     }
-    assert config_params["org_limit_bytes_scanned"].current_value == ORG_SCAN_LIMIT
+    assert policy.get_config("org_limit_bytes_scanned") == ORG_SCAN_LIMIT
     policy.set_config("org_limit_bytes_scanned", 100)
-    assert policy.config_params()["org_limit_bytes_scanned"].current_value == 100
+    assert policy.get_config("org_limit_bytes_scanned") == 100
 
 
 @pytest.mark.redis_db
-def test_passthrough_subscriptions(policy) -> None:
+def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     # currently subscriptions are not throttled due to them being on the critical path
     # this test makes sure that no matter how much quota they consume, they are not throttled
-    tenant_ids = {"referrer": "subscriptions_executor", "organization_id": 1}
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "subscriptions_executor",
+        "organization_id": 1,
+    }
     assert (
         policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
         == MAX_THREAD_NUMBER
@@ -212,3 +215,20 @@ def test_passthrough_subscriptions(policy) -> None:
         policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
         == MAX_THREAD_NUMBER
     )
+
+
+@pytest.mark.redis_db
+def test_single_thread_referrers(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {"referrer": "delete-events-from-file"}
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1
+    policy.update_quota_balance(
+        tenant_ids,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+            ),
+            error=None,
+        ),
+    )
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1

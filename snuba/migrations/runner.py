@@ -39,15 +39,19 @@ DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
-
-    return [
-        group
-        for group in MigrationGroup
-        if not (
-            group in OPTIONAL_GROUPS
-            and group.value in settings.SKIPPED_MIGRATION_GROUPS
-        )
-    ]
+    groups = []
+    for group in MigrationGroup:
+        if group.value in settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED:
+            readiness_state = get_group_readiness_state(group)
+            if readiness_state.value in settings.SUPPORTED_STATES:
+                groups.append(group)
+        else:
+            if not (
+                group in OPTIONAL_GROUPS
+                and group.value in settings.SKIPPED_MIGRATION_GROUPS
+            ):
+                groups.append(group)
+    return groups
 
 
 class MigrationKey(NamedTuple):
@@ -157,7 +161,7 @@ class Runner:
         fake: bool = False,
         force: bool = False,
         group: Optional[MigrationGroup] = None,
-        readiness_state: Optional[ReadinessState] = None,
+        readiness_states: Optional[Sequence[ReadinessState]] = None,
     ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
@@ -178,11 +182,11 @@ class Runner:
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
-        if readiness_state:
+        if readiness_states:
             pending_migrations = [
                 m
                 for m in pending_migrations
-                if get_group_readiness_state(m.group) == readiness_state
+                if get_group_readiness_state(m.group) in readiness_states
             ]
 
         use_through = False if through == "all" else True

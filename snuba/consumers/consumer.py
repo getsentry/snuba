@@ -79,6 +79,8 @@ logger = logging.getLogger("snuba.consumer")
 
 commit_codec = CommitCodec()
 
+_LAST_INVALID_MESSAGE: MutableMapping[str, float] = {}
+
 
 class CommitLogConfig(NamedTuple):
     producer: ConfluentProducer
@@ -511,8 +513,16 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
-                    sentry_sdk.set_tag("invalid_message_schema", "true")
-                    logger.warning(err, exc_info=True)
+                    min_seconds_ago = (
+                        state.get_config("log_validate_schema_every_n_seconds", 1) or 1
+                    )
+                    if (
+                        _LAST_INVALID_MESSAGE.get(snuba_logical_topic.name, 0)
+                        < start - min_seconds_ago
+                    ):
+                        _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
+                        sentry_sdk.set_tag("invalid_message_schema", "true")
+                        logger.warning(err, exc_info=True)
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -632,7 +642,7 @@ def build_multistorage_batch_writer(
                     replacement_topic_spec.topic,
                     override_params={
                         "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB
                     },
                 )
             ),
