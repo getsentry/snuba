@@ -57,6 +57,7 @@ _SINGLE_THREAD_REFERRERS = set(
         "delete-events-by-tag-value",
         "delete.fetch_last_group",
         "forward-events",
+        "tasks.update_user_reports",
     ]
 )
 
@@ -112,7 +113,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         # TODO: This kind of killswitch should just be included with every allocation policy
         is_active = cast(bool, get_config(f"{self.rate_limit_prefix}.is_active", True))
         is_enforced = cast(
-            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", False)
+            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", True)
         )
         throttled_thread_number = cast(
             int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
