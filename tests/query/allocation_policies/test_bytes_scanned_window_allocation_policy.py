@@ -167,7 +167,7 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
         policy.set_config("bad_config", 1)
     assert (
         str(err.value)
-        == "'bad_config' is not a valid config for ErrorsAllocationPolicy!"
+        == "'bad_config' is not a valid config for BytesScannedWindowAllocationPolicy!"
     )
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("throttled_thread_number", "bad_value")
@@ -180,6 +180,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     config_params = policy.config_definitions()
     assert set(config_params.keys()) == {
         "org_limit_bytes_scanned",
+        "org_limit_bytes_scanned_override",
         "throttled_thread_number",
         "is_active",
         "is_enforced",
