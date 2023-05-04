@@ -171,7 +171,10 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
     )
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("throttled_thread_number", "bad_value")
-    assert str(err.value) == "'bad_value' (str) is not of expected type: int"
+    assert (
+        str(err.value)
+        == "'throttled_thread_number' value needs to be of type int (not str) for BytesScannedWindowAllocationPolicy!"
+    )
 
 
 @pytest.mark.redis_db
