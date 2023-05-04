@@ -9,6 +9,7 @@ from typing import Any, cast
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
+from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -355,15 +356,32 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     def get_detailed_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of configs with their definitions on this AllocationPolicy."""
-        return [
-            definition.to_config_dict(
-                value=self.get_config(definition.name, validate=False),
-                params=definition.params,
-            )
-            for definition in self.config_definitions().values()
-            if not definition.params
-        ]
+        """Returns a list of live configs with their definitions on this AllocationPolicy."""
+
+        configs = get_all_runtime_configs(CAPMAN_HASH)
+        definitions = self.config_definitions()
+        detailed_configs: list[dict[str, Any]] = []
+
+        for key in configs:
+            if key.startswith(self.runtime_config_prefix):
+                # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
+                _, _, config_key, *params = key.split(".")
+                # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+                params_dict = dict()
+                if params:
+                    # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
+                    [params_string] = params
+                    params_split = params_string.split(",")
+                    for param_string in params_split:
+                        param_key, param_value = param_string.split(":")
+                        params_dict[param_key] = param_value
+                detailed_configs.append(
+                    definitions[config_key].to_config_dict(
+                        value=configs[key], params=params_dict
+                    )
+                )
+
+        return detailed_configs
 
     def is_active(self) -> bool:
         return bool(self.get_config(IS_ACTIVE))
@@ -438,63 +456,3 @@ DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
 import_submodules_in_directory(
     os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"
 )
-
-
-'''
-
-    def get_configs(self) -> list[dict[str, Any]]:
-        """Placeholder - doesn't actually do anything."""
-        return [
-            {
-                "key": "some key",
-                "value": "some value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {},
-            },
-            {
-                "key": "some_parameterized_key",
-                "value": "some other value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {"c": 3, "d": 4},
-            },
-        ]
-
-    def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
-        """
-        Placeholder - doesn't actually do anything.
-        This should return a list of configs that can be "added" to this policy.
-        The only configs falling under this def should be configs that have params.
-        """
-
-        return [
-            {
-                "name": "some_parameterized_key",
-                "type": "int",
-                "default": 10,
-                "description": "Placeholder config. Will not actually be saved.",
-                "params": [{"name": "c", "type": "int"}, {"name": "d", "type": "int"}],
-            }
-        ]
-
-    def set_config(
-        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
-        """Placeholder - doesn't actually do anything."""
-        return {
-            "key": config_key,
-            "value": value,
-            "description": "Placeholder config. Will not actually be saved.",
-            "type": "placeholder",
-            "params": params,
-        }
-
-    def delete_config(
-        self, config_key: str, user: str | None, params: dict[str, Any] = {}
-    ) -> None:
-        """Placeholder - doesn't actually do anything."""
-        pass
-
-
-'''
