@@ -263,7 +263,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     class RejectAllocationPolicy(AllocationPolicy):
-        def _config_params(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
 
         def _get_quota_allowance(
@@ -320,7 +320,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
-        def _config_params(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
 
         def _get_quota_allowance(
@@ -373,7 +373,7 @@ def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
 
     class CountQueryPolicy(AllocationPolicy):
-        def _config_params(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
 
         def _get_quota_allowance(

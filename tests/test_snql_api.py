@@ -28,7 +28,7 @@ from tests.helpers import write_unprocessed_events
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
-    def _config_params(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:

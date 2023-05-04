@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -41,6 +42,17 @@ class AllocationPolicyConfig:
     value_type: type
     default: Any
     params: dict[str, type] = {}
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "type": self.value_type,
+            "default": self.default,
+            "description": self.description,
+            "params": [
+                {"name": param, "type": self.params[param]} for param in self.params
+            ],
+        }
 
 
 class InvalidPolicyConfig(Exception):
@@ -157,7 +169,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
         self._storage_key = storage_key
-        self._default_config_params = [
+        self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
                 description="Whether or not this policy is active.",
@@ -210,19 +222,28 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     @abstractmethod
-    def _config_params(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         """
-        Define policy specific config params, these will be used along
-        with the default params of the base class.
+        Define policy specific config definitions, these will be used along
+        with the default definitions of the base class. (is_enforced, is_active)
         """
         pass
 
-    def config_params(self) -> dict[str, AllocationPolicyConfig]:
+    def config_definitions(self) -> dict[str, AllocationPolicyConfig]:
         """Returns a dictionary of configurable params on this AllocationPolicy."""
         return {
             config.name: config
-            for config in self._default_config_params + self._config_params()
+            for config in self._default_config_definitions
+            + self._additional_config_definitions()
         }
+
+    def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
+        """Returns a dictionary of parameterized configs on this AllocationPolicy."""
+        return [
+            definition.to_dict()
+            for _, definition in self.config_definitions().items()
+            if definition.params
+        ]
 
     def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
@@ -239,15 +260,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def __validate_config_params(
         self, config_key: str, params: dict[str, Any], value: Any = None
     ) -> AllocationPolicyConfig:
-        configs = self.config_params()
+        definitions = self.config_definitions()
 
         # config doesn't exist
-        if config_key not in configs:
+        if config_key not in definitions:
             raise InvalidPolicyConfig(
                 f"'{config_key}' is not a valid config for {self.__class__.__name__}!"
             )
 
-        config = configs[config_key]
+        config = definitions[config_key]
 
         # missing required parameters
         if (
@@ -282,28 +303,65 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def get_config(self, config_key: str, params: dict[str, Any] = {}) -> Any:
+    def get_config(
+        self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
+    ) -> Any:
         """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        config = self.__validate_config_params(config_key, params)
+        config_definition = (
+            self.__validate_config_params(config_key, params)
+            if validate
+            else self.config_definitions()[config_key]
+        )
         return cast(
-            config.value_type,  # type: ignore
+            config_definition.value_type,  # type: ignore
             get_runtime_config(
                 key=self.__build_runtime_config_key(config_key, params),
-                default=config.default,
+                default=config_definition.default,
                 config_key=CAPMAN_HASH,
             ),
         )
 
     def set_config(
-        self, config_key: str, value: Any, params: dict[str, Any] = {}
+        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
     ) -> None:
         """Sets a value of a config on this Allocation Policy."""
         self.__validate_config_params(config_key, params, value)
         set_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
             value=value,
+            user=user,
             config_key=CAPMAN_HASH,
         )
+
+    def delete_config(
+        self, config_key: str, user: str | None, params: dict[str, Any] = {}
+    ) -> None:
+        """Deletes an instance of a parameterized config on this Allocation Policy."""
+        self.__validate_config_params(config_key, params)
+        delete_runtime_config(
+            key=self.__build_runtime_config_key(config_key, params),
+            user=user,
+            config_key=CAPMAN_HASH,
+        )
+
+    def get_configs(self) -> list[dict[str, Any]]:
+        """Placeholder - doesn't actually do anything."""
+        return [
+            {
+                "key": "some key",
+                "value": "some value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {},
+            },
+            {
+                "key": "some_parameterized_key",
+                "value": "some other value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {"c": 3, "d": 4},
+            },
+        ]
 
     def is_active(self) -> bool:
         return bool(self.get_config(IS_ACTIVE))
@@ -353,7 +411,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    def _config_params(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:

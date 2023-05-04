@@ -89,7 +89,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     ) -> None:
         super().__init__(storage_key, required_tenant_types)
 
-    def _config_params(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
             AllocationPolicyConfig(
                 name="throttled_thread_number",
