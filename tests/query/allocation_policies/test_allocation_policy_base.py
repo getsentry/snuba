@@ -7,6 +7,8 @@ import pytest
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
+    AllocationPolicy,
+    AllocationPolicyConfig,
     AllocationPolicyViolation,
     InvalidPolicyConfig,
     PassthroughPolicy,
@@ -44,7 +46,7 @@ def test_passthrough_allows_queries() -> None:
     assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}).max_threads == 420
 
 
-def test_raises_on_false_can_run():
+def test_raises_on_false_can_run() -> None:
     class RejectingEverythingAllocationPolicy(PassthroughPolicy):
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
@@ -98,10 +100,16 @@ def test_bad_config_keys() -> None:
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("is_active", "bad_value")
-    assert str(err.value) == "'bad_value' (str) is not of expected type: int"
+    assert (
+        str(err.value)
+        == "'is_active' value needs to be of type int (not str) for PassthroughPolicy!"
+    )
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config("is_enforced", "bad_value")
-    assert str(err.value) == "'bad_value' (str) is not of expected type: int"
+    assert (
+        str(err.value)
+        == "'is_enforced' value needs to be of type int (not str) for PassthroughPolicy!"
+    )
 
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.get_config("does_not_exist")
@@ -109,3 +117,135 @@ def test_bad_config_keys() -> None:
         str(err.value)
         == "'does_not_exist' is not a valid config for PassthroughPolicy!"
     )
+
+
+class SomeParametrizedConfigPolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return [
+            AllocationPolicyConfig(
+                name="my_config", description="", value_type=int, default=10
+            ),
+            AllocationPolicyConfig(
+                name="my_param_config",
+                description="",
+                value_type=int,
+                default=-1,
+                params={"org": int, "ref": str},
+            ),
+        ]
+
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+        raise
+
+    def _update_quota_balance(
+        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+    ) -> None:
+        pass
+
+
+@pytest.fixture(scope="function")
+def policy() -> AllocationPolicy:
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [])
+    return policy
+
+
+def test_config_validation(policy: AllocationPolicy) -> None:
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config(config_key="my_config", value=10, params={"bad_param": 10})
+    assert (
+        str(err.value)
+        == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
+    )
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config(config_key="my_config", value="lol")
+    assert (
+        str(err.value)
+        == "'my_config' value needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
+    )
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config(config_key="my_param_config", value=10)
+    assert (
+        str(err.value)
+        == "'my_param_config' missing required parameters: {'org': 'int', 'ref': 'str'} for SomeParametrizedConfigPolicy!"
+    )
+
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config(
+            config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
+        )
+    assert (
+        str(err.value)
+        == "'my_param_config' parameter 'org' needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
+    )
+
+
+@pytest.mark.redis_db
+def test_add_delete_config_value(policy: AllocationPolicy) -> None:
+    """Test adding + resetting a simple config"""
+    config_key = "my_config"
+
+    policy.set_config(config_key=config_key, value=100)
+    assert policy.get_config(config_key=config_key) == 100
+
+    policy.delete_config(config_key=config_key)
+    # back to default
+    assert policy.get_config(config_key=config_key) == 10
+
+    """Test adding + deleting a parameterized config"""
+    config_key = "my_param_config"
+    params = {"org": 10, "ref": "test"}
+
+    policy.set_config(config_key=config_key, value=100, params=params)
+    assert policy.get_config(config_key=config_key, params=params) == 100
+
+    policy.delete_config(config_key=config_key, params=params)
+    # back to default
+    assert policy.get_config(config_key=config_key, params=params) == -1
+
+
+@pytest.mark.redis_db
+def test_get_detailed_configs(policy: AllocationPolicy) -> None:
+    assert len(policy_configs := policy.get_detailed_configs()) == 3
+    assert all(
+        config in policy_configs
+        for config in [
+            {
+                "name": "is_enforced",
+                "type": "int",
+                "default": 0,
+                "description": "Whether or not this policy is enforced.",
+                "value": 0,
+                "params": {},
+            },
+            {
+                "name": "my_config",
+                "type": "int",
+                "default": 10,
+                "description": "",
+                "value": 10,
+                "params": {},
+            },
+            {
+                "name": "is_active",
+                "type": "int",
+                "default": 1,
+                "description": "Whether or not this policy is active.",
+                "value": 1,
+                "params": {},
+            },
+        ]
+    )
+
+    # add an instance of parameterized config
+    policy.set_config(
+        config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
+    )
+    assert len(policy_configs := policy.get_detailed_configs()) == 4
+    assert {
+        "name": "my_param_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 100,
+        "params": {"org": "10", "ref": "test"},
+    } in policy_configs

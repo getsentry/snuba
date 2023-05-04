@@ -47,7 +47,7 @@ class AllocationPolicyConfig:
     def __to_base_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "type": self.value_type,
+            "type": self.value_type.__name__,
             "default": self.default,
             "description": self.description,
         }
@@ -61,9 +61,15 @@ class AllocationPolicyConfig:
             ],
         }
 
-    def to_config_dict(self, value: Any, params: dict[str, Any]) -> dict[str, Any]:
+    def to_config_dict(
+        self, value: Any = None, params: dict[str, Any] = {}
+    ) -> dict[str, Any]:
         """Returns a dict representation of a live Config."""
-        return {**self.__to_base_dict(), "value": value, "params": params}
+        return {
+            **self.__to_base_dict(),
+            "value": value or self.default,
+            "params": params,
+        }
 
 
 class InvalidPolicyConfig(Exception):
@@ -241,7 +247,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         pass
 
     def config_definitions(self) -> dict[str, AllocationPolicyConfig]:
-        """Returns a dictionary of configurable params on this AllocationPolicy."""
+        """Returns a dictionary of config definitions on this AllocationPolicy."""
         return {
             config.name: config
             for config in self._default_config_definitions
@@ -273,10 +279,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> AllocationPolicyConfig:
         definitions = self.config_definitions()
 
+        class_name = self.__class__.__name__
+
         # config doesn't exist
         if config_key not in definitions:
             raise InvalidPolicyConfig(
-                f"'{config_key}' is not a valid config for {self.__class__.__name__}!"
+                f"'{config_key}' is not a valid config for {class_name}!"
             )
 
         config = definitions[config_key]
@@ -290,7 +298,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             }
         ) != dict():
             raise InvalidPolicyConfig(
-                f"'{config_key}' missing required parameters: {diff} for {self.__class__.__name__}!"
+                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
+            )
+
+        # not a parameterized config
+        if params and not config.params:
+            raise InvalidPolicyConfig(
+                f"'{config_key}' takes no params for {class_name}!"
             )
 
         # parameters aren't correct types
@@ -300,7 +314,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                     raise InvalidPolicyConfig(
                         f"'{config_key}' parameter '{param}' needs to be of type"
                         f" {config.params[param].__name__} (not {type(params[param]).__name__})"
-                        f" for {self.__class__.__name__}!"
+                        f" for {class_name}!"
                     )
 
         # value isn't correct type
@@ -309,7 +323,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 raise InvalidPolicyConfig(
                     f"'{config_key}' value needs to be of type"
                     f" {config.value_type.__name__} (not {type(value).__name__})"
-                    f" for {self.__class__.__name__}!"
+                    f" for {class_name}!"
                 )
 
         return config
@@ -365,11 +379,18 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_detailed_configs(self) -> list[dict[str, Any]]:
         """Returns a list of live configs with their definitions on this AllocationPolicy."""
 
-        configs = get_all_runtime_configs(CAPMAN_HASH)
+        runtime_configs = get_all_runtime_configs(CAPMAN_HASH)
         definitions = self.config_definitions()
+
+        required_configs = set(
+            config_name
+            for config_name, config_def in definitions.items()
+            if not config_def.params
+        )
+
         detailed_configs: list[dict[str, Any]] = []
 
-        for key in configs:
+        for key in runtime_configs:
             if key.startswith(self.runtime_config_prefix):
                 # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
                 _, _, config_key, *params = key.split(".")
@@ -384,9 +405,14 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                         params_dict[param_key] = param_value
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
-                        value=configs[key], params=params_dict
+                        value=runtime_configs[key], params=params_dict
                     )
                 )
+                if config_key in required_configs:
+                    required_configs.remove(config_key)
+
+        for required_config_key in required_configs:
+            detailed_configs.append(definitions[required_config_key].to_config_dict())
 
         return detailed_configs
 

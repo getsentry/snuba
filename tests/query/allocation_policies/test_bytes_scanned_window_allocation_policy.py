@@ -175,7 +175,7 @@ def test_bad_config_keys(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_config_values(policy: AllocationPolicy) -> None:
+def test_simple_config_values(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     config_params = policy.config_definitions()
     assert set(config_params.keys()) == {
