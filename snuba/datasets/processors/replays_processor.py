@@ -273,7 +273,7 @@ def segment_id_to_event_hash(segment_id: int | None) -> str:
         # originate from the SDK and do not relate to a specific segment.
         #
         # For example: archive requests.
-        return str(uuid.uuid4().hex)
+        return str(uuid.uuid4())
     else:
         segment_id_bytes = force_bytes(str(segment_id))
         segment_hash = md5(segment_id_bytes).hexdigest()
