@@ -53,25 +53,10 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
     api
       .deleteAllocationPolicyConfig(storage, toDelete.key, toDelete.params)
       .then(() =>
-        setConfigs(
-          configs.filter((config) => {
-            return (
-              config.key != toDelete.key ||
-              !isEqualsJson(toDelete.params, config.params)
-            );
-          })
-        )
+        api.getAllocationPolicyConfigs(storage).then((res) => {
+          setConfigs(res);
+        })
       );
-  }
-
-  // Shallow compare json https://stackoverflow.com/a/65425828
-  function isEqualsJson(obj1: any, obj2: any) {
-    const keys1 = Object.keys(obj1);
-    const keys2 = Object.keys(obj2);
-    return (
-      keys1.length === keys2.length &&
-      Object.keys(obj1).every((key) => obj1[key] == obj2[key])
-    );
   }
 
   function saveConfig(config: AllocationPolicyConfig) {

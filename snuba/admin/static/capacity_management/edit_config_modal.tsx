@@ -28,57 +28,57 @@ function EditConfigModal(props: {
   }
 
   function confirmDeleteConfig() {
-    if (window.confirm(`Are you sure you want to delete this config?`)) {
+    if (
+      window.confirm(
+        "Are you sure you want to " +
+          deleteOrReset().toLowerCase() +
+          " this config?"
+      )
+    ) {
       deleteConfig(currentConfig);
     }
     setCurrentlyEditing(false);
   }
 
+  function deleteOrReset() {
+    return Object.keys(currentConfig.params).length ? "Delete" : "Reset";
+  }
+
   return (
-    <>
-      <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
-        integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65"
-        crossOrigin="anonymous"
-      />
-      <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            Editing:{" "}
-            <code style={{ wordBreak: "break-all", color: "black" }}>
-              {currentConfig.key}
-            </code>
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form.Group>
-            <Form.Label>Value: </Form.Label>
-            <Form.Control
-              type="text"
-              onChange={(e) => updateValue(e.target.value)}
-              placeholder={currentConfig.value}
-            />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setCurrentlyEditing(false)}
-          >
-            Close
-          </Button>
-          {Object.keys(currentConfig.params).length ? (
-            <Button variant="warning" onClick={confirmDeleteConfig}>
-              Delete
-            </Button>
-          ) : null}
-          <Button variant="primary" onClick={saveChanges}>
-            Save Changes
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </>
+    <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          Editing:{" "}
+          <code style={{ wordBreak: "break-all", color: "black" }}>
+            {currentConfig.key}
+          </code>
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form.Group>
+          <Form.Label>Value: </Form.Label>
+          <Form.Control
+            type="text"
+            onChange={(e) => updateValue(e.target.value)}
+            placeholder={currentConfig.value}
+          />
+        </Form.Group>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setCurrentlyEditing(false)}>
+          Close
+        </Button>
+        <Button
+          variant={deleteOrReset() == "Reset" ? "warning" : "danger"}
+          onClick={confirmDeleteConfig}
+        >
+          {deleteOrReset()}
+        </Button>
+        <Button variant="primary" onClick={saveChanges}>
+          Save Changes
+        </Button>
+      </Modal.Footer>
+    </Modal>
   );
 }
 
