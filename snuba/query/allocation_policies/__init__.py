@@ -43,16 +43,26 @@ class AllocationPolicyConfig:
     default: Any
     params: dict[str, type] = {}
 
-    def to_dict(self) -> dict[str, Any]:
+    def __to_base_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "type": self.value_type,
             "default": self.default,
             "description": self.description,
+        }
+
+    def to_definition_dict(self) -> dict[str, Any]:
+        """Returns a dict representation of the definition of a Config."""
+        return {
+            **self.__to_base_dict(),
             "params": [
                 {"name": param, "type": self.params[param]} for param in self.params
             ],
         }
+
+    def to_config_dict(self, value: Any, params: dict[str, Any]) -> dict[str, Any]:
+        """Returns a dict representation of a live Config."""
+        return {**self.__to_base_dict(), "value": value, "params": params}
 
 
 class InvalidPolicyConfig(Exception):
@@ -240,8 +250,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
         """Returns a dictionary of parameterized configs on this AllocationPolicy."""
         return [
-            definition.to_dict()
-            for _, definition in self.config_definitions().items()
+            definition.to_definition_dict()
+            for definition in self.config_definitions().values()
             if definition.params
         ]
 
@@ -324,7 +334,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def set_config(
         self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
     ) -> None:
-        """Sets a value of a config on this Allocation Policy."""
+        """Sets a value of a config on this AllocationPolicy."""
         self.__validate_config_params(config_key, params, value)
         set_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
@@ -336,7 +346,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def delete_config(
         self, config_key: str, user: str | None, params: dict[str, Any] = {}
     ) -> None:
-        """Deletes an instance of a parameterized config on this Allocation Policy."""
+        """Deletes an instance of a parameterized config on this AllocationPolicy."""
         self.__validate_config_params(config_key, params)
         delete_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
@@ -344,23 +354,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             config_key=CAPMAN_HASH,
         )
 
-    def get_configs(self) -> list[dict[str, Any]]:
-        """Placeholder - doesn't actually do anything."""
+    def get_detailed_configs(self) -> list[dict[str, Any]]:
+        """Returns a list of configs with their definitions on this AllocationPolicy."""
         return [
-            {
-                "key": "some key",
-                "value": "some value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {},
-            },
-            {
-                "key": "some_parameterized_key",
-                "value": "some other value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {"c": 3, "d": 4},
-            },
+            definition.to_config_dict(
+                value=self.get_config(definition.name, validate=False),
+                params=definition.params,
+            )
+            for definition in self.config_definitions().values()
+            if not definition.params
         ]
 
     def is_active(self) -> bool:
