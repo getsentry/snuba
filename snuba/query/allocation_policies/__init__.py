@@ -180,6 +180,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "name": "some_parameterized_key",
                 "type": "int",
                 "default": 10,
+                "description": "Placeholder config. Will not actually be saved.",
                 "params": [{"name": "c", "type": "int"}, {"name": "d", "type": "int"}],
             }
         ]

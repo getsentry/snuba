@@ -22,6 +22,7 @@ type AllocationPolicyParametrizedConfigDefinition = {
   name: string;
   type: string;
   default: string;
+  description: string;
   params: AllocationPolicyConfigParams[];
 };
 

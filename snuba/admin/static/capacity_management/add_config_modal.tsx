@@ -99,19 +99,20 @@ function AddConfigModal(props: {
 
         {selectedDefinition ? (
           <>
+            Description:
+            <p>{selectedDefinition.description}</p>
             Params:
             <Form.Group>
               {selectedDefinition.params.map((param) => (
-                <>
-                  <Form.Label key={param.name + "_label"}>
+                <div key={param.name + "_input"}>
+                  <Form.Label>
                     {param.name + " (" + param.type + ")"}
                   </Form.Label>
                   <Form.Control
-                    key={param.name + "_input"}
                     type={inputType(param.type)}
                     onChange={(e) => updateParam(param.name, e.target.value)}
                   />
-                </>
+                </div>
               ))}
             </Form.Group>
             <br />
