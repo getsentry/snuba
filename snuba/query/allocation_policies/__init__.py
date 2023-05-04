@@ -333,7 +333,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     def set_config(
-        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
+        self,
+        config_key: str,
+        value: Any,
+        params: dict[str, Any] = {},
+        user: str | None = None,
     ) -> None:
         """Sets a value of a config on this AllocationPolicy."""
         self.__validate_config_params(config_key, params, value)
@@ -345,7 +349,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
 
     def delete_config(
-        self, config_key: str, user: str | None, params: dict[str, Any] = {}
+        self,
+        config_key: str,
+        params: dict[str, Any] = {},
+        user: str | None = None,
     ) -> None:
         """Deletes an instance of a parameterized config on this AllocationPolicy."""
         self.__validate_config_params(config_key, params)
