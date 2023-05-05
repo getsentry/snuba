@@ -70,7 +70,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["dist"] = maybe(to_string, replay_event.get("dist"))
         processed["platform"] = maybe(to_string, replay_event["platform"])
         processed["replay_type"] = maybe(
-            to_enum(["session", "error"]), replay_event.get("replay_type")
+            to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
         )
 
         # Archived can only be 1 or null.
