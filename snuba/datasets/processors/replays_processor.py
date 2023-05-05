@@ -173,7 +173,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if event_hash is None:
             event_hash = segment_id_to_event_hash(replay_event["segment_id"])
 
-        processed["event_hash"] = event_hash
+        processed["event_hash"] = str(uuid.UUID(event_hash))
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
