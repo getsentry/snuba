@@ -339,6 +339,12 @@ class TestReplaysProcessor:
         expect = InsertBatch([result], None)
         assert output == expect
 
+        # Assert the event_hash UUID contains dashes.
+        assert isinstance(output, InsertBatch)
+        generated_event_hash = output.rows[0]["event_hash"]
+        assert len(generated_event_hash) == 36
+        assert generated_event_hash == str(uuid.UUID(generated_event_hash))
+
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
@@ -473,7 +479,7 @@ class TestReplaysProcessor:
         result = ReplaysProcessor().process_message(minimal_payload, meta)
         assert isinstance(result, InsertBatch)
         assert len(result.rows) == 1
-        assert result.rows[0]["event_hash"] == event_hash
+        assert result.rows[0]["event_hash"] == str(uuid.UUID(event_hash))
 
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
