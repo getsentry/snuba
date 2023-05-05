@@ -15,3 +15,6 @@ updates:
     open-pull-requests-limit: 50
     ignore:
       - dependency-name: "parsimonious"
+      # sentry-kafka-schemas has its own lints to ensure it is reasonably
+      # up-to-date -- we should rely on them
+      - dependency-name: "sentry-kafka-schemas"
