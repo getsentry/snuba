@@ -4,14 +4,14 @@ import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import {
   AllocationPolicyConfig,
-  AllocationPolicyParametrizedConfigDefinition,
+  AllocationPolicyParameterizedConfigDefinition,
 } from "./types";
 import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {
   currentlyAdding: boolean;
   setCurrentlyAdding: (currentlyAdding: boolean) => void;
-  parameterizedConfigDefinitions: AllocationPolicyParametrizedConfigDefinition[];
+  parameterizedConfigDefinitions: AllocationPolicyParameterizedConfigDefinition[];
   saveConfig: (config: AllocationPolicyConfig) => void;
 }) {
   const {
@@ -22,7 +22,7 @@ function AddConfigModal(props: {
   } = props;
 
   const [selectedDefinition, selectDefinition] =
-    useState<AllocationPolicyParametrizedConfigDefinition>();
+    useState<AllocationPolicyParameterizedConfigDefinition>();
 
   const [config, buildConfig] = useState<AllocationPolicyConfig>({
     key: "",

@@ -4,7 +4,7 @@ import { Table } from "../table";
 import Client from "../api_client";
 import {
   AllocationPolicyConfig,
-  AllocationPolicyParametrizedConfigDefinition,
+  AllocationPolicyParameterizedConfigDefinition,
 } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 import { getReadonlyRow } from "./row_data";
@@ -27,7 +27,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   const [addingNew, setAddingNew] = useState(false);
 
   const [parameterizedConfigDefinitions, setDefinitions] = useState<
-    AllocationPolicyParametrizedConfigDefinition[]
+    AllocationPolicyParameterizedConfigDefinition[]
   >([]);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
 
   useEffect(() => {
     api
-      .getAllocationPolicyParametrizedConfigDefinitions(storage)
+      .getAllocationPolicyParameterizedConfigDefinitions(storage)
       .then((res) => {
         setDefinitions(res);
       });

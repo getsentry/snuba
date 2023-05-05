@@ -29,7 +29,7 @@ import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 import {
   AllocationPolicy,
   AllocationPolicyConfig,
-  AllocationPolicyParametrizedConfigDefinition,
+  AllocationPolicyParameterizedConfigDefinition,
 } from "./capacity_management/types";
 
 interface Client {
@@ -64,9 +64,9 @@ interface Client {
   getAllocationPolicyConfigs: (
     storage: string
   ) => Promise<AllocationPolicyConfig[]>;
-  getAllocationPolicyParametrizedConfigDefinitions: (
+  getAllocationPolicyParameterizedConfigDefinitions: (
     storage: string
-  ) => Promise<AllocationPolicyParametrizedConfigDefinition[]>;
+  ) => Promise<AllocationPolicyParameterizedConfigDefinition[]>;
   setAllocationPolicyConfig: (
     storage: string,
     key: string,
@@ -307,7 +307,7 @@ function Client() {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicyParametrizedConfigDefinitions: (storage: string) => {
+    getAllocationPolicyParameterizedConfigDefinitions: (storage: string) => {
       const url =
         baseUrl +
         "allocation_policy_parameterized_config_definitions/" +
