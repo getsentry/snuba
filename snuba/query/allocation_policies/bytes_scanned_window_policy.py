@@ -92,12 +92,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
             AllocationPolicyConfig(
-                name="throttled_thread_number",
-                description="Number of threads any throttled query gets assigned.",
-                value_type=int,
-                default=1,
-            ),
-            AllocationPolicyConfig(
                 name="org_limit_bytes_scanned",
                 description="Number of bytes any org can scan in a 10 minute window.",
                 value_type=int,

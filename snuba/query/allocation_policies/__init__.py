@@ -204,6 +204,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 value_type=int,
                 default=0,
             ),
+            AllocationPolicyConfig(
+                name="throttled_thread_number",
+                description="Number of threads any throttled query gets assigned.",
+                value_type=int,
+                default=1,
+            ),
         ]
 
     @property

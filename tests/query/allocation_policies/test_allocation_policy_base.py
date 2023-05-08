@@ -206,11 +206,19 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_get_detailed_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 3
+def test_get_current_configs(policy: AllocationPolicy) -> None:
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert all(
         config in policy_configs
         for config in [
+            {
+                "name": "is_active",
+                "type": "int",
+                "default": 1,
+                "description": "Whether or not this policy is active.",
+                "value": 1,
+                "params": {},
+            },
             {
                 "name": "is_enforced",
                 "type": "int",
@@ -228,10 +236,10 @@ def test_get_detailed_configs(policy: AllocationPolicy) -> None:
                 "params": {},
             },
             {
-                "name": "is_active",
+                "name": "throttled_thread_number",
                 "type": "int",
                 "default": 1,
-                "description": "Whether or not this policy is active.",
+                "description": "Number of threads any throttled query gets assigned.",
                 "value": 1,
                 "params": {},
             },
@@ -242,7 +250,7 @@ def test_get_detailed_configs(policy: AllocationPolicy) -> None:
     policy.set_config_value(
         config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
     )
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 5
     assert {
         "name": "my_param_config",
         "type": "int",

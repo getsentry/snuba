@@ -6,7 +6,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyViolation,
-    InvalidPolicyConfig,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.bytes_scanned_window_policy import (
@@ -158,23 +157,6 @@ def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
                 error=None,
             ),
         )
-
-
-@pytest.mark.redis_db
-def test_bad_config_keys(policy: AllocationPolicy) -> None:
-    _configure_policy(policy)
-    with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config_value("bad_config", 1)
-    assert (
-        str(err.value)
-        == "'bad_config' is not a valid config for BytesScannedWindowAllocationPolicy!"
-    )
-    with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config_value("throttled_thread_number", "bad_value")
-    assert (
-        str(err.value)
-        == "'throttled_thread_number' value needs to be of type int (not str) for BytesScannedWindowAllocationPolicy!"
-    )
 
 
 @pytest.mark.redis_db
