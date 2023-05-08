@@ -220,7 +220,7 @@ def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]
         return {}
 
 
-def delete_config(
+def delete_config_value(
     key: str, user: Optional[Any] = None, config_key: str = config_hash
 ) -> None:
     set_config(key, None, user=user, config_key=config_key)

@@ -132,7 +132,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 
         is_enforced = self.is_enforced()
-        throttled_thread_number = self.get_config("throttled_thread_number")
+        throttled_thread_number = self.get_config_value("throttled_thread_number")
         max_threads = cast(int, get_runtime_config("query_settings/max_threads", 8))
 
         if not self.is_active():
@@ -266,9 +266,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         Checks if org specific limit exists and returns that. Returns the "all" orgs
         bytes scanned limit if specific one DNE.
         """
-        org_limit_bytes_scanned = self.get_config(
+        org_limit_bytes_scanned = self.get_config_value(
             "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )
         if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-            org_limit_bytes_scanned = self.get_config("org_limit_bytes_scanned")
+            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
         return int(org_limit_bytes_scanned)

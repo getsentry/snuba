@@ -96,23 +96,23 @@ def test_passes_through_on_error() -> None:
 def test_bad_config_keys() -> None:
     policy = PassthroughPolicy(StorageKey("something"), [])
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config("bad_config", 1)
+        policy.set_config_value("bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config("is_active", "bad_value")
+        policy.set_config_value("is_active", "bad_value")
     assert (
         str(err.value)
         == "'is_active' value needs to be of type int (not str) for PassthroughPolicy!"
     )
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config("is_enforced", "bad_value")
+        policy.set_config_value("is_enforced", "bad_value")
     assert (
         str(err.value)
         == "'is_enforced' value needs to be of type int (not str) for PassthroughPolicy!"
     )
 
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.get_config("does_not_exist")
+        policy.get_config_value("does_not_exist")
     assert (
         str(err.value)
         == "'does_not_exist' is not a valid config for PassthroughPolicy!"
@@ -151,26 +151,28 @@ def policy() -> AllocationPolicy:
 
 def test_config_validation(policy: AllocationPolicy) -> None:
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config(config_key="my_config", value=10, params={"bad_param": 10})
+        policy.set_config_value(
+            config_key="my_config", value=10, params={"bad_param": 10}
+        )
     assert (
         str(err.value)
         == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
     )
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config(config_key="my_config", value="lol")
+        policy.set_config_value(config_key="my_config", value="lol")
     assert (
         str(err.value)
         == "'my_config' value needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config(config_key="my_param_config", value=10)
+        policy.set_config_value(config_key="my_param_config", value=10)
     assert (
         str(err.value)
         == "'my_param_config' missing required parameters: {'org': 'int', 'ref': 'str'} for SomeParametrizedConfigPolicy!"
     )
 
     with pytest.raises(InvalidPolicyConfig) as err:
-        policy.set_config(
+        policy.set_config_value(
             config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
         )
     assert (
@@ -184,28 +186,28 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
     """Test adding + resetting a simple config"""
     config_key = "my_config"
 
-    policy.set_config(config_key=config_key, value=100)
-    assert policy.get_config(config_key=config_key) == 100
+    policy.set_config_value(config_key=config_key, value=100)
+    assert policy.get_config_value(config_key=config_key) == 100
 
-    policy.delete_config(config_key=config_key)
+    policy.delete_config_value(config_key=config_key)
     # back to default
-    assert policy.get_config(config_key=config_key) == 10
+    assert policy.get_config_value(config_key=config_key) == 10
 
-    """Test adding + deleting a parameterized config"""
+    """Test adding + deleting an optional config"""
     config_key = "my_param_config"
     params = {"org": 10, "ref": "test"}
 
-    policy.set_config(config_key=config_key, value=100, params=params)
-    assert policy.get_config(config_key=config_key, params=params) == 100
+    policy.set_config_value(config_key=config_key, value=100, params=params)
+    assert policy.get_config_value(config_key=config_key, params=params) == 100
 
-    policy.delete_config(config_key=config_key, params=params)
+    policy.delete_config_value(config_key=config_key, params=params)
     # back to default
-    assert policy.get_config(config_key=config_key, params=params) == -1
+    assert policy.get_config_value(config_key=config_key, params=params) == -1
 
 
 @pytest.mark.redis_db
 def test_get_detailed_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_detailed_configs()) == 3
+    assert len(policy_configs := policy.get_current_configs()) == 3
     assert all(
         config in policy_configs
         for config in [
@@ -236,11 +238,11 @@ def test_get_detailed_configs(policy: AllocationPolicy) -> None:
         ]
     )
 
-    # add an instance of parameterized config
-    policy.set_config(
+    # add an instance of an optional config
+    policy.set_config_value(
         config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
     )
-    assert len(policy_configs := policy.get_detailed_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert {
         "name": "my_param_config",
         "type": "int",

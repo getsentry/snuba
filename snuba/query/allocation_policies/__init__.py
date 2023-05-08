@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import delete_config as delete_runtime_config
+from snuba.state import delete_config_value as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
@@ -136,6 +136,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>         # how many threads
         >>>         pass
 
+        >>>    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        >>>         # Define policy specific config definitions, these will be used along
+        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         pass
+
         >>>     def _update_quota_balance(
         >>>         self,
         >>>         tenant_ids: dict[str, str | int],
@@ -148,7 +153,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     To use it:
 
         >>> policy = MyAllocationPolicy(
-        >>>     StorageSetKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
+        >>>     StorageKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
         >>> )
         >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"})
         >>> result = run_db_query(allowance)
@@ -173,9 +178,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     * get_quota_allowance will throw an AllocationPolicyViolation if _get_quota_allowance().can_run is false.
         this is to keep with the pattern in `db_query.py` which communicates error states with exceptions. There is no other
         reason. For more information see snuba.web.db_query.db_query
-    * Every allocation policy takes a `storage_set_key` in its init. The storage_set_key is like a pseudo-tenant. In different
+    * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
-        knows which storage_set_key it is serving. This is currently not used
+        knows which storage_key it is serving. This is currently not used
     """
 
     def __init__(
@@ -254,8 +259,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             + self._additional_config_definitions()
         }
 
-    def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
-        """Returns a dictionary of parameterized configs on this AllocationPolicy."""
+    def get_optional_config_definitions(self) -> list[dict[str, Any]]:
+        """Returns a dictionary of optional config definitions on this AllocationPolicy."""
         return [
             definition.to_definition_dict()
             for definition in self.config_definitions().values()
@@ -301,7 +306,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 f"'{config_key}' missing required parameters: {diff} for {class_name}!"
             )
 
-        # not a parameterized config
+        # not an optional config (no parameters)
         if params and not config.params:
             raise InvalidPolicyConfig(
                 f"'{config_key}' takes no params for {class_name}!"
@@ -328,7 +333,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def get_config(
+    def get_config_value(
         self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
     ) -> Any:
         """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
@@ -346,7 +351,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             ),
         )
 
-    def set_config(
+    def set_config_value(
         self,
         config_key: str,
         value: Any,
@@ -362,13 +367,16 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             config_key=CAPMAN_HASH,
         )
 
-    def delete_config(
+    def delete_config_value(
         self,
         config_key: str,
         params: dict[str, Any] = {},
         user: str | None = None,
     ) -> None:
-        """Deletes an instance of a parameterized config on this AllocationPolicy."""
+        """
+        Deletes an instance of an optional config on this AllocationPolicy.
+        If this function is run on a required config, it resets the value to default instead.
+        """
         self.__validate_config_params(config_key, params)
         delete_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
@@ -376,7 +384,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             config_key=CAPMAN_HASH,
         )
 
-    def get_detailed_configs(self) -> list[dict[str, Any]]:
+    def get_current_configs(self) -> list[dict[str, Any]]:
         """Returns a list of live configs with their definitions on this AllocationPolicy."""
 
         runtime_configs = get_all_runtime_configs(CAPMAN_HASH)
@@ -417,10 +425,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return detailed_configs
 
     def is_active(self) -> bool:
-        return bool(self.get_config(IS_ACTIVE))
+        return bool(self.get_config_value(IS_ACTIVE))
 
     def is_enforced(self) -> bool:
-        return bool(self.get_config(IS_ENFORCED))
+        return bool(self.get_config_value(IS_ENFORCED))
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:

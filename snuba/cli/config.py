@@ -98,7 +98,7 @@ def delete(*, key: str) -> None:
     click.echo(human_fmt({key: rv}))
     click.confirm("\nAre you sure you want to delete this?", abort=True)
 
-    state.delete_config(key, user=get_user())
+    state.delete_config_value(key, user=get_user())
 
 
 @config.command()

@@ -55,14 +55,14 @@ class TestSpansApi(BaseApiTest):
 
         yield
 
-        state.delete_config("spans_project_allowlist")
+        state.delete_config_value("spans_project_allowlist")
         # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
+        state.delete_config_value("global_concurrent_limit")
+        state.delete_config_value("global_per_second_limit")
+        state.delete_config_value("project_concurrent_limit")
+        state.delete_config_value("project_concurrent_limit_1")
+        state.delete_config_value("project_per_second_limit")
+        state.delete_config_value("date_align_seconds")
 
     def generate_fizzbuzz_events(self) -> None:
         """
