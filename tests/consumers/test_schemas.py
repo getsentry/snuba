@@ -4,7 +4,6 @@ from typing import Any, Iterator, Optional
 
 import pytest
 import sentry_kafka_schemas
-from sentry_kafka_schemas.types import Example
 from sentry_kafka_schemas.sentry_kafka_schemas import _get_schema
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -19,11 +18,16 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
 )
 
+
 @dataclass
 class TopicConfig:
     logical_topic_name: str
     processor: MessageProcessor
     replacer_processor: Optional[ReplacerProcessor[Any]]
+
+    def __repr__(self) -> str:
+        return repr(self.logical_topic_name)
+
 
 @dataclass
 class Case:
@@ -48,21 +52,27 @@ def _generate_topic_configs() -> Iterator[TopicConfig]:
         except sentry_kafka_schemas.SchemaNotFound:
             continue
 
-        yield TopicConfig(processor=processor, replacer_processor=replacer_processor, logical_topic_name=topic.value)
-
+        yield TopicConfig(
+            processor=processor,
+            replacer_processor=replacer_processor,
+            logical_topic_name=topic.value,
+        )
 
 
 from hypothesis import given, settings
 from hypothesis_jsonschema import from_schema
 
-@pytest.mark.parametrize("config", _generate_topic_configs())
+
+@pytest.mark.parametrize("config", _generate_topic_configs(), ids=repr)
 def test_fuzz_schemas(config: TopicConfig):
-    schema = _get_schema(config.logical_topic_name)['schema']
+    schema = _get_schema(config.logical_topic_name)["schema"]
 
     @given(value=from_schema(schema))
     @settings(max_examples=1)
     def inner(value):
         run_test(Case(config=config, example=value))
+
+    inner()
 
 
 def _generate_tests() -> Iterator[Case]:
@@ -73,7 +83,8 @@ def _generate_tests() -> Iterator[Case]:
                 example=example.load(),
             )
 
-@pytest.mark.parametrize("case", _generate_tests())
+
+@pytest.mark.parametrize("case", _generate_tests(), ids=repr)
 def test_all_schemas(case: Case) -> None:
     """
     "Assert" that no message processor crashes under the example payloads in
