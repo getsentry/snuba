@@ -149,7 +149,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
-    def get_configs(self) -> list[dict[str, Any]]:
+    def get_current_configs(self) -> list[dict[str, Any]]:
         """Placeholder - doesn't actually do anything."""
         return [
             {
@@ -160,7 +160,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "params": {},
             },
             {
-                "key": "some_parameterized_key",
+                "key": "some_optional_key",
                 "value": "some other value",
                 "description": "Placeholder config. Will not actually be saved.",
                 "type": "placeholder",
@@ -168,7 +168,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             },
         ]
 
-    def get_parameterized_config_definitions(self) -> list[dict[str, Any]]:
+    def get_optional_config_definitions(self) -> list[dict[str, Any]]:
         """
         Placeholder - doesn't actually do anything.
         This should return a list of configs that can be "added" to this policy.
@@ -177,7 +177,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         return [
             {
-                "name": "some_parameterized_key",
+                "name": "some_optional_key",
                 "type": "int",
                 "default": 10,
                 "description": "Placeholder config. Will not actually be saved.",

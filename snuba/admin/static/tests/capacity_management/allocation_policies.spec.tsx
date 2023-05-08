@@ -4,7 +4,7 @@ import AllocationPolicyConfigs from "../../capacity_management/allocation_policy
 import { it, expect, jest } from "@jest/globals";
 import {
   AllocationPolicyConfig,
-  AllocationPolicyParameterizedConfigDefinition,
+  AllocationPolicyOptionalConfigDefinition,
 } from "../../capacity_management/types";
 import { render, waitFor } from "@testing-library/react";
 import React from "react";
@@ -27,7 +27,7 @@ it("should populate configs table upon render", async () => {
     },
   ];
 
-  let parameterizedConfigDefs = [
+  let optionalConfigDefs = [
     {
       name: "key2",
       type: "int",
@@ -45,9 +45,9 @@ it("should populate configs table upon render", async () => {
     getAllocationPolicyConfigs: jest
       .fn<() => Promise<AllocationPolicyConfig[]>>()
       .mockResolvedValueOnce(policyConfigs),
-    getAllocationPolicyParameterizedConfigDefinitions: jest
-      .fn<() => Promise<AllocationPolicyParameterizedConfigDefinition[]>>()
-      .mockResolvedValueOnce(parameterizedConfigDefs),
+    getAllocationPolicyOptionalConfigDefinitions: jest
+      .fn<() => Promise<AllocationPolicyOptionalConfigDefinition[]>>()
+      .mockResolvedValueOnce(optionalConfigDefs),
   };
 
   let { getByText } = render(
@@ -59,11 +59,11 @@ it("should populate configs table upon render", async () => {
   );
   await waitFor(() =>
     expect(
-      mockClient.getAllocationPolicyParameterizedConfigDefinitions
+      mockClient.getAllocationPolicyOptionalConfigDefinitions
     ).toBeCalledTimes(1)
   );
 
-  expect(getByText("N/A")).toBeTruthy(); // non parameterized key in table
+  expect(getByText("N/A")).toBeTruthy(); // non optional key in table
   expect(getByText("key1")).toBeTruthy();
   expect(getByText("key2")).toBeTruthy();
   expect(getByText(JSON.stringify(policyConfigs[1].params))).toBeTruthy();

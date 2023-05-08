@@ -18,7 +18,7 @@ type AllocationPolicyConfigParams = {
   type: string;
 };
 
-type AllocationPolicyParameterizedConfigDefinition = {
+type AllocationPolicyOptionalConfigDefinition = {
   name: string;
   type: string;
   default: string;
@@ -38,7 +38,7 @@ type RowData = [
 export {
   AllocationPolicy,
   AllocationPolicyConfig,
-  AllocationPolicyParameterizedConfigDefinition,
+  AllocationPolicyOptionalConfigDefinition,
   AllocationPolicyConfigParams,
   RowData,
 };

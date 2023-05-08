@@ -4,7 +4,7 @@ import { Table } from "../table";
 import Client from "../api_client";
 import {
   AllocationPolicyConfig,
-  AllocationPolicyParameterizedConfigDefinition,
+  AllocationPolicyOptionalConfigDefinition,
 } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 import { getReadonlyRow } from "./row_data";
@@ -26,8 +26,8 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   });
   const [addingNew, setAddingNew] = useState(false);
 
-  const [parameterizedConfigDefinitions, setDefinitions] = useState<
-    AllocationPolicyParameterizedConfigDefinition[]
+  const [optionalConfigDefinitions, setDefinitions] = useState<
+    AllocationPolicyOptionalConfigDefinition[]
   >([]);
 
   useEffect(() => {
@@ -37,11 +37,9 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   }, [storage]);
 
   useEffect(() => {
-    api
-      .getAllocationPolicyParameterizedConfigDefinitions(storage)
-      .then((res) => {
-        setDefinitions(res);
-      });
+    api.getAllocationPolicyOptionalConfigDefinitions(storage).then((res) => {
+      setDefinitions(res);
+    });
   }, []);
 
   function enterEditMode(config: AllocationPolicyConfig) {
@@ -97,7 +95,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
       <AddConfigModal
         currentlyAdding={addingNew}
         setCurrentlyAdding={setAddingNew}
-        parameterizedConfigDefinitions={parameterizedConfigDefinitions}
+        optionalConfigDefinitions={optionalConfigDefinitions}
         saveConfig={addConfig}
       />
       <div style={containerStyle}>
@@ -116,7 +114,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
           )}
           columnWidths={[3, 3, 2, 5, 1, 1]}
         />
-        {!addingNew && parameterizedConfigDefinitions.length != 0 && (
+        {!addingNew && optionalConfigDefinitions.length != 0 && (
           <a onClick={() => setAddingNew(true)} style={linkStyle}>
             add new
           </a>

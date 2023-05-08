@@ -726,7 +726,7 @@ def allocation_policies() -> Response:
 def get_allocation_policy_configs(storage: str) -> Response:
     try:
         policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        configs = policy.get_configs()
+        configs = policy.get_current_configs()
         return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
     except Exception as exception:
         return Response(
@@ -737,14 +737,14 @@ def get_allocation_policy_configs(storage: str) -> Response:
 
 
 @application.route(
-    "/allocation_policy_parameterized_config_definitions/<path:storage>",
+    "/allocation_policy_optional_config_definitions/<path:storage>",
     methods=["GET"],
 )
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_parameterized_config_definitions(storage: str) -> Response:
+def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
     try:
         policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        config_definitions = policy.get_parameterized_config_definitions()
+        config_definitions = policy.get_optional_config_definitions()
         return Response(
             json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
         )

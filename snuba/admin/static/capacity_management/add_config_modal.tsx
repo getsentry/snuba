@@ -4,25 +4,25 @@ import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import {
   AllocationPolicyConfig,
-  AllocationPolicyParameterizedConfigDefinition,
+  AllocationPolicyOptionalConfigDefinition,
 } from "./types";
 import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {
   currentlyAdding: boolean;
   setCurrentlyAdding: (currentlyAdding: boolean) => void;
-  parameterizedConfigDefinitions: AllocationPolicyParameterizedConfigDefinition[];
+  optionalConfigDefinitions: AllocationPolicyOptionalConfigDefinition[];
   saveConfig: (config: AllocationPolicyConfig) => void;
 }) {
   const {
     currentlyAdding,
     setCurrentlyAdding,
-    parameterizedConfigDefinitions,
+    optionalConfigDefinitions,
     saveConfig,
   } = props;
 
   const [selectedDefinition, selectDefinition] =
-    useState<AllocationPolicyParameterizedConfigDefinition>();
+    useState<AllocationPolicyOptionalConfigDefinition>();
 
   const [config, buildConfig] = useState<AllocationPolicyConfig>({
     key: "",
@@ -33,7 +33,7 @@ function AddConfigModal(props: {
   });
 
   function selectConfigDefinition(name: string) {
-    parameterizedConfigDefinitions.map((definition) => {
+    optionalConfigDefinitions.map((definition) => {
       if (definition.name == name) {
         selectDefinition(definition);
         buildConfig({
@@ -89,7 +89,7 @@ function AddConfigModal(props: {
             <option key="default_selected" className="d-none" value="">
               Select Option
             </option>
-            {parameterizedConfigDefinitions.map((definition) => (
+            {optionalConfigDefinitions.map((definition) => (
               <option key={definition.name}>{definition.name}</option>
             ))}
           </Form.Select>
