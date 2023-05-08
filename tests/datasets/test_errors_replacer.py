@@ -19,7 +19,7 @@ from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import delete_config_value, set_config
+from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
@@ -915,4 +915,4 @@ class TestReplacerProcess(BaseTest):
         )
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is None
-        delete_config_value("replacements_bypass_projects")
+        delete_config("replacements_bypass_projects")

@@ -27,7 +27,7 @@ from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.state import delete_config_value, set_config
+from snuba.state import delete_config, set_config
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
@@ -43,7 +43,7 @@ def test_query_copying_disallowed() -> None:
     assert _is_query_copying_disallowed("tsdb-modelid:4") is False
     assert _is_query_copying_disallowed("subscriptions_executor") is True
 
-    delete_config_value("pipeline-delegator-disallow-query-copy")
+    delete_config("pipeline-delegator-disallow-query-copy")
 
 
 @pytest.mark.redis_db

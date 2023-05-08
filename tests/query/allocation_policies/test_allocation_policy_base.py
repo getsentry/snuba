@@ -119,6 +119,11 @@ def test_bad_config_keys() -> None:
     )
 
 
+@pytest.mark.redis_db
+def test_bad_config_key_in_redis() -> None:
+    pass
+
+
 class SomeParametrizedConfigPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [

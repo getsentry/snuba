@@ -19,7 +19,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import delete_config_value, set_config
+from snuba.state import delete_config, set_config
 
 DISTS_ENTITY_KEY = EntityKey("generic_metrics_distributions")
 DISTS_STORAGE_KEY = StorageKey("generic_metrics_distributions")
@@ -122,7 +122,7 @@ def test_column_based_partition_selector(
 
     assert cluster.get_database() == expected_slice_db
     if set_override:
-        delete_config_value(
+        delete_config(
             f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions"
         )
 
@@ -176,4 +176,4 @@ def test_should_use_mega_cluster(
         )
     assert _should_use_mega_cluster(storage_set, logical_partition) == expected
     if override_config:
-        delete_config_value(f"MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX_{storage_set}")
+        delete_config(f"MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX_{storage_set}")

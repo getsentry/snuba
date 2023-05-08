@@ -42,4 +42,4 @@ def test_cache_wait_timeout() -> None:
     assert _get_cache_wait_timeout(query_settings, tiger_errors_reader) == 60
     assert _get_cache_wait_timeout(query_settings, tiger_transactions_reader) == 60
 
-    state.delete_config_value("tiger-cache-wait-time")
+    state.delete_config("tiger-cache-wait-time")

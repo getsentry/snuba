@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import delete_config_value as delete_runtime_config
+from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
@@ -221,16 +221,40 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE))
+        try:
+            return bool(self.get_config_value(IS_ACTIVE))
+        except Exception:
+            logger.exception(
+                "Something went wrong getting a config value for an Allocation Policy."
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+            return True
 
     @property
     def is_enforced(self) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED))
+        try:
+            return bool(self.get_config_value(IS_ENFORCED))
+        except Exception:
+            logger.exception(
+                "Something went wrong getting a config value for an Allocation Policy."
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+            return False
 
     @property
     def throttled_thread_number(self) -> int:
         """Number of threads any throttled query gets assigned."""
-        return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
+        try:
+            return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
+        except Exception:
+            logger.exception(
+                "Something went wrong getting a config value for an Allocation Policy."
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+            return 1
 
     @property
     def max_threads(self) -> int:
@@ -359,6 +383,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         for key in runtime_configs:
             if key.startswith(self.runtime_config_prefix):
                 config_key, params = self.__deserialize_runtime_config_key_params(key)
+                if config_key == "DESERIALIZE_KEY_FAILED":
+                    continue
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
                         value=runtime_configs[key], params=params
@@ -388,7 +414,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def __deserialize_runtime_config_key_params(
         self, key: str
-    ) -> tuple[str, dict[str, str]]:
+    ) -> tuple[str, dict[str, Any]]:
         """
         Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
         key and parameters components.
@@ -399,17 +425,27 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
             - returns `"my_config", {"a": "1", "b": "2"}`
         """
-        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
-        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-        params_dict = dict()
-        if params:
-            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
-            params_split = params_string.split(",")
-            for param_string in params_split:
-                param_key, param_value = param_string.split(":")
-                params_dict[param_key] = param_value
+        try:
+            # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
+            _, _, config_key, *params = key.split(".")
+            # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+            params_dict = dict()
+            if params:
+                # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
+                [params_string] = params
+                params_split = params_string.split(",")
+                for param_string in params_split:
+                    param_key, param_value = param_string.split(":")
+                    params_dict[param_key] = param_value
+
+            self.__validate_config_params(config_key=config_key, params=params_dict)
+        except Exception:
+            logger.exception(
+                f"There is a bad config key in Redis for an Allocation Policy: {key}",
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+            return "DESERIALIZE_KEY_FAILED", {}
 
         return config_key, params_dict
 
@@ -450,11 +486,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         if params:
             for param in params:
                 if not isinstance(params[param], config.params[param]):
-                    raise InvalidPolicyConfig(
-                        f"'{config_key}' parameter '{param}' needs to be of type"
-                        f" {config.params[param].__name__} (not {type(params[param]).__name__})"
-                        f" for {class_name}!"
-                    )
+                    try:
+                        # try casting to the right type, eg try int("10")
+                        params[param] = config.params[param](params[param])
+                    except Exception:
+                        raise InvalidPolicyConfig(
+                            f"'{config_key}' parameter '{param}' needs to be of type"
+                            f" {config.params[param].__name__} (not {type(params[param]).__name__})"
+                            f" for {class_name}!"
+                        )
 
         # value isn't correct type
         if value is not None:

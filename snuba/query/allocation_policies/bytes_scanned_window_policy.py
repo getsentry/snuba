@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
@@ -20,6 +20,9 @@ from snuba.state.sliding_windows import (
     RequestedQuota,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
+
 
 # A hardcoded list of referrers which do not have an organization_id associated with them
 # purposefully not in config because we don't want that to be easily changeable
@@ -73,6 +76,7 @@ _PASS_THROUGH_REFERRERS = set(
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter()
 DEFAULT_OVERRIDE_LIMIT = -1
+DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):
@@ -94,7 +98,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 name="org_limit_bytes_scanned",
                 description="Number of bytes any org can scan in a 10 minute window.",
                 value_type=int,
-                default=10000,
+                default=DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             AllocationPolicyConfig(
                 name="org_limit_bytes_scanned_override",
@@ -255,9 +259,20 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         Checks if org specific limit exists and returns that. Returns the "all" orgs
         bytes scanned limit if specific one DNE.
         """
-        org_limit_bytes_scanned = self.get_config_value(
-            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
-        )
-        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
+        org_limit_bytes_scanned = DEFAULT_BYTES_SCANNED_LIMIT
+        try:
+            org_limit_bytes_scanned = self.get_config_value(
+                "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
+            )
+            if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+                org_limit_bytes_scanned = self.get_config_value(
+                    "org_limit_bytes_scanned"
+                )
+        except Exception:
+            logger.exception(
+                "Something went wrong getting a config value for an Allocation Policy."
+            )
+            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                raise
+
         return int(org_limit_bytes_scanned)
