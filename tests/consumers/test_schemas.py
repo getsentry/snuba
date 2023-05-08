@@ -4,6 +4,8 @@ from typing import Any, Iterator, Optional
 
 import pytest
 import sentry_kafka_schemas
+from hypothesis import given
+from hypothesis_jsonschema import from_schema
 from sentry_kafka_schemas.sentry_kafka_schemas import _get_schema
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -59,16 +61,11 @@ def _generate_topic_configs() -> Iterator[TopicConfig]:
         )
 
 
-from hypothesis import given, settings
-from hypothesis_jsonschema import from_schema
-
-
 @pytest.mark.parametrize("config", _generate_topic_configs(), ids=repr)
 def test_fuzz_schemas(config: TopicConfig):
     schema = _get_schema(config.logical_topic_name)["schema"]
 
     @given(value=from_schema(schema))
-    @settings(max_examples=1)
     def inner(value):
         run_test(Case(config=config, example=value))
 
