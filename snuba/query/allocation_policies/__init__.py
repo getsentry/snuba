@@ -182,7 +182,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         reason. For more information see snuba.web.db_query.db_query
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
-        knows which storage_key it is serving. This is currently not used
+        knows which storage_key it is serving. This is used to create unique keys for saving the config values.
+        See `__build_runtime_config_key()` for more info.
     """
 
     def __init__(
@@ -293,72 +294,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if definition.params
         ]
 
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Example return values:
-        - `mystorage.MyAllocationPolicy.my_config`            # no params
-        - `mystorage.MyAllocationPolicy.my_config.a:1,b:2`    # sorted params
-        """
-        parameters = "."
-        for param in sorted(list(params.keys())):
-            parameters += f"{param}:{params[param]},"
-        parameters = parameters[:-1]
-        return f"{self.runtime_config_prefix}.{config}{parameters}"
-
-    def __validate_config_params(
-        self, config_key: str, params: dict[str, Any], value: Any = None
-    ) -> AllocationPolicyConfig:
-        definitions = self.config_definitions()
-
-        class_name = self.__class__.__name__
-
-        # config doesn't exist
-        if config_key not in definitions:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
-
-        config = definitions[config_key]
-
-        # missing required parameters
-        if (
-            diff := {
-                key: config.params[key].__name__
-                for key in config.params
-                if key not in params
-            }
-        ) != dict():
-            raise InvalidPolicyConfig(
-                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
-            )
-
-        # not an optional config (no parameters)
-        if params and not config.params:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' takes no params for {class_name}!"
-            )
-
-        # parameters aren't correct types
-        if params:
-            for param in params:
-                if not isinstance(params[param], config.params[param]):
-                    raise InvalidPolicyConfig(
-                        f"'{config_key}' parameter '{param}' needs to be of type"
-                        f" {config.params[param].__name__} (not {type(params[param]).__name__})"
-                        f" for {class_name}!"
-                    )
-
-        # value isn't correct type
-        if value is not None:
-            if not isinstance(value, config.value_type):
-                raise InvalidPolicyConfig(
-                    f"'{config_key}' value needs to be of type"
-                    f" {config.value_type.__name__} (not {type(value).__name__})"
-                    f" for {class_name}!"
-                )
-
-        return config
-
     def get_config_value(
         self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
     ) -> Any:
@@ -423,20 +358,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         for key in runtime_configs:
             if key.startswith(self.runtime_config_prefix):
-                # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-                _, _, config_key, *params = key.split(".")
-                # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-                params_dict = dict()
-                if params:
-                    # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-                    [params_string] = params
-                    params_split = params_string.split(",")
-                    for param_string in params_split:
-                        param_key, param_value = param_string.split(":")
-                        params_dict[param_key] = param_value
+                config_key, params = self.__deserialize_runtime_config_key_params(key)
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
-                        value=runtime_configs[key], params=params_dict
+                        value=runtime_configs[key], params=params
                     )
                 )
                 if config_key in required_configs:
@@ -446,6 +371,101 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             detailed_configs.append(definitions[required_config_key].to_config_dict())
 
         return detailed_configs
+
+    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+        """
+        Builds a unique key to be used in the actual datastore containing these configs.
+
+        Example return values:
+        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
+        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
+        """
+        parameters = "."
+        for param in sorted(list(params.keys())):
+            parameters += f"{param}:{params[param]},"
+        parameters = parameters[:-1]
+        return f"{self.runtime_config_prefix}.{config}{parameters}"
+
+    def __deserialize_runtime_config_key_params(
+        self, key: str
+    ) -> tuple[str, dict[str, str]]:
+        """
+        Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
+        key and parameters components.
+
+        Examples:
+        - `"mystorage.MyAllocationPolicy.my_config"`
+            - returns `"my_config", {}`
+        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
+            - returns `"my_config", {"a": "1", "b": "2"}`
+        """
+        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
+        _, _, config_key, *params = key.split(".")
+        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+        params_dict = dict()
+        if params:
+            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
+            [params_string] = params
+            params_split = params_string.split(",")
+            for param_string in params_split:
+                param_key, param_value = param_string.split(":")
+                params_dict[param_key] = param_value
+
+        return config_key, params_dict
+
+    def __validate_config_params(
+        self, config_key: str, params: dict[str, Any], value: Any = None
+    ) -> AllocationPolicyConfig:
+        definitions = self.config_definitions()
+
+        class_name = self.__class__.__name__
+
+        # config doesn't exist
+        if config_key not in definitions:
+            raise InvalidPolicyConfig(
+                f"'{config_key}' is not a valid config for {class_name}!"
+            )
+
+        config = definitions[config_key]
+
+        # missing required parameters
+        if (
+            diff := {
+                key: config.params[key].__name__
+                for key in config.params
+                if key not in params
+            }
+        ) != dict():
+            raise InvalidPolicyConfig(
+                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
+            )
+
+        # not an optional config (no parameters)
+        if params and not config.params:
+            raise InvalidPolicyConfig(
+                f"'{config_key}' takes no params for {class_name}!"
+            )
+
+        # parameters aren't correct types
+        if params:
+            for param in params:
+                if not isinstance(params[param], config.params[param]):
+                    raise InvalidPolicyConfig(
+                        f"'{config_key}' parameter '{param}' needs to be of type"
+                        f" {config.params[param].__name__} (not {type(params[param]).__name__})"
+                        f" for {class_name}!"
+                    )
+
+        # value isn't correct type
+        if value is not None:
+            if not isinstance(value, config.value_type):
+                raise InvalidPolicyConfig(
+                    f"'{config_key}' value needs to be of type"
+                    f" {config.value_type.__name__} (not {type(value).__name__})"
+                    f" for {class_name}!"
+                )
+
+        return config
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
