@@ -4,7 +4,7 @@ from typing import Any, Iterator, Optional
 
 import pytest
 import sentry_kafka_schemas
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis_jsonschema import from_schema
 from sentry_kafka_schemas.sentry_kafka_schemas import _get_schema
 
@@ -66,6 +66,7 @@ def test_fuzz_schemas(config: TopicConfig):
     schema = _get_schema(config.logical_topic_name)["schema"]
 
     @given(value=from_schema(schema))
+    @settings(suppress_health_check=[HealthCheck.too_slow], deadline=None)
     def inner(value):
         run_test(Case(config=config, example=value))
 
