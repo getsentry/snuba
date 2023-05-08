@@ -28,7 +28,7 @@ class TopicConfig:
     replacer_processor: Optional[ReplacerProcessor[Any]]
 
     def __repr__(self) -> str:
-        return repr(self.logical_topic_name)
+        return f"{self.logical_topic_name}: {self.processor}"
 
 
 @dataclass
