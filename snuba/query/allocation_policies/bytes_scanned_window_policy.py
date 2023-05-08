@@ -126,7 +126,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 
         is_enforced = self.is_enforced()
-        throttled_thread_number = self.get_config_value("throttled_thread_number")
         max_threads = cast(int, get_runtime_config("query_settings/max_threads", 8))
 
         if not self.is_active():
@@ -198,7 +197,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 explanation["limit"] = org_limit_bytes_scanned
 
                 if is_enforced:
-                    num_threads = throttled_thread_number
+                    num_threads = self.throttled_thread_number
 
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, max_threads, {})

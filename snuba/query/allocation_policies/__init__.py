@@ -19,8 +19,10 @@ from snuba.web import QueryException, QueryResult
 logger = logging.getLogger("snuba.query.allocation_policy_base")
 
 CAPMAN_HASH = "capman"
+
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
+THROTTLED_THREAD_NUMBER = "throttled_thread_number"
 
 
 @dataclass(frozen=True)
@@ -205,7 +207,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 default=0,
             ),
             AllocationPolicyConfig(
-                name="throttled_thread_number",
+                name=THROTTLED_THREAD_NUMBER,
                 description="Number of threads any throttled query gets assigned.",
                 value_type=int,
                 default=1,
@@ -432,6 +434,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def is_enforced(self) -> bool:
         return bool(self.get_config_value(IS_ENFORCED))
+
+    @property
+    def throttled_thread_number(self) -> int:
+        """Number of threads any throttled query gets assigned."""
+        return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
