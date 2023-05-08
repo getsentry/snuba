@@ -342,13 +342,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        return cast(
-            config_definition.value_type,  # type: ignore
-            get_runtime_config(
-                key=self.__build_runtime_config_key(config_key, params),
-                default=config_definition.default,
-                config_key=CAPMAN_HASH,
-            ),
+        return get_runtime_config(
+            key=self.__build_runtime_config_key(config_key, params),
+            default=config_definition.default,
+            config_key=CAPMAN_HASH,
         )
 
     def set_config_value(
