@@ -218,6 +218,24 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def runtime_config_prefix(self) -> str:
         return f"{self._storage_key.value}.{self.__class__.__name__}"
 
+    @property
+    def is_active(self) -> bool:
+        return bool(self.get_config_value(IS_ACTIVE))
+
+    @property
+    def is_enforced(self) -> bool:
+        return bool(self.get_config_value(IS_ENFORCED))
+
+    @property
+    def throttled_thread_number(self) -> int:
+        """Number of threads any throttled query gets assigned."""
+        return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
+
+    @property
+    def max_threads(self) -> int:
+        """Maximum number of threads run a single query on ClickHouse with."""
+        return cast(int, get_runtime_config("query_settings/max_threads", 8))
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -428,17 +446,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             detailed_configs.append(definitions[required_config_key].to_config_dict())
 
         return detailed_configs
-
-    def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE))
-
-    def is_enforced(self) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED))
-
-    @property
-    def throttled_thread_number(self) -> int:
-        """Number of threads any throttled query gets assigned."""
-        return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:

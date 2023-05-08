@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, cast
+from typing import Any
 
 from snuba import environment
 from snuba.datasets.storages.storage_key import StorageKey
@@ -13,7 +13,6 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.state import get_config as get_runtime_config
 from snuba.state.sliding_windows import (
     GrantedQuota,
     Quota,
@@ -125,10 +124,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
 
-        is_enforced = self.is_enforced()
-        max_threads = cast(int, get_runtime_config("query_settings/max_threads", 8))
-
-        if not self.is_active():
+        if not self.is_active:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
@@ -136,11 +132,11 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 "db_request_rejected",
                 tags={
                     "storage_key": self._storage_key.value,
-                    "is_enforced": str(is_enforced),
+                    "is_enforced": str(self.is_enforced),
                     "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
-            if is_enforced:
+            if self.is_enforced:
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
@@ -177,7 +173,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                     ),
                 ]
             )
-            num_threads = max_threads
+            num_threads = self.max_threads
             explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
@@ -185,29 +181,29 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                     "db_request_throttled",
                     tags={
                         "storage_key": self._storage_key.value,
-                        "is_enforced": str(is_enforced),
+                        "is_enforced": str(self.is_enforced),
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )
                 explanation[
                     "reason"
                 ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
-                explanation["is_enforced"] = is_enforced
+                explanation["is_enforced"] = self.is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
 
-                if is_enforced:
+                if self.is_enforced:
                     num_threads = self.throttled_thread_number
 
             return QuotaAllowance(True, num_threads, explanation)
-        return QuotaAllowance(True, max_threads, {})
+        return QuotaAllowance(True, self.max_threads, {})
 
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        if not self.is_active():
+        if not self.is_active:
             return
         if result_or_error.error:
             return
