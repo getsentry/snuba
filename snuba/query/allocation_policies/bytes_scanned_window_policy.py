@@ -40,9 +40,6 @@ _ORG_LESS_REFERRERS = set(
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
         "reprocessing2.start_group_reprocessing",
-        # This is just a suite of sentry tests that I do not want to
-        # update
-        "_insert_transaction.verify_transaction",
     ]
 )
 
@@ -57,7 +54,9 @@ _SINGLE_THREAD_REFERRERS = set(
         "delete-events-by-tag-value",
         "delete.fetch_last_group",
         "forward-events",
+        "_insert_transaction.verify_transaction",
         "tasks.update_user_reports",
+        "test.wait_for_event_count",
     ]
 )
 
@@ -113,7 +112,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         # TODO: This kind of killswitch should just be included with every allocation policy
         is_active = cast(bool, get_config(f"{self.rate_limit_prefix}.is_active", True))
         is_enforced = cast(
-            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", False)
+            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", True)
         )
         throttled_thread_number = cast(
             int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
