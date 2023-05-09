@@ -50,7 +50,7 @@ function EditConfigModal(props: {
         <Modal.Title>
           Editing:{" "}
           <code style={{ wordBreak: "break-all", color: "black" }}>
-            {currentConfig.key}
+            {currentConfig.name}
           </code>
         </Modal.Title>
       </Modal.Header>

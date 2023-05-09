@@ -59,7 +59,7 @@ class AllocationPolicyConfig:
         return {
             **self.__to_base_dict(),
             "params": [
-                {"name": param, "type": self.param_types[param]}
+                {"name": param, "type": self.param_types[param].__name__}
                 for param in self.param_types
             ],
         }
@@ -334,60 +334,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
-    def get_current_configs(self) -> list[dict[str, Any]]:
-        """Placeholder - doesn't actually do anything."""
-        return [
-            {
-                "key": "some key",
-                "value": "some value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {},
-            },
-            {
-                "key": "some_optional_key",
-                "value": "some other value",
-                "description": "Placeholder config. Will not actually be saved.",
-                "type": "placeholder",
-                "params": {"c": 3, "d": 4},
-            },
-        ]
-
-    def get_optional_config_definitions(self) -> list[dict[str, Any]]:
-        """
-        Placeholder - doesn't actually do anything.
-        This should return a list of configs that can be "added" to this policy.
-        The only configs falling under this def should be configs that have params.
-        """
-
-        return [
-            {
-                "name": "some_optional_key",
-                "type": "int",
-                "default": 10,
-                "description": "Placeholder config. Will not actually be saved.",
-                "params": [{"name": "c", "type": "int"}, {"name": "d", "type": "int"}],
-            }
-        ]
-
-    def set_config(
-        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
-        """Placeholder - doesn't actually do anything."""
-        return {
-            "key": config_key,
-            "value": value,
-            "description": "Placeholder config. Will not actually be saved.",
-            "type": "placeholder",
-            "params": params,
-        }
-
-    def delete_config(
-        self, config_key: str, user: str | None, params: dict[str, Any] = {}
-    ) -> None:
-        """Placeholder - doesn't actually do anything."""
-        pass
-
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
         AllocationPolicies are attached to the Table a query is executed against.
@@ -460,7 +406,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         user: str | None = None,
     ) -> None:
         """Sets a value of a config on this AllocationPolicy."""
-        self.__validate_config_params(config_key, params, value)
+        config_definition = self.__validate_config_params(config_key, params, value)
+        # ensure correct type is stored
+        value = config_definition.value_type(value)
         set_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
             value=value,
@@ -614,11 +562,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         # value isn't correct type
         if value is not None:
             if not isinstance(value, config.value_type):
-                raise InvalidPolicyConfig(
-                    f"'{config_key}' value needs to be of type"
-                    f" {config.value_type.__name__} (not {type(value).__name__})"
-                    f" for {class_name}!"
-                )
+                try:
+                    # try casting to the right type
+                    config.value_type(value)
+                except Exception:
+                    raise InvalidPolicyConfig(
+                        f"'{config_key}' value needs to be of type"
+                        f" {config.value_type.__name__} (not {type(value).__name__})"
+                        f" for {class_name}!"
+                    )
 
         return config
 

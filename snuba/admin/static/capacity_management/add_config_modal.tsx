@@ -25,7 +25,7 @@ function AddConfigModal(props: {
     useState<AllocationPolicyOptionalConfigDefinition>();
 
   const [config, buildConfig] = useState<AllocationPolicyConfig>({
-    key: "",
+    name: "",
     value: "",
     description: "",
     type: "",
@@ -37,10 +37,10 @@ function AddConfigModal(props: {
       if (definition.name == name) {
         selectDefinition(definition);
         buildConfig({
-          key: definition.name,
+          name: definition.name,
           value: "",
-          description: "",
-          type: "",
+          description: definition.description,
+          type: definition.type,
           params: {},
         });
       }

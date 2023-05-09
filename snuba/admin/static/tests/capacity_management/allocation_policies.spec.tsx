@@ -12,14 +12,14 @@ import React from "react";
 it("should populate configs table upon render", async () => {
   let policyConfigs = [
     {
-      key: "key1",
+      name: "key1",
       value: "10",
       description: "something",
       type: "int",
       params: {},
     },
     {
-      key: "key2",
+      name: "key2",
       value: "20",
       description: "something params",
       type: "int",
