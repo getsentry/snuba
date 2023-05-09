@@ -347,8 +347,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         for key in runtime_configs:
             if key.startswith(self.runtime_config_prefix):
-                config_key, params = self.__deserialize_runtime_config_key_params(key)
-                if config_key == "DESERIALIZE_KEY_FAILED":
+                try:
+                    config_key, params = self.__deserialize_runtime_config_key(key)
+                except Exception:
+                    logger.exception(
+                        f"AllocationPolicy could not deserialize a key: {key}"
+                    )
                     continue
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
@@ -377,9 +381,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
 
-    def __deserialize_runtime_config_key_params(
-        self, key: str
-    ) -> tuple[str, dict[str, Any]]:
+    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
         """
         Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
         key and parameters components.
