@@ -43,9 +43,6 @@ _ORG_LESS_REFERRERS = set(
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
         "reprocessing2.start_group_reprocessing",
-        # This is just a suite of sentry tests that I do not want to
-        # update
-        "_insert_transaction.verify_transaction",
     ]
 )
 
@@ -60,6 +57,9 @@ _SINGLE_THREAD_REFERRERS = set(
         "delete-events-by-tag-value",
         "delete.fetch_last_group",
         "forward-events",
+        "_insert_transaction.verify_transaction",
+        "tasks.update_user_reports",
+        "test.wait_for_event_count",
     ]
 )
 

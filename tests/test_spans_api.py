@@ -240,8 +240,8 @@ class TestSpansApi(BaseApiTest):
             f"""MATCH (spans)
                 SELECT count() AS aggregate
                 WHERE project_id = 1
-                AND end_timestamp >= toDateTime('{from_date}')
-                AND end_timestamp < toDateTime('{to_date}')
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
             """
         )
         data = json.loads(response.data)
@@ -256,8 +256,8 @@ class TestSpansApi(BaseApiTest):
             f"""MATCH (spans)
                 SELECT count() AS aggregate
                 WHERE project_id = 2
-                AND end_timestamp >= toDateTime('{from_date}')
-                AND end_timestamp < toDateTime('{to_date}')
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
             """
         )
         data = json.loads(response.data)
@@ -276,8 +276,8 @@ class TestSpansApi(BaseApiTest):
                 sum(exclusive_time) AS exclusive_time
                 BY transaction_id, segment_name, description, user, domain, span_id
                 WHERE project_id = 1
-                AND end_timestamp >= toDateTime('{from_date}')
-                AND end_timestamp < toDateTime('{to_date}')
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
                 ORDER BY exclusive_time DESC
             """
         )
@@ -295,8 +295,8 @@ class TestSpansApi(BaseApiTest):
             f"""MATCH (spans)
                 SELECT span_id, description, start_timestamp, end_timestamp, op
                 WHERE project_id = 1
-                AND end_timestamp >= toDateTime('{from_date}')
-                AND end_timestamp < toDateTime('{to_date}')
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
                 AND trace_id = '{self.trace_id}'
                 ORDER BY start_timestamp DESC
             """
@@ -304,3 +304,37 @@ class TestSpansApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 2, data
+
+    def test_granularity_processor_gets_applied(self) -> None:
+        """
+        Validates that the granularity processor gets applied to queries
+        """
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT count() AS aggregate
+                BY time
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                GRANULARITY 60
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert data["sql"].startswith("SELECT (toStartOfMinute(end_timestamp")
+
+        response = self._post_query(
+            f"""MATCH (spans)
+                        SELECT count() AS aggregate
+                        BY time
+                        WHERE project_id = 1
+                        AND timestamp >= toDateTime('{from_date}')
+                        AND timestamp < toDateTime('{to_date}')
+                        GRANULARITY 3600
+                    """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert data["sql"].startswith("SELECT (toStartOfHour(end_timestamp")

@@ -97,6 +97,14 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: end_timestamp
+      time_parse_columns:
+        - start_timestamp
+        - end_timestamp
+        - timestamp
   - processor: BasicFunctionsProcessor
   - processor: ReferrerRateLimiterProcessor
   - processor: ProjectReferrerRateLimiter
@@ -117,4 +125,4 @@ validators:
     args: {}
   - validator: DatetimeConditionValidator
     args: {}
-required_time_column: end_timestamp
+required_time_column: timestamp

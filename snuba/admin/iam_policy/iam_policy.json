@@ -46,14 +46,16 @@
       {
         "members": [
             "user:colton.allen@sentry.io",
-            "user:josh.ferge@sentry.io"
+            "user:josh.ferge@sentry.io",
+            "user:kevan.fisher@sentry.io"
         ],
         "role": "roles/SnQLToSQL"
       },
       {
         "members": [
             "user:colton.allen@sentry.io",
-            "user:josh.ferge@sentry.io"
+            "user:josh.ferge@sentry.io",
+            "user:kevan.fisher@sentry.io"
         ],
         "role": "roles/Tracing"
       }
