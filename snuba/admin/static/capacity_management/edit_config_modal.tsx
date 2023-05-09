@@ -44,6 +44,10 @@ function EditConfigModal(props: {
     return Object.keys(currentConfig.params).length ? "Delete" : "Reset";
   }
 
+  function inputType(type: string) {
+    return type == "int" || type == "float" ? "number" : "text";
+  }
+
   return (
     <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
       <Modal.Header closeButton>
@@ -58,7 +62,7 @@ function EditConfigModal(props: {
         <Form.Group>
           <Form.Label>Value: </Form.Label>
           <Form.Control
-            type="text"
+            type={inputType(currentConfig.type)}
             onChange={(e) => updateValue(e.target.value)}
             placeholder={currentConfig.value}
           />
