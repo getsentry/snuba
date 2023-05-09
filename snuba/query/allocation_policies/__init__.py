@@ -174,10 +174,19 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     Configurations
     --------------
-    The Allocation Policy base class comes with an abstraction on top of the runtime config which is used specifically
-    to interface with the Allocation policies live in production. Any configuration definition that exists in your
-    sub class' `_additional_config_definitions()` will appear in the Capacity Management Snuba Admin UI for the policy.
-    From there you can modify the live values to alter how your policy works.
+    AllocationPolicy Configurations are a way to update live flags without shipping code changes. These can be used to feature
+    flag and modify variables live. Very similar to runtime config (uses it under the hood) but with key differences and
+    restrictions on what they can be.
+
+    *NOTE* : You should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Use the
+    `self.{get,set}_config_value()` methods on the policy itself instead! The only exception here is if you need to access or
+    set some sort of global runtime config which would show up in the runtime config UI instead of Capacity Management.
+
+    If for some reason you find yourself needing to use a global config from snuba.state, consider adding it as a property to
+    this base class since it should be universally useful across policies. An example of this is the `max_threads` property.
+
+    Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
+    Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
 
     The base class comes with 2 built in configs which are accessible as properties of the class itself:
     - is_active
@@ -204,6 +213,59 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         - Eg. Some config that limits queries for a specific organization.
         - These are also the only configs that will show up when you go to "add new" config in the admin UI.
 
+    Examples:
+
+    Required Config: Some sort of queries per second rate limiter using a required config named "qps_limit"
+
+        >>> def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        >>>     return [
+        >>>         AllocationPolicyConfig(
+        >>>             name="qps_limit",
+        >>>             description="Maximum of queries we can run per second",
+        >>>             value_type=int,
+        >>>             default=10,
+        >>>         ),
+        >>>         ...
+        >>>     ]
+        >>>
+        >>> def _get_quota_allowance(...) -> QuotaAllowance:
+        >>>     if self.__get_current_qps() < self.get_config_value("qps_limit"):
+        >>>         return QuotaAllowance(can_run=True, ...)
+        >>>     return QuotaAllowance(can_run=False, ...)
+        >>>
+        >>> def _update_quota_balance(...) -> None:
+        >>>     self.__add_query_hit()
+
+    Now this "qps_limit" config will show up in the Capacity Management UI and will be modifiable to any new integer and
+    resettable to it's default. It cannot be deleted using the UI and must be removed from the actual code to go away.
+
+    Optional Config: Same example but let's say certain referrers shouldn't count towards the QPS limit count
+
+        >>> def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        >>>     return [
+        >>>         AllocationPolicyConfig(
+        >>>             name="qps_limit_referrer_override",
+        >>>             description="Referrer based override for the qps_limit config",
+        >>>             value_type=int,
+        >>>             default=0,
+        >>>             param_types={"referrer": str},  # giving a value to `param_types` is what defines this as config optional
+        >>>         ),
+        >>>         ...
+        >>>     ]
+        >>>
+        >>> def _get_quota_allowance(...) -> QuotaAllowance:
+        >>>      # same as before
+        >>>     ...
+        >>>
+        >>> def _update_quota_balance(...) -> None:
+        >>>     # don't count this query towards the quota if the referrer is overridden
+        >>>     if self.get_config_value("qps_limit_referrer_override", params={"referrer": tenant_ids.get("referrer")}):
+        >>>         return
+        >>>     self.__add_query_hit()
+
+    Now this "qps_limit_referrer_override" config won't show up as an existing config in the UI, but when you go to
+    "add new" config, it will be part of the list of optional configs you can add. From there you can create an instance
+    of this config with the value 1 for a certain referrer and it'll show up in the configs list.
 
     **GOTCHAS**
     -----------
@@ -219,6 +281,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
         See `__build_runtime_config_key()` for more info.
+    * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
+        section of this docstring for more info.
     """
 
     def __init__(
@@ -425,7 +489,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         - `"mystorage.MyAllocationPolicy.my_config"`
             - returns `"my_config", {}`
         - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
-            - returns `"my_config", {"a": "1", "b": "2"}`
+            - returns `"my_config", {"a": 1, "b": 2}`
         """
 
         # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
