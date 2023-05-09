@@ -174,16 +174,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     Configurations
     --------------
-    AllocationPolicy Configurations are a way to update live flags without shipping code changes. These can be used to feature
-    flag and modify variables live. Very similar to runtime config (uses it under the hood) but with key differences and
-    restrictions on what they can be.
-
-    *NOTE* : You should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Use the
-    `self.{get,set}_config_value()` methods on the policy itself instead! The only exception here is if you need to access or
-    set some sort of global runtime config which would show up in the runtime config UI instead of Capacity Management.
-
-    If for some reason you find yourself needing to use a global config from snuba.state, consider adding it as a property to
-    this base class since it should be universally useful across policies. An example of this is the `max_threads` property.
+    AllocationPolicy Configurations are a way to update live flags without shipping code changes. Very similar to runtime config
+    (uses it under the hood) but with key differences and restrictions on what they can be.
 
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
@@ -266,6 +258,14 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     Now this "qps_limit_referrer_override" config won't show up as an existing config in the UI, but when you go to
     "add new" config, it will be part of the list of optional configs you can add. From there you can create an instance
     of this config with the value 1 for a certain referrer and it'll show up in the configs list.
+
+    NOTE:
+    - You should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Use the
+        `self.{get,set}_config_value()` methods on the policy itself instead! The only exception here is if you need to access or
+        set some sort of global runtime config which would show up in the runtime config UI instead of Capacity Management.
+    - If for some reason you find yourself needing to use a global config from snuba.state, consider adding it as a property to
+        this base class since it should be universally useful across policies. An example of this is the `max_threads` property.
+
 
     **GOTCHAS**
     -----------
