@@ -514,10 +514,9 @@ class PassthroughPolicy(AllocationPolicy):
         return []
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-
-        max_threads = get_runtime_config("query_settings/max_threads", 8)
-        assert isinstance(max_threads, int)
-        return QuotaAllowance(can_run=True, max_threads=max_threads, explanation={})
+        return QuotaAllowance(
+            can_run=True, max_threads=self.max_threads, explanation={}
+        )
 
     def _update_quota_balance(
         self,

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from unittest import mock
+from unittest import TestCase, mock
 
 import pytest
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyConfig,
@@ -119,11 +120,6 @@ def test_bad_config_keys() -> None:
     )
 
 
-@pytest.mark.redis_db
-def test_bad_config_key_in_redis() -> None:
-    pass
-
-
 class SomeParametrizedConfigPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
@@ -146,6 +142,41 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> None:
         pass
+
+
+class TestAllocationPolicyLogs(TestCase):
+    @pytest.mark.redis_db
+    def test_bad_config_key_in_redis(self) -> None:
+        policy = SomeParametrizedConfigPolicy(StorageKey("something"), [])
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        with self.assertLogs() as captured:
+            configs = policy.get_current_configs()
+
+        # the bad configs are not returned
+        assert len(configs) == 3
+
+        # the bad configs are logged
+        assert len(captured.records) == 3
+        logs = set([record.getMessage() for record in captured.records])
+        assert logs == {
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+        }
 
 
 @pytest.fixture(scope="function")
