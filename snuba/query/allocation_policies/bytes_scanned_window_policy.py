@@ -265,7 +265,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         Checks if org specific limit exists and returns that. Returns the "all" orgs
         bytes scanned limit if specific one DNE.
         """
-        org_limit_bytes_scanned = DEFAULT_BYTES_SCANNED_LIMIT
         org_limit_bytes_scanned = self.get_config_value(
             "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )

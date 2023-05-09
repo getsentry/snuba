@@ -131,16 +131,18 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         >>> class MyAllocationPolicy(AllocationPolicy):
 
+        >>>    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        >>>         # Define policy specific config definitions, these will be used along
+        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         pass
+
+        >>>     # Use your configs in the following methods
+
         >>>     def _get_quota_allowance(
         >>>         self, tenant_ids: dict[str, str | int]
         >>>     ) -> QuotaAllowance:
         >>>         # before a query is run on clickhouse, make a decision whether it can be run and with
         >>>         # how many threads
-        >>>         pass
-
-        >>>    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
-        >>>         # Define policy specific config definitions, these will be used along
-        >>>         # with the default definitions of the base class. (is_enforced, is_active)
         >>>         pass
 
         >>>     def _update_quota_balance(
@@ -164,11 +166,44 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>     QueryResultOrError(result=result)
         >>> )
 
-    The allocation policy base class has two public methods:
+    The allocation policy base class has two public methods for working with the actual quota:
         * get_quota_allowance
         * update_quota_balance
 
     These functions can be used to modify the behaviour of ALL allocation policies, use with care.
+
+    Configurations
+    --------------
+    The Allocation Policy base class comes with an abstraction on top of the runtime config which is used specifically
+    to interface with the Allocation policies live in production. Any configuration definition that exists in your
+    sub class' `_additional_config_definitions()` will appear in the Capacity Management Snuba Admin UI for the policy.
+    From there you can modify the live values to alter how your policy works.
+
+    The base class comes with 2 built in configs which are accessible as properties of the class itself:
+    - is_active
+        - Use this as a way to skip the policy entirely
+    - is_enforced
+        - Use this to throttle/reject queries OR just log stuff (assuming policy is active)
+
+    Eg.
+
+    >>> if not self.is_active:
+    >>>     return
+    >>> metrics.increment("something")
+    >>> if self.is_enforced:
+    >>>     # throttle query
+
+    How to add additional configurations
+    Additional configurations:
+    - Required:
+        - These are configurations you can add that have no parameters, this could be some amount you want to throttle
+          queries to according to some logic you've written
+    - Optional
+        - These are configs you add that DO have parameters. These are meant to be duplicated as many times as you'd like
+          with different parameters.
+        - Eg. Some config that limits queries for a specific organization.
+        - These are also the only configs that will show up when you go to "add new" config in the admin UI.
+
 
     **GOTCHAS**
     -----------
@@ -275,8 +310,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             + self._additional_config_definitions()
         }
 
-    def get_optional_config_definitions(self) -> list[dict[str, Any]]:
-        """Returns a dictionary of optional config definitions on this AllocationPolicy."""
+    def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
+        """Returns a json-like dictionary of optional config definitions on this AllocationPolicy."""
         return [
             definition.to_definition_dict()
             for definition in self.config_definitions().values()
