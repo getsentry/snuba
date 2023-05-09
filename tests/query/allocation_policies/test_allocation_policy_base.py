@@ -135,7 +135,7 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
                 description="",
                 value_type=int,
                 default=-1,
-                params={"org": int, "ref": str},
+                param_types={"org": int, "ref": str},
             ),
         ]
 
@@ -154,6 +154,7 @@ def policy() -> AllocationPolicy:
     return policy
 
 
+@pytest.mark.redis_db
 def test_config_validation(policy: AllocationPolicy) -> None:
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config_value(
@@ -178,12 +179,18 @@ def test_config_validation(policy: AllocationPolicy) -> None:
 
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config_value(
-            config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
+            config_key="my_param_config", value=10, params={"org": "lol", "ref": "test"}
         )
     assert (
         str(err.value)
         == "'my_param_config' parameter 'org' needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
+
+    # strings should convert into ints if expected type is int
+    policy.set_config_value(
+        config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
+    )
+    assert policy.get_config_value("my_param_config", {"org": 10, "ref": "test"}) == 10
 
 
 @pytest.mark.redis_db
@@ -212,10 +219,18 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 3
     assert all(
         config in policy_configs
         for config in [
+            {
+                "name": "my_config",
+                "type": "int",
+                "default": 10,
+                "description": "",
+                "value": 10,
+                "params": {},
+            },
             {
                 "name": "is_active",
                 "type": "int",
@@ -232,22 +247,6 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "value": 0,
                 "params": {},
             },
-            {
-                "name": "my_config",
-                "type": "int",
-                "default": 10,
-                "description": "",
-                "value": 10,
-                "params": {},
-            },
-            {
-                "name": "throttled_thread_number",
-                "type": "int",
-                "default": 1,
-                "description": "Number of threads any throttled query gets assigned.",
-                "value": 1,
-                "params": {},
-            },
         ]
     )
 
@@ -255,12 +254,12 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     policy.set_config_value(
         config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
     )
-    assert len(policy_configs := policy.get_current_configs()) == 5
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert {
         "name": "my_param_config",
         "type": "int",
         "default": -1,
         "description": "",
         "value": 100,
-        "params": {"org": "10", "ref": "test"},
+        "params": {"org": 10, "ref": "test"},
     } in policy_configs

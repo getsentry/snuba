@@ -22,7 +22,6 @@ CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
-THROTTLED_THREAD_NUMBER = "throttled_thread_number"
 
 
 @dataclass(frozen=True)
@@ -44,7 +43,7 @@ class AllocationPolicyConfig:
     description: str
     value_type: type
     default: Any
-    params: dict[str, type] = field(default_factory=dict)
+    param_types: dict[str, type] = field(default_factory=dict)
 
     def __to_base_dict(self) -> dict[str, Any]:
         return {
@@ -59,7 +58,8 @@ class AllocationPolicyConfig:
         return {
             **self.__to_base_dict(),
             "params": [
-                {"name": param, "type": self.params[param]} for param in self.params
+                {"name": param, "type": self.param_types[param]}
+                for param in self.param_types
             ],
         }
 
@@ -207,12 +207,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 value_type=int,
                 default=0,
             ),
-            AllocationPolicyConfig(
-                name=THROTTLED_THREAD_NUMBER,
-                description="Number of threads any throttled query gets assigned.",
-                value_type=int,
-                default=1,
-            ),
         ]
 
     @property
@@ -221,40 +215,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        try:
-            return bool(self.get_config_value(IS_ACTIVE))
-        except Exception:
-            logger.exception(
-                "Something went wrong getting a config value for an Allocation Policy."
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return True
+        return bool(self.get_config_value(IS_ACTIVE))
 
     @property
     def is_enforced(self) -> bool:
-        try:
-            return bool(self.get_config_value(IS_ENFORCED))
-        except Exception:
-            logger.exception(
-                "Something went wrong getting a config value for an Allocation Policy."
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return False
-
-    @property
-    def throttled_thread_number(self) -> int:
-        """Number of threads any throttled query gets assigned."""
-        try:
-            return int(self.get_config_value(THROTTLED_THREAD_NUMBER))
-        except Exception:
-            logger.exception(
-                "Something went wrong getting a config value for an Allocation Policy."
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return 1
+        return bool(self.get_config_value(IS_ENFORCED))
 
     @property
     def max_threads(self) -> int:
@@ -315,7 +280,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return [
             definition.to_definition_dict()
             for definition in self.config_definitions().values()
-            if definition.params
+            if definition.param_types
         ]
 
     def get_config_value(
@@ -375,7 +340,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         required_configs = set(
             config_name
             for config_name, config_def in definitions.items()
-            if not config_def.params
+            if not config_def.param_types
         )
 
         detailed_configs: list[dict[str, Any]] = []
@@ -425,27 +390,20 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
             - returns `"my_config", {"a": "1", "b": "2"}`
         """
-        try:
-            # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-            _, _, config_key, *params = key.split(".")
-            # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-            params_dict = dict()
-            if params:
-                # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-                [params_string] = params
-                params_split = params_string.split(",")
-                for param_string in params_split:
-                    param_key, param_value = param_string.split(":")
-                    params_dict[param_key] = param_value
 
-            self.__validate_config_params(config_key=config_key, params=params_dict)
-        except Exception:
-            logger.exception(
-                f"There is a bad config key in Redis for an Allocation Policy: {key}",
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return "DESERIALIZE_KEY_FAILED", {}
+        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
+        _, _, config_key, *params = key.split(".")
+        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+        params_dict = dict()
+        if params:
+            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
+            [params_string] = params
+            params_split = params_string.split(",")
+            for param_string in params_split:
+                param_key, param_value = param_string.split(":")
+                params_dict[param_key] = param_value
+
+        self.__validate_config_params(config_key=config_key, params=params_dict)
 
         return config_key, params_dict
 
@@ -467,8 +425,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         # missing required parameters
         if (
             diff := {
-                key: config.params[key].__name__
-                for key in config.params
+                key: config.param_types[key].__name__
+                for key in config.param_types
                 if key not in params
             }
         ) != dict():
@@ -477,22 +435,23 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             )
 
         # not an optional config (no parameters)
-        if params and not config.params:
+        if params and not config.param_types:
             raise InvalidPolicyConfig(
                 f"'{config_key}' takes no params for {class_name}!"
             )
 
         # parameters aren't correct types
         if params:
-            for param in params:
-                if not isinstance(params[param], config.params[param]):
+            for param_name in params:
+                if not isinstance(params[param_name], config.param_types[param_name]):
                     try:
                         # try casting to the right type, eg try int("10")
-                        params[param] = config.params[param](params[param])
+                        expected_type = config.param_types[param_name]
+                        params[param_name] = expected_type(params[param_name])
                     except Exception:
                         raise InvalidPolicyConfig(
-                            f"'{config_key}' parameter '{param}' needs to be of type"
-                            f" {config.params[param].__name__} (not {type(params[param]).__name__})"
+                            f"'{config_key}' parameter '{param_name}' needs to be of type"
+                            f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
                             f" for {class_name}!"
                         )
 

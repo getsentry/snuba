@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any
 
-from snuba import environment, settings
+from snuba import environment
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
@@ -105,7 +105,13 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 description="Number of bytes a specific org can scan in a 10 minute window.",
                 value_type=int,
                 default=DEFAULT_OVERRIDE_LIMIT,
-                params={"org_id": int},
+                param_types={"org_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="throttled_thread_number",
+                description="Number of threads any throttled query gets assigned.",
+                value_type=int,
+                default=1,
             ),
         ]
 
@@ -197,7 +203,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 explanation["limit"] = org_limit_bytes_scanned
 
                 if self.is_enforced:
-                    num_threads = self.throttled_thread_number
+                    num_threads = self.get_config_value("throttled_thread_number")
 
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, self.max_threads, {})
@@ -260,19 +266,10 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         bytes scanned limit if specific one DNE.
         """
         org_limit_bytes_scanned = DEFAULT_BYTES_SCANNED_LIMIT
-        try:
-            org_limit_bytes_scanned = self.get_config_value(
-                "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
-            )
-            if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-                org_limit_bytes_scanned = self.get_config_value(
-                    "org_limit_bytes_scanned"
-                )
-        except Exception:
-            logger.exception(
-                "Something went wrong getting a config value for an Allocation Policy."
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
+        org_limit_bytes_scanned = self.get_config_value(
+            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
+        )
+        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
 
         return int(org_limit_bytes_scanned)
