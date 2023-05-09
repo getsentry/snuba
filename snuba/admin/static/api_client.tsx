@@ -26,6 +26,12 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
+import {
+  AllocationPolicy,
+  AllocationPolicyConfig,
+  AllocationPolicyOptionalConfigDefinition,
+} from "./capacity_management/types";
+
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (
@@ -54,6 +60,24 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
+  getAllocationPolicies: () => Promise<AllocationPolicy[]>;
+  getAllocationPolicyConfigs: (
+    storage: string
+  ) => Promise<AllocationPolicyConfig[]>;
+  getAllocationPolicyOptionalConfigDefinitions: (
+    storage: string
+  ) => Promise<AllocationPolicyOptionalConfigDefinition[]>;
+  setAllocationPolicyConfig: (
+    storage: string,
+    key: string,
+    value: string,
+    params: object
+  ) => Promise<AllocationPolicyConfig>;
+  deleteAllocationPolicyConfig: (
+    storage: string,
+    key: string,
+    params: object
+  ) => Promise<void>;
 }
 
 function Client() {
@@ -268,6 +292,69 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
+    },
+
+    getAllocationPolicies: () => {
+      const url = baseUrl + "allocation_policies";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    getAllocationPolicyConfigs: (storage: string) => {
+      const url =
+        baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    getAllocationPolicyOptionalConfigDefinitions: (storage: string) => {
+      const url =
+        baseUrl +
+        "allocation_policy_optional_config_definitions/" +
+        encodeURIComponent(storage);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setAllocationPolicyConfig: (
+      storage: string,
+      key: string,
+      value: string,
+      params: object
+    ) => {
+      const url = baseUrl + "allocation_policy_config";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({ storage, key, value, params }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not set config";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+    deleteAllocationPolicyConfig: (
+      storage: string,
+      key: string,
+      params: object
+    ) => {
+      const url = baseUrl + "allocation_policy_config";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+        body: JSON.stringify({ storage, key, params }),
+      }).then((res) => {
+        if (res.ok) {
+          return;
+        } else {
+          throw new Error("Could not delete config");
+        }
+      });
     },
   };
 }

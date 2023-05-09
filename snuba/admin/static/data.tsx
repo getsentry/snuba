@@ -6,6 +6,7 @@ import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
 import Kafka from "./kafka";
 import QuerylogQueries from "./querylog";
+import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
 
 function Placeholder(props: any) {
@@ -15,6 +16,11 @@ function Placeholder(props: any) {
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "capacity-management",
+    display: "🪫 Capacity Management",
+    component: CapacityManagement,
+  },
   {
     id: "snql-to-sql",
     display: "🌐 SnQL to SQL",

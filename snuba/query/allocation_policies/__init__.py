@@ -17,6 +17,7 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
+CAPMAN_PREFIX = "capman"
 
 CAPMAN_HASH = "capman"
 
@@ -332,6 +333,60 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @classmethod
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
+
+    def get_current_configs(self) -> list[dict[str, Any]]:
+        """Placeholder - doesn't actually do anything."""
+        return [
+            {
+                "key": "some key",
+                "value": "some value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {},
+            },
+            {
+                "key": "some_optional_key",
+                "value": "some other value",
+                "description": "Placeholder config. Will not actually be saved.",
+                "type": "placeholder",
+                "params": {"c": 3, "d": 4},
+            },
+        ]
+
+    def get_optional_config_definitions(self) -> list[dict[str, Any]]:
+        """
+        Placeholder - doesn't actually do anything.
+        This should return a list of configs that can be "added" to this policy.
+        The only configs falling under this def should be configs that have params.
+        """
+
+        return [
+            {
+                "name": "some_optional_key",
+                "type": "int",
+                "default": 10,
+                "description": "Placeholder config. Will not actually be saved.",
+                "params": [{"name": "c", "type": "int"}, {"name": "d", "type": "int"}],
+            }
+        ]
+
+    def set_config(
+        self, config_key: str, value: Any, user: str | None, params: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        """Placeholder - doesn't actually do anything."""
+        return {
+            "key": config_key,
+            "value": value,
+            "description": "Placeholder config. Will not actually be saved.",
+            "type": "placeholder",
+            "params": params,
+        }
+
+    def delete_config(
+        self, config_key: str, user: str | None, params: dict[str, Any] = {}
+    ) -> None:
+        """Placeholder - doesn't actually do anything."""
+        pass
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
