@@ -15,6 +15,7 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.clickhouse.capacity_management import get_allocation_policies
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -44,6 +45,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
@@ -708,3 +711,109 @@ def snql_to_sql() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+
+
+@application.route("/allocation_policies")
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def allocation_policies() -> Response:
+    return Response(
+        json.dumps(get_allocation_policies()), 200, {"Content-Type": "application/json"}
+    )
+
+
+@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_configs(storage: str) -> Response:
+    try:
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        configs = policy.get_current_configs()
+        return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route(
+    "/allocation_policy_optional_config_definitions/<path:storage>",
+    methods=["GET"],
+)
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
+    try:
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        config_definitions = policy.get_optional_config_definitions()
+        return Response(
+            json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
+        )
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_allocation_policy_config() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        storage, key = (data["storage"], data["key"])
+
+        params = data.get("params", {})
+
+        assert isinstance(storage, str), "Invalid storage"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+
+        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        try:
+            policy.delete_config(key, user, params)
+            return Response("", 200)
+        except Exception as exception:
+            return Response(
+                json.dumps({"error": {"message": str(exception)}}, indent=4),
+                400,
+                {"Content-Type": "application/json"},
+            )
+    else:
+        try:
+            value = data["value"]
+            assert isinstance(value, str), "Invalid value"
+            config = policy.set_config(key, value, user, params)
+            return Response(
+                json.dumps(config), 200, {"Content-Type": "application/json"}
+            )
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+        except Exception as exception:
+            return Response(
+                json.dumps({"error": {"message": str(exception)}}, indent=4),
+                400,
+                {"Content-Type": "application/json"},
+            )
