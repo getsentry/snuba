@@ -350,7 +350,9 @@ def clickhouse_trace_query() -> Response:
     try:
         result = run_query_and_get_trace(storage, raw_sql)
         trace_output = result.trace_output
-        return make_response(jsonify({"trace_output": trace_output}), 200)
+        return make_response(
+            jsonify({"trace_output": trace_output, "cols": len(result.results)}), 200
+        )
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
