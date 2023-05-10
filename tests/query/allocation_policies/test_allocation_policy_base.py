@@ -273,9 +273,9 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
             {
                 "name": "is_enforced",
                 "type": "int",
-                "default": 0,
+                "default": 1,
                 "description": "Whether or not this policy is enforced.",
-                "value": 0,
+                "value": 1,
                 "params": {},
             },
         ]
