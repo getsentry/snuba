@@ -413,6 +413,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             key=self.__build_runtime_config_key(config_key, params),
             value=value,
             user=user,
+            force=True,
             config_key=CAPMAN_HASH,
         )
 
