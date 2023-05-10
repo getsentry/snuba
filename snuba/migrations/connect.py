@@ -15,7 +15,10 @@ from snuba.clusters.cluster import (
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.migrations.clickhouse import CLICKHOUSE_SERVER_MIN_VERSION
+from snuba.migrations.clickhouse import (
+    CLICKHOUSE_SERVER_MAX_VERSION,
+    CLICKHOUSE_SERVER_MIN_VERSION,
+)
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
 from snuba.settings import ENABLE_DEV_FEATURES
 
@@ -57,14 +60,23 @@ def check_clickhouse_connections() -> None:
 
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
+    """
+    Checks that the clickhouse version is at least the min version and at most the max version
+    """
     ver = clickhouse.execute("SELECT version()").results[0][0]
     ver = re.search("(\d+.\d+.\d+.\d+)", ver)
-    if ver is None or version.parse(ver.group()) < version.parse(
+    error_message = (
+        f"Snuba requires Clickhouse versions at least {CLICKHOUSE_SERVER_MIN_VERSION} and "
+        f"at most {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
+    )
+    if ver is None:
+        raise InvalidClickhouseVersion(error_message)
+
+    parsed_ver = version.parse(ver.group())
+    if parsed_ver < version.parse(
         CLICKHOUSE_SERVER_MIN_VERSION
-    ):
-        raise InvalidClickhouseVersion(
-            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
-        )
+    ) or parsed_ver > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
+        raise InvalidClickhouseVersion(error_message)
 
 
 def check_for_inactive_replicas() -> None:
