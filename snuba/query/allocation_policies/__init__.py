@@ -305,7 +305,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 name=IS_ENFORCED,
                 description="Whether or not this policy is enforced.",
                 value_type=int,
-                default=0,
+                default=1,
             ),
         ]
 
