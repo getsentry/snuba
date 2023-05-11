@@ -117,6 +117,8 @@ function TracingQueries(props: { api: Client }) {
         const tracing_result = {
           input_query: `${query.sql}`,
           timestamp: result.timestamp,
+          num_rows: result.num_rows_result,
+          cols: result.cols,
           trace_output: result.trace_output,
           error: result.error,
         };
