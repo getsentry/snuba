@@ -26,6 +26,6 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
     )
     return TraceOutput(
         trace_output=query_result.trace_output,
-        cols=query_result.meta,
+        cols=query_result.meta,  # type: ignore
         num_rows_result=len(query_result.results),
     )
