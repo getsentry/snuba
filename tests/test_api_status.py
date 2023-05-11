@@ -32,6 +32,7 @@ class TestApiCodes(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"organization_id": 132, "referrer": "r"},
                 }
             ),
             headers={"referer": "test"},

@@ -9,6 +9,7 @@ from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.validator import StorageValidator
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
 
@@ -20,15 +21,10 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             self.__initialize()
 
     def __initialize(self) -> None:
-        self._config_built_storages = {
-            storage.get_storage_key(): storage
-            for storage in [
-                build_storage_from_config(config_file)
-                for config_file in glob(
-                    settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
-                )
-            ]
-        }
+        for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True):
+            storage = build_storage_from_config(config_file)
+            StorageValidator(storage).validate()
+            self._config_built_storages[storage.get_storage_key()] = storage
 
         self._all_storages = self._config_built_storages
 

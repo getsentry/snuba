@@ -18,6 +18,8 @@ DOGSTATSD_HOST = env("DOGSTATSD_HOST")
 DOGSTATSD_PORT = env("DOGSTATSD_PORT")
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {"deprecate", "complete"}
+READINESS_STATE_FAIL_QUERIES: bool = False
+
 
 SENTRY_DSN = env("SENTRY_DSN")

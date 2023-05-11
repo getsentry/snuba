@@ -44,19 +44,6 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
-# Migrations Groups that are allowed to be managed
-# in the snuba admin tool.
-ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
-    "search_issues",
-    "test_migration",
-    "events",
-    "transactions",
-}
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -94,6 +81,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
+            "spans",
         },
         "single_node": True,
     },
@@ -240,6 +228,12 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# By default, allocation policies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with allocation
+# policy code, the request will still be able to go through (but it will create a dangerous
+# situation eventually)
+RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6
@@ -254,13 +248,22 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "functions",
     "test_migration",
     "search_issues",
+    "spans",
 }
 
 if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
     SKIPPED_MIGRATION_GROUPS.remove("search_issues")
 
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
+    SKIPPED_MIGRATION_GROUPS.remove("spans")
+
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+# [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
+# We expect to remove them after all storages and migration groups have been migrated.
+READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
+READINESS_STATE_STORAGES_ENABLED: set[str] = set()
+READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -302,13 +305,8 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
 
-# Start time in hours from UTC 00:00:00 after which we are allowed to run
-# optimize jobs in parallel.
-PARALLEL_OPTIMIZE_JOB_START_TIME = 0
-
-# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
-# parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = 9
+# Enable spans ingestion
+ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
@@ -323,6 +321,14 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+
+# Start time in hours from UTC 00:00:00 after which we are allowed to run
+# optimize jobs in parallel.
+PARALLEL_OPTIMIZE_JOB_START_TIME = 0
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
+# parallel to avoid running in parallel when peak traffic starts.
+PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"

@@ -53,7 +53,6 @@ query_processors:
 allocation_policy:
   name: PassthroughPolicy
   args:
-    storage_set_key: test-storage-set
     required_tenant_types: ["some_tenant"]
 
 """
@@ -70,6 +69,10 @@ allocation_policy:
             assert storage.get_allocation_policy()._required_tenant_types == {
                 "some_tenant"
             }
+            assert (
+                storage.get_allocation_policy().runtime_config_prefix
+                == "test-storage.PassthroughPolicy"
+            )
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [

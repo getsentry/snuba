@@ -1,6 +1,6 @@
 use rdkafka::message::OwnedHeaders;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct KafkaPayload {
     pub key: Option<Vec<u8>>,
     pub headers: Option<OwnedHeaders>,

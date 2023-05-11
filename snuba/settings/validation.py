@@ -59,7 +59,6 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "ingest-replay-events",
         "generic-events",
         "snuba-generic-events-commit-log",
-        "snuba-replay-events",
         "snuba-dead-letter-replays",
         "snuba-generic-metrics",
         "snuba-generic-metrics-sets-commit-log",
@@ -69,6 +68,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
         "snuba-dead-letter-generic-events",
+        "snuba-dead-letter-querylog",
         "snuba-generic-events-commit-log",
     }
 

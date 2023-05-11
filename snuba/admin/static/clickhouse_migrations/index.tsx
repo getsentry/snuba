@@ -29,7 +29,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   useEffect(() => {
     props.api.getAllMigrationGroups().then((res) => {
       let options: GroupOptions = {};
-      res.forEach(
+      res.sort().forEach(
         (group: MigrationGroupResult) => (options[group.group] = group)
       );
       setAllGroups(options);
@@ -165,7 +165,7 @@ function ClickhouseMigrations(props: { api: Client }) {
   function refreshStatus(group: string) {
     props.api.getAllMigrationGroups().then((res) => {
       let options: GroupOptions = {};
-      res.forEach(
+      res.sort().forEach(
         (group: MigrationGroupResult) => (options[group.group] = group)
       );
       setAllGroups(options);

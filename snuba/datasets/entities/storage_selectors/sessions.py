@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import List
+from typing import Sequence
 
 from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_time_range
@@ -25,7 +25,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_connections: List[EntityStorageConnection],
+        storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
         # then it is a crash rate alert subscription, and hence we decide on whether to use the

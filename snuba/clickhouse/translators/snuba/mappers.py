@@ -110,6 +110,25 @@ class ColumnToFunction(ColumnToExpression):
 
 
 @dataclass(frozen=True)
+class ColumnToFunctionOnColumn(ColumnToExpression):
+    """
+    Maps a column into a function expression that preserves the alias.
+    """
+
+    to_function_name: str
+    to_function_column: str
+
+    def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
+        return FunctionCallExpr(
+            alias=expression.alias,
+            function_name=self.to_function_name,
+            parameters=(
+                ColumnExpr(None, expression.table_name, self.to_function_column),
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class ColumnToIPAddress(ColumnToFunction):
     """
     Custom column mapper for mapping columns to IP Address.

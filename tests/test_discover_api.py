@@ -10,6 +10,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
@@ -65,6 +66,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -97,6 +99,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -127,6 +130,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -153,6 +157,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -189,6 +194,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -218,6 +224,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -252,6 +259,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 2,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -281,6 +289,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 2,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -304,6 +313,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -328,6 +338,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -378,6 +389,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -428,6 +440,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 10,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -449,6 +462,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -469,6 +483,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -495,6 +510,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -525,6 +541,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -548,6 +565,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -569,6 +587,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -590,6 +609,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -612,6 +632,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 5,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -633,6 +654,7 @@ class TestDiscoverApi(BaseApiTest):
                         "aggregations": [["count()", "", "times_seen"]],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
             ).data
@@ -651,6 +673,7 @@ class TestDiscoverApi(BaseApiTest):
                         "conditions": [["type", "!=", "transaction"]],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
             ).data
@@ -668,6 +691,7 @@ class TestDiscoverApi(BaseApiTest):
                         "conditions": [["duration", ">=", 0]],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
                 entity="discover_transactions",
@@ -689,6 +713,7 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
                 entity="discover_transactions",
@@ -710,6 +735,7 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
                 entity="discover_transactions",
@@ -729,6 +755,7 @@ class TestDiscoverApi(BaseApiTest):
                         "selected_columns": ["contexts[device.online]"],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
             ).data
@@ -745,6 +772,7 @@ class TestDiscoverApi(BaseApiTest):
                         "selected_columns": ["contexts[device.online]"],
                         "from_date": (self.base_time - self.skew).isoformat(),
                         "to_date": (self.base_time + self.skew).isoformat(),
+                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     }
                 ),
                 entity="discover_transactions",
@@ -767,6 +795,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -801,6 +830,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -826,6 +856,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -849,6 +880,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1000,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -874,6 +906,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -895,6 +928,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -921,6 +955,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -943,6 +978,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -966,6 +1002,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -992,6 +1029,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
         )
@@ -1076,6 +1114,7 @@ class TestDiscoverApi(BaseApiTest):
                     "limit": 1,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover_transactions",
@@ -1089,6 +1128,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "selected_columns": [
                         [
@@ -1180,6 +1220,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "aggregations": [["max", "timestamp", "last_seen"]],
                     "having": [],
@@ -1202,6 +1243,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "aggregations": [],
                     "conditions": [
                         ["project_id", "IN", [self.project_id]],
@@ -1244,6 +1286,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "aggregations": [
                         ["divide(count(), divide(86400, 60))", None, "tpm"],
                     ],
@@ -1276,6 +1319,7 @@ class TestDiscoverApi(BaseApiTest):
                     "offset": 0,
                     "project": [self.project_id],
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "groupby": [],
@@ -1383,6 +1427,7 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                     ],
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": [self.project_id],
                     "selected_columns": ["transaction", "project_id"],
                     "limit": 5,
@@ -1420,6 +1465,7 @@ class TestDiscoverApi(BaseApiTest):
                     "offset": 0,
                     "project": [self.project_id],
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "groupby": [],
                     "conditions": [
                         ["type", "=", "transaction"],
@@ -1450,6 +1496,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "selected_columns": ["type", "tags[custom_tag]", "release"],
                     "conditions": [["type", "!=", "transaction"]],
@@ -1473,6 +1520,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "aggregations": [["count", None, "count"]],
                     "arrayjoin": "exception_stacks.type",
@@ -1524,6 +1572,7 @@ class TestDiscoverApi(BaseApiTest):
                     "arrayjoin": "exception_frames.filename",
                     "project": [self.project_id],
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "groupby": ["exception_frames.filename"],
@@ -1550,6 +1599,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "aggregations": [["count()", "", "count"]],
                     "conditions": [
@@ -1572,6 +1622,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": self.project_id,
                     "aggregations": [["count", None, "count"]],
                     "debug": True,
@@ -1641,6 +1692,7 @@ class TestDiscoverApi(BaseApiTest):
                     "totals": False,
                     "debug": True,
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                 }
             ),
             entity="discover",
@@ -1664,6 +1716,7 @@ class TestDiscoverApi(BaseApiTest):
                     "orderby": "-count",
                     "project": [self.project_id],
                     "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "groupby": ["tags_key"],
@@ -1705,3 +1758,13 @@ class TestDiscoverAPIEntitySelection(TestDiscoverApi):
             return orig_post(data, "discover", referrer)
 
         self.post = fixed_entity_post
+
+
+class TestDiscoverAPIErrorsRO(TestDiscoverApi):
+    """
+    Override the original tests to always use the readonly table for discover_events.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("enable_events_readonly_table", 1)

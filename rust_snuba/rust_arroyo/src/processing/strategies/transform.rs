@@ -42,7 +42,7 @@ mod tests {
     use crate::processing::strategies::{
         CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     };
-    use crate::types::{Message, Partition, Topic};
+    use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::Utc;
     use std::time::Duration;
 
@@ -80,12 +80,14 @@ mod tests {
         };
 
         strategy
-            .submit(Message::new(
-                partition,
-                0,
-                "Hello world".to_string(),
-                Utc::now(),
-            ))
+            .submit(Message {
+                inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
+                    "Hello world".to_string(),
+                    partition,
+                    0,
+                    Utc::now(),
+                )),
+            })
             .unwrap();
     }
 }

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Sequence
 
 from snuba import state
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
@@ -18,7 +18,7 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_connections: List[EntityStorageConnection],
+        storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         use_readonly_storage = (
             state.get_config("enable_events_readonly_table", False)

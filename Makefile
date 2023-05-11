@@ -60,16 +60,27 @@ test-admin:
 	cd snuba/admin && yarn install && yarn run test
 	SNUBA_SETTINGS=test pytest -vv tests/admin/
 
+test-frontend-admin:
+	cd snuba/admin && yarn install && yarn run test
+
 validate-configs:
 	python3 snuba/validate_configs.py
-
-watch-rust-snuba:
-	cd rust_snuba/ && cargo watch -s 'maturin develop'
 
 generate-config-docs:
 	pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
+watch-rust-snuba:
+	cd rust_snuba/ && cargo watch -s 'maturin develop'
+.PHONY: watch-rust-snuba
+
+test-rust:
+	cd rust_snuba/rust_arroyo/ && cargo test
+	cd rust_snuba && cargo test
+.PHONY: test-rust
+
 lint-rust:
+	cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings
 	cd rust_snuba && cargo clippy -- -D warnings
+
 .PHONY: lint-rust

@@ -52,10 +52,6 @@ class QuerySettings(ABC):
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass
 
-    @abstractmethod
-    def get_organization_id(self) -> Optional[int]:
-        pass
-
 
 # TODO: I don't like that there are two different classes for the same thing
 # this could probably be replaces with a `source` attribute on the class
@@ -75,7 +71,6 @@ class HTTPQuerySettings(QuerySettings):
         # TODO: is this flag still relevant?
         legacy: bool = False,
         referrer: str = "unknown",
-        organization_id: Optional[int] = None,
     ) -> None:
         super().__init__()
         self.__turbo = turbo
@@ -85,7 +80,6 @@ class HTTPQuerySettings(QuerySettings):
         self.__legacy = legacy
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
-        self.__organization_id = organization_id
         self.referrer = referrer
 
     def get_turbo(self) -> bool:
@@ -114,9 +108,6 @@ class HTTPQuerySettings(QuerySettings):
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         self.__resource_quota = quota
-
-    def get_organization_id(self) -> Optional[int]:
-        return self.__organization_id
 
 
 class SubscriptionQuerySettings(QuerySettings):
@@ -174,6 +165,3 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass
-
-    def get_organization_id(self) -> Optional[int]:
-        return None

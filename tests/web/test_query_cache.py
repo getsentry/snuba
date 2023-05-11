@@ -46,7 +46,7 @@ def run_query() -> None:
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
-                {"tenant_type": "tenant_id"},
+                {"referrer": "r", "organization_id": 1234},
                 "blah",
                 None,
                 None,

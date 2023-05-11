@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
 from arroyo import Topic
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.commit import IMMEDIATE
-from arroyo.dlq import DlqLimit, DlqPolicy, NoopDlqProducer
+from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
@@ -23,6 +23,7 @@ from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
@@ -77,8 +78,7 @@ class ConsumerBuilder:
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
     ) -> None:
-        self.__run_dlq_test = get_config(f"dlq_test_{storage_key.value}") == 1
-
+        self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
@@ -125,7 +125,7 @@ class ConsumerBuilder:
                     bootstrap_servers=kafka_params.replacements_bootstrap_servers,
                     override_params={
                         "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB)
                     },
                 )
             )
@@ -189,13 +189,10 @@ class ConsumerBuilder:
         slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
+        stream_loader = self.storage.get_table_writer().get_stream_loader()
+
         # retrieves the default logical topic
-        topic = (
-            self.storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic
-        )
+        topic = stream_loader.get_default_topic_spec().topic
 
         configuration = build_kafka_consumer_configuration(
             topic,
@@ -238,9 +235,23 @@ class ConsumerBuilder:
             commit_retry_policy=self.__commit_retry_policy,
         )
 
-        dlq_policy = None
-        if self.__run_dlq_test:
-            dlq_policy = DlqPolicy(NoopDlqProducer(), DlqLimit(), None)
+        dlq_config = stream_loader.get_dlq_config()
+
+        if dlq_config is not None:
+            dlq_producer = KafkaProducer(
+                build_kafka_producer_configuration(
+                    dlq_config.topic,
+                    slice_id,
+                )
+            )
+            dlq_topic_spec = KafkaTopicSpec(dlq_config.topic)
+            resolved_topic = Topic(dlq_topic_spec.get_physical_topic_name(slice_id))
+
+            dlq_policy = DlqPolicy(
+                KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit(), None
+            )
+        else:
+            dlq_policy = None
 
         return StreamProcessor(
             consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
@@ -288,7 +299,6 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
-            dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
         )
 
         if self.__profile_path is not None:
@@ -303,12 +313,10 @@ class ConsumerBuilder:
         if self.replacements_producer:
             self.replacements_producer.flush()
 
-    def build_base_consumer(
-        self, slice_id: Optional[int] = None
-    ) -> StreamProcessor[KafkaPayload]:
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.build_streaming_strategy_factory(slice_id), slice_id
+            self.build_streaming_strategy_factory(self.slice_id), self.slice_id
         )

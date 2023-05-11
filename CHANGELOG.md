@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.4.0
+
+### Various fixes & improvements
+
+- fix(CI): add migrations check to main pipeline (attempt 2) (#4019) by @dbanda
+- fix: Add killswitch to disable raising of InvalidMessage (#4023) by @untitaker
+- add a manually triggered migrations stage to prod gocd (#4014) by @dbanda
+- feat(search-issues): process transaction_duration values (#4008) by @barkbarkimashark
+- Revert "feat(CI): add migrations check to main pipeline (#4013)" (b59bb7e9) by @getsentry-bot
+- build: Arroyo 2.10.1 (#4017) by @untitaker
+- feat(CI): add migrations check to main pipeline (#4013) by @dbanda
+- feat(CapMan): Errors Allocation Policy V0 (fixed) (#4016) by @volokluev
+- ref: Make all errors replacements class-based (#4009) by @untitaker
+- Revert "feat(CapMan): AllocationPolicy for Errors (#3999)" (#4015) by @volokluev
+- add optional transaction_duration column (#4007) by @barkbarkimashark
+- feat(CapMan): AllocationPolicy for Errors (#3999) by @volokluev
+- build: sentry-kafka-schemas 0.0.28 (#4005) by @lynnagara
+- feat: DLQ for querylog (#4006) by @lynnagara
+- fix(search-issues): make resource_id, subtitle, culprit, and level fields available in entity (#3995) by @barkbarkimashark
+- build(deps): bump h2 from 0.3.16 to 0.3.17 in /rust_snuba (#4010) by @dependabot
+- fix(admin) Fix regex to allow SelectExecutor tracing lines (#3983) by @evanh
+- feat: Use new DLQ from Arroyo (#4001) by @lynnagara
+- ref: Make delete_groups replacement class-based (#3996) by @untitaker
+- build: Arroyo 2.10.0 (#4003) by @lynnagara
+- fix: update validation from org_countries for granularity (#4002) by @andriisoldatenko
+- fix: Fix type issue (#4000) by @lynnagara
+- ref(ci): add auto labeling for migrations (#3961) by @MeredithAnya
+- build(deps): bump sentry-arroyo[json] from 2.8.0 to 2.9.1 (#3988) by @dependabot
+
+_Plus 90 more_
+
 ## 23.3.1
 
 ### Various fixes & improvements

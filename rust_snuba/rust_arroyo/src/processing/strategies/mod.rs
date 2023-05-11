@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 pub mod commit_offsets;
-pub mod transform;
 pub mod produce;
+pub mod reduce;
+pub mod transform;
 
 #[derive(Debug, Clone)]
 pub struct MessageRejected;

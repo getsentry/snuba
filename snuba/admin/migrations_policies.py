@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, MutableMapping, Set
 
 from flask import Response, g, jsonify, make_response, request
 
-from snuba import settings
 from snuba.admin.auth_roles import (
     ExecuteAllAction,
     ExecuteNonBlockingAction,
@@ -33,11 +32,7 @@ def get_migration_group_policies(
     roles.
     """
     group_policies: MutableMapping[str, Set[str]] = defaultdict(set)
-    allowed_groups = [
-        group.value
-        for group in get_active_migration_groups()
-        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
-    ]
+    allowed_groups = [group.value for group in get_active_migration_groups()]
 
     for role in user.roles:
         for action in role.actions:

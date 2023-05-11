@@ -1,7 +1,8 @@
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import sentry_sdk
 
+from snuba import settings as snuba_settings
 from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
@@ -23,6 +24,7 @@ from snuba.datasets.storage import (
     EntityStorageConnection,
     ReadableStorage,
     ReadableTableStorage,
+    StorageNotAvailable,
 )
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
@@ -116,7 +118,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: List[EntityStorageConnection],
+        storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
@@ -175,6 +177,16 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
         cluster = self.get_cluster(storage, query, settings)
+
+        # Return failure if storage readiness state is not supported in current environment
+        if snuba_settings.READINESS_STATE_FAIL_QUERIES:
+            assert isinstance(storage, ReadableTableStorage)
+            readiness_state = storage.get_readiness_state()
+            if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
+                raise StorageNotAvailable(
+                    StorageNotAvailable.__name__,
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+                )
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"

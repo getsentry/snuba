@@ -141,10 +141,7 @@ pub trait Consumer<'a, TPayload: Clone> {
     /// Stage offsets to be committed. If an offset has already been staged
     /// for a given partition, that offset is overwritten (even if the offset
     /// moves in reverse.)
-    fn stage_offsets(
-        &mut self,
-        positions: HashMap<Partition, u64>,
-    ) -> Result<(), ConsumerError>;
+    fn stage_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 
     /// Commit staged offsets. The return value of this method is a mapping
     /// of streams with their committed offsets as values.

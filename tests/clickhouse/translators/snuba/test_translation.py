@@ -5,6 +5,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToCurriedFunction,
     ColumnToFunction,
+    ColumnToFunctionOnColumn,
     ColumnToLiteral,
     ColumnToMapping,
     FunctionNameMapper,
@@ -81,6 +82,22 @@ def test_column_curried_function_translation() -> None:
             ),
         ),
         (Column(None, None, "duration_quantiles"),),
+    )
+
+
+def test_column_function_column() -> None:
+    assert ColumnToFunctionOnColumn(
+        None,
+        "tags_key",
+        "arrayJoin",
+        "tags.key",
+    ).attempt_map(
+        Column("tags_key", None, "tags_key"),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    ) == FunctionCall(
+        "tags_key",
+        "arrayJoin",
+        (Column(None, None, "tags.key"),),
     )
 
 

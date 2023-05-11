@@ -366,10 +366,30 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.city
             nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_subdivision
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.subdivision
+            nullable: true
         - mapper: ColumnToNullIf
           args:
             from_table_name: null
             from_col_name: user
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: DefaultNoneSubscriptMapper
           args:
@@ -415,7 +435,6 @@ query_processors:
         time: timestamp
       time_parse_columns:
         - timestamp
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
   - processor: ReferrerRateLimiterProcessor
   - processor: ProjectReferrerRateLimiter

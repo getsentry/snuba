@@ -233,10 +233,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
         unimplemented!("Seek is not implemented");
     }
 
-    fn stage_offsets(
-        &mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<(), ConsumerError> {
+    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -264,7 +261,7 @@ impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload>
 
         let offsets = positions
             .iter()
-            .map(|(part, offset)| (part.clone(), offset.clone()))
+            .map(|(part, offset)| (part.clone(), *offset))
             .collect();
         self.broker.commit(&self.group, offsets);
         self.subscription_state.staged_positions.clear();
@@ -301,7 +298,6 @@ mod tests {
     use crate::backends::Consumer;
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
-    use chrono::Utc;
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;
     use uuid::Uuid;
@@ -513,14 +509,12 @@ mod tests {
         assert!(msg1.is_some());
         let msg_content = msg1.unwrap();
         assert_eq!(msg_content.offset, 0);
-        assert_eq!(msg_content.next_offset(), 1);
         assert_eq!(msg_content.payload, "message1".to_string());
 
         let msg2 = consumer.poll(Some(Duration::from_millis(100))).unwrap();
         assert!(msg2.is_some());
         let msg_content = msg2.unwrap();
         assert_eq!(msg_content.offset, 1);
-        assert_eq!(msg_content.next_offset(), 2);
         assert_eq!(msg_content.payload, "message2".to_string());
 
         let ret = consumer.poll(Some(Duration::from_millis(100)));
@@ -574,7 +568,7 @@ mod tests {
         let stage_result = consumer.stage_offsets(positions.clone());
         assert!(stage_result.is_ok());
 
-        let offsets = consumer.commit_offsetes();
+        let offsets = consumer.commit_offsets();
         assert!(offsets.is_ok());
         assert_eq!(offsets.unwrap(), positions);
 
@@ -584,7 +578,7 @@ mod tests {
                 topic: topic2,
                 index: 1,
             },
-            100
+            100,
         )]);
 
         let stage_result = consumer.stage_offsets(invalid_positions);

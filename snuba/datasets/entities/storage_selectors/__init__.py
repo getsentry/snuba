@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import List, Type, cast
+from typing import Sequence, Type, cast
 
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.query.logical import Query
@@ -27,7 +27,7 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_connections: List[EntityStorageConnection],
+        storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         raise NotImplementedError
 

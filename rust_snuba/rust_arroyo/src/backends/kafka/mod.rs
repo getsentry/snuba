@@ -64,11 +64,12 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
             headers: msg.headers().map(BorrowedHeaders::detach),
             payload: msg.payload().map(|p| p.to_vec()),
         },
-
         partition,
         msg.offset() as u64,
-
-        DateTime::from_utc(NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN), Utc),
+        DateTime::from_utc(
+            NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
+            Utc,
+        ),
     )
 }
 
@@ -265,10 +266,7 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
         Ok(())
     }
 
-    fn stage_offsets(
-        &mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<(), ConsumerError> {
+    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         for (partition, offset) in offsets {
             self.staged_offsets.insert(partition, offset);
         }
@@ -313,7 +311,6 @@ mod tests {
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::Consumer;
     use crate::types::{Partition, Topic};
-    use chrono::Utc;
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;
     use rdkafka::config::ClientConfig;
@@ -406,8 +403,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit() {
-        create_topic("test", 1).await;
-
+        create_topic("test2", 1).await;
         let configuration = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
             "my-group-2".to_string(),
@@ -418,16 +414,13 @@ mod tests {
 
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic {
-            name: "test".to_string(),
+            name: "test2".to_string(),
         };
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         consumer.subscribe(&[topic.clone()], my_callbacks).unwrap();
 
-        let positions = HashMap::from([(
-            Partition { topic, index: 0 },
-            100,
-        )]);
+        let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
         consumer.stage_offsets(positions.clone()).unwrap();
 
@@ -445,7 +438,7 @@ mod tests {
         assert_eq!(res, positions);
         consumer.unsubscribe().unwrap();
         consumer.close();
-        delete_topic("test").await;
+        delete_topic("test2").await;
     }
 
     #[test]

@@ -9,6 +9,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.datasets.storage import StorageNotAvailable
 from snuba.request import Request
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
@@ -101,6 +102,7 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: RequestStatus.INVALID_TYPING,
     ErrorCodes.TYPE_MISMATCH: RequestStatus.INVALID_TYPING,
     ErrorCodes.NO_COMMON_TYPE: RequestStatus.INVALID_TYPING,
+    ErrorCodes.UNKNOWN_FUNCTION: RequestStatus.INVALID_REQUEST,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
 }
 
@@ -121,6 +123,8 @@ def get_request_status(cause: Exception | None = None) -> Status:
         slo_status = RequestStatus.CACHE_SET_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
+    elif isinstance(cause, StorageNotAvailable):
+        slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
 

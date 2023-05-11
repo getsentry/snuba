@@ -1,4 +1,4 @@
-from typing import List
+from typing import Sequence
 
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import EntityStorageConnection, ReadableTableStorage
@@ -22,7 +22,7 @@ class DefaultQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_connections: List[EntityStorageConnection],
+        storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         assert len(storage_connections) == 1
         return storage_connections[0]
@@ -40,7 +40,7 @@ class SimpleQueryStorageSelector(QueryStorageSelector):
         self,
         query: Query,
         query_settings: QuerySettings,
-        storage_connections: List[EntityStorageConnection],
+        storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         for storage_connection in storage_connections:
             assert isinstance(storage_connection.storage, ReadableTableStorage)

@@ -32,7 +32,6 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
         for migration_id, status, blocking in group_migrations:
@@ -58,6 +57,7 @@ def list() -> None:
 @click.option(
     "-r",
     "--readiness-state",
+    multiple=True,
     type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
     default=None,
 )
@@ -69,7 +69,7 @@ def list() -> None:
 )
 def migrate(
     group: Optional[str],
-    readiness_state: Optional[ReadinessState],
+    readiness_state: Optional[Sequence[str]],
     through: str,
     force: bool,
     fake: bool,
@@ -98,7 +98,11 @@ def migrate(
             force=force,
             fake=fake,
             group=migration_group,
-            readiness_state=readiness_state,
+            readiness_states=(
+                [ReadinessState(state) for state in readiness_state]
+                if readiness_state
+                else None
+            ),
         )
     except MigrationError as e:
         raise click.ClickException(str(e))

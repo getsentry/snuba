@@ -1,18 +1,16 @@
 import logging
 import signal
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.commit import IMMEDIATE
+from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
-)
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -21,6 +19,7 @@ from snuba.consumers.consumer import (
     CommitLogConfig,
     MultistorageConsumerProcessingStrategyFactory,
 )
+from snuba.datasets.configuration.utils import DlqConfig
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import (
@@ -28,6 +27,7 @@ from snuba.datasets.storages.factory import (
     get_writable_storage_keys,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_logging, setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -253,13 +253,15 @@ def multistorage_consumer(
 
         assert consumer_config.logical_commit_log_topic is not None
 
-        producer = ConfluentKafkaProducer(
+        commit_log_producer = ConfluentKafkaProducer(
             build_kafka_producer_configuration(
                 SnubaTopic(consumer_config.logical_commit_log_topic.name)
             )
         )
 
-        commit_log_config = CommitLogConfig(producer, commit_log, consumer_group)
+        commit_log_config = CommitLogConfig(
+            commit_log_producer, commit_log, consumer_group
+        )
 
     strategy_factory = build_multistorage_streaming_strategy_factory(
         writable_storages,
@@ -271,17 +273,32 @@ def multistorage_consumer(
         metrics,
         commit_log_config,
         replacements,
-        consumer_config.dead_letter_policy,
         slice_id,
         profile_path,
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
+
+    dlq_config = consumer_config.dlq_config
+
+    if dlq_config is not None:
+        dlq_producer = KafkaProducer(
+            build_kafka_producer_configuration(
+                dlq_config.topic,
+                slice_id,
+            )
+        )
+        dlq_topic_spec = KafkaTopicSpec(dlq_config.topic)
+        resolved_topic = Topic(dlq_topic_spec.get_physical_topic_name(slice_id))
+
+        dlq_policy = DlqPolicy(
+            KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit(), None
+        )
+    else:
+        dlq_policy = None
+
     processor = StreamProcessor(
-        consumer,
-        topic,
-        strategy_factory,
-        IMMEDIATE,
+        consumer, topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
     )
 
     def handler(signum: int, frame: Any) -> None:
@@ -297,7 +314,7 @@ class ConsumerConfig:
     logical_raw_topic: Topic
     logical_commit_log_topic: Optional[Topic]
     logical_replacements_topic: Optional[Topic]
-    dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]]
+    dlq_config: Optional[DlqConfig]
 
 
 def get_consumer_config(
@@ -330,10 +347,7 @@ def get_consumer_config(
         if spec is not None
     }
 
-    dead_letter_policies = {
-        stream_loader.get_dead_letter_queue_policy_creator()
-        for stream_loader in stream_loaders
-    }
+    dlq_configs = {stream_loader.get_dlq_config() for stream_loader in stream_loaders}
 
     # XXX: The ``StreamProcessor`` only supports a single topic at this time,
     # but is easily modified. The topic routing in the processing strategy is a
@@ -358,13 +372,11 @@ def get_consumer_config(
 
     # Only one dead letter policy is supported. All storages must share the same
     # dead letter policy creator
-    dead_letter_policy_creator = dead_letter_policies.pop()
-    if dead_letter_policies:
+    dlq_config = dlq_configs.pop()
+    if dlq_config:
         raise ValueError("only one dead letter policy is supported")
 
-    return ConsumerConfig(
-        topic, commit_log_topic, replacement_topic, dead_letter_policy_creator
-    )
+    return ConsumerConfig(topic, commit_log_topic, replacement_topic, dlq_config)
 
 
 def build_multistorage_streaming_strategy_factory(
@@ -377,7 +389,6 @@ def build_multistorage_streaming_strategy_factory(
     metrics: MetricsBackend,
     commit_log_config: Optional[CommitLogConfig],
     replacements: Optional[Topic],
-    dead_letter_policy: Optional[Callable[[], DeadLetterQueuePolicy]],
     slice_id: Optional[int],
     profile_path: Optional[str],
 ) -> ProcessingStrategyFactory[KafkaPayload]:
@@ -392,7 +403,6 @@ def build_multistorage_streaming_strategy_factory(
         input_block_size=input_block_size,
         output_block_size=output_block_size,
         metrics=metrics,
-        dead_letter_policy_creator=dead_letter_policy,
         slice_id=slice_id,
         commit_log_config=commit_log_config,
         replacements=replacements,

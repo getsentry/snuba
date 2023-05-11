@@ -55,6 +55,7 @@ class Topic(Enum):
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
+    DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
@@ -63,7 +64,10 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.REPLAYEVENTS: {
+            "message.timestamp.type": "LogAppendTime",
+            "max.message.bytes": "15000000",
+        },
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
     }

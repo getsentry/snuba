@@ -228,6 +228,12 @@ schema:
     - retention_days
     - date
   not_deleted_mandatory_condition: deleted
+allocation_policy:
+  name: ErrorsAllocationPolicy
+  args:
+    required_tenant_types:
+      - organzation_id
+      - referrer
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

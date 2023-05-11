@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Union
 
 import sentry_sdk
 from sentry_sdk import Hub
@@ -9,41 +9,63 @@ from snuba.attribution.log import (
     QueryAttributionData,
     record_attribution,
 )
+from snuba.datasets.storage import StorageNotAvailable
+from snuba.query.exceptions import QueryPlanException
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api")
+from snuba.querylog.query_metadata import get_request_status
 
 
 def _record_timer_metrics(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
+    result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
     app_id = request.attribution_info.app_id.key or "none"
     parent_api = request.attribution_info.parent_api or "none"
-    timer.send_metrics_to(
-        metrics,
-        tags={
-            "status": query_metadata.status.value,
-            "request_status": query_metadata.request_status.value,
-            "slo": query_metadata.slo.value,
+    tags = {
+        "status": query_metadata.status.value,
+        "request_status": query_metadata.request_status.value,
+        "slo": query_metadata.slo.value,
+        "referrer": referrer,
+        "parent_api": parent_api,
+        "final": final,
+        "dataset": query_metadata.dataset,
+        "app_id": app_id,
+    }
+    mark_tags = {
+        "final": final,
+        "referrer": referrer,
+        "parent_api": parent_api,
+        "dataset": query_metadata.dataset,
+    }
+    if isinstance(result, StorageNotAvailable):
+        # The QueryPlanException is raised outside the query execution flow.
+        # As a result, its status and SLO values are not based on its query_list
+        status = get_request_status(result)
+        tags = {
+            "status": QueryStatus.ERROR.value,
+            "request_status": status.status.value,
+            "slo": status.slo.value,
             "referrer": referrer,
             "parent_api": parent_api,
             "final": final,
             "dataset": query_metadata.dataset,
             "app_id": app_id,
-        },
-        mark_tags={
-            "final": final,
-            "referrer": referrer,
-            "parent_api": parent_api,
-            "dataset": query_metadata.dataset,
-        },
+        }
+
+    timer.send_metrics_to(
+        metrics,
+        tags=tags,
+        mark_tags=mark_tags,
     )
 
 
@@ -62,12 +84,16 @@ def _record_attribution_metrics(
         duration_ms=timing_data["duration_ms"],
         queries=[],
     )
+    query_id = ""
+    if "stats" in extra_data and "query_id" in extra_data["stats"]:
+        query_id = extra_data["stats"]["query_id"]
+
     for q in query_metadata.query_list:
         profile = q.result_profile
         bytes_scanned = profile.get("bytes", 0.0) if profile else 0.0
         attr_query = QueryAttributionData(
             table=q.profile.table,
-            query_id=extra_data["stats"]["query_id"],
+            query_id=query_id,
             bytes_scanned=bytes_scanned,
         )
         attr_data.queries.append(attr_query)
@@ -79,19 +105,23 @@ def record_query(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    extra_data: Mapping[str, Any],
+    result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     """
     Records a request after it has been parsed and validated, whether
     we actually ran a query or not.
     """
+
+    extra_data: Mapping[str, Any] = {}
+    if not isinstance(result, QueryPlanException):
+        extra_data = result.extra
     if settings.RECORD_QUERIES:
         # Send to redis
         # We convert this to a dict before passing it to state in order to avoid a
         # circular dependency, where state would depend on the higher level
         # QueryMetadata class
         state.record_query(query_metadata.to_dict())
-        _record_timer_metrics(request, timer, query_metadata)
+        _record_timer_metrics(request, timer, query_metadata, result)
         _record_attribution_metrics(request, query_metadata, extra_data)
         _add_tags(timer, extra_data.get("experiments"), query_metadata)
 

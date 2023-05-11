@@ -29,8 +29,7 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: String) -> Result<Response, Error> {
-
-        let res = self.client
+        self.client
             .post(self.url.clone())
             .headers(self.headers.clone())
             .body(body)
@@ -39,22 +38,17 @@ impl ClickhouseClient {
                 format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
             )])
             .send()
-            .await;
-
-        // println!("Response status {}", res.as_ref().unwrap().text());
-        return res
-
+            .await
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    #[ignore = "clickhouse not running in rust ci"]
     #[tokio::test]
-    async fn it_works() -> Result<(), reqwest::Error>{
-        let client: ClickhouseClient = ClickhouseClient::new("localhost",8123, "querylog_local");
+    async fn it_works() -> Result<(), reqwest::Error> {
+        let client: ClickhouseClient = ClickhouseClient::new("localhost", 8123, "querylog_local");
 
         println!("{}", "running test");
         let res = client.send("[]".to_string()).await;

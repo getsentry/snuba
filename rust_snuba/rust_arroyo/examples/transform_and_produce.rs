@@ -12,7 +12,7 @@ use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::transform::Transform;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory, InvalidMessage,
+    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
@@ -46,8 +46,6 @@ impl ProcessingStrategy<KafkaPayload> for Noop {
     }
 }
 
-
-
 #[tokio::main]
 async fn main() {
     struct ReverseStringAndProduceStrategyFactory {
@@ -60,7 +58,7 @@ async fn main() {
             let topic = TopicOrPartition::Topic(self.topic.clone());
             let reverse_string_and_produce_strategy = Transform {
                 function: reverse_string,
-                next_step: Box::new(Produce::new(producer, Box::new(Noop {}), topic ))
+                next_step: Box::new(Produce::new(producer, Box::new(Noop {}), topic)),
             };
             Box::new(reverse_string_and_produce_strategy)
         }
@@ -74,16 +72,19 @@ async fn main() {
         None,
     );
 
-
     let consumer = Box::new(KafkaConsumer::new(config.clone()));
-    let mut processor = StreamProcessor::new(consumer,
+    let mut processor = StreamProcessor::new(
+        consumer,
         Box::new(ReverseStringAndProduceStrategyFactory {
-                            config: config.clone(),
-                            topic: Topic { name: "test_out".to_string() }
-                         }));
+            config: config.clone(),
+            topic: Topic {
+                name: "test_out".to_string(),
+            },
+        }),
+    );
     processor.subscribe(Topic {
         name: "test_in".to_string(),
     });
     println!("running processor. transforming from test_in to test_out");
-    processor.run();
+    processor.run().unwrap();
 }

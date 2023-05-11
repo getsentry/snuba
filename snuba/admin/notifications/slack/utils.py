@@ -45,13 +45,30 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
 
 
 def build_migration_run_text(data: Any, action: AuditLogAction) -> Optional[str]:
-    if action == AuditLogAction.RAN_MIGRATION_COMPLETED:
+    if action in [
+        AuditLogAction.RAN_MIGRATION_COMPLETED,
+        AuditLogAction.RAN_MIGRATION_FAILED,
+    ]:
         action_text = f":athletic_shoe: ran migration `{data['migration']}`"
-    elif action == AuditLogAction.REVERSED_MIGRATION_COMPLETED:
+    elif action in [
+        AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+        AuditLogAction.REVERSED_MIGRATION_FAILED,
+    ]:
         action_text = f":back: reversed migration `{data['migration']}`"
     else:
         return None
-    return f":warning: *Migration:* \n\n{action_text} (force={data['force']}, fake={data['fake']})"
+
+    text = (
+        f"*Migration:* \n\n{action_text} (force={data['force']}, fake={data['fake']})"
+    )
+
+    if action in [
+        AuditLogAction.REVERSED_MIGRATION_FAILED,
+        AuditLogAction.RAN_MIGRATION_FAILED,
+    ]:
+        return f":bangbang: *[FAILED]* :bangbang: {text}"
+
+    return f":warning: {text}"
 
 
 def build_context(

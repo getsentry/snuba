@@ -15,6 +15,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
+    Tuple,
     TypeVar,
 )
 
@@ -395,7 +396,9 @@ class ReplacerWorker:
             metrics=self.metrics,
         )
 
-    def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+    def process_message(
+        self, message: Message[KafkaPayload]
+    ) -> Optional[Tuple[ReplacementMessageMetadata, Replacement]]:
         assert isinstance(message.value, BrokerValue)
         metadata = ReplacementMessageMetadata(
             partition_index=message.value.partition.index,
@@ -417,23 +420,29 @@ class ReplacerWorker:
         [version, action_type, data] = seq_message
 
         if version == 2:
-            return self.__replacer_processor.process_message(
+            processed = self.__replacer_processor.process_message(
                 ReplacementMessage(
                     action_type=action_type,
                     data=data,
                     metadata=metadata,
                 )
             )
+            if processed is not None:
+                return metadata, processed
+            else:
+                return None
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
-    def flush_batch(self, batch: Sequence[Replacement]) -> None:
+    def flush_batch(
+        self, batch: Sequence[Tuple[ReplacementMessageMetadata, Replacement]]
+    ) -> None:
         need_optimize = False
         clickhouse_read = self.__storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.REPLACE
         )
 
-        for replacement in batch:
+        for message_metadata, replacement in batch:
             start_time = datetime.now()
 
             table_name = self.__replacer_processor.get_schema().get_table_name()
@@ -458,7 +467,9 @@ class ReplacerWorker:
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._check_timing_and_write_to_redis(replacement, start_time.timestamp())
+            self._check_timing_and_write_to_redis(
+                message_metadata, start_time.timestamp()
+            )
 
             if isinstance(replacement, ErrorReplacement):
                 project_id = replacement.get_project_id()
@@ -524,7 +535,7 @@ class ReplacerWorker:
             redis_client.delete(key)
 
     def _check_timing_and_write_to_redis(
-        self, replacement: Replacement, start_time: float
+        self, message_metadata: ReplacementMessageMetadata, start_time: float
     ) -> None:
         """
         Write the offset just processed to Redis if execution took longer than the threshold.
@@ -535,7 +546,6 @@ class ReplacerWorker:
         """
         if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
             return
-        message_metadata = replacement.get_message_metadata()
         key = self._build_topic_group_index_key(message_metadata)
         redis_client.set(
             key,

@@ -8,6 +8,10 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: group_id, type: UInt, args: { size: 64 } },
     { name: search_title, type: String },
+    { name: resource_id, type: String },
+    { name: subtitle, type: String },
+    { name: culprit, type: String },
+    { name: level, type: String, args: { schema_modifiers: [ low_cardinality ] } },
     { name: primary_hash, type: UUID },
     { name: fingerprint, type: Array, args: { inner_type: { type: String } } },
     { name: occurrence_id, type: UUID },
@@ -55,6 +59,7 @@ schema:
       type: String,
       args: { schema_modifiers: [ nullable ] },
     },
+    { name: transaction_duration, type: UInt, args: { size: 32 } },
 
     { name: message_timestamp, type: DateTime },
     { name: partition, type: UInt, args: { size: 16 } },
@@ -129,6 +134,42 @@ storages:
             to_nested_col_name: "contexts"
             to_nested_mapping_key: "geo.city"
             nullable: True
+        - mapper: ColumnToMapping
+          args:
+            from_table_name:
+            from_col_name: "geo_subdivision"
+            to_nested_col_table_name:
+            to_nested_col_name: "contexts"
+            to_nested_mapping_key: "geo.subdivision"
+            nullable: True
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: "transaction"
+            to_nested_col_table_name: null
+            to_nested_col_name: "tags"
+            to_nested_mapping_key: "transaction"
+            nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: "transaction_name"
+            to_nested_col_table_name: null
+            to_nested_col_name: "tags"
+            to_nested_mapping_key: "transaction"
+            nullable: true
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -160,7 +201,6 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
 
 validators:
