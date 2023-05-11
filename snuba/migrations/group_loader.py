@@ -306,6 +306,7 @@ class SearchIssuesLoader(DirectoryLoader):
             "0004_rebuild_search_issues_with_version",
             "0005_search_issues_v2",
             "0006_add_subtitle_culprit_level_resource_id",
+            "0007_drop_search_issues_old_table",
             "0007_add_transaction_duration",
         ]
 
