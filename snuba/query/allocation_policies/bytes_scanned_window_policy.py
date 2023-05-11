@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, cast
+from typing import Any
 
 from snuba import environment
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
+    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.state import get_config
 from snuba.state.sliding_windows import (
     GrantedQuota,
     Quota,
@@ -20,6 +20,9 @@ from snuba.state.sliding_windows import (
     RequestedQuota,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
+
 
 # A hardcoded list of referrers which do not have an organization_id associated with them
 # purposefully not in config because we don't want that to be easily changeable
@@ -72,6 +75,8 @@ _PASS_THROUGH_REFERRERS = set(
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter()
+DEFAULT_OVERRIDE_LIMIT = -1
+DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):
@@ -81,19 +86,38 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
     def __init__(
         self,
-        storage_set_key: StorageSetKey,
+        storage_key: StorageKey,
         required_tenant_types: list[str],
         **kwargs: str,
     ) -> None:
-        super().__init__(storage_set_key, required_tenant_types)
+        super().__init__(storage_key, required_tenant_types)
+
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return [
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned",
+                description="Number of bytes any org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_BYTES_SCANNED_LIMIT,
+            ),
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned_override",
+                description="Number of bytes a specific org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_OVERRIDE_LIMIT,
+                param_types={"org_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="throttled_thread_number",
+                description="Number of threads any throttled query gets assigned.",
+                value_type=int,
+                default=1,
+            ),
+        ]
 
     @property
     def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(environment.metrics, self.__class__.__name__)
-
-    @property
-    def rate_limit_prefix(self) -> str:
-        return self.__class__.__name__
 
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
@@ -109,28 +133,20 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        # TODO: This kind of killswitch should just be included with every allocation policy
-        is_active = cast(bool, get_config(f"{self.rate_limit_prefix}.is_active", True))
-        is_enforced = cast(
-            bool, get_config(f"{self.rate_limit_prefix}.is_enforced", True)
-        )
-        throttled_thread_number = cast(
-            int, get_config(f"{self.rate_limit_prefix}.throttled_thread_number", 1)
-        )
-        max_threads = cast(int, get_config("query_settings/max_threads", 8))
-        if not is_active:
+
+        if not self.is_active:
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             self.metrics.increment(
                 "db_request_rejected",
                 tags={
-                    "storage_set_key": self._storage_set_key.value,
-                    "is_enforced": str(is_enforced),
+                    "storage_key": self._storage_key.value,
+                    "is_enforced": str(self.is_enforced),
                     "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
-            if is_enforced:
+            if self.is_enforced:
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
@@ -145,19 +161,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 explanation={"reason": "low priority referrer"},
             )
         if org_id is not None:
-            org_limit_bytes_scanned = cast(
-                int,
-                get_config(
-                    # TODO: figure out an actually good number
-                    f"{self.rate_limit_prefix}.org_limit_bytes_scanned",
-                    10000,
-                ),
-            )
+            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id)
 
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
                     RequestedQuota(
-                        self.rate_limit_prefix,
+                        self.runtime_config_prefix,
                         # request a big number because we don't know how much we actually
                         # will use in this query. this doesn't use up any quota, we just want to know how much is left
                         UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
@@ -167,44 +176,44 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                                 # reacts to such changes
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_limit_bytes_scanned),
-                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{org_id}",
+                                limit=org_limit_bytes_scanned,
+                                prefix_override=f"{self.runtime_config_prefix}-organization_id-{org_id}",
                             )
                         ],
                     ),
                 ]
             )
-            num_threads = max_threads
+            num_threads = self.max_threads
             explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
                 self.metrics.increment(
                     "db_request_throttled",
                     tags={
-                        "storage_set_key": self._storage_set_key.value,
-                        "is_enforced": str(is_enforced),
+                        "storage_key": self._storage_key.value,
+                        "is_enforced": str(self.is_enforced),
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )
                 explanation[
                     "reason"
                 ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
-                explanation["is_enforced"] = is_enforced
+                explanation["is_enforced"] = self.is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
 
-                if is_enforced:
-                    num_threads = throttled_thread_number
+                if self.is_enforced:
+                    num_threads = self.get_config_value("throttled_thread_number")
 
             return QuotaAllowance(True, num_threads, explanation)
-        return QuotaAllowance(True, max_threads, {})
+        return QuotaAllowance(True, self.max_threads, {})
 
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
         result_or_error: QueryResultOrError,
     ) -> None:
-        if not get_config(f"{self.rate_limit_prefix}.is_active", True):
+        if not self.is_active:
             return
         if result_or_error.error:
             return
@@ -221,32 +230,45 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if bytes_scanned == 0:
             return
         if "organization_id" in tenant_ids:
-            org_limit_bytes_scanned = get_config(
-                f"{self.rate_limit_prefix}.org_limit_bytes_scanned", 10000
+            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
+                tenant_ids.get("organization_id")
             )
             # we can assume that the requested quota was granted (because it was)
             # we just need to update the quota with however many bytes were consumed
             _RATE_LIMITER.use_quotas(
                 [
                     RequestedQuota(
-                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                         bytes_scanned,
                         [
                             Quota(
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=int(org_limit_bytes_scanned),  # type: ignore
-                                prefix_override=f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                                limit=org_limit_bytes_scanned,
+                                prefix_override=f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                             )
                         ],
                     )
                 ],
                 grants=[
                     GrantedQuota(
-                        f"{self.rate_limit_prefix}-organization_id-{tenant_ids['organization_id']}",
+                        f"{self.runtime_config_prefix}-organization_id-{tenant_ids['organization_id']}",
                         granted=bytes_scanned,
                         reached_quotas=[],
                     )
                 ],
                 timestamp=int(time.time()),
             )
+
+    def __get_org_limit_bytes_scanned(self, org_id: Any) -> int:
+        """
+        Checks if org specific limit exists and returns that. Returns the "all" orgs
+        bytes scanned limit if specific one DNE.
+        """
+        org_limit_bytes_scanned = self.get_config_value(
+            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
+        )
+        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
+
+        return int(org_limit_bytes_scanned)

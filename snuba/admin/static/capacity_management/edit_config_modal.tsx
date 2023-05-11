@@ -44,13 +44,17 @@ function EditConfigModal(props: {
     return Object.keys(currentConfig.params).length ? "Delete" : "Reset";
   }
 
+  function inputType(type: string) {
+    return type == "int" || type == "float" ? "number" : "text";
+  }
+
   return (
     <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
       <Modal.Header closeButton>
         <Modal.Title>
           Editing:{" "}
           <code style={{ wordBreak: "break-all", color: "black" }}>
-            {currentConfig.key}
+            {currentConfig.name}
           </code>
         </Modal.Title>
       </Modal.Header>
@@ -58,7 +62,7 @@ function EditConfigModal(props: {
         <Form.Group>
           <Form.Label>Value: </Form.Label>
           <Form.Control
-            type="text"
+            type={inputType(currentConfig.type)}
             onChange={(e) => updateValue(e.target.value)}
             placeholder={currentConfig.value}
           />

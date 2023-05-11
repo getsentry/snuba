@@ -8,7 +8,7 @@ function getReadonlyRow(
 ): RowData {
   return [
     <code style={{ wordBreak: "break-all", color: "black" }}>
-      {config.key}
+      {config.name}
     </code>,
     <code style={{ wordBreak: "break-all", color: "black" }}>
       {Object.keys(config.params).length

@@ -72,7 +72,7 @@ interface Client {
     key: string,
     value: string,
     params: object
-  ) => Promise<AllocationPolicyConfig>;
+  ) => Promise<void>;
   deleteAllocationPolicyConfig: (
     storage: string,
     key: string,
@@ -329,7 +329,7 @@ function Client() {
         body: JSON.stringify({ storage, key, value, params }),
       }).then((res) => {
         if (res.ok) {
-          return Promise.resolve(res.json());
+          return;
         } else {
           return res.json().then((err) => {
             let errMsg = err?.error || "Could not set config";
@@ -352,7 +352,10 @@ function Client() {
         if (res.ok) {
           return;
         } else {
-          throw new Error("Could not delete config");
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not set config";
+            throw new Error(errMsg);
+          });
         }
       });
     },

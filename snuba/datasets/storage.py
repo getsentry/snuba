@@ -15,7 +15,7 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -98,7 +98,7 @@ class ReadableStorage(Storage):
         return []
 
     def get_allocation_policy(self) -> AllocationPolicy:
-        return PassthroughPolicy(self.get_storage_set_key(), [])
+        return DEFAULT_PASSTHROUGH_POLICY
 
 
 class WritableStorage(Storage):

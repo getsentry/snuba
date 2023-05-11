@@ -6,7 +6,7 @@ type AllocationPolicy = {
 };
 
 type AllocationPolicyConfig = {
-  key: string;
+  name: string;
   value: string;
   description: string;
   type: string;

@@ -231,7 +231,6 @@ schema:
 allocation_policy:
   name: ErrorsAllocationPolicy
   args:
-    storage_set_key: events_ro
     required_tenant_types:
       - organzation_id
       - referrer

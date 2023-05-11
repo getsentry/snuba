@@ -18,7 +18,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
 
   const [currentlyEditing, setCurrentlyEditing] = useState(false);
   const [currentConfig, setCurrentConfig] = useState<AllocationPolicyConfig>({
-    key: "",
+    name: "",
     value: "",
     description: "",
     type: "",
@@ -31,16 +31,26 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   >([]);
 
   useEffect(() => {
-    api.getAllocationPolicyConfigs(storage).then((res) => {
-      setConfigs(res);
-    });
+    api
+      .getAllocationPolicyConfigs(storage)
+      .then((res) => {
+        setConfigs(res);
+      })
+      .catch((err) => {
+        window.alert(err);
+      });
   }, [storage]);
 
   useEffect(() => {
-    api.getAllocationPolicyOptionalConfigDefinitions(storage).then((res) => {
-      setDefinitions(res);
-    });
-  }, []);
+    api
+      .getAllocationPolicyOptionalConfigDefinitions(storage)
+      .then((res) => {
+        setDefinitions(res);
+      })
+      .catch((err) => {
+        window.alert(err);
+      });
+  }, [storage]);
 
   function enterEditMode(config: AllocationPolicyConfig) {
     setCurrentlyEditing(true);
@@ -49,32 +59,35 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
 
   function deleteConfig(toDelete: AllocationPolicyConfig) {
     api
-      .deleteAllocationPolicyConfig(storage, toDelete.key, toDelete.params)
-      .then(() =>
-        api.getAllocationPolicyConfigs(storage).then((res) => {
-          setConfigs(res);
-        })
-      );
+      .deleteAllocationPolicyConfig(storage, toDelete.name, toDelete.params)
+      .catch((err) => {
+        window.alert(err);
+      })
+      .then(() => {
+        setConfigs((prev) =>
+          Object.keys(currentConfig.params).length
+            ? prev.filter((config) => config != toDelete)
+            : prev
+        );
+      });
   }
 
   function saveConfig(config: AllocationPolicyConfig) {
-    api.setAllocationPolicyConfig(
-      storage,
-      config.key,
-      config.value,
-      config.params
-    );
-  }
-
-  function addConfig(config: AllocationPolicyConfig) {
     api
       .setAllocationPolicyConfig(
         storage,
-        config.key,
+        config.name,
         config.value,
         config.params
       )
-      .then((res) => setConfigs((configs) => [...configs, res]));
+      .catch((err) => {
+        window.alert(err);
+      });
+  }
+
+  function addConfig(config: AllocationPolicyConfig) {
+    saveConfig(config);
+    setConfigs((prev) => [...prev, config]);
   }
 
   return (
