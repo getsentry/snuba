@@ -33,7 +33,7 @@ class Migration(migration.ClickhouseNodeMigration):
         # we could run through all our regular tests. DROPing a table is
         # of course not reversible. Your data will be forever lost
         create_table_statement = """
-            CREATE TABLE IF NOT EXISTS search_issues_local
+            CREATE TABLE IF NOT EXISTS {0}
             (
                 `organization_id` UInt64,
                 `project_id` UInt64,
