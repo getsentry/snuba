@@ -117,7 +117,7 @@ function TracingQueries(props: { api: Client }) {
         const tracing_result = {
           input_query: `${query.sql}`,
           timestamp: result.timestamp,
-          num_rows: result.num_rows_result,
+          num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
           error: result.error,
@@ -145,7 +145,7 @@ function TracingQueries(props: { api: Client }) {
     if (queryResult.error) {
       elements = { Error: [queryResult.error, 200] };
     } else {
-      elements = { Trace: [queryResult.trace_output, 400] };
+      elements = { Trace: [queryResult, 400] };
     }
     return tracingOutput(elements);
   }
@@ -169,7 +169,14 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            return heirarchicalTraceDisplay(title, value);
+            return (
+                <div>
+                    <br />
+                    <b>Number of rows in result set:</b> {value.num_rows_result}
+                    <br />
+                    {heirarchicalTraceDisplay(title, value.trace_output)}
+                </div>
+            );
           }
         })}
       </>
