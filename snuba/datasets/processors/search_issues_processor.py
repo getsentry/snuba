@@ -195,6 +195,12 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             if profile_id is not None:
                 processed["profile_id"] = ensure_uuid(profile_id)
 
+        replay = contexts.get("replay", {})
+        if replay.get("replay_id") is not None:
+            replay_id = _unicodify(replay["replay_id"])
+            if replay_id is not None:
+                processed["replay_id"] = ensure_uuid(replay_id)
+
     def __extract_timestamp(self, field: int) -> datetime:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
