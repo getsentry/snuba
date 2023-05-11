@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, SimpleQueue
@@ -243,9 +242,6 @@ class HTTPWriteBatch:
                 "http_batch.timeout",
                 tags={"table": str(self.__statement.get_qualified_table())},
             )
-            # Container names are available as the hostnames within the container. Let's use that
-            # when logging to Sentry.
-            sentry_sdk.set_tag("hostname", socket.gethostname())
             raise
 
         logger.debug("Received response for %r.", self)
