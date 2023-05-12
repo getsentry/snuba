@@ -118,6 +118,10 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
+)
 def consumer(
     *,
     storage_name: str,
@@ -140,6 +144,7 @@ def consumer(
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    max_poll_interval_ms: Optional[int] = None,
 ) -> None:
 
     setup_logging(log_level)
@@ -190,6 +195,7 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         slice_id=slice_id,
+        max_poll_interval_ms=max_poll_interval_ms,
     )
 
     consumer = consumer_builder.build_base_consumer()
