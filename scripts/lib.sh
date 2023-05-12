@@ -3,6 +3,7 @@
 # Execute functions from this module via the script do.sh
 
 # Check if a command is available
+# Exec
 require() {
     command -v "$1" >/dev/null 2>&1
 }
