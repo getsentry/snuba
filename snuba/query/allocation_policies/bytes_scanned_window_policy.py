@@ -122,14 +122,15 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[bool, str]:
-        if "referrer" not in tenant_ids:
+        if tenant_ids.get("referrer") is None:
             return False, "no referrer"
         if (
-            "organization_id" not in tenant_ids
+            tenant_ids.get("organization_id") is None
             and tenant_ids.get("referrer", None) not in _ORG_LESS_REFERRERS
             and tenant_ids.get("referrer", None) not in _SINGLE_THREAD_REFERRERS
         ):
             return False, f"no organization_id for referrer {tenant_ids['referrer']}"
+
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:

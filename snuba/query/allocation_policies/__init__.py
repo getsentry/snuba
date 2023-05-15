@@ -8,7 +8,6 @@ from typing import Any, cast
 
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.exceptions import InvalidQueryException
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
@@ -576,19 +575,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def __validate_tenant_ids(self, tenant_ids: dict[str, str | int]) -> None:
-        missing = [
-            tenant
-            for tenant in self._required_tenant_types
-            if tenant_ids.get(tenant, None) is None
-        ]
-        if missing:
-            raise InvalidQueryException(
-                f"Tenant ids missing or are None: {', '.join(missing)}"
-            )
-
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-        self.__validate_tenant_ids(tenant_ids)
         try:
             allowance = self._get_quota_allowance(tenant_ids)
         except Exception:
