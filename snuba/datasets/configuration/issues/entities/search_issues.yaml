@@ -203,9 +203,12 @@ query_processors:
       project_field: project_id
   - processor: BasicFunctionsProcessor
 
+validate_data_model: warn
 validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["project_id"]
+  - validator: TagConditionValidator
+    args: {}
 
 required_time_column: timestamp
