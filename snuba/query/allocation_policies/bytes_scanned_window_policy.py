@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any
 
-from snuba import environment
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
@@ -19,7 +18,6 @@ from snuba.state.sliding_windows import (
     RedisSlidingWindowRateLimiter,
     RequestedQuota,
 )
-from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -115,10 +113,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             ),
         ]
 
-    @property
-    def metrics(self) -> MetricsWrapper:
-        return MetricsWrapper(environment.metrics, self.__class__.__name__)
-
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[bool, str]:
@@ -141,8 +135,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             self.metrics.increment(
                 "db_request_rejected",
                 tags={
-                    "storage_key": self._storage_key.value,
-                    "is_enforced": str(self.is_enforced),
                     "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
@@ -190,8 +182,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 self.metrics.increment(
                     "db_request_throttled",
                     tags={
-                        "storage_key": self._storage_key.value,
-                        "is_enforced": str(self.is_enforced),
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )
