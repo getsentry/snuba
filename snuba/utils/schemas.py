@@ -239,6 +239,7 @@ class ColumnSet(ABC):
 
         self._lookup: MutableMapping[str, FlattenedColumn] = {}
         self._flattened: List[FlattenedColumn] = []
+        self._nested = {}
         for column in self.__columns:
             if not isinstance(column, WildcardColumn):
                 self._flattened.extend(column.type.flatten(column.name))
@@ -246,6 +247,8 @@ class ColumnSet(ABC):
         for col in self._flattened:
             if col.flattened in self._lookup:
                 raise RuntimeError("Duplicate column: {}".format(col.flattened))
+            if isinstance(column.type, Nested):
+                self._nested[column.name] = column
 
             self._lookup[col.flattened] = col
             # also store it by the escaped name
@@ -282,6 +285,8 @@ class ColumnSet(ABC):
 
     def __contains__(self, key: str) -> bool:
         if key in self._lookup:
+            return True
+        if key in self._nested:
             return True
 
         if self._wildcard_columns:
