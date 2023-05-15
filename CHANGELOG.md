@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.5.0
+
+### Various fixes & improvements
+
+- Pin action-github-commit (#4175) by @chadwhitacre
+- ref(tech-debt) Column validator also checks mapped columns (#4116) by @evanh
+- Make kafka consumer max poll time configurable (#4165) by @nikhars
+- ref: bump sentry-redis-tools to 0.1.5 (#4170) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.7 (#4168) by @getsentry-bot
+- fix: Fix another reference to unavailable secret (#4161) by @untitaker
+- Revert "drop old tables (#3896)" (ee62ee06) by @getsentry-bot
+- drop old tables (#3896) by @barkbarkimashark
+- fix(consumer): Remove DLQ policy for generic metrics consumers config (#4166) by @ayirr7
+- fix(consumers): Add timeout for http batch writes (#4160) by @nikhars
+- chore(arroyo): Bump version to 2.10.4 (#4162) by @nikhars
+- feat(CapMan): AllocationPolicy Config API (#4025) by @rahul-kumar-saini
+- feat(functions): Process new functions message (#4056) by @Zylphrex
+- fix: Fix permissions of bump-version.yml workflow (#4157) by @untitaker
+- feat(CapMan): Basic Snuba Admin UI (#4055) by @rahul-kumar-saini
+- ref: Arroyo 2.10.3 (#4153) by @untitaker
+- add test referrer to single thread referrers (#4154) by @volokluev
+- fix: Unknown functions shouldn't count against the SLO (#4150) by @evanh
+- feat(ci): allow skip check migrations (#4111) by @dbanda
+- Revert "turn on policy, add user report referrer (#4151)" (21864c36) by @getsentry-bot
+- turn on policy, add user report referrer (#4151) by @volokluev
+- ref(admin): Give more users access to the admin tool (#4149) by @evanh
+- build: sentry-kafka-schemas 0.1.6 (#4147) by @lynnagara
+- test: Fix flaky optimize test (#4143) by @lynnagara
+
+_Plus 89 more_
+
 ## 23.4.0
 
 ### Various fixes & improvements
