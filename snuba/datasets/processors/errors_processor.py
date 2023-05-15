@@ -73,7 +73,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], None)
+            return InsertBatch([row], row["received"])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
