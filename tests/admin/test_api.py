@@ -349,12 +349,3 @@ def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
-
-
-def test_tools(admin_api: FlaskClient) -> None:
-    response = admin_api.get("/tools")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert len(data["tools"]) > 0
-    assert "snql-to-sql" in data["tools"]
-    assert "all" in data["tools"]

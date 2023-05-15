@@ -44,6 +44,8 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
+ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
+
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
