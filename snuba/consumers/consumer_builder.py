@@ -254,8 +254,11 @@ class ConsumerBuilder:
         else:
             dlq_policy = None
 
+        # XXX This is an experiment to see if this helps with the rebalancing issues
+        # on generic metrics distributions consumer. If the approach is viable, we
+        # should implement as a CLI arg instead.
         join_timeout = None
-        if self.storage_key.value == "generic_metrics_distributions":
+        if self.storage_key.value == "generic_metrics_distributions_raw":
             join_timeout = 5.0
 
         return StreamProcessor(
