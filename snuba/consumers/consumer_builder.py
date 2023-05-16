@@ -76,8 +76,10 @@ class ConsumerBuilder:
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
+        join_timeout: Optional[int] = None,
         profile_path: Optional[str] = None,
     ) -> None:
+        self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage_key = storage_key
         self.storage = get_writable_storage(storage_key)
@@ -254,20 +256,13 @@ class ConsumerBuilder:
         else:
             dlq_policy = None
 
-        # XXX This is an experiment to see if this helps with the rebalancing issues
-        # on generic metrics distributions consumer. If the approach is viable, we
-        # should implement as a CLI arg instead.
-        join_timeout = None
-        if self.storage_key.value == "generic_metrics_distributions_raw":
-            join_timeout = 5.0
-
         return StreamProcessor(
             consumer,
             self.raw_topic,
             strategy_factory,
             IMMEDIATE,
             dlq_policy=dlq_policy,
-            join_timeout=join_timeout,
+            join_timeout=self.join_timeout,
         )
 
     def build_streaming_strategy_factory(
