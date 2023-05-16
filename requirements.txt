@@ -28,7 +28,7 @@ sentry-arroyo==2.11.0
 sentry-kafka-schemas==0.1.8
 sentry-redis-tools==0.1.5
 sentry-relay==0.8.21
-sentry-sdk==1.18.0
+sentry-sdk==1.23.0
 simplejson==3.17.6
 structlog==22.1.0
 structlog-sentry==2.0.0
