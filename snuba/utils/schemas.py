@@ -141,6 +141,10 @@ class Column(Generic[TModifiers]):
         self.name = name
         self.type = type
 
+        escaped = escape_identifier(self.name)
+        assert escaped is not None
+        self.escaped: str = escaped
+
     def __repr__(self) -> str:
         return "Column({}, {})".format(repr(self.name), repr(self.type))
 
@@ -237,22 +241,31 @@ class ColumnSet(ABC):
             col.name: col for col in columns if isinstance(col, WildcardColumn)
         }
 
-        self._lookup: MutableMapping[str, FlattenedColumn] = {}
-        self._flattened: List[FlattenedColumn] = []
+        self._lookup: MutableMapping[str, Sequence[FlattenedColumn]] = {}
         self._nested = {}
+
+        self._flattened: List[FlattenedColumn] = []
+        self._flattened_lookup: MutableMapping[str, FlattenedColumn] = {}
+
         for column in self.__columns:
             if not isinstance(column, WildcardColumn):
                 self._flattened.extend(column.type.flatten(column.name))
+                flattened = column.type.flatten(column.name)
+                self._lookup[column.name] = flattened
+                self._lookup[
+                    column.escaped
+                ] = flattened  # also store it by the escaped name
 
         for col in self._flattened:
-            if col.flattened in self._lookup:
+            if col.flattened in self._flattened_lookup:
                 raise RuntimeError("Duplicate column: {}".format(col.flattened))
-            if isinstance(column.type, Nested):
-                self._nested[column.name] = column
+            if col.base_name:
+                self._nested[col.flattened] = col
 
-            self._lookup[col.flattened] = col
-            # also store it by the escaped name
-            self._lookup[col.escaped] = col
+            self._flattened_lookup[col.flattened] = col
+            self._flattened_lookup[
+                col.escaped
+            ] = col  # also store it by the escaped name
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -262,8 +275,8 @@ class ColumnSet(ABC):
         )
 
     def __getitem__(self, key: str) -> FlattenedColumn:
-        if key in self._lookup:
-            return self._lookup[key]
+        if key in self._flattened_lookup:
+            return self._flattened_lookup[key]
 
         if self._wildcard_columns:
             match = NESTED_COL_EXPR_RE.match(key)
