@@ -74,8 +74,9 @@ def build_storage_from_config(
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    storage_key = register_storage_key(config[STORAGE]["key"])
     return {
-        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
+        STORAGE_KEY: storage_key,
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
         SCHEMA: __build_storage_schema(config),
         READINESS_STATE: ReadinessState(config[READINESS_STATE]),
@@ -92,7 +93,12 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         ),
         ALLOCATION_POLICY: AllocationPolicy.get_from_name(
             config[ALLOCATION_POLICY]["name"]
-        ).from_kwargs(**config[ALLOCATION_POLICY].get("args", {}))
+        ).from_kwargs(
+            **{
+                **config[ALLOCATION_POLICY].get("args", {}),
+                "storage_key": storage_key.value,
+            }
+        )
         if ALLOCATION_POLICY in config
         else None,
     }

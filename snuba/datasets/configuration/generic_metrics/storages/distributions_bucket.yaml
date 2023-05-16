@@ -60,6 +60,7 @@ stream_loader:
   subscription_scheduler_mode: global
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
   subscription_result_topic: generic-metrics-subscription-results
-  dlq_policy:
-    type: produce
-    args: [snuba-dead-letter-generic-metrics]
+  # We noticed that the Snuba generic metrics consumers are unable to
+  # shut down successfully with a DLQ policy, when we remove the policy
+  # the issue is fixed. We also reproduced it on the errors consumer
+  # and observed the same behavior.

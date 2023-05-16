@@ -16,6 +16,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -27,6 +28,9 @@ from tests.helpers import write_unprocessed_events
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return []
+
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=False,
@@ -1249,7 +1253,9 @@ class TestSnQLApi(BaseApiTest):
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policy",
-            return_value=RejectAllocationPolicy123("doesntmatter", ["a", "b", "c"]),  # type: ignore
+            return_value=RejectAllocationPolicy123(
+                StorageKey("doesntmatter"), ["a", "b", "c"]
+            ),
         ):
             response = self.post(
                 "/discover/snql",
