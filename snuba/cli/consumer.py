@@ -144,7 +144,7 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    join_timeout: Optional[str] = None,
+    join_timeout: Optional[int] = None,
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
 ) -> None:
