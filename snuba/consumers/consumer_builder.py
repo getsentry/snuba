@@ -79,6 +79,7 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
     ) -> None:
         self.slice_id = slice_id
+        self.storage_key = storage_key
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
@@ -253,8 +254,17 @@ class ConsumerBuilder:
         else:
             dlq_policy = None
 
+        join_timeout = None
+        if self.storage_key.value == "generic_metrics_distributions":
+            join_timeout = 5.0
+
         return StreamProcessor(
-            consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
+            consumer,
+            self.raw_topic,
+            strategy_factory,
+            IMMEDIATE,
+            dlq_policy=dlq_policy,
+            join_timeout=join_timeout,
         )
 
     def build_streaming_strategy_factory(
