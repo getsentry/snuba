@@ -14,7 +14,9 @@ test_cases = [
         SELECT event_id
         WHERE timestamp LIKE 'carbonara'
         """,
-        ParsingException("missing >= condition on column timestamp for entity events"),
+        ParsingException(
+            "Missing >= condition with a datetime literal on column timestamp for entity discover. Example: timestamp >= toDateTime('2023-05-16 00:00')"
+        ),
         id="Invalid LIKE param",
     ),
     pytest.param(

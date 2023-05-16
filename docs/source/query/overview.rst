@@ -261,7 +261,7 @@ A query validation issue would generally have this format::
     {
         "error": {
             "type": "invalid_query",
-            "message": "missing >= condition on column timestamp for entity events"
+            "message": "Missing >= condition with a datetime literal on column timestamp for entity discover. Example: timestamp >= toDateTime('2023-05-16 00:00')"
         }
     }
 
