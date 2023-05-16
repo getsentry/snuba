@@ -479,10 +479,6 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
 
     try:
         result = parse_and_run_query(dataset, request, timer)
-        import pdb
-
-        pdb.set_trace()
-        print(result)
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
