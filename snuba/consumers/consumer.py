@@ -513,6 +513,11 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
+                    metrics.increment(
+                        "schema_validation.failed",
+                        tags={"snuba_logical_topic": snuba_logical_topic.name},
+                    )
+
                     min_seconds_ago = (
                         state.get_config("log_validate_schema_every_n_seconds", 1) or 1
                     )
