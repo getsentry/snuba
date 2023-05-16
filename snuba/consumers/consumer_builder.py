@@ -82,7 +82,6 @@ class ConsumerBuilder:
     ) -> None:
         self.join_timeout = join_timeout
         self.slice_id = slice_id
-        self.storage_key = storage_key
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
