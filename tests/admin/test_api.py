@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
@@ -358,3 +360,71 @@ def test_tools(admin_api: FlaskClient) -> None:
     assert len(data["tools"]) > 0
     assert "snql-to-sql" in data["tools"]
     assert "all" in data["tools"]
+
+
+@pytest.mark.redis_db
+def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
+    # an end to end test setting a config, retrieving allocation policy configs,
+    # and deleting the config afterwards
+    auditlog_records = []
+
+    def mock_record(user, action, data, notify):
+        nonlocal auditlog_records
+        auditlog_records.append((user, action, data, notify))
+
+    with mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+        response = admin_api.post(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "key": "org_limit_bytes_scanned_override",
+                    "params": {"org_id": 1},
+                    "value": "420",
+                }
+            ),
+        )
+
+        assert response.status_code == 200, response.json
+        # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
+        response = admin_api.get("/allocation_policy_configs/errors")
+        assert response.status_code == 200
+        assert {
+            "default": -1,
+            "description": "Number of bytes a specific org can scan in a 10 minute "
+            "window.",
+            "name": "org_limit_bytes_scanned_override",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } in response.json  # type: ignore
+        # no need to record auditlog when nothing was updated
+        assert not auditlog_records
+        assert (
+            admin_api.delete(
+                "/allocation_policy_config",
+                data=json.dumps(
+                    {
+                        "storage": "errors",
+                        "key": "org_limit_bytes_scanned_override",
+                        "params": {"org_id": 1},
+                    }
+                ),
+            ).status_code
+            == 200
+        )
+
+        response = admin_api.get("/allocation_policy_configs/errors")
+        assert response.status_code == 200
+        assert {
+            "default": -1,
+            "description": "Number of bytes a specific org can scan in a 10 minute "
+            "window.",
+            "name": "org_limit_bytes_scanned_override",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } not in response.json  # type: ignore
+        # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
