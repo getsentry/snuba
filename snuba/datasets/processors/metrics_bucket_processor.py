@@ -117,7 +117,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             [processed],
             None,
             sentry_received_timestamp=datetime.utcfromtimestamp(
-                message["sentry_received_timestamp"]
+                message.get("sentry_received_timestamp")
             ),
         )
 
