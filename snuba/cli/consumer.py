@@ -115,8 +115,13 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.")
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
 )
 def consumer(
     *,
@@ -139,7 +144,9 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    join_timeout: Optional[int] = None,
     profile_path: Optional[str] = None,
+    max_poll_interval_ms: Optional[int] = None,
 ) -> None:
 
     setup_logging(log_level)
@@ -190,6 +197,8 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         slice_id=slice_id,
+        join_timeout=join_timeout,
+        max_poll_interval_ms=max_poll_interval_ms,
     )
 
     consumer = consumer_builder.build_base_consumer()

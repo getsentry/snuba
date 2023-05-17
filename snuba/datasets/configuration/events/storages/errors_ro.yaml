@@ -226,9 +226,8 @@ schema:
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
 allocation_policy:
-  name: ErrorsAllocationPolicy
+  name: BytesScannedWindowAllocationPolicy
   args:
-    storage_set_key: events_ro
     required_tenant_types:
       - organzation_id
       - referrer

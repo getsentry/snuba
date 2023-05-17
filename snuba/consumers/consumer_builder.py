@@ -76,8 +76,11 @@ class ConsumerBuilder:
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
+        join_timeout: Optional[int] = None,
         profile_path: Optional[str] = None,
+        max_poll_interval_ms: Optional[int] = None,
     ) -> None:
+        self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
@@ -167,6 +170,7 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
+        self.max_poll_interval_ms = max_poll_interval_ms
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -218,6 +222,9 @@ class ConsumerBuilder:
                 }
             )
 
+        if self.max_poll_interval_ms is not None:
+            configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+
         def log_general_error(e: KafkaError) -> None:
             with configure_scope() as scope:
                 scope.fingerprint = [e.code(), e.name()]
@@ -254,7 +261,12 @@ class ConsumerBuilder:
             dlq_policy = None
 
         return StreamProcessor(
-            consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
+            consumer,
+            self.raw_topic,
+            strategy_factory,
+            IMMEDIATE,
+            dlq_policy=dlq_policy,
+            join_timeout=self.join_timeout,
         )
 
     def build_streaming_strategy_factory(

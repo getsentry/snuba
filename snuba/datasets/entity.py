@@ -55,8 +55,9 @@ class Entity(Describable, ABC):
         self.__subscription_validators = subscription_validators
         self.required_time_column = required_time_column
 
+        mappers = [s.translation_mappers for s in storages]
         columns_exist_validator = EntityContainsColumnsValidator(
-            self.__data_model, validation_mode=validate_data_model
+            self.__data_model, mappers, validation_mode=validate_data_model
         )
         self.__validators = (
             [*validators, columns_exist_validator]

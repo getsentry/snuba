@@ -277,6 +277,18 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.subdivision
             nullable: true
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -376,6 +388,18 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.subdivision
             nullable: true
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -404,7 +428,6 @@ query_processors:
       time_parse_columns:
         - timestamp
         - received
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
   - processor: HandledFunctionsProcessor
     args:

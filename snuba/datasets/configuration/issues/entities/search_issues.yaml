@@ -158,6 +158,18 @@ storages:
             to_nested_col_name: "tags"
             to_nested_mapping_key: "transaction"
             nullable: true
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -189,12 +201,14 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
 
+validate_data_model: warn
 validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["project_id"]
+  - validator: TagConditionValidator
+    args: {}
 
 required_time_column: timestamp

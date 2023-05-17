@@ -224,6 +224,18 @@ storages:
             from_table_name: null
             from_col_name: group_id
             to_literal_value: 0
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
         - mapper: DefaultNoneColumnMapper
           args:
             column_names:
@@ -308,7 +320,6 @@ query_processors:
         - start_ts
         - finish_ts
         - timestamp
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
   - processor: ApdexProcessor
   - processor: FailureRateProcessor

@@ -76,5 +76,6 @@ def test_all_names() -> None:
             "generic_metrics",
             "replays",
             "search_issues",
+            "spans",
         ]
     )

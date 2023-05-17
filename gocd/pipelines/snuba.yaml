@@ -111,6 +111,7 @@ pipelines:
                                     --container-name="transactions-consumer-new" \
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
+                                    --container-name="spans-consumer" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba,is_canary=true" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
@@ -178,6 +179,7 @@ pipelines:
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
                                     --container-name="rust-querylog-consumer" \
+                                    --container-name="spans-consumer" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \

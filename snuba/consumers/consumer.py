@@ -513,6 +513,11 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
+                    metrics.increment(
+                        "schema_validation.failed",
+                        tags={"snuba_logical_topic": snuba_logical_topic.name},
+                    )
+
                     min_seconds_ago = (
                         state.get_config("log_validate_schema_every_n_seconds", 1) or 1
                     )
@@ -546,7 +551,7 @@ def process_message(
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value
-            if state.get_config(f"enable_new_dlq_{snuba_logical_topic.name}", 0):
+            if state.get_config(f"enable_new_dlq_{snuba_logical_topic.name}", 1):
                 raise InvalidMessage(value.partition, value.offset) from err
 
             return None

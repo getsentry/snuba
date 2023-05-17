@@ -414,6 +414,21 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
+    if settings.ENABLE_SPANS_CONSUMER:
+        daemons += [
+            (
+                "spans-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=spans",
+                    "--consumer-group=spans_group",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(

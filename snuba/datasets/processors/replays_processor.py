@@ -70,7 +70,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["dist"] = maybe(to_string, replay_event.get("dist"))
         processed["platform"] = maybe(to_string, replay_event["platform"])
         processed["replay_type"] = maybe(
-            to_enum(["session", "error"]), replay_event.get("replay_type")
+            to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
         )
 
         # Archived can only be 1 or null.
@@ -173,7 +173,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if event_hash is None:
             event_hash = segment_id_to_event_hash(replay_event["segment_id"])
 
-        processed["event_hash"] = event_hash
+        processed["event_hash"] = str(uuid.UUID(event_hash))
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
@@ -273,7 +273,7 @@ def segment_id_to_event_hash(segment_id: int | None) -> str:
         # originate from the SDK and do not relate to a specific segment.
         #
         # For example: archive requests.
-        return str(uuid.uuid4().hex)
+        return str(uuid.uuid4())
     else:
         segment_id_bytes = force_bytes(str(segment_id))
         segment_hash = md5(segment_id_bytes).hexdigest()

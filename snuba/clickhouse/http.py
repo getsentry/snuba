@@ -191,7 +191,7 @@ class HTTPWriteBatch:
         if encoding:
             headers["Content-Encoding"] = encoding
 
-        self.__result = executor.submit(
+        self._result = executor.submit(
             pool.urlopen,
             "POST",
             "/?" + urlencode({**options, "query": statement.build_statement()}),
@@ -235,7 +235,15 @@ class HTTPWriteBatch:
         self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
-        response = self.__result.result(timeout)
+        try:
+            response = self._result.result(timeout)
+        except TimeoutError:
+            self.__metrics.increment(
+                "http_batch.timeout",
+                tags={"table": str(self.__statement.get_qualified_table())},
+            )
+            raise
+
         logger.debug("Received response for %r.", self)
 
         self.__metrics.timing(
@@ -307,6 +315,14 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
 
     def write(self, values: Iterable[bytes]) -> None:
+        """
+        This method is called during both normal operation of a consumer as well as during a
+        rebalance when the consumer is shutting down. When calling the join method on the batch,
+        we provide a timeout of 10 seconds. If the batch is not finished within that time,
+        the exception would be raised and the consumer would be shutdown. Raising an exception is
+        much better than waiting forever for the batch to finish and never shutting down the
+        consumer. That would cause the consumer to be stuck.
+        """
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
@@ -325,4 +341,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch.join()
+        batch_join_timeout = state.get_config("http_batch_join_timeout", 10)
+        # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
+        # timeout argument from the join method.
+        batch.join(timeout=batch_join_timeout)

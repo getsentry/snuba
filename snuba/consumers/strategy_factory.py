@@ -2,6 +2,7 @@ from abc import abstractmethod
 from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing.strategies import (
     FilterStep,
     ProcessingStrategy,
@@ -149,6 +150,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             )
 
         if self.__prefilter is not None:
-            strategy = FilterStep(self.__should_accept, strategy)
+            strategy = FilterStep(
+                self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND
+            )
 
         return strategy

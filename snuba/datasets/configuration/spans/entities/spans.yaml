@@ -1,0 +1,128 @@
+version: v1
+kind: entity
+name: spans
+
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: transaction_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
+    { name: transaction_op, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: trace_id, type: UUID },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: parent_span_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: segment_id, type: UInt, args: { size: 64 } },
+    { name: is_segment, type: UInt, args: { size: 8 } },
+    { name: segment_name, type: String },
+    { name: start_timestamp, type: DateTime },
+    { name: end_timestamp, type: DateTime },
+    { name: duration, type: UInt, args: { size: 32 } },
+    { name: exclusive_time, type: Float, args: { size: 64 } },
+    { name: op, type: String },
+    { name: group, type: UInt, args: { size: 64 } },
+    { name: span_status, type: UInt, args: { size: 8 } },
+    { name: span_kind, type: String },
+    { name: description, type: String },
+    { name: status, type: UInt, args: { size: 32, schema_modifiers: [ nullable ] } },
+    { name: module, type: String },
+    { name: action, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: domain, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: platform, type: String, args: { schema_modifiers: [ nullable ] } },
+    { name: user, type: String, args: { schema_modifiers: [ nullable] } },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [ { name: key, type: String }, { name: value, type: String } ],
+        },
+    },
+    {
+      name: measurements,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: Float, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [ readonly ],
+        },
+    },
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: deleted, type: UInt, args: { size: 8 } },
+  ]
+
+storages:
+  - storage: spans
+    is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: timestamp
+            to_table_name: null
+            to_col_name: end_timestamp
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: measurements
+            to_nested_col_table: null
+            to_nested_col_name: measurements
+            value_subcolumn_name: value
+            nullable: false
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: end_timestamp
+      time_parse_columns:
+        - start_timestamp
+        - end_timestamp
+        - timestamp
+  - processor: BasicFunctionsProcessor
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [project_id]
+  - validator: TagConditionValidator
+    args: {}
+  - validator: DatetimeConditionValidator
+    args: {}
+required_time_column: timestamp
