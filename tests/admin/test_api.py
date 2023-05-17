@@ -368,7 +368,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
     # and deleting the config afterwards
     auditlog_records = []
 
-    def mock_record(user, action, data, notify):
+    def mock_record(user, action, data, notify) -> None:
         nonlocal auditlog_records
         auditlog_records.append((user, action, data, notify))
 
