@@ -61,7 +61,7 @@ test_cases = [
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
-        "missing >= condition on column finish_ts for entity transactions",
+        "Missing >= condition with a datetime literal on column finish_ts for entity transactions. Example: finish_ts >= toDateTime('2023-05-16 00:00')",
         id="join missing required conditions on one side",
     ),
     pytest.param(
