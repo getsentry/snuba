@@ -14,7 +14,7 @@ class AuditLogAction(Enum):
     RAN_MIGRATION_FAILED = "ran.migration.failed"
     REVERSED_MIGRATION_FAILED = "reversed.migration.failed"
     ALLOCATION_POLICY_UPDATE = "allocation_policy.update"
-    ALLOCATION_POLICY_DELETE = "allocation_policy.update"
+    ALLOCATION_POLICY_DELETE = "allocation_policy.delete"
 
 
 RUNTIME_CONFIG_ACTIONS = [
