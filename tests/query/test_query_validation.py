@@ -15,7 +15,7 @@ test_cases = [
         WHERE timestamp LIKE 'carbonara'
         """,
         ParsingException(
-            "Missing >= condition with a datetime literal on column timestamp for entity discover. Example: timestamp >= toDateTime('2023-05-16 00:00')"
+            "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')"
         ),
         id="Invalid LIKE param",
     ),
