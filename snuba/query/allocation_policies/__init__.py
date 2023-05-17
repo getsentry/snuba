@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, cast
 
 from snuba import environment, settings
@@ -291,6 +291,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self,
         storage_key: StorageKey,
         required_tenant_types: list[str],
+        default_config_values: dict[str, Any] = {},
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
@@ -300,15 +301,16 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 name=IS_ACTIVE,
                 description="Whether or not this policy is active.",
                 value_type=int,
-                default=1,
+                default=default_config_values.get(IS_ACTIVE, 1),
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Whether or not this policy is enforced.",
                 value_type=int,
-                default=1,
+                default=default_config_values.get(IS_ACTIVE, 1),
             ),
         ]
+        self._default_config_values = default_config_values
 
     @property
     def metrics(self) -> MetricsWrapper:
@@ -362,6 +364,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
         required_tenant_types = kwargs.pop("required_tenant_types", None)
         storage_key = kwargs.pop("storage_key", None)
+        default_config_values: dict[str, Any] = cast(
+            "dict[str, Any]", kwargs.pop("default_config_values", {})
+        )
         assert isinstance(
             required_tenant_types, list
         ), "required_tenant_types must be a list of strings"
@@ -369,8 +374,23 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return cls(
             required_tenant_types=required_tenant_types,
             storage_key=StorageKey(storage_key),
+            default_config_values=default_config_values,
             **kwargs,
         )
+
+    def additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        """A wrapper around the user defined _additional_config_definitions function which overrides the defaults specified for the config in code with the default specifed to the instance of the policy
+        """
+        definitions = self._additional_config_definitions()
+        return [
+            replace(
+                definition,
+                default=self._default_config_values.get(
+                    definition.name, definition.default
+                ),
+            )
+            for definition in definitions
+        ]
 
     @abstractmethod
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -385,7 +405,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return {
             config.name: config
             for config in self._default_config_definitions
-            + self._additional_config_definitions()
+            + self.additional_config_definitions()
         }
 
     def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
@@ -407,7 +427,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         )
         return get_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
-            default=config_definition.default,
+            default=self._default_config_values.get(
+                config_key, config_definition.default
+            ),
             config_key=CAPMAN_HASH,
         )
 

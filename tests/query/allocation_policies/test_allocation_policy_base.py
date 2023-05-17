@@ -294,3 +294,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "value": 100,
         "params": {"org": 10, "ref": "test"},
     } in policy_configs
+
+
+def test_default_config_override():
+    policy = SomeParametrizedConfigPolicy(StorageKey("some_storage"), [], {"my_param_config": 420})
