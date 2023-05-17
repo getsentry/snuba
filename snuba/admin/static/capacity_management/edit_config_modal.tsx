@@ -50,7 +50,7 @@ function EditConfigModal(props: {
 
   return (
     <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
-      <Modal.Header closeButton>
+      <Modal.Header>
         <Modal.Title>
           Editing:{" "}
           <code style={{ wordBreak: "break-all", color: "black" }}>
