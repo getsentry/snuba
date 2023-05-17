@@ -492,7 +492,7 @@ def process_message(
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
 
     validate_sample_rate = float(
-        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
+        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 1.0) or 0.0
     )
 
     assert isinstance(message.value, BrokerValue)
