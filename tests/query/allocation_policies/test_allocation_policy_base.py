@@ -296,5 +296,31 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     } in policy_configs
 
 
-def test_default_config_override():
-    policy = SomeParametrizedConfigPolicy(StorageKey("some_storage"), [], {"my_param_config": 420})
+@pytest.mark.redis_db
+def test_default_config_override() -> None:
+    policy = SomeParametrizedConfigPolicy(
+        StorageKey("some_storage"), [], {"my_param_config": 420, "is_enforced": 0}
+    )
+    assert (
+        policy.get_config_value(
+            "my_param_config", params={"org": 1, "ref": "a"}, validate=True
+        )
+        == 420
+    )
+    assert policy.get_config_value("is_enforced") == 0
+
+
+@pytest.mark.redis_db
+def test_bad_defaults() -> None:
+    with pytest.raises(ValueError):
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"is_enforced": "0"}
+        )
+    with pytest.raises(ValueError):
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"is_active": False}
+        )
+    with pytest.raises(ValueError):
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"my_param_config": False}
+        )
