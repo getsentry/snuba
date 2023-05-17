@@ -26,17 +26,21 @@ def test_eq() -> None:
     assert PassthroughPolicy(
         StorageKey("something"),
         required_tenant_types=["organization_id", "referrer"],
+        default_config_overrides={},
     ) == PassthroughPolicy(
         StorageKey("something"),
         required_tenant_types=["organization_id", "referrer"],
+        default_config_overrides={},
     )
 
     assert PassthroughPolicy(
         StorageKey("something"),
         required_tenant_types=["organization_id", "referrer"],
+        default_config_overrides={},
     ) != SomeAllocationPolicy(
         StorageKey("something"),
         required_tenant_types=["organization_id", "referrer"],
+        default_config_overrides={},
     )
 
 
@@ -56,7 +60,7 @@ def test_raises_on_false_can_run() -> None:
 
     with pytest.raises(AllocationPolicyViolation):
         RejectingEverythingAllocationPolicy(
-            StorageKey("something"), []
+            StorageKey("something"), [], default_config_overrides={}
         ).get_quota_allowance({})
 
 
@@ -73,29 +77,31 @@ def test_passes_through_on_error() -> None:
             raise ValueError("you messed up AGAIN")
 
     with pytest.raises(AttributeError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), []).get_quota_allowance(
-            {}
-        )
+        BadlyWrittenAllocationPolicy(
+            StorageKey("something"), [], {}
+        ).get_quota_allowance({})
 
     with pytest.raises(ValueError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), []).update_quota_balance(None, None)  # type: ignore
+        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None)  # type: ignore
 
     # should not raise even though the implementation is buggy (this is the production setting)
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
         assert (
-            BadlyWrittenAllocationPolicy(StorageKey("something"), [])
+            BadlyWrittenAllocationPolicy(StorageKey("something"), [], {})
             .get_quota_allowance({})
             .can_run
         )
 
-        BadlyWrittenAllocationPolicy(StorageKey("something"), []).update_quota_balance(
+        BadlyWrittenAllocationPolicy(
+            StorageKey("something"), [], {}
+        ).update_quota_balance(
             None, None  # type: ignore
         )
 
 
 @pytest.mark.redis_db
 def test_bad_config_keys() -> None:
-    policy = PassthroughPolicy(StorageKey("something"), [])
+    policy = PassthroughPolicy(StorageKey("something"), [], {})
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.set_config_value("bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
@@ -147,7 +153,7 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
 class TestAllocationPolicyLogs(TestCase):
     @pytest.mark.redis_db
     def test_bad_config_key_in_redis(self) -> None:
-        policy = SomeParametrizedConfigPolicy(StorageKey("something"), [])
+        policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
         set_config(
             key="something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
             value=10,
@@ -181,7 +187,7 @@ class TestAllocationPolicyLogs(TestCase):
 
 @pytest.fixture(scope="function")
 def policy() -> AllocationPolicy:
-    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [])
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     return policy
 
 

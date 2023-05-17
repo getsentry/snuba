@@ -315,7 +315,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self,
         storage_key: StorageKey,
         required_tenant_types: list[str],
-        default_config_overrides: dict[str, Any] = {},
+        default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
@@ -701,6 +701,7 @@ class PassthroughPolicy(AllocationPolicy):
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
     StorageKey("default.no_storage_key"),
     required_tenant_types=[],
+    default_config_overrides={},
 )
 
 import_submodules_in_directory(
