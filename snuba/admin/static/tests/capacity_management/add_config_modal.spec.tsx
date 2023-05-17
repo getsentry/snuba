@@ -1,11 +1,5 @@
-import { it, expect, jest, beforeEach } from "@jest/globals";
-import {
-  act,
-  fireEvent,
-  getByAltText,
-  getByTestId,
-  render,
-} from "@testing-library/react";
+import { it, expect, jest } from "@jest/globals";
+import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import AddConfigModal from "../../capacity_management/add_config_modal";
 import {
@@ -38,6 +32,12 @@ it("should modify the config as expected", async () => {
         { name: "some_param", type: "int" },
         { name: "some_other_param", type: "str" },
       ],
+    },
+    {
+      ...mockedConfig,
+      name: "another_optional_config",
+      default: "200",
+      params: [{ name: "a_dfferent_param", type: "int" }],
     },
   ];
 

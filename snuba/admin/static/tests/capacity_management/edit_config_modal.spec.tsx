@@ -31,11 +31,16 @@ it("should modify the config as expected", async () => {
   act(() => fireEvent.click(getByRole("button", { name: "Close" })));
   expect(mockedSet).toBeCalledWith(false);
 
+  // Button should be disabled since the form isn't completed yet
+  const saveButton = getByRole("button", { name: "Save Changes" });
+  act(() => fireEvent.click(saveButton));
+  expect(mockedSave).not.toBeCalled();
+
   // Save changes with a value should call the save function with the updated value
   act(() =>
     fireEvent.change(getByRole("spinbutton"), { target: { value: 20 } })
   );
-  act(() => fireEvent.click(getByRole("button", { name: "Save Changes" })));
+  act(() => fireEvent.click(saveButton));
   expect(mockedSave).toBeCalledWith({ ...mockedConfig, value: "20" });
   expect(mockedSet).toBeCalledWith(false);
 

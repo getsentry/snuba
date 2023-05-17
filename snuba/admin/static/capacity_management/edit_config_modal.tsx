@@ -78,7 +78,7 @@ function EditConfigModal(props: {
         >
           {deleteOrReset()}
         </Button>
-        <Button variant="primary" onClick={saveChanges}>
+        <Button variant="primary" onClick={saveChanges} disabled={value == ""}>
           Save Changes
         </Button>
       </Modal.Footer>

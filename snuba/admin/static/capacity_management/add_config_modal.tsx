@@ -139,8 +139,10 @@ function AddConfigModal(props: {
           disabled={
             selectedDefinition == undefined ||
             (selectedDefinition &&
-              Object.keys(config.params).length !=
-                Object.keys(selectedDefinition.params).length)
+              (Object.keys(config.params).length !=
+                Object.keys(selectedDefinition.params).length ||
+                Object.values(config.params).includes("") ||
+                config.value == ""))
           }
         >
           Save Changes
