@@ -99,7 +99,13 @@ class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
             }
             for granularity in self.GRANULARITIES_SECONDS
         ]
-        return AggregateInsertBatch(processed, None)
+        return AggregateInsertBatch(
+            processed,
+            origin_timestamp=None,
+            sentry_received_timestamp=datetime.utcfromtimestamp(
+                message["sentry_received_timestamp"]
+            ),
+        )
 
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):

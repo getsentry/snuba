@@ -91,17 +91,26 @@ class CommitLogConfig(NamedTuple):
 class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
     origin_timestamp: Optional[datetime]
+    sentry_received_timestamp: Optional[datetime] = None
 
     def __reduce_ex__(
         self, protocol: SupportsIndex
-    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
+    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime], Optional[datetime]]]:
         if int(protocol) >= 5:
             return (
                 type(self),
-                ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),
+                (
+                    [PickleBuffer(row) for row in self.rows],
+                    self.origin_timestamp,
+                    self.sentry_received_timestamp,
+                ),
             )
         else:
-            return type(self), (self.rows, self.origin_timestamp)
+            return type(self), (
+                self.rows,
+                self.origin_timestamp,
+                self.sentry_received_timestamp,
+            )
 
 
 class InsertBatchWriter:
@@ -560,6 +569,7 @@ def process_message(
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     else:
         return result
@@ -581,11 +591,13 @@ def _process_message_multistorage_work(
         return BytesInsertBatch(
             [values_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     elif isinstance(result, InsertBatch):
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     else:
         return result

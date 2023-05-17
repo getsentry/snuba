@@ -35,6 +35,11 @@ timestamp = int(datetime.now(timezone.utc).timestamp())
 # expects that test is run in utc local time
 expected_timestamp = datetime.utcfromtimestamp(timestamp)
 
+sentry_received_timestamp = datetime.now(timezone.utc).timestamp()
+expected_sentry_received_timestamp = datetime.utcfromtimestamp(
+    sentry_received_timestamp
+)
+
 MAPPING_META_COMMON = {
     "c": {
         "10": "tag-1",
@@ -66,6 +71,7 @@ SET_MESSAGE_SHARED = {
     # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_COMMON,
+    "sentry_received_timestamp": sentry_received_timestamp,
 }
 
 SET_MESSAGE_TAG_VALUES_STRINGS = {
@@ -81,6 +87,7 @@ SET_MESSAGE_TAG_VALUES_STRINGS = {
     # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_TAG_VALUES_STRINGS,
+    "sentry_received_timestamp": sentry_received_timestamp,
 }
 
 COUNTER_MESSAGE_SHARED = {
@@ -95,6 +102,7 @@ COUNTER_MESSAGE_SHARED = {
     # test enforce retention days of 30
     "retention_days": 23,
     "mapping_meta": MAPPING_META_COMMON,
+    "sentry_received_timestamp": sentry_received_timestamp,
 }
 
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
@@ -110,6 +118,7 @@ DIST_MESSAGE_SHARED = {
     # test enforce retention days of 90
     "retention_days": 50,
     "mapping_meta": MAPPING_META_COMMON,
+    "sentry_received_timestamp": sentry_received_timestamp,
 }
 
 TEST_CASES_BUCKETS = [
@@ -197,12 +206,16 @@ def test_metrics_processor(
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
     expected_set_result = (
-        InsertBatch(expected_set, None) if expected_set is not None else None
+        InsertBatch(expected_set, None, expected_sentry_received_timestamp)
+        if expected_set is not None
+        else None
     )
     assert SetsMetricsProcessor().process_message(message, meta) == expected_set_result
 
     expected_counter_result = (
-        InsertBatch(expected_counter, None) if expected_counter is not None else None
+        InsertBatch(expected_counter, None, expected_sentry_received_timestamp)
+        if expected_counter is not None
+        else None
     )
     assert (
         CounterMetricsProcessor().process_message(message, meta)
@@ -210,7 +223,7 @@ def test_metrics_processor(
     )
 
     expected_distributions_result = (
-        InsertBatch(expected_distributions, None)
+        InsertBatch(expected_distributions, None, expected_sentry_received_timestamp)
         if expected_distributions is not None
         else None
     )
@@ -375,7 +388,9 @@ def test_metrics_aggregate_processor(
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
     expected_set_result = (
-        AggregateInsertBatch(expected_set, None) if expected_set is not None else None
+        AggregateInsertBatch(expected_set, None, expected_sentry_received_timestamp)
+        if expected_set is not None
+        else None
     )
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
@@ -389,7 +404,9 @@ def test_metrics_aggregate_processor(
         )
 
         expected_counter_result = (
-            AggregateInsertBatch(expected_counter, None)
+            AggregateInsertBatch(
+                expected_counter, None, expected_sentry_received_timestamp
+            )
             if expected_counter is not None
             else None
         )
@@ -399,7 +416,9 @@ def test_metrics_aggregate_processor(
         )
 
         expected_distributions_result = (
-            AggregateInsertBatch(expected_distributions, None)
+            AggregateInsertBatch(
+                expected_distributions, None, expected_sentry_received_timestamp
+            )
             if expected_distributions is not None
             else None
         )
@@ -493,7 +512,9 @@ def test_metrics_polymorphic_processor(
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
-            AggregateInsertBatch(expected_output, None)
+            AggregateInsertBatch(
+                expected_output, None, expected_sentry_received_timestamp
+            )
             if expected_output is not None
             else None
         )
@@ -561,7 +582,9 @@ def test_generic_metrics_sets_processor(
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
     expected_polymorphic_result = (
-        InsertBatch(expected_output, None) if expected_output is not None else None
+        InsertBatch(expected_output, None, expected_sentry_received_timestamp)
+        if expected_output is not None
+        else None
     )
     assert (
         GenericSetsMetricsProcessor().process_message(message, meta)
