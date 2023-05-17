@@ -65,18 +65,17 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     """
     ver = clickhouse.execute("SELECT version()").results[0][0]
     ver = re.search("(\d+.\d+.\d+.\d+)", ver)
-    error_message = (
-        f"Snuba requires Clickhouse versions at least {CLICKHOUSE_SERVER_MIN_VERSION} and "
-        f"at most {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
-    )
-    if ver is None:
-        raise InvalidClickhouseVersion(error_message)
-
-    parsed_ver = version.parse(ver.group())
-    if parsed_ver < version.parse(
+    if ver is None or version.parse(ver.group()) < version.parse(
         CLICKHOUSE_SERVER_MIN_VERSION
-    ) or parsed_ver > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
-        raise InvalidClickhouseVersion(error_message)
+    ):
+        raise InvalidClickhouseVersion(
+            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
+        )
+
+    if version.parse(ver.group()) > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
+        logger.warning(
+            "Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver}). Higher versions might not be supported."
+        )
 
 
 def check_for_inactive_replicas() -> None:
