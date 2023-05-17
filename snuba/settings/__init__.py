@@ -81,6 +81,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
+            "spans",
         },
         "single_node": True,
     },
@@ -233,7 +234,8 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
+# (logical topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -241,8 +243,12 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = set()
+SKIPPED_MIGRATION_GROUPS: Set[str] = {
+    "spans",
+}
 
+if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
+    SKIPPED_MIGRATION_GROUPS.remove("spans")
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
@@ -278,7 +284,8 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+# (entity name, buffer size)
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
@@ -296,13 +303,8 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
 
-# Start time in hours from UTC 00:00:00 after which we are allowed to run
-# optimize jobs in parallel.
-PARALLEL_OPTIMIZE_JOB_START_TIME = 0
-
-# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
-# parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = 9
+# Enable spans ingestion
+ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
@@ -317,6 +319,14 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+
+# Start time in hours from UTC 00:00:00 after which we are allowed to run
+# optimize jobs in parallel.
+PARALLEL_OPTIMIZE_JOB_START_TIME = 0
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
+# parallel to avoid running in parallel when peak traffic starts.
+PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
