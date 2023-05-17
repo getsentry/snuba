@@ -1,48 +1,95 @@
 import { it, expect, jest, beforeEach } from "@jest/globals";
-import { act, fireEvent, render } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  getByAltText,
+  getByTestId,
+  render,
+} from "@testing-library/react";
 import React from "react";
 import AddConfigModal from "../../capacity_management/add_config_modal";
-describe("AddConfigModal", function () {
-  beforeEach(() => {
-    jest.resetAllMocks();
-  });
+import {
+  AllocationPolicyConfig,
+  AllocationPolicyOptionalConfigDefinition,
+} from "../../capacity_management/types";
 
-  it("should modify the config as expected", async () => {
-    const mockedSet = jest.fn();
-    const mockedDelete = jest.fn();
-    const mockedSave = jest.fn();
-    window.confirm = jest.fn(() => true); // always click 'yes'
+it("should modify the config as expected", async () => {
+  const mockedSet = jest.fn();
+  const mockedSave = jest.fn();
+  window.confirm = jest.fn(() => true); // always click 'yes'
 
-    var mockedConfig = {
-      name: "my_config",
-      value: "10",
-      type: "int",
-      description: "some config",
-      params: {},
-    };
+  let mockedConfig = {
+    name: "optional_config",
+    type: "int",
+    description: "some config",
+  };
 
-    let { getByRole, getByText } = render(
-      <AddConfigModal currentlyAdding={true} />
-    );
+  let expectedConfig: AllocationPolicyConfig = {
+    ...mockedConfig,
+    value: "20",
+    params: { some_param: "30", some_other_param: "test" },
+  };
 
-    // Close button should set editing to false
-    act(() => fireEvent.click(getByRole("button", { name: "Close" })));
-    expect(mockedSet).toBeCalledWith(false);
+  let mockedDefs: AllocationPolicyOptionalConfigDefinition[] = [
+    {
+      ...mockedConfig,
+      default: "10",
+      params: [
+        { name: "some_param", type: "int" },
+        { name: "some_other_param", type: "str" },
+      ],
+    },
+  ];
 
-    // Save changes with a value should call the save function with the updated value
-    act(() =>
-      fireEvent.change(getByRole("spinbutton"), { target: { value: 20 } })
-    );
-    act(() => fireEvent.click(getByRole("button", { name: "Save Changes" })));
-    expect(mockedSave).toBeCalledWith({ ...mockedConfig, value: "20" });
-    expect(mockedSet).toBeCalledWith(false);
+  let { getByRole, getByText, getByTestId } = render(
+    <AddConfigModal
+      currentlyAdding={true}
+      setCurrentlyAdding={mockedSet}
+      optionalConfigDefinitions={mockedDefs}
+      saveConfig={mockedSave}
+    />
+  );
 
-    // Not parameterized so it should say "Reset" instead of "Delete"
-    expect(getByText("Reset")).toBeTruthy();
+  // Close button should set editing to false
+  act(() => fireEvent.click(getByRole("button", { name: "Close" })));
+  expect(mockedSet).toBeCalledWith(false);
 
-    // Reset button should call the delete config function
-    act(() => fireEvent.click(getByRole("button", { name: "Reset" })));
-    expect(window.confirm).toBeCalled();
-    expect(mockedDelete).toBeCalled();
-  });
+  // Select an optional config
+  act(() =>
+    fireEvent.change(getByRole("combobox"), {
+      target: { value: "optional_config" },
+    })
+  );
+
+  // Modal should populate with the parameters of the config
+  expect(getByText("some_param (int)")).toBeTruthy();
+  expect(getByText("some_other_param (str)")).toBeTruthy();
+
+  // Save changes with a value should call the save function with the updated value
+  act(() =>
+    fireEvent.change(getByTestId("some_param"), { target: { value: 30 } })
+  );
+
+  const saveButton = getByRole("button", { name: "Save Changes" });
+  act(() => fireEvent.click(saveButton));
+
+  // Button should be disabled since the form isn't completed yet
+  expect(mockedSave).not.toBeCalled();
+
+  act(() =>
+    fireEvent.change(getByTestId("some_other_param"), {
+      target: { value: "test" },
+    })
+  );
+
+  act(() =>
+    fireEvent.change(getByTestId("value_field"), {
+      target: { value: 20 },
+    })
+  );
+
+  act(() => fireEvent.click(saveButton));
+
+  expect(mockedSave).toBeCalledWith(expectedConfig);
+  expect(mockedSet).toBeCalledWith(false);
 });
