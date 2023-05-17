@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -368,7 +369,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
     # and deleting the config afterwards
     auditlog_records = []
 
-    def mock_record(user, action, data, notify) -> None:
+    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
         nonlocal auditlog_records
         auditlog_records.append((user, action, data, notify))
 
