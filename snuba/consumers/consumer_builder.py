@@ -76,9 +76,11 @@ class ConsumerBuilder:
         slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
+        join_timeout: Optional[int] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
+        self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
         self.__kafka_params = kafka_params
@@ -259,7 +261,12 @@ class ConsumerBuilder:
             dlq_policy = None
 
         return StreamProcessor(
-            consumer, self.raw_topic, strategy_factory, IMMEDIATE, dlq_policy=dlq_policy
+            consumer,
+            self.raw_topic,
+            strategy_factory,
+            IMMEDIATE,
+            dlq_policy=dlq_policy,
+            join_timeout=self.join_timeout,
         )
 
     def build_streaming_strategy_factory(

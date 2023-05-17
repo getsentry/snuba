@@ -226,7 +226,7 @@ schema:
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
 allocation_policy:
-  name: ErrorsAllocationPolicy
+  name: BytesScannedWindowAllocationPolicy
   args:
     required_tenant_types:
       - organzation_id

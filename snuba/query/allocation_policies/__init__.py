@@ -6,12 +6,13 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
@@ -308,6 +309,18 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 default=1,
             ),
         ]
+
+    @property
+    def metrics(self) -> MetricsWrapper:
+        return MetricsWrapper(
+            environment.metrics,
+            "allocation_policy",
+            tags={
+                "storage_key": self._storage_key.value,
+                "is_enforced": str(self.is_enforced),
+                "policy_class": self.__class__.__name__,
+            },
+        )
 
     @property
     def runtime_config_prefix(self) -> str:
