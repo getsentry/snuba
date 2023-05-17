@@ -234,7 +234,8 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
+# (logical topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -244,8 +245,6 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 # Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "querylog",
-    "profiles",
-    "functions",
     "test_migration",
     "search_issues",
     "spans",
@@ -287,7 +286,8 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+# (entity name, buffer size)
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
