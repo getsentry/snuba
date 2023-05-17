@@ -179,6 +179,9 @@ def execute_query(
     """
     Execute a query and return a result.
     """
+    # Apply clickhouse query setting overrides
+    clickhouse_query_settings = query_settings.get_clickhouse_settings()
+
     # Force query to use the first shard replica, which
     # should have synchronously received any cluster writes
     # before this query is run.

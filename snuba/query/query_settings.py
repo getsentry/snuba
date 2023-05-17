@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence
+from typing import Any, List, MutableMapping, Optional, Sequence
 
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
@@ -52,6 +52,14 @@ class QuerySettings(ABC):
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass
 
+    @abstractmethod
+    def get_clickhouse_settings(self) -> MutableMapping[str, Any]:
+        pass
+
+    @abstractmethod
+    def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
+        pass
+
 
 # TODO: I don't like that there are two different classes for the same thing
 # this could probably be replaces with a `source` attribute on the class
@@ -80,6 +88,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__legacy = legacy
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
+        self.__clickhouse_settings: MutableMapping[str, Any] = {}
         self.referrer = referrer
 
     def get_turbo(self) -> bool:
@@ -108,6 +117,12 @@ class HTTPQuerySettings(QuerySettings):
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         self.__resource_quota = quota
+
+    def get_clickhouse_settings(self) -> MutableMapping[str, Any]:
+        return self.__clickhouse_settings
+
+    def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
+        self.__clickhouse_settings = settings
 
 
 class SubscriptionQuerySettings(QuerySettings):
@@ -164,4 +179,10 @@ class SubscriptionQuerySettings(QuerySettings):
         return None
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
+        pass
+
+    def get_clickhouse_settings(self) -> MutableMapping[str, Any]:
+        return {}
+
+    def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         pass
