@@ -113,13 +113,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
-        return InsertBatch(
-            [processed],
-            origin_timestamp=None,
-            sentry_received_timestamp=datetime.utcfromtimestamp(
-                message["sentry_received_timestamp"]
-            ),
-        )
+        return InsertBatch([processed], None)
 
 
 class SetsMetricsProcessor(MetricsBucketProcessor):

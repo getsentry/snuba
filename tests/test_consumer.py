@@ -236,7 +236,6 @@ def test_metrics_writing_e2e() -> None:
             "tags": {"6": 91, "9": 134, "4": 117, "5": 7},
             "metric_id": 8,
             "retention_days": 90,
-            "sentry_received_timestamp": datetime.now().timestamp(),
         }
     )
 

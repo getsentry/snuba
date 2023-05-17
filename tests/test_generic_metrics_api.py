@@ -99,7 +99,6 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
-        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
         self.unique_values = 5
@@ -136,8 +135,6 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -263,7 +260,6 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
-        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
 
@@ -304,8 +300,6 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -419,7 +413,6 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
-        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
 
@@ -451,8 +444,6 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -519,7 +510,6 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
 
         self.count = 3600
         self.base_time = utc_yesterday_12_15()
-        self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
         self.end_time = (
@@ -562,8 +552,6 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
                                 "retention_days": RETENTION_DAYS,
                                 "mapping_meta": self.mapping_meta,
                                 "use_case_id": self.use_case_id,
-                                "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                                + n,
                             }
                         ),
                         KafkaMessageMetadata(0, 0, self.base_time),
