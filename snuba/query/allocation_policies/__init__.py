@@ -233,7 +233,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>> def _get_quota_allowance(...) -> QuotaAllowance:
         >>>     if self.__get_current_qps() < self.get_config_value("qps_limit"):
         >>>         return QuotaAllowance(can_run=True, ...)
-        >>>     return QuotaAllowance(Changes to the allocation policy were not being published to the auditlog or the slack feed. This should fix that.
+        >>>     return QuotaAllowance(can_run=False, ...)
         >>>
         >>> def _update_quota_balance(...) -> None:
         >>>     self.__add_query_hit()
