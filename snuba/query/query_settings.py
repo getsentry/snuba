@@ -144,6 +144,7 @@ class SubscriptionQuerySettings(QuerySettings):
         self.__feature = feature
         self.__app_id = app_id
         self.referrer = referrer
+        self.__clickhouse_settings: MutableMapping[str, Any] = {}
 
     def get_turbo(self) -> bool:
         return False
@@ -182,7 +183,7 @@ class SubscriptionQuerySettings(QuerySettings):
         pass
 
     def get_clickhouse_settings(self) -> MutableMapping[str, Any]:
-        return {}
+        return self.__clickhouse_settings
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
-        pass
+        self.__clickhouse_settings = settings
