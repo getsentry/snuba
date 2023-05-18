@@ -4,6 +4,7 @@ from snuba import settings
 from snuba.admin.audit_log.action import (
     MIGRATION_ACTIONS,
     RUNTIME_CONFIG_ACTIONS,
+    ALLOCATION_POLICY_ACTIONS,
     AuditLogAction,
 )
 
@@ -15,8 +16,10 @@ def build_blocks(
         text = build_runtime_config_text(data, action)
     elif action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, action)
+    elif action in ALLOCATION_POLICY_ACTIONS:
+        text = build_migration_run_text(data, action)
     else:
-        text = action.value
+        text = f"{action.value}: {data}"
 
     section = {
         "type": "section",

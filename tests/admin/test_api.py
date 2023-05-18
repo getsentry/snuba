@@ -388,6 +388,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         assert response.status_code == 200, response.json
         # make sure an auditlog entry was recorded
+        print(auditlog_records)
         assert auditlog_records.pop()
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
@@ -427,5 +428,6 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "type": "int",
             "value": 420,
         } not in response.json  # type: ignore
+        print(auditlog_records)
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
