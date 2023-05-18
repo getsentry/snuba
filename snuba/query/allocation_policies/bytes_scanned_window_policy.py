@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any
 
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
@@ -81,14 +80,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
-
-    def __init__(
-        self,
-        storage_key: StorageKey,
-        required_tenant_types: list[str],
-        **kwargs: str,
-    ) -> None:
-        super().__init__(storage_key, required_tenant_types)
 
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
