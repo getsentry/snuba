@@ -45,5 +45,4 @@ def test_build_blocks(
         datetime.now().isoformat(),
         "ninja",
     )
-    print(res[0]["text"]["text"])
     assert res[0]["text"]["text"] == expected
