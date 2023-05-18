@@ -1,7 +1,7 @@
 import Client from "../../api_client";
 
 import AllocationPolicyConfigs from "../../capacity_management/allocation_policy";
-import { it, jest } from "@jest/globals";
+import { it, expect, jest } from "@jest/globals";
 import {
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
