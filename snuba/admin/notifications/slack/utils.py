@@ -2,9 +2,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
 from snuba.admin.audit_log.action import (
+    ALLOCATION_POLICY_ACTIONS,
     MIGRATION_ACTIONS,
     RUNTIME_CONFIG_ACTIONS,
-    ALLOCATION_POLICY_ACTIONS,
     AuditLogAction,
 )
 
@@ -17,7 +17,7 @@ def build_blocks(
     elif action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, action)
     elif action in ALLOCATION_POLICY_ACTIONS:
-        text = build_migration_run_text(data, action)
+        text = build_allocation_policy_changed_text(data, action)
     else:
         text = f"{action.value}: {data}"
 
@@ -27,6 +27,23 @@ def build_blocks(
     }
 
     return [section, build_context(user, timestamp, action)]
+
+
+def build_allocation_policy_changed_text(
+    data: Any, action: AuditLogAction
+) -> Optional[str]:
+    base = f"*Storage {data['storage']} Allocation Policy Changed:*"
+
+    if action == AuditLogAction.ALLOCATION_POLICY_DELETE:
+        removed = f"~```'{data['key']}({data.get('params', {})})'```~"
+        return f"{base} :put_litter_in_its_place:\n\n{removed}"
+    elif action == AuditLogAction.ALLOCATION_POLICY_UPDATE:
+        updated = f"```'{data['key']}({data.get('params', {})})' = '{data['value']}'```"
+        return f"{base} :up: :date:\n\n{updated}"
+    else:
+        # todo: raise error, cause slack won't accept this
+        # if it is none
+        return f"{action.value}: {data}"
 
 
 def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str]:
