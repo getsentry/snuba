@@ -7,7 +7,7 @@ import {
   AllocationPolicyOptionalConfigDefinition,
 } from "../../capacity_management/types";
 
-it("should modify the config as expected", async () => {
+it("should add the config as expected", async () => {
   const mockedSet = jest.fn();
   const mockedSave = jest.fn();
   window.confirm = jest.fn(() => true); // always click 'yes'
