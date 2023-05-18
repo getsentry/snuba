@@ -318,4 +318,5 @@ class SpansLoader(DirectoryLoader):
         return [
             "0001_spans_v1",
             "0002_spans_add_tags_hashmap",
+            "0003_spans_add_profile_id",
         ]
