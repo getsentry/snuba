@@ -407,7 +407,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def __get_overridden_additional_config_defaults(
         self, default_config_overrides: dict[str, Any]
     ) -> list[AllocationPolicyConfig]:
-        """overrides the defaults specified for the config in code with the default specifed
+        """overrides the defaults specified for the config in code with the default specified
         to the instance of the policy
         """
         definitions = self._additional_config_definitions()
