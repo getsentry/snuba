@@ -74,7 +74,7 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
 
     if version.parse(ver.group()) > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
         logger.warning(
-            "Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver}). Higher versions might not be supported."
+            f"Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver}). Higher versions might not be supported."
         )
 
 
