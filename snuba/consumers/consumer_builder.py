@@ -8,7 +8,6 @@ from arroyo.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
     KafkaProducer,
-    build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
 from arroyo.commit import IMMEDIATE
@@ -98,13 +97,11 @@ class ConsumerBuilder:
 
         if self.__consumer_config.replacements_topic is not None:
             self.replacements_producer = Producer(
-                build_kafka_configuration(
-                    self.__consumer_config.replacements_topic.broker_config,
-                    override_params={
-                        "partitioner": "consistent",
-                        "message.max.bytes": 10000000,  # 10MB, default is 1MB)
-                    },
-                )
+                {
+                    **self.__consumer_config.replacements_topic.broker_config,
+                    "partitioner": "consistent",
+                    "message.max.bytes": 10000000,  # 10MB, default is 1MB)
+                }
             )
         else:
             self.replacements_producer = None
