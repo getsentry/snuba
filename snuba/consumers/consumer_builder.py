@@ -8,6 +8,7 @@ from arroyo.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
     KafkaProducer,
+    build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
 from arroyo.commit import IMMEDIATE
@@ -83,7 +84,10 @@ class ConsumerBuilder:
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
 
-        broker_config = self.__consumer_config.raw_topic.broker_config
+        broker_config = build_kafka_consumer_configuration(
+            self.__consumer_config.raw_topic.broker_config,
+            self.__kafka_params.group_id,
+        )
 
         logger.info(f"librdkafka log level: {broker_config.get('log_level', 6)}")
 
@@ -97,11 +101,13 @@ class ConsumerBuilder:
 
         if self.__consumer_config.replacements_topic is not None:
             self.replacements_producer = Producer(
-                {
-                    **self.__consumer_config.replacements_topic.broker_config,
-                    "partitioner": "consistent",
-                    "message.max.bytes": 10000000,  # 10MB, default is 1MB)
-                }
+                build_kafka_configuration(
+                    self.__consumer_config.replacements_topic.broker_config,
+                    override_params={
+                        "partitioner": "consistent",
+                        "message.max.bytes": 10000000,  # 10MB, default is 1MB)
+                    },
+                )
             )
         else:
             self.replacements_producer = None
@@ -114,7 +120,9 @@ class ConsumerBuilder:
 
         if self.__consumer_config.commit_log_topic is not None:
             self.commit_log_producer = Producer(
-                self.__consumer_config.commit_log_topic.broker_config
+                build_kafka_configuration(
+                    self.__consumer_config.commit_log_topic.broker_config
+                )
             )
         else:
             self.commit_log_producer = None
@@ -156,13 +164,12 @@ class ConsumerBuilder:
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
-            {},
+            self.__consumer_config.raw_topic.broker_config,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
             strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
-            override_params=self.__consumer_config.raw_topic.broker_config,
         )
 
         stats_collection_frequency_ms = get_config(

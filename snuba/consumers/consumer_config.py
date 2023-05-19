@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
-from arroyo.backends.kafka import build_kafka_configuration
-
 from snuba import settings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -76,9 +74,7 @@ def _resolve_topic_config(
     else:
         physical_topic_name = topic_spec.get_physical_topic_name(slice_id)
 
-    broker = build_kafka_configuration(
-        _get_default_topic_configuration(topic_spec.topic, slice_id)
-    )
+    broker = _get_default_topic_configuration(topic_spec.topic, slice_id)
     return TopicConfig(broker_config=broker, physical_topic_name=physical_topic_name)
 
 
