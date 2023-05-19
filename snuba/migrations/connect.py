@@ -69,12 +69,12 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
         CLICKHOUSE_SERVER_MIN_VERSION
     ):
         raise InvalidClickhouseVersion(
-            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
+            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(ver.group())})"
         )
 
     if version.parse(ver.group()) > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
         logger.warning(
-            f"Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver}). Higher versions might not be supported."
+            f"Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(ver.group())}). Higher versions might not be supported."
         )
 
 
