@@ -24,6 +24,7 @@ def test_consumer_config() -> None:
     assert resolved.commit_log_topic.physical_topic_name == "snuba-commit-log"
     assert resolved.replacements_topic is not None
     assert resolved.replacements_topic.physical_topic_name == "event-replacements"
+    assert resolved.dlq_topic is None
 
     # Invalid storage raises
     with pytest.raises(KeyError):

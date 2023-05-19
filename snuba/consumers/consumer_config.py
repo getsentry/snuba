@@ -54,6 +54,7 @@ class ConsumerConfig:
     raw_topic: TopicConfig
     commit_log_topic: Optional[TopicConfig]
     replacements_topic: Optional[TopicConfig]
+    dlq_topic: Optional[TopicConfig]
     max_batch_size: int
     max_batch_time_ms: int
     env: Optional[EnvConfig]
@@ -129,6 +130,18 @@ def resolve_consumer_config(
 
     resolved_env_config = _resolve_env_config()
 
+    # DLQ topic does not support override via CLI
+    resolved_dlq_topic: Optional[TopicConfig]
+    dlq_config = stream_loader.get_dlq_config()
+
+    if dlq_config is not None:
+        dlq_topic_spec = KafkaTopicSpec(dlq_config.topic)
+        resolved_dlq_topic = _resolve_topic_config(
+            "dlq topic", dlq_topic_spec, None, slice_id
+        )
+    else:
+        resolved_dlq_topic = None
+
     return ConsumerConfig(
         storages=[
             resolve_storage_config(storage_name, storage)
@@ -137,6 +150,7 @@ def resolve_consumer_config(
         raw_topic=resolved_raw_topic,
         commit_log_topic=resolved_commit_log_topic,
         replacements_topic=resolved_replacements_topic,
+        dlq_topic=resolved_dlq_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         env=resolved_env_config,

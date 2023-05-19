@@ -29,11 +29,9 @@ from snuba.consumers.consumer_config import ConsumerConfig
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 
 logger = logging.getLogger(__name__)
 
@@ -205,23 +203,16 @@ class ConsumerBuilder:
             commit_retry_policy=self.__commit_retry_policy,
         )
 
-        # TODO: Move DLQ into consumer config
-        stream_loader = self.storage.get_table_writer().get_stream_loader()
-
-        dlq_config = stream_loader.get_dlq_config()
-
-        if dlq_config is not None:
-            dlq_producer = KafkaProducer(
-                build_kafka_producer_configuration(
-                    dlq_config.topic,
-                    slice_id,
-                )
-            )
-            dlq_topic_spec = KafkaTopicSpec(dlq_config.topic)
-            resolved_topic = Topic(dlq_topic_spec.get_physical_topic_name(slice_id))
+        if self.__consumer_config.dlq_topic is not None:
+            dlq_producer = KafkaProducer(self.__consumer_config.dlq_topic.broker_config)
 
             dlq_policy = DlqPolicy(
-                KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit(), None
+                KafkaDlqProducer(
+                    dlq_producer,
+                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
+                ),
+                DlqLimit(),
+                None,
             )
         else:
             dlq_policy = None
