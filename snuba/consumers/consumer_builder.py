@@ -156,12 +156,13 @@ class ConsumerBuilder:
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
-            self.__consumer_config.raw_topic.broker_config,
+            {},
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
             strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
+            override_params=self.__consumer_config.raw_topic.broker_config,
         )
 
         stats_collection_frequency_ms = get_config(
