@@ -6,9 +6,12 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.spans_processor import SpansMessageProcessor
+from snuba.datasets.processors.spans_processor import (
+    SpansMessageProcessor,
+    is_project_in_allowlist,
+)
 from snuba.processor import InsertBatch
-from snuba.state import set_config
+from snuba.state import delete_config, set_config
 
 
 @dataclass
@@ -356,3 +359,30 @@ class TestSpansProcessor:
 
         for index in range(len(rows)):
             assert len(rows[index]) == len(expected_result[index])
+
+
+@pytest.mark.parametrize(
+    "sample_rate, project_id, input_project_id, expected_result",
+    [
+        (0, 100, 100, True),
+        (0, 101, 100, False),
+        (1, 101, 100, True),
+        (1, 101, 101, True),
+        (1, 101, 102, False),
+        (None, 100, 100, True),
+        (None, 101, 100, False),
+    ],
+)
+@pytest.mark.redis_db
+def test_is_project_in_allowlist(
+    sample_rate, project_id, input_project_id, expected_result
+):
+    if sample_rate:
+        set_config("spans_sample_rate", sample_rate)
+    if project_id:
+        set_config("spans_project_allowlist", f"[{project_id}]")
+
+    assert is_project_in_allowlist(input_project_id) == expected_result
+
+    delete_config("spans_sample_rate")
+    delete_config("spans_project_allowlist")
