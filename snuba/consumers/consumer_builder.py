@@ -204,7 +204,11 @@ class ConsumerBuilder:
         )
 
         if self.__consumer_config.dlq_topic is not None:
-            dlq_producer = KafkaProducer(self.__consumer_config.dlq_topic.broker_config)
+            dlq_producer = KafkaProducer(
+                build_kafka_configuration(
+                    self.__consumer_config.dlq_topic.broker_config
+                )
+            )
 
             dlq_policy = DlqPolicy(
                 KafkaDlqProducer(
