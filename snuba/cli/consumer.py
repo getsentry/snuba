@@ -13,6 +13,7 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
+from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
@@ -167,20 +168,28 @@ def consumer(
     metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 
+    consumer_config = resolve_consumer_config(
+        storage_names=[storage_name],
+        raw_topic=raw_events_topic,
+        commit_log_topic=commit_log_topic,
+        replacements_topic=replacements_topic,
+        bootstrap_servers=bootstrap_server,
+        commit_log_bootstrap_servers=commit_log_bootstrap_server,
+        replacement_bootstrap_servers=replacement_bootstrap_server,
+        slice_id=slice_id,
+        max_batch_size=max_batch_size,
+        max_batch_time_ms=max_batch_time_ms,
+    )
+
     def stats_callback(stats_json: str) -> None:
         stats = rapidjson.loads(stats_json)
         metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
+        consumer_config=consumer_config,
         kafka_params=KafkaParameters(
-            raw_topic=raw_events_topic,
-            replacements_topic=replacements_topic,
-            bootstrap_servers=bootstrap_server,
-            commit_log_bootstrap_servers=commit_log_bootstrap_server,
-            replacements_bootstrap_servers=replacement_bootstrap_server,
             group_id=consumer_group,
-            commit_log_topic=commit_log_topic,
             auto_offset_reset=auto_offset_reset,
             strict_offset_reset=not no_strict_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
