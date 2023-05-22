@@ -4,6 +4,13 @@ import logging
 import time
 from typing import Any
 
+from sentry_redis_tools.sliding_windows_rate_limiter import (
+    GrantedQuota,
+    Quota,
+    RedisSlidingWindowRateLimiter,
+    RequestedQuota,
+)
+
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
@@ -11,12 +18,7 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.state.sliding_windows import (
-    GrantedQuota,
-    Quota,
-    RedisSlidingWindowRateLimiter,
-    RequestedQuota,
-)
+from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -71,7 +73,9 @@ _PASS_THROUGH_REFERRERS = set(
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter()
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(
+    get_redis_client(RedisClientKey.RATE_LIMITER)
+)
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
