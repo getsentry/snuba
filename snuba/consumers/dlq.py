@@ -104,8 +104,13 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
         self.__commit = commit
         self.__last_message_time = time.time()
         self.__max_message_timeout = max_message_timeout
+        self.__exiting = False
 
     def __exit(self) -> None:
+        if self.__exiting:
+            return
+
+        self.__exiting = True
         self.__commit({}, force=True)
         logger.info("Processed %d messages", self.__processed_messages)
         signal.raise_signal(signal.SIGINT)
