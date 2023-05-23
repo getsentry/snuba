@@ -711,7 +711,7 @@ def db_query(
                         --> execute_query_with_readthrough_caching
                             ### READTHROUGH CACHE GOES HERE ###
                                 --> execute_query_with_rate_limits
-                                    --> execue_query
+                                    --> execute_query
 
         The implication is that if a user hits the cache they will not be rate limited because the
         request will simply be cached. That is the behavior at time of writing (28-03-2023) but there

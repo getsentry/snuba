@@ -4,8 +4,13 @@ import logging
 import time
 from typing import Any
 
-from snuba import environment
-from snuba.datasets.storages.storage_key import StorageKey
+from sentry_redis_tools.sliding_windows_rate_limiter import (
+    GrantedQuota,
+    Quota,
+    RedisSlidingWindowRateLimiter,
+    RequestedQuota,
+)
+
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
@@ -13,13 +18,7 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.state.sliding_windows import (
-    GrantedQuota,
-    Quota,
-    RedisSlidingWindowRateLimiter,
-    RequestedQuota,
-)
-from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -74,7 +73,9 @@ _PASS_THROUGH_REFERRERS = set(
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter()
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(
+    get_redis_client(RedisClientKey.RATE_LIMITER)
+)
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
@@ -83,14 +84,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
-
-    def __init__(
-        self,
-        storage_key: StorageKey,
-        required_tenant_types: list[str],
-        **kwargs: str,
-    ) -> None:
-        super().__init__(storage_key, required_tenant_types)
 
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
@@ -115,21 +108,18 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             ),
         ]
 
-    @property
-    def metrics(self) -> MetricsWrapper:
-        return MetricsWrapper(environment.metrics, self.__class__.__name__)
-
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[bool, str]:
-        if "referrer" not in tenant_ids:
+        if tenant_ids.get("referrer") is None:
             return False, "no referrer"
         if (
-            "organization_id" not in tenant_ids
+            tenant_ids.get("organization_id") is None
             and tenant_ids.get("referrer", None) not in _ORG_LESS_REFERRERS
             and tenant_ids.get("referrer", None) not in _SINGLE_THREAD_REFERRERS
         ):
             return False, f"no organization_id for referrer {tenant_ids['referrer']}"
+
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
@@ -141,8 +131,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             self.metrics.increment(
                 "db_request_rejected",
                 tags={
-                    "storage_key": self._storage_key.value,
-                    "is_enforced": str(self.is_enforced),
                     "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                 },
             )
@@ -190,8 +178,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 self.metrics.increment(
                     "db_request_throttled",
                     tags={
-                        "storage_key": self._storage_key.value,
-                        "is_enforced": str(self.is_enforced),
                         "referrer": str(tenant_ids.get("referrer", "no_referrer")),
                     },
                 )

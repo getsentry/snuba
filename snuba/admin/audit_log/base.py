@@ -31,7 +31,7 @@ class AuditLog:
             timestamp=timestamp,
             **data,
         )
+        blocks = build_blocks(data, action, timestamp, user)
+        payload: MutableMapping[str, Any] = {"blocks": blocks}
         if notify and self.client.is_configured:
-            blocks = build_blocks(data, action, timestamp, user)
-            payload: MutableMapping[str, Any] = {"blocks": blocks}
             self.client.post_message(message=payload)

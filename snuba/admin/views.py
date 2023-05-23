@@ -349,8 +349,7 @@ def clickhouse_trace_query() -> Response:
 
     try:
         result = run_query_and_get_trace(storage, raw_sql)
-        trace_output = result.trace_output
-        return make_response(jsonify({"trace_output": trace_output}), 200)
+        return make_response(jsonify(asdict(result)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -716,33 +715,19 @@ def snql_to_sql() -> Response:
 @application.route("/allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def allocation_policies() -> Response:
-    try:
-        return Response(
-            json.dumps(get_allocation_policies()),
-            200,
-            {"Content-Type": "application/json"},
-        )
-    except Exception as exception:
-        return Response(
-            json.dumps({"error": str(exception)}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
+    return Response(
+        json.dumps(get_allocation_policies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage: str) -> Response:
-    try:
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        configs = policy.get_current_configs()
-        return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
-    except Exception as exception:
-        return Response(
-            json.dumps({"error": str(exception)}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
+    policy = get_storage(StorageKey(storage)).get_allocation_policy()
+    configs = policy.get_current_configs()
+    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
 
 
 @application.route(
@@ -751,18 +736,11 @@ def get_allocation_policy_configs(storage: str) -> Response:
 )
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
-    try:
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
-        config_definitions = policy.get_optional_config_definitions_json()
-        return Response(
-            json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
-        )
-    except Exception as exception:
-        return Response(
-            json.dumps({"error": str(exception)}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
+    policy = get_storage(StorageKey(storage)).get_allocation_policy()
+    config_definitions = policy.get_optional_config_definitions_json()
+    return Response(
+        json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
+    )
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -789,29 +767,28 @@ def set_allocation_policy_config() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except Exception as exception:
-        return Response(
-            json.dumps({"error": str(exception)}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
 
     if request.method == "DELETE":
-        try:
-            policy.delete_config_value(config_key=key, params=params, user=user)
-            return Response("", 200)
-        except Exception as exception:
-            return Response(
-                json.dumps({"error": str(exception)}, indent=4),
-                400,
-                {"Content-Type": "application/json"},
-            )
-    else:
+        policy.delete_config_value(config_key=key, params=params, user=user)
+        audit_log.record(
+            user or "",
+            AuditLogAction.ALLOCATION_POLICY_DELETE,
+            {"storage": storage, "key": key},
+            notify=True,
+        )
+        return Response("", 200)
+    elif request.method == "POST":
         try:
             value = data["value"]
             assert isinstance(value, str), "Invalid value"
             policy.set_config_value(
                 config_key=key, value=value, params=params, user=user
+            )
+            audit_log.record(
+                user or "",
+                AuditLogAction.ALLOCATION_POLICY_UPDATE,
+                {"storage": storage, "key": key, "value": value, "params": str(params)},
+                notify=True,
             )
             return Response("", 200)
         except (KeyError, AssertionError) as exc:
@@ -820,9 +797,9 @@ def set_allocation_policy_config() -> Response:
                 400,
                 {"Content-Type": "application/json"},
             )
-        except Exception as exception:
-            return Response(
-                json.dumps({"error": str(exception)}, indent=4),
-                400,
-                {"Content-Type": "application/json"},
-            )
+    else:
+        return Response(
+            json.dumps({"error": "Method not allowed"}),
+            405,
+            {"Content-Type": "application/json"},
+        )

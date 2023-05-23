@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.5.1
+
+### Various fixes & improvements
+
+- ref(process_message): Tag all metrics by consumer_group (#4226) by @untitaker
+- feat: Default join timeout for all consumers of 5 seconds (#4222) by @lynnagara
+- fix(clickhouse): Add a check for the max supported clickhouse version (#4158) by @davidtsuk
+- fix: Fix flaky optimize test (#4217) by @lynnagara
+- fix: Fix DLQ producer config (#4216) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.2 (#4215) by @getsentry-bot
+- feat: Move DLQ configuration into consumer configuration (#4206) by @lynnagara
+- feat: Python and Rust consumers share common cluster resolution code (#4205) by @lynnagara
+- Fix slack notifications for when allocation policy changes (#4204) by @volokluev
+- ref: bump sentry-kafka-schemas to 0.1.9 (#4207) by @getsentry-bot
+- feat(admin): add amount of rows in result set to tracing tool (#4167) by @volokluev
+- feat(capman): Allow overriding policy defaults in configuration (#4201) by @volokluev
+- fix: All consumers run with --no-strict-offset-reset in dev (#4177) by @lynnagara
+- fix(CapMan): Validate Tenant IDs (#4176) by @rahul-kumar-saini
+- ref: Use RetryingRedisCluster from sentry-redis-tools (#4197) by @untitaker
+- ref(consumer): pass sentry_received_timestamp again (#4198) by @MeredithAnya
+- feat(dlq): Add the DLQ instruction mechanism (#4199) by @lynnagara
+- fix(capman): create auditlog notifications for allocation policy updates (#4193) by @volokluev
+- feat(schema-validation): Validate all messages 😱 (#4194) by @lynnagara
+- Revert "ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052)" (0d1b0cfa) by @getsentry-bot
+- ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052) by @ayirr7
+- feat(profiling): Create profiling datasets by default in self-hosted (#4195) by @phacops
+- feat: Add metric to count validation failures [SNS-2279] (#4182) by @untitaker
+- ref: bump sentry-arroyo to 2.11.1 (#4190) by @getsentry-bot
+
+_Plus 10 more_
+
 ## 23.5.0
 
 ### Various fixes & improvements

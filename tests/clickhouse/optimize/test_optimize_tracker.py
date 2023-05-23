@@ -65,7 +65,7 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
             if pending is not None:
                 assert tracker.get_partitions_to_optimize() == pending
 
-        for _ in range(5):
+        for _ in range(10):
             try:
                 _do_assertions()
                 return

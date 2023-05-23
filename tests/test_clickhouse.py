@@ -75,8 +75,8 @@ def test_capture_trace() -> None:
     data = clickhouse.execute(
         "SELECT count() FROM errors_local", with_column_types=True, capture_trace=True
     )
-    assert data.results == []
-    assert data.meta == []
+    assert data.results == [(0,)]
+    assert data.meta == [("count()", "UInt64")]
     assert data.trace_output != ""
     assert data.profile is not None
     assert data.profile["elapsed"] > 0
