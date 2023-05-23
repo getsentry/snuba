@@ -62,6 +62,9 @@ def setup_logging(level: Optional[str] = None) -> None:
         processors=[
             add_severity_attribute,
             structlog.contextvars.merge_contextvars,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             SentryProcessor(),
             drop_level,

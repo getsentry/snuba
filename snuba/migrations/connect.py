@@ -1,8 +1,8 @@
-import logging
 import re
 import time
 from typing import Sequence
 
+import structlog
 from packaging import version
 
 from snuba.clickhouse.native import ClickhousePool
@@ -19,7 +19,7 @@ from snuba.migrations.clickhouse import CLICKHOUSE_SERVER_MIN_VERSION
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
 from snuba.settings import ENABLE_DEV_FEATURES
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 
 def check_clickhouse_connections() -> None:
