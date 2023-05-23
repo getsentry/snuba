@@ -364,13 +364,13 @@ class TestSpansProcessor:
 @pytest.mark.parametrize(
     "sample_rate, project_id, input_project_id, expected_result",
     [
-        (0, 100, 100, True),
-        (0, 101, 100, False),
-        (1, 101, 100, True),
-        (1, 101, 101, True),
-        (1, 101, 102, False),
-        (None, 100, 100, True),
-        (None, 101, 100, False),
+        pytest.param(0, 100, 100, True, id="sample rate mismatch exact project match"),
+        pytest.param(0, 101, 100, False, id="sample rate mismatch project mismatch"),
+        pytest.param(1, 101, 100, True, id="sample rate match project mismatch"),
+        pytest.param(1, 101, 101, True, id="sample rate match project match"),
+        pytest.param(1, 101, 102, False, id="sample rate mismatch project mismatch"),
+        pytest.param(None, 100, 100, True, id="no sample rate exact project match"),
+        pytest.param(None, 101, 100, False, id="no sample rate project mismatch"),
     ],
 )
 @pytest.mark.redis_db
