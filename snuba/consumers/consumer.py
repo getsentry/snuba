@@ -125,15 +125,14 @@ class LatencyRecorder:
         if self._max is None or latency_seconds > self._max:
             self._max = latency_seconds
 
-    def has_data(self) -> bool:
-        return self._max is not None
-
     @property
     def avg_ms(self) -> float:
         return (self._sum / self._msg_count) * 1000
 
     @property
     def max_ms(self) -> Optional[float]:
+        if not self._max:
+            return None
         return self._max * 1000
 
 
@@ -186,10 +185,10 @@ class InsertBatchWriter:
                 )
                 sentry_received_latency_recorder.record(sentry_received_latency)
 
-        if snuba_latency_recorder.has_data():
+        if snuba_latency_recorder.max_ms:
             self.__metrics.timing("max_latency_ms", snuba_latency_recorder.max_ms)
             self.__metrics.timing("latency_ms", snuba_latency_recorder.avg_ms)
-        if end_to_end_latency_recorder.has_data():
+        if end_to_end_latency_recorder.max_ms:
             self.__metrics.timing(
                 "max_end_to_end_latency_ms", end_to_end_latency_recorder.max_ms
             )
@@ -198,7 +197,7 @@ class InsertBatchWriter:
                 end_to_end_latency_recorder.avg_ms,
             )
 
-        if sentry_received_latency_recorder.has_data():
+        if sentry_received_latency_recorder.max_ms:
             self.__metrics.timing(
                 "max_sentry_received_latency_ms",
                 sentry_received_latency_recorder.max_ms,

@@ -279,13 +279,12 @@ def test_metrics_writing_e2e() -> None:
 def test_latency_recorder() -> None:
     recorder = LatencyRecorder()
 
-    assert recorder.has_data() == False
+    assert recorder.max_ms is None
 
     recorder.record(1.0)
     recorder.record(0.5)
     recorder.record(1.2)
 
-    assert recorder.has_data() == True
     assert recorder.max_ms == 1200.0
     # (2.7 / 3) * 1000 == 900
     assert recorder.avg_ms == 900.0
