@@ -62,7 +62,7 @@ impl MetricsClientTrait for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -87,7 +87,7 @@ impl MetricsClientTrait for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -112,7 +112,7 @@ impl MetricsClientTrait for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -136,7 +136,7 @@ impl MetricsClient {
         match result {
             Ok(_) => {}
             Err(_err) => {
-                println!("Failed to send metric with tags: {}", _err)
+                println!("Failed to send metric with tags: {_err}")
             }
         }
     }
