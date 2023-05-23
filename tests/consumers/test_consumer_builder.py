@@ -61,6 +61,7 @@ consumer_builder = ConsumerBuilder(
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
     slice_id=None,
+    join_timeout=5,
 )
 
 optional_consumer_config = resolve_consumer_config(
@@ -104,6 +105,7 @@ consumer_builder_with_opt = ConsumerBuilder(
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
     slice_id=None,
+    join_timeout=5,
 )
 
 
