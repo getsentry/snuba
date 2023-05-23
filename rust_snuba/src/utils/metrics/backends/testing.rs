@@ -35,7 +35,11 @@ impl MetricsBackend for TestingMetricsBackend {
 }
 
 impl MetricsClientTrait for TestingMetricsBackend{
-    fn counter(&self, name: &str, value: Option<i64>, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
+    fn counter(&self, name: &str, value: Option<i64>, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
+
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {
@@ -50,7 +54,10 @@ impl MetricsClientTrait for TestingMetricsBackend{
         });
     }
 
-    fn gauge(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
+    fn gauge(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {
@@ -66,7 +73,11 @@ impl MetricsClientTrait for TestingMetricsBackend{
         });
     }
 
-    fn time(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
+    fn time(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
+
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {

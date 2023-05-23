@@ -43,8 +43,12 @@ impl MetricsClientTrait for DatadogMetricsBackend {
         key: &str,
         value: Option<i64>,
         tags: Option<std::collections::HashMap<&str, &str>>,
-        _sample_rate: Option<f64>,
+        sample_rate: Option<f64>,
     ) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
+
         let tags_str: Vec<String> = tags.unwrap().iter().map(|(k, v)| format!("{k}:{v}")).collect();
 
         match value {
@@ -70,8 +74,11 @@ impl MetricsClientTrait for DatadogMetricsBackend {
         key: &str,
         value: u64,
         tags: Option<std::collections::HashMap<&str, &str>>,
-        _sample_rate: Option<f64>,
+        sample_rate: Option<f64>,
     ) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
         let tags_str: Vec<String> = tags.unwrap().iter().map(|(k, v)| format!("{k}:{v}")).collect();
         self.client_sd.gauge(key, value.to_string(), tags_str).unwrap();
     }
@@ -81,8 +88,11 @@ impl MetricsClientTrait for DatadogMetricsBackend {
         key: &str,
         value: u64,
         tags: Option<std::collections::HashMap<&str, &str>>,
-        _sample_rate: Option<f64>,
+        sample_rate: Option<f64>,
     ) {
+        if !self.should_sample(sample_rate) {
+            return;
+        }
         let tags_str: Vec<String> = tags.unwrap().iter().map(|(k, v)| format!("{k}:{v}")).collect();
         self.client_sd.timing(key, value.try_into().unwrap(), tags_str).unwrap();
     }

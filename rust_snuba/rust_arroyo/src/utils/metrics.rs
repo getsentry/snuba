@@ -9,6 +9,11 @@ use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
 
 pub trait MetricsClientTrait: Send + Sync  {
+
+    fn should_sample(&self, sample_rate: Option<f64>) -> bool {
+        rand::thread_rng().gen_range(0.0..=1.0) < sample_rate.unwrap_or(1.0)
+    }
+
     fn counter(
         &self,
         key: &str,
@@ -34,7 +39,6 @@ pub trait MetricsClientTrait: Send + Sync  {
     );
 }
 
-// #[derive( Clone)]
 pub struct MetricsClient {
     statsd_client: StatsdClient,
     prefix: String,
@@ -120,9 +124,6 @@ impl MetricsClientTrait for MetricsClient {
 }
 
 impl MetricsClient {
-    fn should_sample(&self, sample_rate: Option<f64>) -> bool {
-        rand::thread_rng().gen_range(0.0..=1.0) < sample_rate.unwrap_or(1.0)
-    }
 
     fn send_with_tags<'t, T: cadence::Metric + From<String>>(
         &self,
@@ -210,11 +211,17 @@ mod tests {
     fn test_metrics() {
         init("my_host", "0.0.0.0:8125");
 
+        assert!(!METRICS_CLIENT
+            .read()
+            .clone()
+            .unwrap()
+            .should_sample(Some(0.0)),);
+
         assert!(METRICS_CLIENT
             .read()
             .clone()
-            .is_some()
-        );
+            .unwrap()
+            .should_sample(Some(1.0)),);
 
         increment(
             "a",
