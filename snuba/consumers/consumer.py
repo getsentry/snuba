@@ -117,19 +117,24 @@ class LatencyRecorder:
     def __init__(self) -> None:
         self._sum = 0.0
         self._max: Optional[float] = None
+        self._msg_count = 0
 
-    def record(self, latency: float) -> None:
-        self._sum += latency
-        if self._max is None or latency > self._max:
-            self._max = latency
+    def record(self, latency_seconds: float) -> None:
+        self._msg_count += 1
+        self._sum += latency_seconds
+        if self._max is None or latency_seconds > self._max:
+            self._max = latency_seconds
+
+    def has_data(self) -> bool:
+        return self._max is not None
 
     @property
-    def sum(self) -> float:
-        return self._sum
+    def avg_ms(self) -> float:
+        return (self._sum / self._msg_count) * 1000
 
     @property
-    def max(self) -> Optional[float]:
-        return self._max
+    def max_ms(self) -> Optional[float]:
+        return self._max * 1000
 
 
 class InsertBatchWriter:
@@ -181,28 +186,26 @@ class InsertBatchWriter:
                 )
                 sentry_received_latency_recorder.record(sentry_received_latency)
 
-        if snuba_latency_recorder.max is not None:
-            self.__metrics.timing("max_latency_ms", snuba_latency_recorder.max * 1000)
+        if snuba_latency_recorder.has_data():
+            self.__metrics.timing("max_latency_ms", snuba_latency_recorder.max_ms)
+            self.__metrics.timing("latency_ms", snuba_latency_recorder.avg_ms)
+        if end_to_end_latency_recorder.has_data():
             self.__metrics.timing(
-                "latency_ms", (snuba_latency_recorder.sum / len(self.__messages)) * 1000
-            )
-        if end_to_end_latency_recorder.max is not None:
-            self.__metrics.timing(
-                "max_end_to_end_latency_ms", end_to_end_latency_recorder.max * 1000
+                "max_end_to_end_latency_ms", end_to_end_latency_recorder.max_ms
             )
             self.__metrics.timing(
                 "end_to_end_latency_ms",
-                (end_to_end_latency_recorder.sum / len(self.__messages)) * 1000,
+                end_to_end_latency_recorder.avg_ms,
             )
 
-        if sentry_received_latency_recorder.max is not None:
+        if sentry_received_latency_recorder.has_data():
             self.__metrics.timing(
                 "max_sentry_received_latency_ms",
-                sentry_received_latency_recorder.max * 1000,
+                sentry_received_latency_recorder.max_ms,
             )
             self.__metrics.timing(
                 "sentry_received_latency_ms",
-                (sentry_received_latency_recorder.sum / len(self.__messages)) * 1000,
+                sentry_received_latency_recorder.avg_ms,
             )
 
         self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
