@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, sync::{Mutex}};
 
 use rust_arroyo::utils::metrics::MetricsClientTrait;
 
@@ -6,80 +6,79 @@ use super::abstract_backend::MetricsBackend;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    // static ref METRICS_CLIENT: RwLock<Option<Arc<dyn MetricsClientTrait>>> = RwLock::new(None);
     static ref METRICS: Mutex<HashMap<String, Vec<MetricCall>>> = {
-        let mut m = HashMap::new();
+        let m = HashMap::new();
         Mutex::new(m)
     };
 }
-// static  METRICS: Arc<HashMap<String, Vec<MetricCall>>> = Arc::new(HashMap::new());
 
 
 pub struct MetricCall {
-    value: String,
-    tags: Vec<String>,
+    _value: String,
+    _tags: Vec<String>,
 }
+
 pub struct TestingMetricsBackend {
 }
 
 impl MetricsBackend for TestingMetricsBackend {
     fn events(
         &self,
-        title: &str,
-        text: &str,
-        alert_type: &str,
-        priority: &str,
-        tags: &[&str],
+        _title: &str,
+        _text: &str,
+        _alert_type: &str,
+        _priority: &str,
+        _tags: &[&str],
     ) {
         todo!()
     }
 }
 
 impl MetricsClientTrait for TestingMetricsBackend{
-    fn counter(&self, name: &str, value: Option<i64>, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+    fn counter(&self, name: &str, value: Option<i64>, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {
-                tags_vec.push(format!("{}:{}", k, v));
+                tags_vec.push(format!("{k}:{v}"));
             }
         }
         let mut metrics_map = METRICS.lock().unwrap();
         let metric = metrics_map.entry(name.to_string()).or_insert(Vec::new());
         metric.push(MetricCall {
-            value: value.unwrap().to_string(),
-            tags: tags_vec,
+            _value: value.unwrap().to_string(),
+            _tags: tags_vec,
         });
     }
 
-    fn gauge(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+    fn gauge(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {
-                tags_vec.push(format!("{}:{}", k, v));
+                tags_vec.push(format!("{k}:{v}"));
             }
         }
         let mut metrics_map = METRICS.lock().unwrap();
         let metric = metrics_map.entry(name.to_string()).or_insert(Vec::new());
 
         metric.push(MetricCall {
-            value: value.to_string(),
-            tags: tags_vec,
+            _value: value.to_string(),
+            _tags: tags_vec,
         });
     }
 
-    fn time(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, sample_rate: Option<f64>) {
+    fn time(&self, name: &str, value: u64, tags: Option<HashMap<&str, &str>>, _sample_rate: Option<f64>) {
         let mut tags_vec = Vec::new();
         if let Some(tags) = tags {
             for (k, v) in tags {
-                tags_vec.push(format!("{}:{}", k, v));
+                tags_vec.push(format!("{k}:{v}"));
             }
         }
         let mut metrics_map = METRICS.lock().unwrap();
         let metric = metrics_map.entry(name.to_string()).or_insert(Vec::new());
 
         metric.push(MetricCall {
-            value: value.to_string(),
-            tags: tags_vec,
+            _value: value.to_string(),
+            _tags: tags_vec,
         });
     }
 

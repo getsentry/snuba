@@ -303,6 +303,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dogstatsd"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4609d1443932a4fcee5d2df820ef0597d039fa4154a5c60f798650a5b4f48e14"
+dependencies = [
+ "chrono",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1355,8 +1364,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ctrlc",
+ "dogstatsd",
  "env_logger 0.10.0",
  "glob",
+ "lazy_static",
  "log",
  "pyo3",
  "rust_arroyo",
