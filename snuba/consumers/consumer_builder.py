@@ -158,7 +158,6 @@ class ConsumerBuilder:
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
-        slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
@@ -232,7 +231,6 @@ class ConsumerBuilder:
 
     def build_streaming_strategy_factory(
         self,
-        slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
@@ -263,7 +261,7 @@ class ConsumerBuilder:
                 metrics=self.metrics,
                 replacements_producer=self.replacements_producer,
                 replacements_topic=self.replacements_topic,
-                slice_id=slice_id,
+                slice_id=self.slice_id,
                 commit_log_config=commit_log_config,
             ),
             max_batch_size=self.max_batch_size,
@@ -293,6 +291,4 @@ class ConsumerBuilder:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(
-            self.build_streaming_strategy_factory(self.slice_id), self.slice_id
-        )
+        return self.__build_consumer(self.build_streaming_strategy_factory())
