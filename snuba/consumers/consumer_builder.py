@@ -286,6 +286,9 @@ class ConsumerBuilder:
         if self.replacements_producer:
             self.replacements_producer.flush()
 
+        if self.commit_log_producer:
+            self.commit_log_producer.flush()
+
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.

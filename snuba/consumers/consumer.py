@@ -326,12 +326,6 @@ class ProcessedMessageBatchWriter:
 
             self.__replacement_batch_writer.join(timeout)
 
-        # XXX: This adds a blocking call when each batch is joined. Ideally we would only
-        # call proudcer.flush() when the consumer / strategy is actually being shut down but
-        # the CollectStep that this is called from does not allow us to hook into that easily.
-        if self.__commit_log_config:
-            self.__commit_log_config.producer.flush()
-
 
 json_row_encoder = JSONRowEncoder()
 
