@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, Union
+from typing import Any, Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -33,16 +33,8 @@ class StreamMessageFilter(Protocol):
 
 class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     """
-    Do not use for new consumers.
-    This is deprecated and will be removed in a future version.
-
     Builds a four step consumer strategy consisting of dead letter queue,
     filter, transform, and collect phases.
-
-    The `dead_letter_queue_policy_creator` defines the policy for what to do
-    when an bad message is encountered throughout the next processing step(s).
-    A DLQ wraps the entire strategy, catching InvalidMessage exceptions and
-    handling them as the policy dictates.
 
     The `prefilter` supports passing a test function to determine whether a
     message should proceed to the next processing steps or be dropped. If no
@@ -55,6 +47,10 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     The `collector` function should return a strategy to be executed on
     batches of messages. Could be used to write messages to disk in batches.
+
+    Custom `commit_strategy` can be passed. This is useful for the DLQ consumer
+    which has a special commit strategy which exits after a fixed number of
+    messages are processed.
     """
 
     def __init__(
@@ -67,11 +63,13 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+        commit_strategy: Callable[[Commit], ProcessingStrategy[Any]] = CommitOffsets,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
         self.__collector = collector
+        self.__commit_strategy = commit_strategy
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -126,7 +124,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 # sequentially and passed to the next step in order.
                 1,
                 1,
-                CommitOffsets(commit),
+                self.__commit_strategy(commit),
             ),
         )
 
