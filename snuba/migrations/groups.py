@@ -141,7 +141,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.TEST_MIGRATION: _MigrationGroup(
         loader=TestMigrationLoader(),
         storage_sets_keys=set(),
-        readiness_state=ReadinessState.LIMITED,
+        readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         loader=SearchIssuesLoader(),
