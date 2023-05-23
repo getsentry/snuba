@@ -374,11 +374,12 @@ def test_get_active_migration_groups(temp_settings: Any) -> None:
         MigrationGroup.SEARCH_ISSUES not in active_groups
     )  # should be skipped by SKIPPED_MIGRATION_GROUPS
 
-    temp_settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED = {"search_issues"}
+    temp_settings.SKIPPED_MIGRATION_GROUPS = {}
+    temp_settings.SUPPORTED_STATES = {}
     active_groups = get_active_migration_groups()
     assert (
-        MigrationGroup.SEARCH_ISSUES in active_groups
-    )  # should be active by readiness_state
+        MigrationGroup.SEARCH_ISSUES not in active_groups
+    )  # should be skipped by readiness_state
 
 
 @pytest.mark.clickhouse_db
