@@ -499,6 +499,13 @@ def process_message(
     snuba_logical_topic: SnubaTopic,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    local_metrics = MetricsWrapper(
+        metrics,
+        tags={
+            "consumer_group": consumer_group,
+            "snuba_logical_topic": snuba_logical_topic.name,
+        },
+    )
 
     validate_sample_rate = float(
         state.get_config(f"validate_schema_{snuba_logical_topic.name}", 1.0) or 0.0
@@ -522,9 +529,8 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
-                    metrics.increment(
+                    local_metrics.increment(
                         "schema_validation.failed",
-                        tags={"snuba_logical_topic": snuba_logical_topic.name},
                     )
 
                     min_seconds_ago = (
@@ -541,10 +547,9 @@ def process_message(
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
             # OK.
-            metrics.timing(
+            local_metrics.timing(
                 "codec_decode_and_validate",
                 (time.time() - start) * 1000,
-                tags={"snuba_logical_topic": snuba_logical_topic.name},
             )
 
         result = processor.process_message(

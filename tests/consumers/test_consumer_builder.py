@@ -13,6 +13,7 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
+from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -23,17 +24,25 @@ from tests.test_consumer import get_row_count
 test_storage_key = StorageKey("errors")
 consumer_group_name = "my_consumer_group"
 
+consumer_config = resolve_consumer_config(
+    storage_names=[test_storage_key.value],
+    raw_topic=None,
+    commit_log_topic=None,
+    replacements_topic=None,
+    bootstrap_servers=[],
+    commit_log_bootstrap_servers=[],
+    replacement_bootstrap_servers=[],
+    slice_id=None,
+    max_batch_size=3,
+    max_batch_time_ms=4,
+)
+
 # Below, a ConsumerBuilder with only required args
 consumer_builder = ConsumerBuilder(
     storage_key=test_storage_key,
+    consumer_config=consumer_config,
     kafka_params=KafkaParameters(
-        raw_topic=None,
-        replacements_topic=None,
-        bootstrap_servers=None,
-        commit_log_bootstrap_servers=None,
-        replacements_bootstrap_servers=None,
         group_id=consumer_group_name,
-        commit_log_topic=None,
         auto_offset_reset="earliest",
         strict_offset_reset=None,
         queued_max_messages_kbytes=1,
@@ -52,16 +61,24 @@ consumer_builder = ConsumerBuilder(
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
     slice_id=None,
+    join_timeout=5,
+)
+
+optional_consumer_config = resolve_consumer_config(
+    storage_names=[test_storage_key.value],
+    raw_topic="raw",
+    commit_log_topic="snuba-commit-log",
+    replacements_topic="event-replacements",
+    bootstrap_servers=[],
+    commit_log_bootstrap_servers=[],
+    replacement_bootstrap_servers=[],
+    slice_id=None,
+    max_batch_size=3,
+    max_batch_time_ms=4,
 )
 
 optional_kafka_params = KafkaParameters(
-    raw_topic="raw",
-    replacements_topic="event-replacements",
-    bootstrap_servers=None,
-    commit_log_bootstrap_servers=None,
-    replacements_bootstrap_servers=None,
     group_id=consumer_group_name,
-    commit_log_topic="snuba-commit-log",
     auto_offset_reset="earliest",
     strict_offset_reset=False,
     queued_max_messages_kbytes=1,
@@ -73,6 +90,7 @@ optional_kafka_params = KafkaParameters(
 # no default values
 consumer_builder_with_opt = ConsumerBuilder(
     storage_key=test_storage_key,
+    consumer_config=optional_consumer_config,
     kafka_params=optional_kafka_params,
     processing_params=ProcessingParameters(
         processes=5,
@@ -87,6 +105,7 @@ consumer_builder_with_opt = ConsumerBuilder(
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
     slice_id=None,
+    join_timeout=5,
 )
 
 
@@ -132,32 +151,6 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     con_build.processes
     con_build.input_block_size
     con_build.output_block_size
-
-
-def test_optional_kafka_overrides() -> None:
-
-    # In the case that Kafka topic overrides are provided,
-    # verify that these attributes are populated
-    # as expected
-
-    if optional_kafka_params.raw_topic is not None:
-        assert (
-            consumer_builder_with_opt.raw_topic.name == optional_kafka_params.raw_topic
-        ), "Raw topic name should match raw Kafka topic override"
-
-    if optional_kafka_params.replacements_topic is not None:
-        assert consumer_builder_with_opt.replacements_topic is not None
-        assert (
-            consumer_builder_with_opt.replacements_topic.name
-            == optional_kafka_params.replacements_topic
-        ), "Replacements topic name should match replacements Kafka topic override"
-
-    if optional_kafka_params.commit_log_topic is not None:
-        assert consumer_builder_with_opt.commit_log_topic is not None
-        assert (
-            consumer_builder_with_opt.commit_log_topic.name
-            == optional_kafka_params.commit_log_topic
-        ), "Commit log topic name should match commit log Kafka topic override"
 
 
 @pytest.mark.clickhouse_db

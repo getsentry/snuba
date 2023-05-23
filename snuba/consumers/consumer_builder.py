@@ -1,10 +1,16 @@
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional
 
 from arroyo import Topic
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
+from arroyo.backends.kafka import (
+    KafkaConsumer,
+    KafkaPayload,
+    KafkaProducer,
+    build_kafka_configuration,
+    build_kafka_consumer_configuration,
+)
 from arroyo.commit import IMMEDIATE
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
 from arroyo.processing import StreamProcessor
@@ -19,32 +25,20 @@ from snuba.consumers.consumer import (
     build_batch_writer,
     process_message,
 )
+from snuba.consumers.consumer_config import ConsumerConfig
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
-from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.configuration_builder import (
-    build_kafka_consumer_configuration,
-    build_kafka_producer_configuration,
-    get_default_kafka_configuration,
-)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class KafkaParameters:
-    raw_topic: Optional[str]
-    replacements_topic: Optional[str]
-    bootstrap_servers: Optional[Sequence[str]]
-    commit_log_bootstrap_servers: Optional[Sequence[str]]
-    replacements_bootstrap_servers: Optional[Sequence[str]]
     group_id: str
-    commit_log_topic: Optional[str]
     auto_offset_reset: str
     strict_offset_reset: Optional[bool]
     queued_max_messages_kbytes: int
@@ -68,64 +62,45 @@ class ConsumerBuilder:
     def __init__(
         self,
         storage_key: StorageKey,
+        consumer_config: ConsumerConfig,
         kafka_params: KafkaParameters,
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
         slice_id: Optional[int],
+        join_timeout: int,
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
-        join_timeout: Optional[int] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
         self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
+        self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
-        topic = (
-            self.storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-            .topic
+
+        broker_config = build_kafka_consumer_configuration(
+            self.__consumer_config.raw_topic.broker_config,
+            self.__kafka_params.group_id,
         )
 
-        # Ensure that the slice, storage set combination is valid
-        validate_passed_slice(self.storage.get_storage_set_key(), slice_id)
-
-        broker_config = get_default_kafka_configuration(
-            topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
-        )
         logger.info(f"librdkafka log level: {broker_config.get('log_level', 6)}")
 
-        stream_loader = self.storage.get_table_writer().get_stream_loader()
+        self.raw_topic = Topic(self.__consumer_config.raw_topic.physical_topic_name)
 
-        self.raw_topic: Topic
-        if kafka_params.raw_topic is not None:
-            self.raw_topic = Topic(kafka_params.raw_topic)
-        else:
-            default_topic_spec = stream_loader.get_default_topic_spec()
-            self.raw_topic = Topic(default_topic_spec.get_physical_topic_name(slice_id))
+        self.replacements_topic = (
+            Topic(self.__consumer_config.replacements_topic.physical_topic_name)
+            if self.__consumer_config.replacements_topic is not None
+            else None
+        )
 
-        self.replacements_topic: Optional[Topic]
-        replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-        if kafka_params.replacements_topic is not None:
-            self.replacements_topic = Topic(kafka_params.replacements_topic)
-        else:
-            if replacement_topic_spec is not None:
-                self.replacements_topic = Topic(
-                    replacement_topic_spec.get_physical_topic_name(slice_id)
-                )
-            else:
-                self.replacements_topic = None
-
-        if replacement_topic_spec is not None:
+        if self.__consumer_config.replacements_topic is not None:
             self.replacements_producer = Producer(
-                build_kafka_producer_configuration(
-                    replacement_topic_spec.topic,
-                    bootstrap_servers=kafka_params.replacements_bootstrap_servers,
+                build_kafka_configuration(
+                    self.__consumer_config.replacements_topic.broker_config,
                     override_params={
                         "partitioner": "consistent",
                         "message.max.bytes": 10000000,  # 10MB, default is 1MB)
@@ -135,24 +110,17 @@ class ConsumerBuilder:
         else:
             self.replacements_producer = None
 
-        self.commit_log_topic: Optional[Topic]
-        commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
-        if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = Topic(kafka_params.commit_log_topic)
-        else:
-            if commit_log_topic_spec is not None:
-                self.commit_log_topic = Topic(
-                    commit_log_topic_spec.get_physical_topic_name(slice_id)
-                )
-            else:
-                self.commit_log_topic = None
+        self.commit_log_topic = (
+            Topic(self.__consumer_config.commit_log_topic.physical_topic_name)
+            if self.__consumer_config.commit_log_topic is not None
+            else None
+        )
 
-        if commit_log_topic_spec is not None:
+        if self.__consumer_config.commit_log_topic is not None:
             self.commit_log_producer = Producer(
-                build_kafka_producer_configuration(
-                    commit_log_topic_spec.topic,
-                    bootstrap_servers=kafka_params.commit_log_bootstrap_servers,
-                ),
+                build_kafka_configuration(
+                    self.__consumer_config.commit_log_topic.broker_config
+                )
             )
         else:
             self.commit_log_producer = None
@@ -193,16 +161,9 @@ class ConsumerBuilder:
         slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
-        stream_loader = self.storage.get_table_writer().get_stream_loader()
-
-        # retrieves the default logical topic
-        topic = stream_loader.get_default_topic_spec().topic
-
         configuration = build_kafka_consumer_configuration(
-            topic,
-            bootstrap_servers=self.__kafka_params.bootstrap_servers,
+            self.__consumer_config.raw_topic.broker_config,
             group_id=self.group_id,
-            slice_id=slice_id,
             auto_offset_reset=self.auto_offset_reset,
             strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
@@ -242,20 +203,20 @@ class ConsumerBuilder:
             commit_retry_policy=self.__commit_retry_policy,
         )
 
-        dlq_config = stream_loader.get_dlq_config()
-
-        if dlq_config is not None:
+        if self.__consumer_config.dlq_topic is not None:
             dlq_producer = KafkaProducer(
-                build_kafka_producer_configuration(
-                    dlq_config.topic,
-                    slice_id,
+                build_kafka_configuration(
+                    self.__consumer_config.dlq_topic.broker_config
                 )
             )
-            dlq_topic_spec = KafkaTopicSpec(dlq_config.topic)
-            resolved_topic = Topic(dlq_topic_spec.get_physical_topic_name(slice_id))
 
             dlq_policy = DlqPolicy(
-                KafkaDlqProducer(dlq_producer, resolved_topic), DlqLimit(), None
+                KafkaDlqProducer(
+                    dlq_producer,
+                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
+                ),
+                DlqLimit(),
+                None,
             )
         else:
             dlq_policy = None
