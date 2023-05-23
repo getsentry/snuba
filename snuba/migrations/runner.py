@@ -41,13 +41,13 @@ DIST_TABLE_NAME = "migrations_dist"
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
     groups = []
     for group in MigrationGroup:
-        if not (
+        if (
             group in OPTIONAL_GROUPS
             and group.value in settings.SKIPPED_MIGRATION_GROUPS
+            or get_group_readiness_state(group).value not in settings.SUPPORTED_STATES
         ):
-            readiness_state = get_group_readiness_state(group)
-            if readiness_state.value in settings.SUPPORTED_STATES:
-                groups.append(group)
+            continue
+        groups.append(group)
     return groups
 
 
