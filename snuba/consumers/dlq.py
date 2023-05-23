@@ -54,6 +54,13 @@ class DlqInstruction:
             max_messages_to_process=decoded["max_messages_to_process"],
         )
 
+    def is_valid(self) -> bool:
+        """
+        Replaying topics with post processing enabled is not yet supported.
+        This will be supported in a future iteratrion and this code can be removed.
+        """
+        return self.storage_key.value not in ("errors", "transactions", "search_issues")
+
 
 def load_instruction() -> Optional[DlqInstruction]:
     value = redis_client.get(DLQ_REDIS_KEY)
