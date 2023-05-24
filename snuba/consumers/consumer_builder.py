@@ -1,7 +1,7 @@
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -14,8 +14,7 @@ from arroyo.commit import IMMEDIATE
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.abstract import ProcessingStrategy
-from arroyo.types import Commit, Topic
+from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
@@ -27,7 +26,7 @@ from snuba.consumers.consumer import (
     process_message,
 )
 from snuba.consumers.consumer_config import ConsumerConfig
-from snuba.consumers.dlq import DlqInstruction, ExitAfterNMessages
+from snuba.consumers.dlq import DlqInstruction
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -297,9 +296,6 @@ class ConsumerBuilder:
 
         processor = stream_loader.get_processor()
 
-        def build_commit_strategy(commit: Commit) -> ProcessingStrategy[Any]:
-            return ExitAfterNMessages(commit, instruction.max_messages_to_process, 2.0)
-
         # DLQ consumer never writes to the commit log
         commit_log_config = None
 
@@ -326,7 +322,7 @@ class ConsumerBuilder:
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
-            commit_strategy=build_commit_strategy,
+            max_messages_to_process=instruction.max_messages_to_process,
             initialize_parallel_transform=setup_sentry,
         )
 
