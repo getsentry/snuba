@@ -4,7 +4,7 @@ name: org_sessions
 storage:
   key: org_sessions
   set_key: sessions
-readiness_state: deprecate
+readiness_state: complete
 schema:
   columns:
     [
