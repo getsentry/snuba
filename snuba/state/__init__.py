@@ -57,7 +57,17 @@ def _kafka_producer() -> Producer:
     if kfk is None:
         kfk = Producer(
             build_kafka_producer_configuration(
-                topic=None,
+                topic=Topic.QUERYLOG,
+                override_params={
+                    # at time of writing (2022-05-09) lz4 was chosen because it
+                    # compresses quickly. If more compression is needed at the cost of
+                    # performance, zstd can be used instead. Recording the query
+                    # is part of the API request, therefore speed is important
+                    # perf-testing: https://indico.fnal.gov/event/16264/contributions/36466/attachments/22610/28037/Zstd__LZ4.pdf
+                    # by default a topic is configured to use whatever compression method the producer used
+                    # https://docs.confluent.io/platform/current/installation/configuration/topic-configs.html#topicconfigs_compression.type
+                    "compression.type": "lz4",
+                },
             )
         )
     return kfk

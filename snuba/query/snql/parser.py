@@ -1297,11 +1297,13 @@ def _align_max_days_date_align(
     )
     if not lower:
         raise ParsingException(
-            f"missing >= condition on column {entity.required_time_column} for entity {key.value}"
+            f"Missing >= condition with a datetime literal on column {entity.required_time_column} for entity {key.value}. "
+            f"Example: {entity.required_time_column} >= toDateTime('2023-05-16 00:00')"
         )
     elif not upper:
         raise ParsingException(
-            f"missing < condition on column {entity.required_time_column} for entity {key.value}"
+            f"Missing < condition with a datetime literal on column {entity.required_time_column} for entity {key.value}. "
+            f"Example: {entity.required_time_column} < toDateTime('2023-05-16 00:00')"
         )
 
     from_date, from_exp = lower

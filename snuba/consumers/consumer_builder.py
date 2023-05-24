@@ -69,9 +69,9 @@ class ConsumerBuilder:
         max_batch_time_ms: int,
         metrics: MetricsBackend,
         slice_id: Optional[int],
+        join_timeout: int,
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
-        join_timeout: Optional[int] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
@@ -158,7 +158,6 @@ class ConsumerBuilder:
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
-        slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
@@ -232,7 +231,6 @@ class ConsumerBuilder:
 
     def build_streaming_strategy_factory(
         self,
-        slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
@@ -263,7 +261,7 @@ class ConsumerBuilder:
                 metrics=self.metrics,
                 replacements_producer=self.replacements_producer,
                 replacements_topic=self.replacements_topic,
-                slice_id=slice_id,
+                slice_id=self.slice_id,
                 commit_log_config=commit_log_config,
             ),
             max_batch_size=self.max_batch_size,
@@ -286,10 +284,11 @@ class ConsumerBuilder:
         if self.replacements_producer:
             self.replacements_producer.flush()
 
+        if self.commit_log_producer:
+            self.commit_log_producer.flush()
+
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(
-            self.build_streaming_strategy_factory(self.slice_id), self.slice_id
-        )
+        return self.__build_consumer(self.build_streaming_strategy_factory())

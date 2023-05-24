@@ -116,7 +116,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.")
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
@@ -144,8 +144,8 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
+    join_timeout: int = 5,
     log_level: Optional[str] = None,
-    join_timeout: Optional[int] = None,
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
 ) -> None:

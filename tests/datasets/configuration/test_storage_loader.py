@@ -49,6 +49,12 @@ query_processors:
       column_name: a
       hash_map_name: hashmap
       killswitch: kill
+  -
+    processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_rows_to_group_by: 1000000
+        group_by_overflow_mode: any
 
 allocation_policy:
   name: PassthroughPolicy
@@ -61,11 +67,35 @@ allocation_policy:
             with open(filename, "w") as f:
                 f.write(yml_text)
             storage = build_storage_from_config(filename)
-            assert len(storage.get_query_processors()) == 1
-            qp = storage.get_query_processors()[0]
-            assert getattr(qp, "_MappingOptimizer__column_name") == "a"
-            assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
-            assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"
+            assert len(storage.get_query_processors()) == 2
+            (
+                mapping_optimizer_qp,
+                clickhouse_settings_override_qp,
+            ) = storage.get_query_processors()
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
+            )
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name")
+                == "hashmap"
+            )
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
+            )
+            assert (
+                getattr(
+                    clickhouse_settings_override_qp,
+                    "_ClickhouseSettingsOverride__settings",
+                )["max_rows_to_group_by"]
+                == 1000000
+            )
+            assert (
+                getattr(
+                    clickhouse_settings_override_qp,
+                    "_ClickhouseSettingsOverride__settings",
+                )["group_by_overflow_mode"]
+                == "any"
+            )
             assert storage.get_allocation_policy()._required_tenant_types == {
                 "some_tenant"
             }
