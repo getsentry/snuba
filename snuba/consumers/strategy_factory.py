@@ -15,6 +15,7 @@ from arroyo.processing.strategies.transform import ParallelTransformStep, Transf
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
+from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
 
 ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
@@ -33,16 +34,8 @@ class StreamMessageFilter(Protocol):
 
 class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     """
-    Do not use for new consumers.
-    This is deprecated and will be removed in a future version.
-
     Builds a four step consumer strategy consisting of dead letter queue,
     filter, transform, and collect phases.
-
-    The `dead_letter_queue_policy_creator` defines the policy for what to do
-    when an bad message is encountered throughout the next processing step(s).
-    A DLQ wraps the entire strategy, catching InvalidMessage exceptions and
-    handling them as the policy dictates.
 
     The `prefilter` supports passing a test function to determine whether a
     message should proceed to the next processing steps or be dropped. If no
@@ -55,6 +48,9 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     The `collector` function should return a strategy to be executed on
     batches of messages. Could be used to write messages to disk in batches.
+
+    `max_messages_to_process` is passed only by the DLQ consumer. It is used
+    to stop the consumer after a fixed number of messages are processed.
     """
 
     def __init__(
@@ -67,11 +63,15 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+        # Passed in the case of DLQ consumer which exits after a certain number of messages
+        # is processed
+        max_messages_to_process: Optional[int] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
         self.__collector = collector
+        self.__max_messages_to_process = max_messages_to_process
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -115,6 +115,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
+        if self.__max_messages_to_process is not None:
+            ExitAfterNMessages(commit, self.__max_messages_to_process, 2.0)
+        else:
+            commit_strategy = CommitOffsets(commit)
+
         collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
             self.__max_batch_size,
             self.__max_batch_time,
@@ -126,7 +131,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 # sequentially and passed to the next step in order.
                 1,
                 1,
-                CommitOffsets(commit),
+                commit_strategy,
             ),
         )
 

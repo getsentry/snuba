@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from arroyo import Topic
 from arroyo.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
@@ -15,6 +14,7 @@ from arroyo.commit import IMMEDIATE
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
@@ -26,6 +26,7 @@ from snuba.consumers.consumer import (
     process_message,
 )
 from snuba.consumers.consumer_config import ConsumerConfig
+from snuba.consumers.dlq import DlqInstruction
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -280,6 +281,53 @@ class ConsumerBuilder:
 
         return strategy_factory
 
+    def build_dlq_strategy_factory(
+        self, instruction: DlqInstruction
+    ) -> ProcessingStrategyFactory[KafkaPayload]:
+        """
+        Similar to build_streaming_strategy_factory with 2 differences:
+        - uses ExitAfterNMessages instead of the standard CommitOffsets strategy
+        - never commits to the commit log (the commit log should always be monotonic)
+        """
+        table_writer = self.storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
+
+        logical_topic = stream_loader.get_default_topic_spec().topic
+
+        processor = stream_loader.get_processor()
+
+        # DLQ consumer never writes to the commit log
+        commit_log_config = None
+
+        strategy_factory: ProcessingStrategyFactory[
+            KafkaPayload
+        ] = KafkaConsumerStrategyFactory(
+            prefilter=stream_loader.get_pre_filter(),
+            process_message=functools.partial(
+                process_message,
+                processor,
+                self.consumer_group,
+                logical_topic,
+            ),
+            collector=build_batch_writer(
+                table_writer,
+                metrics=self.metrics,
+                replacements_producer=self.replacements_producer,
+                replacements_topic=self.replacements_topic,
+                slice_id=self.slice_id,
+                commit_log_config=commit_log_config,
+            ),
+            max_batch_size=self.max_batch_size,
+            max_batch_time=self.max_batch_time_ms / 1000.0,
+            processes=self.processes,
+            input_block_size=self.input_block_size,
+            output_block_size=self.output_block_size,
+            max_messages_to_process=instruction.max_messages_to_process,
+            initialize_parallel_transform=setup_sentry,
+        )
+
+        return strategy_factory
+
     def flush(self) -> None:
         if self.replacements_producer:
             self.replacements_producer.flush()
@@ -291,4 +339,13 @@ class ConsumerBuilder:
         """
         Builds the consumer.
         """
+        return self.__build_consumer(self.build_streaming_strategy_factory())
+
+    def build_dlq_consumer(
+        self, instruction: DlqInstruction
+    ) -> StreamProcessor[KafkaPayload]:
+        """
+        Dlq consumer. Same as the base consumer but exits after `max_messages_to_process`
+        """
+
         return self.__build_consumer(self.build_streaming_strategy_factory())
