@@ -31,7 +31,7 @@ sentry-relay==0.8.21
 sentry-sdk==1.18.0
 simplejson==3.17.6
 structlog==22.3.0
-structlog-sentry==2.0.2
+structlog-sentry==2.0.0
 sql-metadata==2.6.0
 typing-extensions==4.5.0
 urllib3==1.26.12
