@@ -15,7 +15,6 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
     InsertBatchWriter,
-    LatencyRecorder,
     MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
@@ -274,17 +273,3 @@ def test_metrics_writing_e2e() -> None:
         ):
             strategy.close()
             strategy.join()
-
-
-def test_latency_recorder() -> None:
-    recorder = LatencyRecorder()
-
-    assert recorder.max_ms is None
-
-    recorder.record(1.0)
-    recorder.record(0.5)
-    recorder.record(1.2)
-
-    assert recorder.max_ms == 1200.0
-    # (2.7 / 3) * 1000 == 900
-    assert recorder.avg_ms == 900.0
