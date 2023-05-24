@@ -75,5 +75,4 @@ def build_kafka_producer_configuration(
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
-
     return broker_config
