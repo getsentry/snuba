@@ -14,6 +14,9 @@ from snuba.web.views import check_clickhouse, filter_checked_storages
 
 
 class BadStorage(mock.MagicMock):
+    def get_readiness_state(self) -> ReadinessState:
+        return ReadinessState.DEPRECATE
+
     def get_cluster(self) -> None:
         raise Exception("No cluster")
 
