@@ -307,6 +307,7 @@ class SearchIssuesLoader(DirectoryLoader):
             "0005_search_issues_v2",
             "0006_add_subtitle_culprit_level_resource_id",
             "0007_add_transaction_duration",
+            "0008_add_profile_id_replay_id",
         ]
 
 

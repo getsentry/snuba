@@ -47,7 +47,7 @@ class SnubaCLI(click.MultiCommand):
         # since all of our infrastructure depends on this being the
         # case
         with sentry_sdk.start_transaction(
-            op="snuba_init", name="Snuba CLI Initialization", sampled=True
+            op="snuba_init", name=f"[cli init] {name}", sampled=True
         ):
             actual_command_name = name.replace("-", "_")
             ns: dict[str, click.Command] = {}

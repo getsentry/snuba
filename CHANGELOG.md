@@ -1,5 +1,67 @@
 # Changelog
 
+## 23.5.1
+
+### Various fixes & improvements
+
+- ref(process_message): Tag all metrics by consumer_group (#4226) by @untitaker
+- feat: Default join timeout for all consumers of 5 seconds (#4222) by @lynnagara
+- fix(clickhouse): Add a check for the max supported clickhouse version (#4158) by @davidtsuk
+- fix: Fix flaky optimize test (#4217) by @lynnagara
+- fix: Fix DLQ producer config (#4216) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.2 (#4215) by @getsentry-bot
+- feat: Move DLQ configuration into consumer configuration (#4206) by @lynnagara
+- feat: Python and Rust consumers share common cluster resolution code (#4205) by @lynnagara
+- Fix slack notifications for when allocation policy changes (#4204) by @volokluev
+- ref: bump sentry-kafka-schemas to 0.1.9 (#4207) by @getsentry-bot
+- feat(admin): add amount of rows in result set to tracing tool (#4167) by @volokluev
+- feat(capman): Allow overriding policy defaults in configuration (#4201) by @volokluev
+- fix: All consumers run with --no-strict-offset-reset in dev (#4177) by @lynnagara
+- fix(CapMan): Validate Tenant IDs (#4176) by @rahul-kumar-saini
+- ref: Use RetryingRedisCluster from sentry-redis-tools (#4197) by @untitaker
+- ref(consumer): pass sentry_received_timestamp again (#4198) by @MeredithAnya
+- feat(dlq): Add the DLQ instruction mechanism (#4199) by @lynnagara
+- fix(capman): create auditlog notifications for allocation policy updates (#4193) by @volokluev
+- feat(schema-validation): Validate all messages 😱 (#4194) by @lynnagara
+- Revert "ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052)" (0d1b0cfa) by @getsentry-bot
+- ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052) by @ayirr7
+- feat(profiling): Create profiling datasets by default in self-hosted (#4195) by @phacops
+- feat: Add metric to count validation failures [SNS-2279] (#4182) by @untitaker
+- ref: bump sentry-arroyo to 2.11.1 (#4190) by @getsentry-bot
+
+_Plus 10 more_
+
+## 23.5.0
+
+### Various fixes & improvements
+
+- Pin action-github-commit (#4175) by @chadwhitacre
+- ref(tech-debt) Column validator also checks mapped columns (#4116) by @evanh
+- Make kafka consumer max poll time configurable (#4165) by @nikhars
+- ref: bump sentry-redis-tools to 0.1.5 (#4170) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.7 (#4168) by @getsentry-bot
+- fix: Fix another reference to unavailable secret (#4161) by @untitaker
+- Revert "drop old tables (#3896)" (ee62ee06) by @getsentry-bot
+- drop old tables (#3896) by @barkbarkimashark
+- fix(consumer): Remove DLQ policy for generic metrics consumers config (#4166) by @ayirr7
+- fix(consumers): Add timeout for http batch writes (#4160) by @nikhars
+- chore(arroyo): Bump version to 2.10.4 (#4162) by @nikhars
+- feat(CapMan): AllocationPolicy Config API (#4025) by @rahul-kumar-saini
+- feat(functions): Process new functions message (#4056) by @Zylphrex
+- fix: Fix permissions of bump-version.yml workflow (#4157) by @untitaker
+- feat(CapMan): Basic Snuba Admin UI (#4055) by @rahul-kumar-saini
+- ref: Arroyo 2.10.3 (#4153) by @untitaker
+- add test referrer to single thread referrers (#4154) by @volokluev
+- fix: Unknown functions shouldn't count against the SLO (#4150) by @evanh
+- feat(ci): allow skip check migrations (#4111) by @dbanda
+- Revert "turn on policy, add user report referrer (#4151)" (21864c36) by @getsentry-bot
+- turn on policy, add user report referrer (#4151) by @volokluev
+- ref(admin): Give more users access to the admin tool (#4149) by @evanh
+- build: sentry-kafka-schemas 0.1.6 (#4147) by @lynnagara
+- test: Fix flaky optimize test (#4143) by @lynnagara
+
+_Plus 89 more_
+
 ## 23.4.0
 
 ### Various fixes & improvements

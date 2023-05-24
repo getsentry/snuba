@@ -285,7 +285,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     with mock.patch(
         "snuba.web.db_query._get_allocation_policy",
         return_value=RejectAllocationPolicy(
-            StorageKey("doesntmatter"), ["a", "b", "c"]
+            StorageKey("doesntmatter"), ["a", "b", "c"], {}
         ),
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -341,7 +341,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"]),
+        ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -398,7 +398,7 @@ def test_allocation_policy_updates_quota() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"]),
+        CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
     )
 
     def _run_query() -> None:
@@ -424,3 +424,47 @@ def test_allocation_policy_updates_quota() -> None:
     with pytest.raises(QueryException) as e:
         _run_query()
     assert isinstance(e.value.__cause__, AllocationPolicyViolation)
+
+
+@pytest.mark.redis_db
+def test_clickhouse_settings_applied_to_query() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    settings = HTTPQuerySettings()
+    clickhouse_settings = {
+        "max_rows_to_group_by": 1000000,
+        "group_by_overflow_mode": "any",
+    }
+    settings.set_clickhouse_settings(clickhouse_settings)
+
+    reader = mock.MagicMock()
+    result = mock.MagicMock()
+    reader.execute.return_value = result
+    result.get.return_value.get.return_value = 0
+
+    db_query(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=reader,
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+
+    clickhouse_settings_used = reader.execute.call_args.args[1]
+    assert (
+        "max_rows_to_group_by" in clickhouse_settings_used
+        and clickhouse_settings_used["max_rows_to_group_by"] == 1000000
+    )
+    assert (
+        "group_by_overflow_mode" in clickhouse_settings_used
+        and clickhouse_settings_used["group_by_overflow_mode"] == "any"
+    )

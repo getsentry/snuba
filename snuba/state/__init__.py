@@ -57,7 +57,7 @@ def _kafka_producer() -> Producer:
     if kfk is None:
         kfk = Producer(
             build_kafka_producer_configuration(
-                topic=None,
+                topic=Topic.QUERYLOG,
                 override_params={
                     # at time of writing (2022-05-09) lz4 was chosen because it
                     # compresses quickly. If more compression is needed at the cost of

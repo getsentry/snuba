@@ -76,7 +76,3 @@ def build_kafka_producer_configuration(
         override_params=override_params,
     )
     return broker_config
-
-
-def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None, None)

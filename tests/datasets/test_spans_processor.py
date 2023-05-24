@@ -4,9 +4,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 import pytest
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.spans_processor import SpansMessageProcessor
+from snuba.datasets.processors.spans_processor import (
+    SpansMessageProcessor,
+    clean_span_tags,
+)
 from snuba.processor import InsertBatch
 from snuba.state import set_config
 
@@ -35,10 +39,22 @@ class TransactionEvent:
             datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=1)
         ).timestamp()
         self.span1_end_timestamp = (
-            datetime.utcfromtimestamp(self.timestamp) + timedelta(seconds=3)
+            datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=500)
         ).timestamp()
-        self.span2_start_timestamp = self.span1_start_timestamp + 1000
+        self.span1_duration = (
+            int(self.span1_end_timestamp - self.span1_start_timestamp) * 1000
+        )
+
+        self.span2_start_timestamp = (
+            datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=100)
+        ).timestamp()
         self.span2_end_timestamp = self.span1_end_timestamp
+        self.span2_duration = (
+            int(self.span2_end_timestamp - self.span2_start_timestamp) * 1000
+        )
+
+        self.span1_id = int(self.span_id, 16) + 1
+        self.span2_id = int(self.span_id, 16) + 2
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -99,8 +115,20 @@ class TransactionEvent:
                             "timestamp": self.span1_end_timestamp,
                             "parent_span_id": self.span_id,
                             "trace_id": self.trace_id,
-                            "span_id": str(int(self.span_id, 16) + 1),
-                            "data": {},
+                            "span_id": "8841662216cc598c",
+                            "data": {
+                                "environment": self.environment,
+                                "http.method": "GET",
+                                "span.action": "GET",
+                                "span.domain": "targetdomain.tld:targetport",
+                                "span.module": "http",
+                                "span.op": "http.client",
+                                "span.status": "ok",
+                                "span.status_code": 200,
+                                "status_code": 200,
+                                "transaction": self.transaction_name,
+                                "transaction.op": self.op,
+                            },
                             "op": "http.client",
                             "hash": "b" * 16,
                             "exclusive_time": 0.1234,
@@ -112,10 +140,18 @@ class TransactionEvent:
                             "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
                             "tags": None,
                             "timestamp": self.span2_end_timestamp,
-                            "parent_span_id": str(int(self.span_id, 16) + 1),
+                            "parent_span_id": "8841662216cc598c",
                             "trace_id": self.trace_id,
-                            "span_id": str(int(self.span_id, 16) + 2),
-                            "data": {},
+                            "span_id": "8841662216cc598d",
+                            "data": {
+                                "span.action": "SELECT",
+                                "span.module": "db",
+                                "span.op": "db",
+                                "span.domain": "sentry_tagkey",
+                                "span.status": "ok",
+                                "transaction": self.transaction_name,
+                                "transaction.op": self.op,
+                            },
                             "op": "db",
                             "hash": "c" * 16,
                             "exclusive_time": 0.4567,
@@ -197,22 +233,27 @@ class TransactionEvent:
                 ),
                 "exclusive_time": 1.2345,
                 "op": self.op,
-                "group": "a" * 16,
-                "span_status": self.status,
-                "span_kind": "SERVER",
-                "description": "/organizations/:orgId/issues/",
-                "status": 200,
-                "module": "api",
-                "action": "GET",
-                "domain": "127.0.0.1",
-                "platform": "",
+                "group": int("a" * 16, 16),
+                "span_status": SPAN_STATUS_NAME_TO_CODE.get(self.status),
+                "span_kind": "",
+                "description": "",
+                "status": 0,
+                "module": "",
+                "action": "",
+                "domain": "",
+                "platform": "python",
                 "user": self.user_id,
-                "tags.key": ["environment", "release", "user", "random_key"],
+                "tags.key": [
+                    "environment",
+                    "random_key",
+                    "sentry:release",
+                    "sentry:user",
+                ],
                 "tags.value": [
-                    self.environment,
-                    self.release,
-                    self.user_id,
+                    "prod",
                     "random_value",
+                    "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+                    "123",
                 ],
                 "measurements.key": ["lcp", "lcp.elementSize"],
                 "measurements.value": [32.129, 4242],
@@ -226,32 +267,32 @@ class TransactionEvent:
                 "transaction_id": str(uuid.UUID(self.event_id)),
                 "transaction_op": self.op,
                 "trace_id": str(uuid.UUID(self.trace_id)),
-                "span_id": int("b70840cd33074881", 16),
-                "parent_span_id": 0,
+                "span_id": int("8841662216cc598c", 16),
+                "parent_span_id": int(self.span_id, 16),
                 "segment_id": int(self.span_id, 16),
                 "is_segment": 0,
                 "segment_name": self.transaction_name,
-                "start_timestamp": start_timestamp,
-                "end_timestamp": finish_timestamp,
-                "duration": int(
-                    (finish_timestamp - start_timestamp).total_seconds() * 1000
+                "start_timestamp": datetime.utcfromtimestamp(
+                    self.span1_start_timestamp
                 ),
-                "exclusive_time": 1.2345,
+                "end_timestamp": datetime.utcfromtimestamp(self.span1_end_timestamp),
+                "duration": self.span1_duration,
+                "exclusive_time": 0.1234,
                 "op": "http.client",
-                "group": "b" * 16,
-                "span_status": self.status,
-                "span_kind": "span",
+                "group": int("b" * 16, 16),
+                "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
+                "span_kind": "",
                 "description": "GET /api/0/organizations/sentry/tags/?project=1",
                 "status": 200,
-                "module": "sentry",
-                "domain": "",
+                "module": "http",
+                "domain": "targetdomain.tld:targetport",
                 "platform": "",
-                "tags.key": ["environment", "release", "user", "random_key"],
+                "action": "GET",
+                "tags.key": ["release", "user", "environment"],
                 "tags.value": [
+                    "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+                    "123",
                     self.environment,
-                    self.release,
-                    self.user_id,
-                    "random_value",
                 ],
                 "measurements.key": [],
                 "measurements.value": [],
@@ -265,32 +306,31 @@ class TransactionEvent:
                 "transaction_id": str(uuid.UUID(self.event_id)),
                 "transaction_op": self.op,
                 "trace_id": str(uuid.UUID(self.trace_id)),
-                "span_id": int(self.span_id, 16),
-                "parent_span_id": 0,
+                "span_id": int("8841662216cc598d", 16),
+                "parent_span_id": int("8841662216cc598c", 16),
                 "segment_id": int(self.span_id, 16),
-                "is_segment": 1,
+                "is_segment": 0,
                 "segment_name": self.transaction_name,
-                "start_timestamp": start_timestamp,
-                "end_timestamp": finish_timestamp,
-                "duration": int(
-                    (finish_timestamp - start_timestamp).total_seconds() * 1000
+                "start_timestamp": datetime.utcfromtimestamp(
+                    self.span2_start_timestamp
                 ),
-                "exclusive_time": 1.2345,
+                "end_timestamp": datetime.utcfromtimestamp(self.span2_end_timestamp),
+                "duration": self.span2_duration,
+                "exclusive_time": 0.4567,
                 "op": "db",
-                "group": "c" * 16,
-                "span_status": self.status,
-                "span_kind": "span",
+                "group": int("c" * 16, 16),
+                "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
+                "span_kind": "",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
-                "status": 200,
-                "module": "sentry",
-                "domain": "http",
-                "platform": self.platform,
-                "tags.key": ["environment", "release", "user", "random_key"],
+                "status": 0,
+                "module": "db",
+                "domain": "sentry_tagkey",
+                "platform": "",
+                "action": "SELECT",
+                "tags.key": ["release", "user"],
                 "tags.value": [
-                    self.environment,
                     self.release,
                     self.user_id,
-                    "random_value",
                 ],
                 "measurements.key": [],
                 "measurements.value": [],
@@ -304,12 +344,34 @@ class TransactionEvent:
         return ret
 
 
+def compare_types_and_values(dict1: Any, dict2: Any) -> bool:
+    """
+    Helper function to compare nested dicts. It is used to validate the results of span
+    processing in the test cases with the expected results.
+    """
+    if isinstance(dict1, dict) and isinstance(dict2, dict):
+        if len(dict1) != len(dict2):
+            return False
+        for key in dict1:
+            if key not in dict2:
+                raise KeyError(f"Key {key} not found in dict2")
+            if not compare_types_and_values(dict1[key], dict2[key]):
+                return False
+        return True
+    else:
+        # Compare keys and values
+        if dict1 == dict2:
+            return True
+        else:
+            raise ValueError(f"Value {dict1} != {dict2}")
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestSpansProcessor:
     @staticmethod
     def __get_timestamps() -> Tuple[float, float]:
-        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
+        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=1000)
         start_timestamp = timestamp - timedelta(seconds=10)
         return start_timestamp.timestamp(), timestamp.timestamp()
 
@@ -356,3 +418,45 @@ class TestSpansProcessor:
 
         for index in range(len(rows)):
             assert len(rows[index]) == len(expected_result[index])
+
+    def test_exact_results(self) -> None:
+        set_config("spans_project_allowlist", "[1]")
+        message = self.__get_transaction_event()
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        actual_result = SpansMessageProcessor().process_message(
+            message.serialize(), meta
+        )
+        assert isinstance(actual_result, InsertBatch)
+        rows = actual_result.rows
+
+        expected_result = message.build_result(meta)
+        assert len(rows) == len(expected_result)
+
+        for index in range(len(rows)):
+            assert compare_types_and_values(rows[index], expected_result[index])
+
+
+@pytest.mark.parametrize(
+    "tags, expected_output",
+    [
+        pytest.param(
+            {"span.example": 1, "environment": "prod", "span.data": 3},
+            {"environment": "prod"},
+        ),
+        pytest.param(
+            {"transaction": 1, "transaction.op": 2, "other": 3},
+            {},
+        ),
+        pytest.param(
+            {"environment": "value1", "release": "value2", "user": "value3"},
+            {"environment": "value1", "release": "value2", "user": "value3"},
+        ),
+    ],
+)
+def test_clean_span_tags(
+    tags: Mapping[str, Any], expected_output: Mapping[str, Any]
+) -> None:
+    assert clean_span_tags(tags) == expected_output

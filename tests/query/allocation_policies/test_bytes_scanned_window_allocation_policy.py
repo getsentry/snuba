@@ -25,6 +25,7 @@ def policy() -> AllocationPolicy:
     policy = BytesScannedWindowAllocationPolicy(
         storage_key=StorageKey("errors"),
         required_tenant_types=["referrer", "organization_id"],
+        default_config_overrides={},
     )
     return policy
 

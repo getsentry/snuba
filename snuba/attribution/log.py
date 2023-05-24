@@ -11,9 +11,7 @@ from confluent_kafka import Producer
 from snuba import settings
 from snuba.attribution import logger, metrics
 from snuba.state import safe_dumps
-from snuba.utils.streams.configuration_builder import (
-    build_default_kafka_producer_configuration,
-)
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
 from .appid import AppID
@@ -72,7 +70,7 @@ def _attribution_producer() -> Producer:
     global kfk
 
     if kfk is None:
-        kfk = Producer(build_default_kafka_producer_configuration())
+        kfk = Producer(build_kafka_producer_configuration(Topic.ATTRIBUTION, None))
 
     return kfk
 

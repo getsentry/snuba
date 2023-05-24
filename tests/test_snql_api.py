@@ -1254,7 +1254,7 @@ class TestSnQLApi(BaseApiTest):
         with patch(
             "snuba.web.db_query._get_allocation_policy",
             return_value=RejectAllocationPolicy123(
-                StorageKey("doesntmatter"), ["a", "b", "c"]
+                StorageKey("doesntmatter"), ["a", "b", "c"], {}
             ),
         ):
             response = self.post(

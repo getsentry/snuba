@@ -91,17 +91,49 @@ class CommitLogConfig(NamedTuple):
 class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
     origin_timestamp: Optional[datetime]
+    sentry_received_timestamp: Optional[datetime] = None
 
     def __reduce_ex__(
         self, protocol: SupportsIndex
-    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
+    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime], Optional[datetime]]]:
         if int(protocol) >= 5:
             return (
                 type(self),
-                ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),
+                (
+                    [PickleBuffer(row) for row in self.rows],
+                    self.origin_timestamp,
+                    self.sentry_received_timestamp,
+                ),
             )
         else:
-            return type(self), (self.rows, self.origin_timestamp)
+            return type(self), (
+                self.rows,
+                self.origin_timestamp,
+                self.sentry_received_timestamp,
+            )
+
+
+class LatencyRecorder:
+    def __init__(self) -> None:
+        self._sum = 0.0
+        self._max: Optional[float] = None
+        self._msg_count = 0
+
+    def record(self, latency_seconds: float) -> None:
+        self._msg_count += 1
+        self._sum += latency_seconds
+        if self._max is None or latency_seconds > self._max:
+            self._max = latency_seconds
+
+    @property
+    def avg_ms(self) -> float:
+        return (self._sum / self._msg_count) * 1000
+
+    @property
+    def max_ms(self) -> Optional[float]:
+        if not self._max:
+            return None
+        return self._max * 1000
 
 
 class InsertBatchWriter:
@@ -131,39 +163,48 @@ class InsertBatchWriter:
         )
         write_finish = time.time()
 
-        max_latency: Optional[float] = None
-        latency_sum = 0.0
-        max_end_to_end_latency: Optional[float] = None
-        end_to_end_latency_sum = 0.0
+        snuba_latency_recorder = LatencyRecorder()
+        end_to_end_latency_recorder = LatencyRecorder()
+        sentry_received_latency_recorder = LatencyRecorder()
+
         for message in self.__messages:
             assert isinstance(message.value, BrokerValue)
-            latency = write_finish - message.value.timestamp.timestamp()
-            latency_sum += latency
-            if max_latency is None or latency > max_latency:
-                max_latency = latency
-            if message.payload.origin_timestamp is not None:
-                end_to_end_latency = (
-                    write_finish - message.payload.origin_timestamp.timestamp()
-                )
-                end_to_end_latency_sum += end_to_end_latency
-                if (
-                    max_end_to_end_latency is None
-                    or end_to_end_latency > max_end_to_end_latency
-                ):
-                    max_end_to_end_latency = end_to_end_latency
 
-        if max_latency is not None:
-            self.__metrics.timing("max_latency_ms", max_latency * 1000)
+            latency = write_finish - message.value.timestamp.timestamp()
+            snuba_latency_recorder.record(latency)
+
+            origin_timestamp = message.payload.origin_timestamp
+            if origin_timestamp is not None:
+                end_to_end_latency = write_finish - origin_timestamp.timestamp()
+                end_to_end_latency_recorder.record(end_to_end_latency)
+
+            sentry_received_timestamp = message.payload.sentry_received_timestamp
+            if sentry_received_timestamp is not None:
+                sentry_received_latency = (
+                    write_finish - sentry_received_timestamp.timestamp()
+                )
+                sentry_received_latency_recorder.record(sentry_received_latency)
+
+        if snuba_latency_recorder.max_ms:
+            self.__metrics.timing("max_latency_ms", snuba_latency_recorder.max_ms)
+            self.__metrics.timing("latency_ms", snuba_latency_recorder.avg_ms)
+        if end_to_end_latency_recorder.max_ms:
             self.__metrics.timing(
-                "latency_ms", (latency_sum / len(self.__messages)) * 1000
-            )
-        if max_end_to_end_latency is not None:
-            self.__metrics.timing(
-                "max_end_to_end_latency_ms", max_end_to_end_latency * 1000
+                "max_end_to_end_latency_ms", end_to_end_latency_recorder.max_ms
             )
             self.__metrics.timing(
                 "end_to_end_latency_ms",
-                (end_to_end_latency_sum / len(self.__messages)) * 1000,
+                end_to_end_latency_recorder.avg_ms,
+            )
+
+        if sentry_received_latency_recorder.max_ms:
+            self.__metrics.timing(
+                "max_sentry_received_latency_ms",
+                sentry_received_latency_recorder.max_ms,
+            )
+            self.__metrics.timing(
+                "sentry_received_latency_ms",
+                sentry_received_latency_recorder.avg_ms,
             )
 
         self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
@@ -316,12 +357,6 @@ class ProcessedMessageBatchWriter:
                 timeout = max(timeout - (time.time() - start), 0)
 
             self.__replacement_batch_writer.join(timeout)
-
-        # XXX: This adds a blocking call when each batch is joined. Ideally we would only
-        # call proudcer.flush() when the consumer / strategy is actually being shut down but
-        # the CollectStep that this is called from does not allow us to hook into that easily.
-        if self.__commit_log_config:
-            self.__commit_log_config.producer.flush()
 
 
 json_row_encoder = JSONRowEncoder()
@@ -490,9 +525,16 @@ def process_message(
     snuba_logical_topic: SnubaTopic,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    local_metrics = MetricsWrapper(
+        metrics,
+        tags={
+            "consumer_group": consumer_group,
+            "snuba_logical_topic": snuba_logical_topic.name,
+        },
+    )
 
     validate_sample_rate = float(
-        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 0) or 0.0
+        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 1.0) or 0.0
     )
 
     assert isinstance(message.value, BrokerValue)
@@ -513,6 +555,10 @@ def process_message(
                 try:
                     codec.validate(decoded)
                 except Exception as err:
+                    local_metrics.increment(
+                        "schema_validation.failed",
+                    )
+
                     min_seconds_ago = (
                         state.get_config("log_validate_schema_every_n_seconds", 1) or 1
                     )
@@ -527,10 +573,9 @@ def process_message(
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
             # OK.
-            metrics.timing(
+            local_metrics.timing(
                 "codec_decode_and_validate",
                 (time.time() - start) * 1000,
-                tags={"snuba_logical_topic": snuba_logical_topic.name},
             )
 
         result = processor.process_message(
@@ -555,6 +600,7 @@ def process_message(
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     else:
         return result
@@ -576,11 +622,13 @@ def _process_message_multistorage_work(
         return BytesInsertBatch(
             [values_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     elif isinstance(result, InsertBatch):
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
+            result.sentry_received_timestamp,
         )
     else:
         return result

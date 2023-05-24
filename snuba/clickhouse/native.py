@@ -186,8 +186,7 @@ class ClickhousePool(object):
                     trace_output = ""
                     if capture_trace:
                         with capture_logging() as buffer:
-                            query_execute()  # In order to avoid exposing PII the results are discarded
-                            result_data = [[], []] if with_column_types else []
+                            result_data = query_execute()
                             trace_output = buffer.getvalue()
                     else:
                         result_data = query_execute()

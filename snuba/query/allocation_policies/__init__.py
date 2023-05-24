@@ -3,15 +3,16 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, cast
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
@@ -45,6 +46,12 @@ class AllocationPolicyConfig:
     value_type: type
     default: Any
     param_types: dict[str, type] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if type(self.default) != self.value_type:
+            raise ValueError(
+                f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
+            )
 
     def __to_base_dict(self) -> dict[str, Any]:
         return {
@@ -129,6 +136,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     * A a referrer that has scanned this many bytes has this many max_threads to run their query
 
     To make your own allocation policy:
+    ===================================
 
         >>> class MyAllocationPolicy(AllocationPolicy):
 
@@ -174,7 +182,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     These functions can be used to modify the behaviour of ALL allocation policies, use with care.
 
     Configurations
-    --------------
+    ==============
+
     AllocationPolicy Configurations are a way to update live flags without shipping code changes. Very similar to runtime config
     (uses it under the hood) but with key differences and restrictions on what they can be.
 
@@ -260,6 +269,22 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     "add new" config, it will be part of the list of optional configs you can add. From there you can create an instance
     of this config with the value 1 for a certain referrer and it'll show up in the configs list.
 
+    Overriding Policy Default Configurations
+    ----------------------------------------
+    Every AllocationPolicyConfig comes with a default value specified in code. That can be overridden for any specific instance of the policy
+    Example:
+
+        >>> policy = MyAllocationPolicy(
+        >>>     storage_key=StorageKey("some_storage"),
+        >>>     required_tenant_types=["foo"],
+        >>>     # This dictionary overrides whatever defaults are set
+        >>>     # for this class
+        >>>     default_config_overrides={
+        >>>         "is_enforced": False, "fart_noise_level": 100
+        >>>     }
+        >>> )
+
+
     NOTE:
     - You should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Use the
         `self.{get,set}_config_value()` methods on the policy itself instead! The only exception here is if you need to access or
@@ -290,6 +315,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self,
         storage_key: StorageKey,
         required_tenant_types: list[str],
+        default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
@@ -299,15 +325,30 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 name=IS_ACTIVE,
                 description="Whether or not this policy is active.",
                 value_type=int,
-                default=1,
+                default=default_config_overrides.get(IS_ACTIVE, 1),
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Whether or not this policy is enforced.",
                 value_type=int,
-                default=1,
+                default=default_config_overrides.get(IS_ENFORCED, 1),
             ),
         ]
+        self._overridden_additional_config_definitions = (
+            self.__get_overridden_additional_config_defaults(default_config_overrides)
+        )
+
+    @property
+    def metrics(self) -> MetricsWrapper:
+        return MetricsWrapper(
+            environment.metrics,
+            "allocation_policy",
+            tags={
+                "storage_key": self._storage_key.value,
+                "is_enforced": str(self.is_enforced),
+                "policy_class": self.__class__.__name__,
+            },
+        )
 
     @property
     def runtime_config_prefix(self) -> str:
@@ -349,6 +390,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
         required_tenant_types = kwargs.pop("required_tenant_types", None)
         storage_key = kwargs.pop("storage_key", None)
+        default_config_overrides: dict[str, Any] = cast(
+            "dict[str, Any]", kwargs.pop("default_config_overrides", {})
+        )
         assert isinstance(
             required_tenant_types, list
         ), "required_tenant_types must be a list of strings"
@@ -356,8 +400,29 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return cls(
             required_tenant_types=required_tenant_types,
             storage_key=StorageKey(storage_key),
+            default_config_overrides=default_config_overrides,
             **kwargs,
         )
+
+    def __get_overridden_additional_config_defaults(
+        self, default_config_overrides: dict[str, Any]
+    ) -> list[AllocationPolicyConfig]:
+        """overrides the defaults specified for the config in code with the default specified
+        to the instance of the policy
+        """
+        definitions = self._additional_config_definitions()
+        return [
+            replace(
+                definition,
+                default=default_config_overrides.get(
+                    definition.name, definition.default
+                ),
+            )
+            for definition in definitions
+        ]
+
+    def additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return self._overridden_additional_config_definitions
 
     @abstractmethod
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -372,7 +437,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         return {
             config.name: config
             for config in self._default_config_definitions
-            + self._additional_config_definitions()
+            + self.additional_config_definitions()
         }
 
     def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
@@ -636,6 +701,7 @@ class PassthroughPolicy(AllocationPolicy):
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
     StorageKey("default.no_storage_key"),
     required_tenant_types=[],
+    default_config_overrides={},
 )
 
 import_submodules_in_directory(

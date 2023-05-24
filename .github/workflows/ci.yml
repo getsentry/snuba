@@ -18,7 +18,7 @@ jobs:
         uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
         continue-on-error: true
         with:
-          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v4
         with:
@@ -300,7 +300,6 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
-            -e ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES=1 \
             --name sentry_snuba \
             --network sentry \
             snuba-test
