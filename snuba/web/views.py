@@ -57,7 +57,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import ReadableTableStorage, Storage, StorageNotAvailable
+from snuba.datasets.storage import Storage, StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolation
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -133,12 +133,7 @@ def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
     for entity in entities:
         entity_storages = entity.get_all_storages()
         for storage in entity_storages:
-            assert isinstance(storage, ReadableTableStorage)
-            storage_name = storage.get_storage_key().value
-            if storage_name in settings.READINESS_STATE_STORAGES_ENABLED:
-                if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
-                    storages.append(storage)
-            else:
+            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
                 storages.append(storage)
     return storages
 
