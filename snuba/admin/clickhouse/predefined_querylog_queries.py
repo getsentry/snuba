@@ -289,3 +289,37 @@ class BytesScannedForReferrerByOrganization(QuerylogQuery):
     )
     ORDER BY c DESC
     """
+
+
+class MostThrottledOrgs(QuerylogQuery):
+    """Orgs with the highest ratios of throttled queries. This isn't perfect, it just shows how many queries an Allocation Policy has set to
+    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown."""
+
+    sql = """
+    SELECT organization, c_throttled, c_total, divide(c_throttled, c_total) as ratio
+    FROM
+    (
+        SELECT organization, count(*) as c_throttled
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND JSONExtractRaw(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'explanation') != '{}'
+            AND JSONExtractInt(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'max_threads') != 10
+            AND timestamp < now()
+        GROUP BY organization
+    )
+    AS throttled_orgs
+    INNER JOIN
+    (
+        SELECT organization, count(*) as c_total
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp < now()
+        GROUP BY organization
+    ) AS queries_by_org
+    ON throttled_orgs.organization = queries_by_org.organization
+    ORDER BY ratio desc
+    LIMIT 10
+    """
