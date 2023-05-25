@@ -241,7 +241,7 @@ class TransactionEvent:
                 "module": "",
                 "action": "",
                 "domain": "",
-                "platform": self.platform,
+                "platform": "",
                 "user": self.user_id,
                 "tags.key": [
                     "environment",
