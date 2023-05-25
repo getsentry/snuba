@@ -24,7 +24,7 @@ class TransactionEvent:
     op: str
     start_timestamp: float
     timestamp: float
-    system: str
+    platform: str
     dist: Optional[str]
     user_name: Optional[str]
     user_id: Optional[str]
@@ -63,7 +63,6 @@ class TransactionEvent:
             {
                 "datetime": "2019-08-08T22:29:53.917000Z",
                 "organization_id": 1,
-                "system": self.system,
                 "project_id": 1,
                 "event_id": self.event_id,
                 "message": "/organizations/:orgId/issues/",
@@ -124,6 +123,7 @@ class TransactionEvent:
                                 "span.module": "http",
                                 "span.op": "http.client",
                                 "span.status": "ok",
+                                "span.system": self.platform,
                                 "span.status_code": 200,
                                 "status_code": 200,
                                 "transaction": self.transaction_name,
@@ -148,6 +148,7 @@ class TransactionEvent:
                                 "span.module": "db",
                                 "span.op": "db",
                                 "span.domain": "sentry_tagkey",
+                                "span.system": self.platform,
                                 "span.status": "ok",
                                 "transaction": self.transaction_name,
                                 "transaction.op": self.op,
@@ -157,7 +158,6 @@ class TransactionEvent:
                             "exclusive_time": 0.4567,
                         },
                     ],
-                    "system": self.system,
                     "version": "7",
                     "location": "/organizations/:orgId/issues/",
                     "logger": "",
@@ -241,7 +241,7 @@ class TransactionEvent:
                 "module": "",
                 "action": "",
                 "domain": "",
-                "system": "python",
+                "platform": self.platform,
                 "user": self.user_id,
                 "tags.key": [
                     "environment",
@@ -286,7 +286,7 @@ class TransactionEvent:
                 "status": 200,
                 "module": "http",
                 "domain": "targetdomain.tld:targetport",
-                "system": "",
+                "platform": self.platform,
                 "action": "GET",
                 "tags.key": ["release", "user", "environment"],
                 "tags.value": [
@@ -325,7 +325,7 @@ class TransactionEvent:
                 "status": 0,
                 "module": "db",
                 "domain": "sentry_tagkey",
-                "system": "",
+                "platform": self.platform,
                 "action": "SELECT",
                 "tags.key": ["release", "user"],
                 "tags.value": [
@@ -386,7 +386,7 @@ class TestSpansProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
-            system="python",
+            platform="python",
             dist="",
             user_name="me",
             user_id="123",
@@ -429,12 +429,12 @@ class TestSpansProcessor:
         actual_result = SpansMessageProcessor().process_message(
             message.serialize(), meta
         )
+
         assert isinstance(actual_result, InsertBatch)
         rows = actual_result.rows
 
         expected_result = message.build_result(meta)
         assert len(rows) == len(expected_result)
-
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
 

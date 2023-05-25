@@ -166,8 +166,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status
 
-        processed["platform"] = _unicodify(event_dict["platform"])
-
     @staticmethod
     def _process_tags(
         processed: MutableMapping[str, Any],
@@ -357,6 +355,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             "retention_days": retention_days,
             "partition": metadata.partition,
             "offset": metadata.offset,
+            "platform": "",
         }
 
         processed: MutableMapping[str, Any] = {}
@@ -382,6 +381,11 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed_rows.append(processed)
             processed_spans = self._process_spans(event_dict, common_span_fields)
             processed_rows.extend(processed_spans)
+
+            # extract platform from spans
+            if processed_spans:
+                processed["platform"] = processed_spans[0].get("platform", "")
+
         except Exception as e:
             metrics.increment("message_processing_error")
             log_bad_span_pct = state.get_config(
