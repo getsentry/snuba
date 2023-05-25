@@ -2,4 +2,8 @@ type AllowedTools = {
   tools: string[];
 };
 
-export { AllowedTools };
+type Settings = {
+  dsn: string;
+};
+
+export { AllowedTools, Settings };

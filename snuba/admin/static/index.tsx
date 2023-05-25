@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
+import * as Sentry from "@sentry/react";
 import Header from "./header";
 import Nav from "./nav";
 import Body from "./body";
@@ -19,6 +20,19 @@ const bodyStyle = {
 };
 
 let client = Client();
+client.getSettings().then((settings) => {
+  if (settings.dsn != "") {
+    Sentry.init({
+      dsn: settings.dsn,
+      integrations: [new Sentry.BrowserTracing(), new Sentry.Replay()],
+      // Performance Monitoring
+      tracesSampleRate: 1.0, // Capture 100% of the transactions, reduce in production!
+      // Session Replay
+      replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%
+      replaysOnErrorSampleRate: 1.0,
+    });
+  }
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 
