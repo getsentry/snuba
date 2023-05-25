@@ -453,8 +453,7 @@ def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
     with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"test_migration"}):
-        with patch("snuba.settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED", {}):
-            runner.Runner().run_all(force=True)
+        runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE

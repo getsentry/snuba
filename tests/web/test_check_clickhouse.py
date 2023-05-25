@@ -151,7 +151,6 @@ def test_filter_checked_storages(
         "partial",
         "complete",
     }  # remove deprecate from supported states
-    temp_settings.READINESS_STATE_STORAGES_ENABLED = {"mock_storage"}
     storages = filter_checked_storages(ignore_experimental=True)
 
     # check experimental dataset's storage is not in list
