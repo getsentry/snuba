@@ -321,5 +321,32 @@ class MostThrottledOrgs(QuerylogQuery):
     ) AS queries_by_org
     ON throttled_orgs.organization = queries_by_org.organization
     ORDER BY ratio desc
-    LIMIT 10
+    LIMIT 20
     """
+
+
+class OrgQueryDurationQuantiles(QuerylogQuery):
+    """Returns count, p50, p75, p90, p99 of all queries per Organization over a certain period of time, sorted by descending p99"""
+
+    sql = """
+    SELECT
+        organization,
+        sum(c) as c_total,
+        quantile(0.50)(duration_ms) as p50,
+        quantile(0.75)(duration_ms) as p75,
+        quantile(0.9)(duration_ms) as p90,
+        quantile(0.99)(duration_ms) as p99
+    FROM
+    (
+        SELECT organization, count(*) as c, arrayJoin(clickhouse_queries.duration_ms) as duration_ms
+        FROM querylog_local
+        WHERE
+            timestamp < now()
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp > (now() - {{duration}})
+        GROUP BY organization, duration_ms
+    )
+    GROUP BY organization
+    ORDER BY p99 DESC
+    LIMIT 20
+"""
