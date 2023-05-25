@@ -1,6 +1,16 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
+import { SETTINGS } from "./settings";
+import * as Sentry from "@sentry/react";
+
+if (SETTINGS.sentryIntegration.hasOwnProperty("dsn")) {
+  Sentry.init({
+    integrations: [new Sentry.BrowserTracing(), new Sentry.Replay()],
+    ...SETTINGS.sentryIntegration,
+  });
+}
+
 import Header from "./header";
 import Nav from "./nav";
 import Body from "./body";
