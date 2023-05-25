@@ -162,7 +162,7 @@ query_processors:
     args:
       settings:
         max_rows_to_group_by: 1000000
-        group_by_overflow_mode: any
+        group_by_overflow_mode: break
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 stream_loader:
