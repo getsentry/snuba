@@ -131,8 +131,7 @@ def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
 
     storages: List[Storage] = []
     for entity in entities:
-        entity_storages = entity.get_all_storages()
-        for storage in entity_storages:
+        for storage in entity.get_all_storages():
             if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
                 storages.append(storage)
     return storages
