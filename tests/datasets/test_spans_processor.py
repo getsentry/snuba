@@ -24,7 +24,7 @@ class TransactionEvent:
     op: str
     start_timestamp: float
     timestamp: float
-    platform: str
+    system: str
     dist: Optional[str]
     user_name: Optional[str]
     user_id: Optional[str]
@@ -34,7 +34,7 @@ class TransactionEvent:
     http_referer: Optional[str]
     status: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.span1_start_timestamp = (
             datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=1)
         ).timestamp()
@@ -63,7 +63,7 @@ class TransactionEvent:
             {
                 "datetime": "2019-08-08T22:29:53.917000Z",
                 "organization_id": 1,
-                "platform": self.platform,
+                "system": self.system,
                 "project_id": 1,
                 "event_id": self.event_id,
                 "message": "/organizations/:orgId/issues/",
@@ -157,7 +157,7 @@ class TransactionEvent:
                             "exclusive_time": 0.4567,
                         },
                     ],
-                    "platform": self.platform,
+                    "system": self.system,
                     "version": "7",
                     "location": "/organizations/:orgId/issues/",
                     "logger": "",
@@ -241,7 +241,7 @@ class TransactionEvent:
                 "module": "",
                 "action": "",
                 "domain": "",
-                "platform": "python",
+                "system": "python",
                 "user": self.user_id,
                 "tags.key": [
                     "environment",
@@ -286,7 +286,7 @@ class TransactionEvent:
                 "status": 200,
                 "module": "http",
                 "domain": "targetdomain.tld:targetport",
-                "platform": "",
+                "system": "",
                 "action": "GET",
                 "tags.key": ["release", "user", "environment"],
                 "tags.value": [
@@ -325,7 +325,7 @@ class TransactionEvent:
                 "status": 0,
                 "module": "db",
                 "domain": "sentry_tagkey",
-                "platform": "",
+                "system": "",
                 "action": "SELECT",
                 "tags.key": ["release", "user"],
                 "tags.value": [
@@ -386,7 +386,7 @@ class TestSpansProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
-            platform="python",
+            system="python",
             dist="",
             user_name="me",
             user_id="123",

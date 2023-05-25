@@ -263,7 +263,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         else:
             processed_span["span_status"] = UNKNOWN_SPAN_STATUS
         processed_span["domain"] = _unicodify(span_data.get("span.domain", ""))
-        processed_span["platform"] = _unicodify(span_data.get("span.platform", ""))
+        processed_span["platform"] = _unicodify(span_data.get("span.system", ""))
         processed_span["action"] = _unicodify(span_data.get("span.action", ""))
         processed_span["status"] = span_data.get("span.status_code", 0)
 
