@@ -296,10 +296,10 @@ class MostThrottledOrgs(QuerylogQuery):
     not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown."""
 
     sql = """
-    SELECT organization, c_throttled, c_total, divide(c_throttled, c_total) as ratio
+    SELECT organization, throttled_queries, total_queries, divide(throttled_queries, total_queries) as ratio
     FROM
     (
-        SELECT organization, count(*) as c_throttled
+        SELECT organization, count(*) as throttled_queries
         FROM querylog_local
         WHERE
             timestamp > (now() - {{duration}})
@@ -311,7 +311,7 @@ class MostThrottledOrgs(QuerylogQuery):
     AS throttled_orgs
     INNER JOIN
     (
-        SELECT organization, count(*) as c_total
+        SELECT organization, count(*) as total_queries
         FROM querylog_local
         WHERE
             timestamp > (now() - {{duration}})
@@ -331,7 +331,7 @@ class OrgQueryDurationQuantiles(QuerylogQuery):
     sql = """
     SELECT
         organization,
-        sum(c) as c_total,
+        sum(c) as total_queries,
         quantile(0.50)(duration_ms) as p50,
         quantile(0.75)(duration_ms) as p75,
         quantile(0.9)(duration_ms) as p90,
