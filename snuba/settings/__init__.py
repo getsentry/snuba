@@ -31,12 +31,16 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+##################
+# Admin Settings #
+##################
+
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
-ADMIN_AUTH_PROVIDER = "NOOP"
-ADMIN_AUTH_JWT_AUDIENCE = ""
+ADMIN_AUTH_PROVIDER = os.environ.get("ADMIN_AUTH_PROVIDER", "NOOP")
+ADMIN_AUTH_JWT_AUDIENCE = os.environ.get("ADMIN_AUTH_JWT_AUDIENCE", "")
 
 # file path to the IAM policy file which contains the roles
 ADMIN_IAM_POLICY_FILE = os.environ.get(
@@ -45,6 +49,10 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 )
 
 ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
+
+######################
+# End Admin Settings #
+######################
 
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
