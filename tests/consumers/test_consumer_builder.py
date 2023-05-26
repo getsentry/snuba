@@ -55,6 +55,8 @@ consumer_builder = ConsumerBuilder(
     ),
     max_batch_size=3,
     max_batch_time_ms=4,
+    max_insert_batch_size=None,
+    max_insert_batch_time_ms=None,
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
@@ -99,6 +101,8 @@ consumer_builder_with_opt = ConsumerBuilder(
     ),
     max_batch_size=3,
     max_batch_time_ms=4,
+    max_insert_batch_size=None,
+    max_insert_batch_time_ms=None,
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
