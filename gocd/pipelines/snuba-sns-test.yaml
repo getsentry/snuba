@@ -35,7 +35,7 @@ pipelines:
                           tasks:
                               - script: |
                                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
-                                    git fetch origin $deploy_sha && \
+                                    (cd snuba && git fetch origin $deploy_sha) && \
                                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
