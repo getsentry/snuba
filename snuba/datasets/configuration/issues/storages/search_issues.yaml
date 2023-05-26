@@ -51,6 +51,8 @@ schema:
       { name: http_method, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: http_referer, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: transaction_duration, type: UInt, args: { size: 32 } },
+      { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
 
       { name: message_timestamp, type: DateTime },
       { name: partition, type: UInt, args: { size: 16 } },

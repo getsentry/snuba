@@ -411,6 +411,34 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert insert_row["transaction_duration"] == 0
 
+    def test_extract_profile_id(self, message_base):
+        profile_id = str(uuid.uuid4().hex)
+        message_base["data"]["contexts"] = {"profile": {"profile_id": profile_id}}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["profile_id"] == ensure_uuid(profile_id)
+
+        for invalid_profile_id in ["", "im a little tea pot", 1, 1.1]:
+            message_base["data"]["contexts"]["profile"][
+                "profile_id"
+            ] = invalid_profile_id
+            with pytest.raises(ValueError):
+                self.process_message(message_base)
+
+    def test_extract_replay_id(self, message_base):
+        replay_id = str(uuid.uuid4().hex)
+        message_base["data"]["contexts"] = {"replay": {"replay_id": replay_id}}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["replay_id"] == ensure_uuid(replay_id)
+
+        for invalid_replay_id in ["", "im a little tea pot", 1, 1.1]:
+            message_base["data"]["contexts"]["replay"]["replay_id"] = invalid_replay_id
+            with pytest.raises(ValueError):
+                self.process_message(message_base)
+
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
             ensure_uuid("not_a_uuid")
