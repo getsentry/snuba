@@ -51,18 +51,6 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
             self._set_query_final(query, False)
             return
 
-        for no_final_subscriptions_project in (
-            get_config("skip_final_subscriptions_projects") or "[]"
-        )[1:-1].split(","):
-            if (
-                no_final_subscriptions_project
-                and int(no_final_subscriptions_project) in project_ids
-                and isinstance(query_settings, SubscriptionQuerySettings)
-            ):
-                metrics.increment(name="subscriptions_skipped_final")
-                self._set_query_final(query, False)
-                return
-
         for denied_project_id_string in (
             get_config("post_replacement_consistency_projects_denylist") or "[]"
         )[1:-1].split(","):
@@ -128,6 +116,18 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                         [Literal(None, p) for p in groups_to_exclude],
                     )
                 )
+
+        for no_final_subscriptions_project in (
+            get_config("skip_final_subscriptions_projects") or "[]"
+        )[1:-1].split(","):
+            if (
+                no_final_subscriptions_project
+                and int(no_final_subscriptions_project) in project_ids
+                and isinstance(query_settings, SubscriptionQuerySettings)
+            ):
+                metrics.increment(name="subscriptions_skipped_final")
+                self._set_query_final(query, False)
+                return
 
         self._set_query_final(query, set_final)
 
