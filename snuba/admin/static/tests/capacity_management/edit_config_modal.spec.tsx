@@ -1,9 +1,14 @@
+import "@testing-library/react/dont-cleanup-after-each";
 import { it, expect, jest } from "@jest/globals";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import EditConfigModal from "../../capacity_management/edit_config_modal";
 
-it("should modify the config as expected", async () => {
+describe("Edit Config Modal", () => {
+  afterAll(() => {
+    cleanup();
+  });
+
   const mockedSet = jest.fn();
   const mockedDelete = jest.fn();
   const mockedSave = jest.fn();
@@ -27,28 +32,34 @@ it("should modify the config as expected", async () => {
     />
   );
 
-  // Close button should set editing to false
-  act(() => fireEvent.click(getByRole("button", { name: "Close" })));
-  expect(mockedSet).toBeCalledWith(false);
+  it("should not save the config if it isn't completed yet", async () => {
+    const saveButton = getByRole("button", { name: "Save Changes" });
+    act(() => fireEvent.click(saveButton));
+    expect(mockedSave).not.toBeCalled();
+  });
 
-  // Button should be disabled since the form isn't completed yet
-  const saveButton = getByRole("button", { name: "Save Changes" });
-  act(() => fireEvent.click(saveButton));
-  expect(mockedSave).not.toBeCalled();
+  it("should call the save function if the form is completed and the save button is clicked", async () => {
+    const saveButton = getByRole("button", { name: "Save Changes" });
+    act(() =>
+      fireEvent.change(getByRole("spinbutton"), { target: { value: 20 } })
+    );
+    act(() => fireEvent.click(saveButton));
+    expect(mockedSave).toBeCalledWith({ ...mockedConfig, value: "20" });
+    expect(mockedSet).toBeCalledWith(false);
+  });
 
-  // Save changes with a value should call the save function with the updated value
-  act(() =>
-    fireEvent.change(getByRole("spinbutton"), { target: { value: 20 } })
-  );
-  act(() => fireEvent.click(saveButton));
-  expect(mockedSave).toBeCalledWith({ ...mockedConfig, value: "20" });
-  expect(mockedSet).toBeCalledWith(false);
+  it("should label the delete button as Reset for a required config", async () => {
+    expect(getByText("Reset")).toBeTruthy();
+  });
 
-  // Not parameterized so it should say "Reset" instead of "Delete"
-  expect(getByText("Reset")).toBeTruthy();
+  it("should call the delete config function upon hitting delete button", async () => {
+    act(() => fireEvent.click(getByRole("button", { name: "Reset" })));
+    expect(window.confirm).toBeCalled();
+    expect(mockedDelete).toBeCalled();
+  });
 
-  // Reset button should call the delete config function
-  act(() => fireEvent.click(getByRole("button", { name: "Reset" })));
-  expect(window.confirm).toBeCalled();
-  expect(mockedDelete).toBeCalled();
+  it("should call the currently_editing setter with False when closed", async () => {
+    act(() => fireEvent.click(getByRole("button", { name: "Close" })));
+    expect(mockedSet).toBeCalledWith(false);
+  });
 });

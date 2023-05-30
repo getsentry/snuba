@@ -1,5 +1,6 @@
+import "@testing-library/react/dont-cleanup-after-each";
 import { it, expect, jest } from "@jest/globals";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import AddConfigModal from "../../capacity_management/add_config_modal";
 import {
@@ -7,7 +8,11 @@ import {
   AllocationPolicyOptionalConfigDefinition,
 } from "../../capacity_management/types";
 
-it("should add the config as expected", async () => {
+describe("Add Config Modal", () => {
+  afterAll(() => {
+    cleanup();
+  });
+
   const mockedSet = jest.fn();
   const mockedSave = jest.fn();
   window.confirm = jest.fn(() => true); // always click 'yes'
@@ -50,46 +55,45 @@ it("should add the config as expected", async () => {
     />
   );
 
-  // Close button should set editing to false
-  act(() => fireEvent.click(getByRole("button", { name: "Close" })));
-  expect(mockedSet).toBeCalledWith(false);
+  it("should populate the modal with the parameters upon selecting an optional config", async () => {
+    act(() =>
+      fireEvent.change(getByRole("combobox"), {
+        target: { value: "optional_config" },
+      })
+    );
+    expect(getByText("some_param (int)")).toBeTruthy();
+    expect(getByText("some_other_param (str)")).toBeTruthy();
+  });
 
-  // Select an optional config
-  act(() =>
-    fireEvent.change(getByRole("combobox"), {
-      target: { value: "optional_config" },
-    })
-  );
+  it("should not save an incomplete form", async () => {
+    act(() =>
+      fireEvent.change(getByTestId("some_param"), { target: { value: 30 } })
+    );
+    const saveButton = getByRole("button", { name: "Save Changes" });
+    act(() => fireEvent.click(saveButton));
+    expect(mockedSave).not.toBeCalled();
+  });
 
-  // Modal should populate with the parameters of the config
-  expect(getByText("some_param (int)")).toBeTruthy();
-  expect(getByText("some_other_param (str)")).toBeTruthy();
+  it("should save a completed form upon clicking the Save button", async () => {
+    act(() =>
+      fireEvent.change(getByTestId("some_other_param"), {
+        target: { value: "test" },
+      })
+    );
+    act(() =>
+      fireEvent.change(getByTestId("value_field"), {
+        target: { value: 20 },
+      })
+    );
+    const saveButton = getByRole("button", { name: "Save Changes" });
+    act(() => fireEvent.click(saveButton));
+    expect(mockedSave).toBeCalledWith(expectedConfig);
+    // Close the modal as well
+    expect(mockedSet).toBeCalledWith(false);
+  });
 
-  // Save changes with a value should call the save function with the updated value
-  act(() =>
-    fireEvent.change(getByTestId("some_param"), { target: { value: 30 } })
-  );
-
-  const saveButton = getByRole("button", { name: "Save Changes" });
-  act(() => fireEvent.click(saveButton));
-
-  // Button should be disabled since the form isn't completed yet
-  expect(mockedSave).not.toBeCalled();
-
-  act(() =>
-    fireEvent.change(getByTestId("some_other_param"), {
-      target: { value: "test" },
-    })
-  );
-
-  act(() =>
-    fireEvent.change(getByTestId("value_field"), {
-      target: { value: 20 },
-    })
-  );
-
-  act(() => fireEvent.click(saveButton));
-
-  expect(mockedSave).toBeCalledWith(expectedConfig);
-  expect(mockedSet).toBeCalledWith(false);
+  it("should call the currently_editing setter with False when closed", async () => {
+    act(() => fireEvent.click(getByRole("button", { name: "Close" })));
+    expect(mockedSet).toBeCalledWith(false);
+  });
 });
