@@ -205,7 +205,7 @@ query_processors:
       project_field: project_id
   - processor: BasicFunctionsProcessor
 
-validate_data_model: warn
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
