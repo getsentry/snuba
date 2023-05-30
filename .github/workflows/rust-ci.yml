@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
+      - name: Registry login
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
       - name: Run Zookeeper and Kafka
         run: |
           docker run \
@@ -47,7 +50,6 @@ jobs:
 
       - name: Docker set up
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
           docker network create --attachable cloudbuild
       - name: Run ClickHouse
         run: |
