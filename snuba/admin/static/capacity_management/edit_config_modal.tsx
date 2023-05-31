@@ -50,7 +50,7 @@ function EditConfigModal(props: {
 
   return (
     <Modal show={currentlyEditing} onHide={() => setCurrentlyEditing(false)}>
-      <Modal.Header closeButton>
+      <Modal.Header>
         <Modal.Title>
           Editing:{" "}
           <code style={{ wordBreak: "break-all", color: "black" }}>
@@ -78,7 +78,7 @@ function EditConfigModal(props: {
         >
           {deleteOrReset()}
         </Button>
-        <Button variant="primary" onClick={saveChanges}>
+        <Button variant="primary" onClick={saveChanges} disabled={value == ""}>
           Save Changes
         </Button>
       </Modal.Footer>
