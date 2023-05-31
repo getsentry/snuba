@@ -55,6 +55,16 @@ query_processors:
         transaction_id: null
         profile_id: null
   - processor: TableRateLimit
+allocation_policy:
+  name: BytesScannedWindowAllocationPolicy
+  args:
+    required_tenant_types:
+      - organization_id
+      - referrer
+    default_config_overrides:
+      is_enforced: 1
+      throttled_thread_number: 1
+      org_limit_bytes_scanned: 100000
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
     args:
