@@ -167,7 +167,6 @@ class TestLegacyOutcomesApi(BaseApiTest):
                         ["timestamp", "<=", to_date],
                     ],
                     "groupby": ["project_id", "time"],
-                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )
@@ -276,7 +275,6 @@ class TestLegacyOutcomesApi(BaseApiTest):
                         ["project_id", "=", project_id],
                     ],
                     "groupby": ["category"],
-                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )
@@ -428,7 +426,6 @@ class TestOutcomesAPI(BaseApiTest):
                     GRANULARITY 60
                     """,
                     "dataset": "outcomes",
-                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )

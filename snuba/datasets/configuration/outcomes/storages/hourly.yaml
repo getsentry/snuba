@@ -20,16 +20,6 @@ schema:
     ]
   local_table_name: outcomes_hourly_local
   dist_table_name: outcomes_hourly_dist
-allocation_policy:
-  name: BytesScannedWindowAllocationPolicy
-  args:
-    required_tenant_types:
-      - organization_id
-      - referrer
-    default_config_overrides:
-      is_enforced: 1
-      throttled_thread_number: 1
-      org_limit_bytes_scanned: 100000
 query_processors:
   - processor: PrewhereProcessor
     args:
