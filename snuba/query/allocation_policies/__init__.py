@@ -77,7 +77,7 @@ class AllocationPolicyConfig:
         """Returns a dict representation of a live Config."""
         return {
             **self.__to_base_dict(),
-            "value": value or self.default,
+            "value": value if value is not None else self.default,
             "params": params,
         }
 
