@@ -82,7 +82,7 @@ allocation_policy:
     default_config_overrides:
       is_enforced: 1
       throttled_thread_number: 1
-      org_limit_bytes_scanned: 10000000
+      org_limit_bytes_scanned: 100000
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
