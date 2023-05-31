@@ -51,7 +51,6 @@ class TestReplaysApi(BaseApiTest):
                     LIMIT 10 OFFSET 0
                     """,
                     "debug": True,
-                    "tenant_ids": {"referrer": "replays", "organization_id": 1},
                 }
             ),
         )
@@ -96,7 +95,6 @@ class TestReplaysApi(BaseApiTest):
                     LIMIT 10 OFFSET 0
                     """,
                     "debug": True,
-                    "tenant_ids": {"referrer": "replays", "organization_id": 1},
                 }
             ),
         )
