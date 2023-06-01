@@ -77,6 +77,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
             headers={"referer": "test"},
