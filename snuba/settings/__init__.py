@@ -31,12 +31,16 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+##################
+# Admin Settings #
+##################
+
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
-ADMIN_AUTH_PROVIDER = "NOOP"
-ADMIN_AUTH_JWT_AUDIENCE = ""
+ADMIN_AUTH_PROVIDER = os.environ.get("ADMIN_AUTH_PROVIDER", "NOOP")
+ADMIN_AUTH_JWT_AUDIENCE = os.environ.get("ADMIN_AUTH_JWT_AUDIENCE", "")
 
 # file path to the IAM policy file which contains the roles
 ADMIN_IAM_POLICY_FILE = os.environ.get(
@@ -45,6 +49,12 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 )
 
 ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0)
+ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
+
+######################
+# End Admin Settings #
+######################
 
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
@@ -256,8 +266,6 @@ if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
-READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
-READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60

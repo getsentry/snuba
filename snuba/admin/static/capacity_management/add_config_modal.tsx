@@ -76,7 +76,7 @@ function AddConfigModal(props: {
 
   return (
     <Modal show={currentlyAdding} onHide={cancelAdding}>
-      <Modal.Header closeButton>
+      <Modal.Header>
         <Modal.Title>Adding a new config:</Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -109,6 +109,7 @@ function AddConfigModal(props: {
                     {param.name + " (" + param.type + ")"}
                   </Form.Label>
                   <Form.Control
+                    data-testid={param.name}
                     type={inputType(param.type)}
                     onChange={(e) => updateParam(param.name, e.target.value)}
                   />
@@ -119,6 +120,7 @@ function AddConfigModal(props: {
             <FormGroup>
               <Form.Label>Value: </Form.Label>
               <Form.Control
+                data-testid="value_field"
                 type={inputType(selectedDefinition.type)}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={selectedDefinition.default}
@@ -137,8 +139,10 @@ function AddConfigModal(props: {
           disabled={
             selectedDefinition == undefined ||
             (selectedDefinition &&
-              Object.keys(config.params).length !=
-                Object.keys(selectedDefinition.params).length)
+              (Object.keys(config.params).length !=
+                Object.keys(selectedDefinition.params).length ||
+                Object.values(config.params).includes("") ||
+                config.value == ""))
           }
         >
           Save Changes

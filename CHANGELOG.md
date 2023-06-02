@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.5.2
+
+### Various fixes & improvements
+
+- feat(CapMan): Spans Allocation Policy (#4261) by @rahul-kumar-saini
+- feat(CapMan): Allocation Policy UI tests (#4200) by @rahul-kumar-saini
+- fix(CapMan): organzation_id -> organization_id (#4267) by @rahul-kumar-saini
+- fix(DC): Outcomes Raw Entity was under wrong Dataset (#4263) by @rahul-kumar-saini
+- reject search issues bad column (#4260) by @volokluev
+- Final bypass for subscriptions (#4253) by @fpacifici
+- feat(search-issues): expose and process profile_id and replay_id columns (#4164) by @barkbarkimashark
+- fix: Fix flaky optimize test (#4252) by @untitaker
+- fix(spans): use system instead of platform (#4244) by @dbanda
+- promote profiles and functions to complete (#4238) by @enochtangg
+- ref: bump sentry-kafka-schemas to 0.1.10 (#4250) by @getsentry-bot
+- feat(CapMan): Most throttled Orgs visibility (#4248) by @rahul-kumar-saini
+- feat(DRS): Enable readiness state for storages (#4240) by @enochtangg
+- ref(dashboard): Add a setting that restricts the tools visible in the dashboard (#4174) by @evanh
+- fix: Add querylog `max.message.bytes` to topic configuration (#4221) by @lynnagara
+- fix(logs) : use structlog in migrations (#4236) by @dbanda
+- feat(dlq): Consumer builder can build a DLQ strategy (#4235) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.4 (#4243) by @getsentry-bot
+- ref: bump sentry-arroyo to 2.11.3 (#4241) by @getsentry-bot
+- fix(parsing): Update error message for missing datetime column comparison condition (#4189) by @davidtsuk
+- fix: Querylog producer (#4219) by @lynnagara
+- fix: Fix attribution producer (#4218) by @lynnagara
+- test(dlq): Add a small test for ExitAfterNMessages strategy (#4234) by @lynnagara
+- feat(dlq): Add is_valid() method to DlqInstruction class (#4233) by @lynnagara
+
+_Plus 12 more_
+
 ## 23.5.1
 
 ### Various fixes & improvements

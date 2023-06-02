@@ -26,7 +26,7 @@ client.getSettings().then((settings) => {
       dsn: settings.dsn,
       integrations: [new Sentry.BrowserTracing(), new Sentry.Replay()],
       // Performance Monitoring
-      tracesSampleRate: 1.0, // Capture 100% of the transactions, reduce in production!
+      tracesSampleRate: settings.traces_sample_rate,
       // Session Replay
       replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%
       replaysOnErrorSampleRate: 1.0,

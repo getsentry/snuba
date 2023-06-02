@@ -117,12 +117,12 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.PROFILES: _MigrationGroup(
         loader=ProfilesLoader(),
         storage_sets_keys={StorageSetKey.PROFILES},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.FUNCTIONS: _MigrationGroup(
         loader=FunctionsLoader(),
         storage_sets_keys={StorageSetKey.FUNCTIONS},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.REPLAYS: _MigrationGroup(
         loader=ReplaysLoader(),

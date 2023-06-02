@@ -35,6 +35,7 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.admin.tool_policies import (
+    DEVELOPER_TOOLS,
     AdminTools,
     check_tool_perms,
     get_user_allowed_tools,
@@ -104,11 +105,25 @@ def settings_endpoint() -> Response:
     our internal network. If this ever becomes a public app, this is a security risk.
     """
     # This must mirror the Settings type in the frontend code
-    return make_response(jsonify({"dsn": settings.ADMIN_FRONTEND_DSN}), 200)
+    return make_response(
+        jsonify(
+            {
+                "dsn": settings.ADMIN_FRONTEND_DSN,
+                "traces_sample_rate": settings.ADMIN_TRACE_SAMPLE_RATE,
+            }
+        ),
+        200,
+    )
 
 
 @application.route("/tools")
 def tools() -> Response:
+    if settings.ADMIN_DEVELOPER_MODE:
+        return make_response(
+            jsonify({"tools": [t.value for t in DEVELOPER_TOOLS]}), 200
+        )
+
+    # TODO: This can return all the tools once developer mode is deployed
     return make_response(
         jsonify({"tools": [t.value for t in get_user_allowed_tools(g.user)]}), 200
     )

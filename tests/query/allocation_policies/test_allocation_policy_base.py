@@ -255,6 +255,21 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
+def test_enforced_active(policy: AllocationPolicy) -> None:
+    assert policy.is_enforced == 1
+    policy.set_config_value(config_key="is_enforced", value=0)
+    assert policy.is_enforced == 0
+    policy.set_config_value(config_key="is_enforced", value=1)
+    assert policy.is_enforced == 1
+
+    assert policy.is_active == 1
+    policy.set_config_value(config_key="is_active", value=0)
+    assert policy.is_active == 0
+    policy.set_config_value(config_key="is_active", value=1)
+    assert policy.is_active == 1
+
+
+@pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
     assert len(policy_configs := policy.get_current_configs()) == 3
     assert all(
@@ -291,6 +306,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     policy.set_config_value(
         config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
     )
+    policy.set_config_value(config_key="is_enforced", value=0)
     assert len(policy_configs := policy.get_current_configs()) == 4
     assert {
         "name": "my_param_config",
@@ -300,6 +316,15 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "value": 100,
         "params": {"org": 10, "ref": "test"},
     } in policy_configs
+    assert {
+        "name": "is_enforced",
+        "type": "int",
+        "default": 1,
+        "description": "Whether or not this policy is enforced.",
+        "value": 0,
+        "params": {},
+    } in policy_configs
+    assert policy.is_enforced == 0
 
 
 @pytest.mark.redis_db
