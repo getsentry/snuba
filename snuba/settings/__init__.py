@@ -49,7 +49,12 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 )
 
 ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
-ADMIN_TRACE_SAMPLE_RATE = os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0)
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
 ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
 
 ######################

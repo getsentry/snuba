@@ -4,7 +4,9 @@ type AllowedTools = {
 
 type Settings = {
   dsn: string;
-  traces_sample_rate: number;
+  tracesSampleRate: number;
+  replaysSessionSampleRate: number;
+  replaysOnErrorSampleRate: number;
 };
 
 export { AllowedTools, Settings };

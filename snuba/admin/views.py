@@ -109,7 +109,9 @@ def settings_endpoint() -> Response:
         jsonify(
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
-                "traces_sample_rate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
+                "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
             }
         ),
         200,

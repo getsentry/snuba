@@ -26,10 +26,10 @@ client.getSettings().then((settings) => {
       dsn: settings.dsn,
       integrations: [new Sentry.BrowserTracing(), new Sentry.Replay()],
       // Performance Monitoring
-      tracesSampleRate: settings.traces_sample_rate,
+      tracesSampleRate: settings.tracesSampleRate,
       // Session Replay
-      replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%
-      replaysOnErrorSampleRate: 1.0,
+      replaysSessionSampleRate: settings.replaysSessionSampleRate,
+      replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
     });
   }
 });
