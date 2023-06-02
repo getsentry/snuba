@@ -90,6 +90,12 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+      - timestamp
 
 validators:
   - validator: EntityRequiredColumnValidator
