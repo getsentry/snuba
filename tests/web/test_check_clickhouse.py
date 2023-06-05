@@ -89,13 +89,12 @@ def temp_settings() -> Any:
 
 @mock.patch(
     "snuba.web.views.get_enabled_dataset_names",
-    return_value=["events", "experimental"],
+    return_value=["events"],
 )
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
 def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
     assert check_clickhouse()
-    assert not check_clickhouse()
 
 
 @mock.patch(

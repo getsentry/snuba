@@ -136,6 +136,8 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     """
     try:
         storages = filter_checked_storages()
+        for storage in storages:
+            print(storage.get_storage_set_key())
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
