@@ -175,6 +175,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policy: Optional[AllocationPolicy] = None,
+        allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
@@ -189,6 +190,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             query_splitters,
             mandatory_condition_checkers,
             allocation_policy,
+            allocation_policies,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(
