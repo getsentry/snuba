@@ -238,6 +238,16 @@ allocation_policy:
       is_enforced: 1
       throttled_thread_number: 1
       org_limit_bytes_scanned: 10000000
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 10000000
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

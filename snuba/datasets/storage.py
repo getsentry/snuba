@@ -100,6 +100,9 @@ class ReadableStorage(Storage):
     def get_allocation_policy(self) -> AllocationPolicy:
         return DEFAULT_PASSTHROUGH_POLICY
 
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
+
 
 class WritableStorage(Storage):
     """
@@ -131,12 +134,14 @@ class ReadableTableStorage(ReadableStorage):
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policy: Optional[AllocationPolicy] = None,
+        allocation_policies: Optional[list[AllocationPolicy]] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policy = allocation_policy
+        self.__allocation_policies = allocation_policies or []
         super().__init__(storage_set_key, schema, readiness_state)
 
     def get_storage_key(self) -> StorageKey:
@@ -153,6 +158,9 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_allocation_policy(self) -> AllocationPolicy:
         return self.__allocation_policy or super().get_allocation_policy()
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return self.__allocation_policies or super().get_allocation_policies()
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):

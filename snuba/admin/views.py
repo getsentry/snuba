@@ -15,7 +15,10 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.clickhouse.capacity_management import get_allocation_policies
+from snuba.admin.clickhouse.capacity_management import (
+    get_allocation_policies,
+    get_storages_with_allocation_policies,
+)
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -729,10 +732,38 @@ def allocation_policies() -> Response:
     )
 
 
-@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+CAPMAN_API_V2 = "capman_api_v2"
+
+
+@application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
+def storages_with_allocation_policies() -> Response:
+    return Response(
+        json.dumps(get_storages_with_allocation_policies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_configs(storage_key: str) -> Response:
+
+    storage = get_storage(StorageKey(storage_key))
+
+    if state.get_config(CAPMAN_API_V2, False):
+        policies = storage.get_allocation_policies()
+        data = [
+            {
+                "policy_name": policy.config_key(),
+                "configs": policy.get_current_configs(),
+                "optional_config_definitions": policy.get_optional_config_definitions_json(),
+            }
+            for policy in policies
+        ]
+        return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+    policy = storage.get_allocation_policy()
     configs = policy.get_current_configs()
     return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
 
@@ -766,7 +797,17 @@ def set_allocation_policy_config() -> Response:
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
 
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        if state.get_config(CAPMAN_API_V2, False):
+            policy_name = data["policy"]
+            assert isinstance(policy_name, str), "Invalid policy name"
+            policies = get_storage(StorageKey(storage)).get_allocation_policies()
+            policy = next(
+                (p for p in policies if p.config_key() == policy_name),
+                None,
+            )
+            assert policy is not None, "Policy not found on storage"
+        else:
+            policy = get_storage(StorageKey(storage)).get_allocation_policy()
 
     except (KeyError, AssertionError) as exc:
         return Response(
@@ -780,7 +821,7 @@ def set_allocation_policy_config() -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            {"storage": storage, "key": key},
+            {"storage": storage, "policy": policy.config_key(), "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -794,7 +835,13 @@ def set_allocation_policy_config() -> Response:
             audit_log.record(
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
-                {"storage": storage, "key": key, "value": value, "params": str(params)},
+                {
+                    "storage": storage,
+                    "policy": policy.config_key(),
+                    "key": key,
+                    "value": value,
+                    "params": str(params),
+                },
                 notify=True,
             )
             return Response("", 200)

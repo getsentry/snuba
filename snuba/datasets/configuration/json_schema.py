@@ -353,6 +353,11 @@ STORAGE_ALLOCATION_POLICY_SCHEMA = registered_class_schema(
     "AllocationPolicy",
     "Name of the AllocationPolicy used for allocating read resources per query on this storage.",
 )
+STORAGE_ALLOCATION_POLICIES_SCHEMA = registered_class_array_schema(
+    "name",
+    "AllocationPolicy",
+    "Name of the AllocationPolicy used for allocating read resources per query on this storage.",
+)
 STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
     "processor",
     "ReplacerProcessor",
@@ -551,6 +556,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
     },
     "required": [
         "version",
@@ -578,6 +584,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
@@ -616,6 +623,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
