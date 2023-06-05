@@ -30,10 +30,6 @@ class ExperimentalDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(all_entities=[])
 
-    @classmethod
-    def is_experimental(cls) -> bool:
-        return True
-
     def get_all_entities(self) -> Sequence[BadEntity]:
         return [BadEntity()]
 
@@ -62,10 +58,6 @@ class MockDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(all_entities=[])
 
-    @classmethod
-    def is_experimental(cls) -> bool:
-        return False
-
     def get_all_entities(self) -> Sequence[MockEntity]:
         return [MockEntity()]
 
@@ -73,10 +65,6 @@ class MockDataset(Dataset):
 class BadDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(all_entities=[])
-
-    @classmethod
-    def is_experimental(cls) -> bool:
-        return False
 
     def get_all_entities(self) -> Sequence[BadEntity]:
         return [BadEntity()]
@@ -106,8 +94,8 @@ def temp_settings() -> Any:
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
 def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
-    assert check_clickhouse(ignore_experimental=True)
-    assert not check_clickhouse(ignore_experimental=False)
+    assert check_clickhouse()
+    assert not check_clickhouse()
 
 
 @mock.patch(
@@ -120,7 +108,7 @@ def test_bad_dataset_fails_healthcheck(
 ) -> None:
     # the bad dataset is enabled and not experimental, therefore the healthcheck
     # should fail
-    assert not check_clickhouse(ignore_experimental=True)
+    assert not check_clickhouse()
 
 
 @mock.patch(
@@ -132,7 +120,7 @@ def test_dataset_undefined_storage_set(
     mock1: mock.MagicMock, mock2: mock.MagicMock
 ) -> None:
     metrics_tags: dict[str, str] = {}
-    assert not check_clickhouse(ignore_experimental=True, metric_tags=metrics_tags)
+    assert not check_clickhouse(metric_tags=metrics_tags)
     for v in metrics_tags.values():
         assert isinstance(v, str)
 
@@ -151,7 +139,7 @@ def test_filter_checked_storages(
         "partial",
         "complete",
     }  # remove deprecate from supported states
-    storages = filter_checked_storages(ignore_experimental=True)
+    storages = filter_checked_storages()
 
     # check experimental dataset's storage is not in list
     assert BadStorage() not in storages

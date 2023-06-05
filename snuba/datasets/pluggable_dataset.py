@@ -19,14 +19,9 @@ class PluggableDataset(Dataset):
         *,
         name: str,
         all_entities: list[EntityKey],
-        is_experimental: bool | None,
     ) -> None:
         super().__init__(all_entities=all_entities)
         self.name = name
-        self.__is_experimental = is_experimental or False
-
-    def is_experimental(self) -> bool:
-        return self.__is_experimental
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, PluggableDataset) and self.name == other.name
