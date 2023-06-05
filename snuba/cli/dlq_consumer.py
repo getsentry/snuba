@@ -16,7 +16,7 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.consumers.dlq import load_instruction
+from snuba.consumers.dlq import clear_instruction, load_instruction
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -110,6 +110,10 @@ def dlq_consumer(
         if instruction is None:
             time.sleep(2.0)
             continue
+
+        # Immediately clear the instruction so it does not get picked up more than once
+        # even if the consumer does not finish processing it.
+        clear_instruction()
 
         logger.info("Starting DLQ consumer", extra={"instruction": instruction})
 
