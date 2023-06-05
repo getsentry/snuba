@@ -186,7 +186,6 @@ def consumer(
         metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
         consumer_config=consumer_config,
         kafka_params=KafkaParameters(
             group_id=consumer_group,

@@ -58,11 +58,13 @@ class ConsumerBuilder:
     Simplifies the initialization of a consumer by merging parameters that
     generally come from the command line with defaults that come from the
     dataset class and defaults that come from the settings file.
+
+    Multiple storage consumer is not currently supported via consumer builder,
+    supports building a single storage consumer only.
     """
 
     def __init__(
         self,
-        storage_key: StorageKey,
         consumer_config: ConsumerConfig,
         kafka_params: KafkaParameters,
         processing_params: ProcessingParameters,
@@ -76,6 +78,9 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
+        assert len(consumer_config.storages) == 1, "Only one storage supported"
+        storage_key = StorageKey(consumer_config.storages[0].name)
+
         self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
