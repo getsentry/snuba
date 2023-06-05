@@ -86,7 +86,7 @@ query_processors:
       column_name: tags
   - processor: UUIDColumnProcessor
     args:
-      columns: [occurrence_id, event_id, trace_id]
+      columns: [occurrence_id, event_id, trace_id, profile_id, replay_id]
   - processor: MappingColumnPromoter
     args:
       mapping_specs:
