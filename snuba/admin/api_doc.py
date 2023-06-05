@@ -77,6 +77,7 @@ Upon selecting a storage previously, new components would render per policy retu
 """
 
 # new version: same api but new response
+# /allocation_policy_configs/<storage_key>
 [
     {
         "policy_name": "BytesScannedWindowPolicy",
