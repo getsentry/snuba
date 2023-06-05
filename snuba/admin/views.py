@@ -35,7 +35,6 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.admin.tool_policies import (
-    DEVELOPER_TOOLS,
     AdminTools,
     check_tool_perms,
     get_user_allowed_tools,
@@ -100,12 +99,6 @@ def health() -> Response:
 
 @application.route("/tools")
 def tools() -> Response:
-    if settings.ADMIN_DEVELOPER_MODE:
-        return make_response(
-            jsonify({"tools": [t.value for t in DEVELOPER_TOOLS]}), 200
-        )
-
-    # TODO: This can return all the tools once developer mode is deployed
     return make_response(
         jsonify({"tools": [t.value for t in get_user_allowed_tools(g.user)]}), 200
     )
