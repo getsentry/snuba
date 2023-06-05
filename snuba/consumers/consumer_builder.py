@@ -348,4 +348,4 @@ class ConsumerBuilder:
         Dlq consumer. Same as the base consumer but exits after `max_messages_to_process`
         """
 
-        return self.__build_consumer(self.build_streaming_strategy_factory())
+        return self.__build_consumer(self.build_dlq_strategy_factory(instruction))
