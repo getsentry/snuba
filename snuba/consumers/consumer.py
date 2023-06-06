@@ -587,6 +587,13 @@ def process_message(
             ),
         )
     except Exception as err:
+        local_metrics.increment(
+            "invalid_message",
+            tags={
+                "topic": snuba_logical_topic.name,
+                "processor": type(processor).__name__,
+            },
+        )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
