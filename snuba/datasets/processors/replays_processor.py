@@ -178,43 +178,39 @@ class ReplaysProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        replay_event = rapidjson.loads(bytes(message["payload"]))
         try:
-            replay_event = rapidjson.loads(bytes(message["payload"]))
-            try:
-                retention_days = enforce_retention(
-                    message["retention_days"],
-                    datetime.utcfromtimestamp(message["start_time"]),
-                )
-            except EventTooOld:
-                return None
+            retention_days = enforce_retention(
+                message["retention_days"],
+                datetime.utcfromtimestamp(message["start_time"]),
+            )
+        except EventTooOld:
+            return None
 
-            processed: MutableMapping[str, Any] = {
-                "retention_days": retention_days,
-                "project_id": message["project_id"],
-            }
+        processed: MutableMapping[str, Any] = {
+            "retention_days": retention_days,
+            "project_id": message["project_id"],
+        }
 
-            if replay_event["type"] == "replay_actions":
-                actions = process_replay_actions(replay_event, processed, metadata)
-                return InsertBatch(actions, None)
-            else:
-                # The following helper functions should be able to be applied in any order.
-                # At time of writing, there are no reads of the values in the `processed`
-                # dictionary to inform values in other functions.
-                # Ideally we keep continue that rule
-                self._process_base_replay_event_values(processed, replay_event)
-                self._process_tags(processed, replay_event)
-                self._process_sdk(processed, replay_event)
-                self._process_kafka_metadata(metadata, processed)
+        if replay_event["type"] == "replay_actions":
+            actions = process_replay_actions(replay_event, processed, metadata)
+            return InsertBatch(actions, None)
+        else:
+            # The following helper functions should be able to be applied in any order.
+            # At time of writing, there are no reads of the values in the `processed`
+            # dictionary to inform values in other functions.
+            # Ideally we keep continue that rule
+            self._process_base_replay_event_values(processed, replay_event)
+            self._process_tags(processed, replay_event)
+            self._process_sdk(processed, replay_event)
+            self._process_kafka_metadata(metadata, processed)
 
-                # the following operation modifies the event_dict and is therefore *not*
-                # order-independent
-                self._process_user(processed, replay_event)
-                self._process_event_hash(processed, replay_event)
-                self._process_contexts(processed, replay_event)
-                return InsertBatch([processed], None)
-        except Exception:
-            metrics.increment("consumer_error")
-            raise
+            # the following operation modifies the event_dict and is therefore *not*
+            # order-independent
+            self._process_user(processed, replay_event)
+            self._process_event_hash(processed, replay_event)
+            self._process_contexts(processed, replay_event)
+            return InsertBatch([processed], None)
 
 
 def process_replay_actions(
