@@ -145,7 +145,6 @@ def dlq_consumer(
         consumer_config = replace(orig_consumer_config, commit_log_topic=None)
 
         consumer_builder = ConsumerBuilder(
-            storage_key=instruction.storage_key,
             consumer_config=consumer_config,
             kafka_params=KafkaParameters(
                 group_id=consumer_group,
