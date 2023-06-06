@@ -86,7 +86,6 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
-        self.consumer_group = kafka_params.group_id
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -259,7 +258,6 @@ class ConsumerBuilder:
             process_message=functools.partial(
                 process_message,
                 processor,
-                self.consumer_group,
                 logical_topic,
             ),
             collector=build_batch_writer(
@@ -311,7 +309,6 @@ class ConsumerBuilder:
             process_message=functools.partial(
                 process_message,
                 processor,
-                self.consumer_group,
                 logical_topic,
             ),
             collector=build_batch_writer(

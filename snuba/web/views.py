@@ -672,7 +672,6 @@ if application.debug or application.testing:
                     functools.partial(
                         process_message,
                         stream_loader.get_processor(),
-                        "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),

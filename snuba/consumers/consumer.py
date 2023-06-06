@@ -521,14 +521,12 @@ MultistorageProcessedMessage = Sequence[
 
 def process_message(
     processor: MessageProcessor,
-    consumer_group: str,
     snuba_logical_topic: SnubaTopic,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     local_metrics = MetricsWrapper(
         metrics,
         tags={
-            "consumer_group": consumer_group,
             "snuba_logical_topic": snuba_logical_topic.name,
         },
     )
