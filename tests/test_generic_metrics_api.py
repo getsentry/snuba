@@ -157,7 +157,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -194,7 +200,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -231,7 +243,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -330,7 +348,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -355,7 +379,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -381,7 +411,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -472,7 +508,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -492,7 +534,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                 """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -590,7 +638,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
@@ -624,7 +677,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),

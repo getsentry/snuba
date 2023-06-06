@@ -55,8 +55,6 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
-ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
-
 ######################
 # End Admin Settings #
 ######################

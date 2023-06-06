@@ -292,5 +292,9 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert response.status_code == 200, data
         assert data["stats"]["consistent"]
         assert data["data"] == [
-            {"project_id": 1, "profile_id": profile_id, "replay_id": replay_id}
+            {
+                "project_id": 1,
+                "profile_id": profile_id.replace("-", ""),
+                "replay_id": replay_id.replace("-", ""),
+            }
         ]
