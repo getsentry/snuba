@@ -591,8 +591,7 @@ def process_message(
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value
-            if state.get_config(f"enable_new_dlq_{snuba_logical_topic.name}", 1):
-                raise InvalidMessage(value.partition, value.offset) from err
+            raise InvalidMessage(value.partition, value.offset) from err
 
             return None
 
