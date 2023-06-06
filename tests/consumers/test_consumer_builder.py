@@ -117,7 +117,7 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
 
     assert con_build.storage == get_writable_storage(test_storage_key)
 
-    assert con_build.consumer_group == consumer_group_name
+    assert con_build.group_id == consumer_group_name
 
     assert isinstance(con_build.raw_topic, Topic)
 
