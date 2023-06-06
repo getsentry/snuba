@@ -20,7 +20,16 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column("trace_sampled", UInt(8, Modifiers(nullable=True))),
                 after="exception_main_thread",
                 target=OperationTarget.DISTRIBUTED,
-            )
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.EVENTS_RO,
+                table_name=table_name,
+                column=Column(
+                    "num_processing_errors", UInt(64, Modifiers(nullable=True))
+                ),
+                after="trace_sampled",
+                target=OperationTarget.DISTRIBUTED,
+            ),
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
@@ -28,7 +37,13 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropColumn(
                 storage_set=StorageSetKey.EVENTS_RO,
                 table_name=table_name,
-                column_name="exception_main_thread",
+                column_name="trace_sampled",
                 target=OperationTarget.DISTRIBUTED,
-            )
+            ),
+            operations.DropColumn(
+                storage_set=StorageSetKey.EVENTS_RO,
+                table_name=table_name,
+                column_name="num_processing_errors",
+                target=OperationTarget.DISTRIBUTED,
+            ),
         ]
