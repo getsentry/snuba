@@ -1,5 +1,67 @@
 # Changelog
 
+## 23.5.2
+
+### Various fixes & improvements
+
+- feat(CapMan): Spans Allocation Policy (#4261) by @rahul-kumar-saini
+- feat(CapMan): Allocation Policy UI tests (#4200) by @rahul-kumar-saini
+- fix(CapMan): organzation_id -> organization_id (#4267) by @rahul-kumar-saini
+- fix(DC): Outcomes Raw Entity was under wrong Dataset (#4263) by @rahul-kumar-saini
+- reject search issues bad column (#4260) by @volokluev
+- Final bypass for subscriptions (#4253) by @fpacifici
+- feat(search-issues): expose and process profile_id and replay_id columns (#4164) by @barkbarkimashark
+- fix: Fix flaky optimize test (#4252) by @untitaker
+- fix(spans): use system instead of platform (#4244) by @dbanda
+- promote profiles and functions to complete (#4238) by @enochtangg
+- ref: bump sentry-kafka-schemas to 0.1.10 (#4250) by @getsentry-bot
+- feat(CapMan): Most throttled Orgs visibility (#4248) by @rahul-kumar-saini
+- feat(DRS): Enable readiness state for storages (#4240) by @enochtangg
+- ref(dashboard): Add a setting that restricts the tools visible in the dashboard (#4174) by @evanh
+- fix: Add querylog `max.message.bytes` to topic configuration (#4221) by @lynnagara
+- fix(logs) : use structlog in migrations (#4236) by @dbanda
+- feat(dlq): Consumer builder can build a DLQ strategy (#4235) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.4 (#4243) by @getsentry-bot
+- ref: bump sentry-arroyo to 2.11.3 (#4241) by @getsentry-bot
+- fix(parsing): Update error message for missing datetime column comparison condition (#4189) by @davidtsuk
+- fix: Querylog producer (#4219) by @lynnagara
+- fix: Fix attribution producer (#4218) by @lynnagara
+- test(dlq): Add a small test for ExitAfterNMessages strategy (#4234) by @lynnagara
+- feat(dlq): Add is_valid() method to DlqInstruction class (#4233) by @lynnagara
+
+_Plus 12 more_
+
+## 23.5.1
+
+### Various fixes & improvements
+
+- ref(process_message): Tag all metrics by consumer_group (#4226) by @untitaker
+- feat: Default join timeout for all consumers of 5 seconds (#4222) by @lynnagara
+- fix(clickhouse): Add a check for the max supported clickhouse version (#4158) by @davidtsuk
+- fix: Fix flaky optimize test (#4217) by @lynnagara
+- fix: Fix DLQ producer config (#4216) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.2 (#4215) by @getsentry-bot
+- feat: Move DLQ configuration into consumer configuration (#4206) by @lynnagara
+- feat: Python and Rust consumers share common cluster resolution code (#4205) by @lynnagara
+- Fix slack notifications for when allocation policy changes (#4204) by @volokluev
+- ref: bump sentry-kafka-schemas to 0.1.9 (#4207) by @getsentry-bot
+- feat(admin): add amount of rows in result set to tracing tool (#4167) by @volokluev
+- feat(capman): Allow overriding policy defaults in configuration (#4201) by @volokluev
+- fix: All consumers run with --no-strict-offset-reset in dev (#4177) by @lynnagara
+- fix(CapMan): Validate Tenant IDs (#4176) by @rahul-kumar-saini
+- ref: Use RetryingRedisCluster from sentry-redis-tools (#4197) by @untitaker
+- ref(consumer): pass sentry_received_timestamp again (#4198) by @MeredithAnya
+- feat(dlq): Add the DLQ instruction mechanism (#4199) by @lynnagara
+- fix(capman): create auditlog notifications for allocation policy updates (#4193) by @volokluev
+- feat(schema-validation): Validate all messages 😱 (#4194) by @lynnagara
+- Revert "ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052)" (0d1b0cfa) by @getsentry-bot
+- ref(consumer): Pass sentry_received_timestamp for e2e latency  (#4052) by @ayirr7
+- feat(profiling): Create profiling datasets by default in self-hosted (#4195) by @phacops
+- feat: Add metric to count validation failures [SNS-2279] (#4182) by @untitaker
+- ref: bump sentry-arroyo to 2.11.1 (#4190) by @getsentry-bot
+
+_Plus 10 more_
+
 ## 23.5.0
 
 ### Various fixes & improvements

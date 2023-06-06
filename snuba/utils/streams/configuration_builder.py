@@ -86,7 +86,3 @@ def build_kafka_producer_configuration(
     broker_config["compression.type"] = "lz4"
 
     return broker_config
-
-
-def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None, None)

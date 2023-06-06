@@ -57,16 +57,7 @@ def _kafka_producer() -> Producer:
     if kfk is None:
         kfk = Producer(
             build_kafka_producer_configuration(
-                topic=None,
-                override_params={
-                    # the querylog payloads can get really large so we allow larger messages
-                    # (double the default)
-                    # The performance is not business critical and therefore we accept the tradeoffs
-                    # in more bandwidth for more observability/debugability
-                    # for this to be meaningful, the following setting has to be at least as large on the broker
-                    # message.max.bytes=2000000
-                    "message.max.bytes": 2000000,
-                },
+                topic=Topic.QUERYLOG,
             )
         )
     return kfk

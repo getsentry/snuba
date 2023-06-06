@@ -1,5 +1,5 @@
 import copy
-from typing import Optional, Sequence
+from typing import Any, MutableMapping, Optional, Sequence
 
 from snuba.query.query_settings import QuerySettings
 from snuba.state.quota import ResourceQuota
@@ -71,3 +71,9 @@ class RateLimiterDelegate(QuerySettings):
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
         self.__delegate.set_resource_quota(quota)
+
+    def get_clickhouse_settings(self) -> MutableMapping[str, Any]:
+        return self.__delegate.get_clickhouse_settings()
+
+    def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
+        return self.__delegate.set_clickhouse_settings(settings)

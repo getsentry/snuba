@@ -29,6 +29,9 @@ class AdminTools(Enum):
     CAPACITY_MANAGEMENT = "capacity-management"
 
 
+DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
+
+
 def get_user_allowed_tools(user: AdminUser) -> set[AdminTools]:
     user_allowed_tools = set()
     for role in user.roles:

@@ -1,8 +1,8 @@
-import logging
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
+import structlog
 from clickhouse_driver import errors
 
 from snuba import settings
@@ -32,7 +32,7 @@ from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, M
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
 
-logger = logging.getLogger("snuba.migrations")
+logger = structlog.get_logger().bind(module=__name__)
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
@@ -41,16 +41,13 @@ DIST_TABLE_NAME = "migrations_dist"
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
     groups = []
     for group in MigrationGroup:
-        if group.value in settings.READINESS_STATE_MIGRATION_GROUPS_ENABLED:
-            readiness_state = get_group_readiness_state(group)
-            if readiness_state.value in settings.SUPPORTED_STATES:
-                groups.append(group)
-        else:
-            if not (
-                group in OPTIONAL_GROUPS
-                and group.value in settings.SKIPPED_MIGRATION_GROUPS
-            ):
-                groups.append(group)
+        if (
+            group in OPTIONAL_GROUPS
+            and group.value in settings.SKIPPED_MIGRATION_GROUPS
+            or get_group_readiness_state(group).value not in settings.SUPPORTED_STATES
+        ):
+            continue
+        groups.append(group)
     return groups
 
 

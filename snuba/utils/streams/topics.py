@@ -70,5 +70,6 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         },
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.QUERYLOG: {"max.message.bytes": "2000000"},
     }
     return config.get(topic, {})
