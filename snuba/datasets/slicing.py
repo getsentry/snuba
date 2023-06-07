@@ -43,16 +43,3 @@ def is_storage_set_sliced(storage_set: StorageSetKey) -> bool:
     from snuba.settings import SLICED_STORAGE_SETS
 
     return True if storage_set.value in SLICED_STORAGE_SETS.keys() else False
-
-
-def validate_passed_slice(storage_set: StorageSetKey, slice_id: Optional[int]) -> None:
-    """
-    Verifies that the given storage set can be sliced
-    and that the slice_id passed in is within the range
-    of the total number of slices for the given storage set
-    """
-    from snuba.settings import SLICED_STORAGE_SETS
-
-    if slice_id is not None:
-        assert storage_set.value in SLICED_STORAGE_SETS
-        assert slice_id < SLICED_STORAGE_SETS[storage_set.value]
