@@ -18,6 +18,7 @@ pub struct ConsumerConfig {
 #[derive(Deserialize)]
 pub struct TopicConfig {
     pub physical_topic_name: String,
+    pub logical_topic_name: String,
     pub broker_config: BrokerConfig,
 }
 

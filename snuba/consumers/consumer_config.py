@@ -36,6 +36,7 @@ class StorageConfig:
 @dataclass(frozen=True)
 class TopicConfig:
     broker_config: Mapping[str, Any]
+    logical_topic_name: str
     physical_topic_name: str
 
 
@@ -70,13 +71,22 @@ def _resolve_topic_config(
         if cli_param is not None:
             raise ValueError(f"{param} not supported for this storage")
         return None
-    elif cli_param is not None:
+
+    assert topic_spec is not None
+
+    if cli_param is not None:
         physical_topic_name = cli_param
     else:
         physical_topic_name = topic_spec.get_physical_topic_name(slice_id)
 
     broker = _get_default_topic_configuration(topic_spec.topic, slice_id)
-    return TopicConfig(broker_config=broker, physical_topic_name=physical_topic_name)
+
+    logical_topic_name = topic_spec.topic.value
+    return TopicConfig(
+        broker_config=broker,
+        logical_topic_name=logical_topic_name,
+        physical_topic_name=physical_topic_name,
+    )
 
 
 def _resolve_env_config() -> Optional[EnvConfig]:
