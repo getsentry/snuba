@@ -56,10 +56,11 @@ query_processors:
         max_rows_to_group_by: 1000000
         group_by_overflow_mode: any
 
-allocation_policy:
-  name: PassthroughPolicy
-  args:
-    required_tenant_types: ["some_tenant"]
+allocation_policies:
+  -
+    name: PassthroughPolicy
+    args:
+      required_tenant_types: ["some_tenant"]
 
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -96,11 +97,11 @@ allocation_policy:
                 )["group_by_overflow_mode"]
                 == "any"
             )
-            assert storage.get_allocation_policy()._required_tenant_types == {
+            assert storage.get_allocation_policies()[0]._required_tenant_types == {
                 "some_tenant"
             }
             assert (
-                storage.get_allocation_policy().runtime_config_prefix
+                storage.get_allocation_policies()[0].runtime_config_prefix
                 == "test-storage.PassthroughPolicy"
             )
 

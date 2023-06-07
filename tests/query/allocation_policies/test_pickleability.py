@@ -12,4 +12,4 @@ def test_policies_are_pickleable() -> None:
     # this test makes sure that any allocation policy defined on a storage is in fact pickleable
     for key in get_all_storage_keys():
         storage = get_storage(key)
-        pickle.dumps(storage.get_allocation_policy())
+        pickle.dumps(storage.get_allocation_policies())

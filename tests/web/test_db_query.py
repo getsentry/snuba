@@ -126,7 +126,7 @@ def test_apply_thread_quota(
 
 
 def _build_test_query(
-    select_expression: str, allocation_policy: AllocationPolicy | None = None
+    select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
     return (
@@ -135,7 +135,8 @@ def _build_test_query(
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policy=allocation_policy or storage.get_allocation_policy(),
+                allocation_policies=allocation_policies
+                or storage.get_allocation_policies(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -283,10 +284,10 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             return
 
     with mock.patch(
-        "snuba.web.db_query._get_allocation_policy",
-        return_value=RejectAllocationPolicy(
-            StorageKey("doesntmatter"), ["a", "b", "c"], {}
-        ),
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[
+            RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+        ],
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
@@ -341,7 +342,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        [ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})],
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -398,7 +399,7 @@ def test_allocation_policy_updates_quota() -> None:
 
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        [CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})],
     )
 
     def _run_query() -> None:
