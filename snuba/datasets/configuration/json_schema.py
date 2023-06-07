@@ -75,14 +75,9 @@ STREAM_LOADER_SCHEMA = {
         "dlq_policy": {
             "type": "object",
             "properties": {
-                "type": {
+                "topic": {
                     "type": "string",
-                    "description": "DLQ policy type",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Key/value mappings required to instantiate DLQ class (e.g. topic name).",
+                    "description": "DLQ topic name",
                 },
             },
             "additionalProperties": False,

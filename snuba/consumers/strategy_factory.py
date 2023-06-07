@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, Union
+from typing import Any, Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -115,8 +115,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
+        commit_strategy: ProcessingStrategy[Any]
         if self.__max_messages_to_process is not None:
-            ExitAfterNMessages(commit, self.__max_messages_to_process, 2.0)
+            commit_strategy = ExitAfterNMessages(
+                commit, self.__max_messages_to_process, 2.0
+            )
         else:
             commit_strategy = CommitOffsets(commit)
 

@@ -39,7 +39,6 @@ consumer_config = resolve_consumer_config(
 
 # Below, a ConsumerBuilder with only required args
 consumer_builder = ConsumerBuilder(
-    storage_key=test_storage_key,
     consumer_config=consumer_config,
     kafka_params=KafkaParameters(
         group_id=consumer_group_name,
@@ -89,7 +88,6 @@ optional_kafka_params = KafkaParameters(
 # and optional args, but only those with
 # no default values
 consumer_builder_with_opt = ConsumerBuilder(
-    storage_key=test_storage_key,
     consumer_config=optional_consumer_config,
     kafka_params=optional_kafka_params,
     processing_params=ProcessingParameters(
