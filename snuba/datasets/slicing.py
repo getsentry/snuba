@@ -3,8 +3,6 @@ The number of logical partitions used to distinguish between where records
 should be stored. These do not require individual physical partitions but allow
 for repartitioning with less code changes per physical change.
 """
-from typing import Optional
-
 from snuba.clusters.storage_sets import StorageSetKey
 
 SENTRY_LOGICAL_PARTITIONS = 256
