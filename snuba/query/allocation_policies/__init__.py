@@ -128,6 +128,21 @@ class AllocationPolicyViolation(SerializableException):
         return f"{self.message}, explanation: {self.explanation}"
 
 
+class AllocationPolicyViolations(SerializableException):
+    def __init__(
+        self,
+        message: str | None = None,
+        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
+        should_report: bool = True,
+        **extra_data: JsonSerializable,
+    ) -> None:
+        self.violations = violations
+        super().__init__(message, should_report, **extra_data)
+
+    def __str__(self) -> str:
+        return str({k: str(v) for k, v in self.violations.items()})
+
+
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item

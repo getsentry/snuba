@@ -37,6 +37,7 @@ from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyViolation,
+    AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -794,12 +795,14 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
         raise QueryException.from_args(
             AllocationPolicyViolation.__name__,
-            "Query cannot be run due to allocation policies",
+            "Query cannot be run due to allocation policy",
             extra={
                 "stats": stats,
                 "sql": formatted_query.get_sql(),
                 "experiments": {},
             },
+        ) from AllocationPolicyViolations(
+            "Query cannot be run due to allocation policies", violations
         )
 
     stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
