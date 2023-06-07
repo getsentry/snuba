@@ -732,7 +732,7 @@ def allocation_policies() -> Response:
     )
 
 
-CAPMAN_API_V2 = "capman_api_v2"
+MULTIPLE_POLICIES = "multiple_allocation_policies_enabled"
 
 
 @application.route("/storages_with_allocation_policies")
@@ -751,7 +751,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
 
     storage = get_storage(StorageKey(storage_key))
 
-    if state.get_config(CAPMAN_API_V2, False):
+    if state.get_config(MULTIPLE_POLICIES, False):
         policies = storage.get_allocation_policies()
         data = [
             {
@@ -797,7 +797,7 @@ def set_allocation_policy_config() -> Response:
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
 
-        if state.get_config(CAPMAN_API_V2, False):
+        if state.get_config(MULTIPLE_POLICIES, False):
             policy_name = data["policy"]
             assert isinstance(policy_name, str), "Invalid policy name"
             policies = get_storage(StorageKey(storage)).get_allocation_policies()

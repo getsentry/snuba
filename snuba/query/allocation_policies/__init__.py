@@ -96,6 +96,9 @@ class QuotaAllowance:
     # because I don't know what exactly should go in it yet
     explanation: dict[str, Any]
 
+    def __lt__(self, other: QuotaAllowance) -> bool:
+        return self.max_threads < other.max_threads
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
