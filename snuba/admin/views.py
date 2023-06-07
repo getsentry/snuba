@@ -16,7 +16,6 @@ from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.capacity_management import (
-    get_allocation_policies,
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
@@ -722,19 +721,6 @@ def snql_to_sql() -> Response:
         )
 
 
-@application.route("/allocation_policies")
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def allocation_policies() -> Response:
-    return Response(
-        json.dumps(get_allocation_policies()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-MULTIPLE_POLICIES = "multiple_allocation_policies_enabled"
-
-
 @application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def storages_with_allocation_policies() -> Response:
@@ -749,36 +735,16 @@ def storages_with_allocation_policies() -> Response:
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage_key: str) -> Response:
 
-    storage = get_storage(StorageKey(storage_key))
-
-    if state.get_config(MULTIPLE_POLICIES, False):
-        policies = storage.get_allocation_policies()
-        data = [
-            {
-                "policy_name": policy.config_key(),
-                "configs": policy.get_current_configs(),
-                "optional_config_definitions": policy.get_optional_config_definitions_json(),
-            }
-            for policy in policies
-        ]
-        return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
-
-    policy = storage.get_allocation_policy()
-    configs = policy.get_current_configs()
-    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
-
-
-@application.route(
-    "/allocation_policy_optional_config_definitions/<path:storage>",
-    methods=["GET"],
-)
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
-    config_definitions = policy.get_optional_config_definitions_json()
-    return Response(
-        json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
-    )
+    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    data = [
+        {
+            "policy_name": policy.config_key(),
+            "configs": policy.get_current_configs(),
+            "optional_config_definitions": policy.get_optional_config_definitions_json(),
+        }
+        for policy in policies
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -788,7 +754,7 @@ def set_allocation_policy_config() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        storage, key = (data["storage"], data["key"])
+        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
 
         params = data.get("params", {})
 
@@ -796,18 +762,14 @@ def set_allocation_policy_config() -> Response:
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
+        assert isinstance(policy_name, str), "Invalid policy name"
 
-        if state.get_config(MULTIPLE_POLICIES, False):
-            policy_name = data["policy"]
-            assert isinstance(policy_name, str), "Invalid policy name"
-            policies = get_storage(StorageKey(storage)).get_allocation_policies()
-            policy = next(
-                (p for p in policies if p.config_key() == policy_name),
-                None,
-            )
-            assert policy is not None, "Policy not found on storage"
-        else:
-            policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policy = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
         return Response(
