@@ -61,7 +61,10 @@ allocation_policies:
     name: PassthroughPolicy
     args:
       required_tenant_types: ["some_tenant"]
-
+  -
+    name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types: ["some_other_tenant"]
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -97,13 +100,16 @@ allocation_policies:
                 )["group_by_overflow_mode"]
                 == "any"
             )
-            assert storage.get_allocation_policies()[0]._required_tenant_types == {
-                "some_tenant"
+            assert len(policies := storage.get_allocation_policies()) == 2
+            assert set([p.config_key() for p in policies]) == {
+                "BytesScannedWindowAllocationPolicy",
+                "PassthroughPolicy",
             }
-            assert (
-                storage.get_allocation_policies()[0].runtime_config_prefix
-                == "test-storage.PassthroughPolicy"
+            passthru = next(
+                p for p in policies if p.config_key() == "PassthroughPolicy"
             )
+            assert passthru.runtime_config_prefix == "test-storage.PassthroughPolicy"
+            assert passthru._required_tenant_types == {"some_tenant"}
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [
