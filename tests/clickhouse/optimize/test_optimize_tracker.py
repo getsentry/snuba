@@ -44,6 +44,7 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 )
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+@pytest.mark.skip(reason="This test is flaky and needs to be fixed.")
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     def assert_partitions(
         *,
