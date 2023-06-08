@@ -143,14 +143,14 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             event_dict["data"].get("transaction") or ""
         )
 
-        processed["start_timestamp"], _ = self.__extract_timestamp(
+        processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
             event_dict["data"]["start_timestamp"],
         )
         if event_dict["data"]["timestamp"] - event_dict["data"]["start_timestamp"] < 0:
             # Seems we have some negative durations in the DB
             metrics.increment("negative_duration")
 
-        processed["end_timestamp"], _ = self.__extract_timestamp(
+        processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
             event_dict["data"]["timestamp"],
         )
         duration_secs = (
@@ -291,12 +291,18 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         start_timestamp = span_dict["start_timestamp"]
         end_timestamp = span_dict["timestamp"]
-        processed_span["start_timestamp"], _ = self.__extract_timestamp(start_timestamp)
+        (
+            processed_span["start_timestamp"],
+            processed_span["start_ms"],
+        ) = self.__extract_timestamp(start_timestamp)
         if end_timestamp - start_timestamp < 0:
             # Seems we have some negative durations in the DB
             metrics.increment("negative_duration")
 
-        processed_span["end_timestamp"], _ = self.__extract_timestamp(end_timestamp)
+        (
+            processed_span["end_timestamp"],
+            processed_span["end_ms"],
+        ) = self.__extract_timestamp(end_timestamp)
         duration_secs = (
             processed_span["end_timestamp"] - processed_span["start_timestamp"]
         ).total_seconds()
