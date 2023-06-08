@@ -794,8 +794,8 @@ def _apply_allocation_policies_quota(
     if violations:
         stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
         raise QueryException.from_args(
-            AllocationPolicyViolation.__name__,
-            "Query cannot be run due to allocation policy",
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
             extra={
                 "stats": stats,
                 "sql": formatted_query.get_sql(),
