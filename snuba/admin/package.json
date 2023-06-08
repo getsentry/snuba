@@ -7,7 +7,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@sentry/react": "^7.53.1",
+    "@sentry/react": "^7.54.0",
     "@types/react": "^18.0.20",
     "@types/react-dom": "^18.0.6",
     "jest-dom": "^4.0.0",
