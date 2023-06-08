@@ -75,14 +75,9 @@ STREAM_LOADER_SCHEMA = {
         "dlq_policy": {
             "type": "object",
             "properties": {
-                "type": {
+                "topic": {
                     "type": "string",
-                    "description": "DLQ policy type",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Key/value mappings required to instantiate DLQ class (e.g. topic name).",
+                    "description": "DLQ topic name",
                 },
             },
             "additionalProperties": False,
@@ -615,6 +610,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",

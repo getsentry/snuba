@@ -20,7 +20,11 @@ function getReadonlyRow(
     </code>,
     config.description,
     config.type,
-    <Button variant="outline-secondary" onClick={() => edit()}>
+    <Button
+      variant="outline-secondary"
+      onClick={() => edit()}
+      data-testid={config.name + "_edit"}
+    >
       edit
     </Button>,
   ];

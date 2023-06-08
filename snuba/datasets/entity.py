@@ -38,7 +38,7 @@ class Entity(Describable, ABC):
         join_relationships: Mapping[str, JoinRelationship],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
-        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
+        validate_data_model: ColumnValidationMode = ColumnValidationMode.ERROR,
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:

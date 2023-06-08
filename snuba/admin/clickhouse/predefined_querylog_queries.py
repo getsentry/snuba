@@ -289,3 +289,64 @@ class BytesScannedForReferrerByOrganization(QuerylogQuery):
     )
     ORDER BY c DESC
     """
+
+
+class MostThrottledOrgs(QuerylogQuery):
+    """Orgs with the highest ratios of throttled queries. This isn't perfect, it just shows how many queries an Allocation Policy has set to
+    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown."""
+
+    sql = """
+    SELECT organization, throttled_queries, total_queries, divide(throttled_queries, total_queries) as ratio
+    FROM
+    (
+        SELECT organization, count(*) as throttled_queries
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND JSONExtractRaw(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'explanation') != '{}'
+            AND JSONExtractInt(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'max_threads') != 10
+            AND timestamp < now()
+        GROUP BY organization
+    )
+    AS throttled_orgs
+    INNER JOIN
+    (
+        SELECT organization, count(*) as total_queries
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp < now()
+        GROUP BY organization
+    ) AS queries_by_org
+    ON throttled_orgs.organization = queries_by_org.organization
+    ORDER BY ratio desc
+    LIMIT 20
+    """
+
+
+class OrgQueryDurationQuantiles(QuerylogQuery):
+    """Returns count, p50, p75, p90, p99 of all queries per Organization over a certain period of time, sorted by descending p99"""
+
+    sql = """
+    SELECT
+        organization,
+        sum(c) as total_queries,
+        quantile(0.50)(duration_ms) as p50,
+        quantile(0.75)(duration_ms) as p75,
+        quantile(0.9)(duration_ms) as p90,
+        quantile(0.99)(duration_ms) as p99
+    FROM
+    (
+        SELECT organization, count(*) as c, arrayJoin(clickhouse_queries.duration_ms) as duration_ms
+        FROM querylog_local
+        WHERE
+            timestamp < now()
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp > (now() - {{duration}})
+        GROUP BY organization, duration_ms
+    )
+    GROUP BY organization
+    ORDER BY p99 DESC
+    LIMIT 20
+"""
