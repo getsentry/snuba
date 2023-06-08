@@ -129,6 +129,16 @@ class AllocationPolicyViolation(SerializableException):
 
 
 class AllocationPolicyViolations(SerializableException):
+    """
+    An exception class which is used to collect multiple AllocationPolicyViolation
+    exceptions and raise them at once, useful for storages with multiple policies
+    defined on them.
+
+    Do not manually raise this exception! Use AllocationPolicyViolation instead within
+    your Allocation Policies for when a violation occurs and this exception will be
+    raised containing your raised exceptions at the end.
+    """
+
     def __init__(
         self,
         message: str | None = None,

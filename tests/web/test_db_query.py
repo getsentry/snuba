@@ -17,6 +17,7 @@ from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
+    AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -328,6 +329,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             ]["reason"]
             == "policy rejects all queries"
         )
+        cause = excinfo.value.__cause__
+        assert isinstance(cause, AllocationPolicyViolations)
+        assert "RejectAllocationPolicy" in cause.violations
 
 
 @pytest.mark.clickhouse_db
@@ -499,6 +503,10 @@ def test_allocation_policy_updates_quota() -> None:
             "explanation": {"reason": "can only run 2 queries!"},
         },
     }
+    cause = e.value.__cause__
+    assert isinstance(cause, AllocationPolicyViolations)
+    assert "CountQueryPolicy" in cause.violations
+    assert "CountQueryPolicyDuplicate" in cause.violations
 
 
 @pytest.mark.redis_db
