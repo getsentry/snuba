@@ -60,6 +60,7 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
+  getStoragesWithAllocationPolicies: () => Promise<string[]>;
   getAllocationPolicies: () => Promise<AllocationPolicy[]>;
   getAllocationPolicyConfigs: (
     storage: string
@@ -294,6 +295,12 @@ function Client() {
       }).then((resp) => resp.json());
     },
 
+    getStoragesWithAllocationPolicies: () => {
+      const url = baseUrl + "storages_with_allocation_policies";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
     getAllocationPolicies: () => {
       const url = baseUrl + "allocation_policies";
       return fetch(url, {
