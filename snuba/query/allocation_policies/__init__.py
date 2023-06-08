@@ -24,6 +24,7 @@ CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
+MAX_THREADS = "max_threads"
 
 
 @dataclass(frozen=True)
@@ -333,6 +334,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 value_type=int,
                 default=default_config_overrides.get(IS_ENFORCED, 1),
             ),
+            AllocationPolicyConfig(
+                name=MAX_THREADS,
+                description="The max threads Clickhouse can use for the query.",
+                value_type=int,
+                default=default_config_overrides.get(MAX_THREADS, 10),
+            ),
         ]
         self._overridden_additional_config_definitions = (
             self.__get_overridden_additional_config_defaults(default_config_overrides)
@@ -365,7 +372,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @property
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
-        return cast(int, get_runtime_config("query_settings/max_threads", 8))
+        return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
     def config_key(cls) -> str:
