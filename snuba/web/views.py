@@ -58,10 +58,7 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage, StorageNotAvailable
-from snuba.query.allocation_policies import (
-    AllocationPolicyViolation,
-    AllocationPolicyViolations,
-)
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
@@ -481,10 +478,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(
-            cause,
-            (RateLimitExceeded, AllocationPolicyViolation, AllocationPolicyViolations),
-        ):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
             status = 429
             details = {
                 "type": "rate-limited",
