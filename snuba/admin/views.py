@@ -97,6 +97,26 @@ def health() -> Response:
     return Response("OK", 200)
 
 
+@application.route("/settings")
+def settings_endpoint() -> Response:
+    """
+    IMPORTANT: This endpoint is only secure because the admin tool is only exposed on
+    our internal network. If this ever becomes a public app, this is a security risk.
+    """
+    # This must mirror the Settings type in the frontend code
+    return make_response(
+        jsonify(
+            {
+                "dsn": settings.ADMIN_FRONTEND_DSN,
+                "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
+                "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+            }
+        ),
+        200,
+    )
+
+
 @application.route("/tools")
 def tools() -> Response:
     return make_response(
