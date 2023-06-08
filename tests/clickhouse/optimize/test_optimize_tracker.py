@@ -70,7 +70,7 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
                 _do_assertions()
                 return
             except AssertionError:
-                time.sleep(0.5)
+                time.sleep(1)
         _do_assertions()
 
     with pytest.raises(NoOptimizedStateException):
