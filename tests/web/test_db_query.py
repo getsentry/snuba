@@ -177,7 +177,9 @@ def test_db_query_success() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert stats["quota_allowance"] == dict(can_run=True, max_threads=8, explanation={})
+    assert stats["quota_allowance"] == dict(
+        can_run=True, max_threads=10, explanation={}
+    )
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
@@ -218,7 +220,7 @@ def test_db_query_bypass_cache() -> None:
                 robust=False,
             )
             assert stats["quota_allowance"] == dict(
-                can_run=True, max_threads=8, explanation={}
+                can_run=True, max_threads=10, explanation={}
             )
             assert len(query_metadata_list) == 1
             assert result.extra["stats"] == stats
