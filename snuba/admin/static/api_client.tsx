@@ -339,7 +339,7 @@ function Client() {
           return;
         } else {
           return res.json().then((err) => {
-            let errMsg = err?.error || "Could not set config";
+            let errMsg = err?.error || "Could not delete config";
             throw new Error(errMsg);
           });
         }
