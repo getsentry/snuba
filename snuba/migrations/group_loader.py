@@ -83,6 +83,8 @@ class EventsLoader(DirectoryLoader):
             "0020_add_main_thread_column",
             "0021_add_replay_id_errors_ro",
             "0022_add_main_thread_column_errors_ro",
+            "0023_add_trace_sampled_num_processing_errors_columns",
+            "0024_add_trace_sampled_num_processing_errors_columns_ro",
         ]
 
 
