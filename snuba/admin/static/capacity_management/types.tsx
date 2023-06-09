@@ -5,6 +5,12 @@ type AllocationPolicy = {
   allocation_policy: string;
 };
 
+type AllocationPolicy2 = {
+  policy_name: string;
+  configs: AllocationPolicyConfig[];
+  optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
+};
+
 type AllocationPolicyConfig = {
   name: string;
   value: string;
@@ -37,6 +43,7 @@ type RowData = [
 
 export {
   AllocationPolicy,
+  AllocationPolicy2,
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
   AllocationPolicyConfigParams,

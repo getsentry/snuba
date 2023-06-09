@@ -30,6 +30,7 @@ import {
   AllocationPolicy,
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
+  AllocationPolicy2,
 } from "./capacity_management/types";
 
 interface Client {
@@ -61,21 +62,17 @@ interface Client {
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
-  getAllocationPolicies: () => Promise<AllocationPolicy[]>;
-  getAllocationPolicyConfigs: (
-    storage: string
-  ) => Promise<AllocationPolicyConfig[]>;
-  getAllocationPolicyOptionalConfigDefinitions: (
-    storage: string
-  ) => Promise<AllocationPolicyOptionalConfigDefinition[]>;
+  getAllocationPolicyConfigs: (storage: string) => Promise<AllocationPolicy2[]>;
   setAllocationPolicyConfig: (
     storage: string,
+    policy: string,
     key: string,
     value: string,
     params: object
   ) => Promise<void>;
   deleteAllocationPolicyConfig: (
     storage: string,
+    policy: string,
     key: string,
     params: object
   ) => Promise<void>;
@@ -301,12 +298,6 @@ function Client() {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicies: () => {
-      const url = baseUrl + "allocation_policies";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
     getAllocationPolicyConfigs: (storage: string) => {
       const url =
         baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
@@ -325,6 +316,7 @@ function Client() {
     },
     setAllocationPolicyConfig: (
       storage: string,
+      policy: string,
       key: string,
       value: string,
       params: object
@@ -333,7 +325,7 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ storage, key, value, params }),
+        body: JSON.stringify({ storage, policy, key, value, params }),
       }).then((res) => {
         if (res.ok) {
           return;
@@ -347,6 +339,7 @@ function Client() {
     },
     deleteAllocationPolicyConfig: (
       storage: string,
+      policy: string,
       key: string,
       params: object
     ) => {
@@ -354,7 +347,7 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ storage, key, params }),
+        body: JSON.stringify({ storage, policy, key, params }),
       }).then((res) => {
         if (res.ok) {
           return;

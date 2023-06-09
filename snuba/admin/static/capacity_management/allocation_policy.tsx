@@ -2,19 +2,24 @@ import React, { useEffect, useState } from "react";
 
 import { Table } from "../table";
 import Client from "../api_client";
-import {
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-} from "./types";
+import { AllocationPolicy2, AllocationPolicyConfig } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 import { getReadonlyRow } from "./row_data";
 import EditConfigModal from "./edit_config_modal";
 import AddConfigModal from "./add_config_modal";
 
-function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
-  const { api, storage } = props;
+function AllocationPolicyConfigs(props: {
+  api: Client;
+  storage: string;
+  policy: AllocationPolicy2;
+}) {
+  const { api, storage, policy } = props;
 
   const [configs, setConfigs] = useState<AllocationPolicyConfig[]>([]);
+
+  useEffect(() => {
+    setConfigs(policy.configs);
+  }, [policy]);
 
   const [currentlyEditing, setCurrentlyEditing] = useState(false);
   const [currentConfig, setCurrentConfig] = useState<AllocationPolicyConfig>({
@@ -26,32 +31,6 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
   });
   const [addingNew, setAddingNew] = useState(false);
 
-  const [optionalConfigDefinitions, setDefinitions] = useState<
-    AllocationPolicyOptionalConfigDefinition[]
-  >([]);
-
-  useEffect(() => {
-    api
-      .getAllocationPolicyConfigs(storage)
-      .then((res) => {
-        setConfigs(res);
-      })
-      .catch((err) => {
-        window.alert(err);
-      });
-  }, [storage]);
-
-  useEffect(() => {
-    api
-      .getAllocationPolicyOptionalConfigDefinitions(storage)
-      .then((res) => {
-        setDefinitions(res);
-      })
-      .catch((err) => {
-        window.alert(err);
-      });
-  }, [storage]);
-
   function enterEditMode(config: AllocationPolicyConfig) {
     setCurrentlyEditing(true);
     setCurrentConfig(config);
@@ -59,16 +38,21 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
 
   function deleteConfig(toDelete: AllocationPolicyConfig) {
     api
-      .deleteAllocationPolicyConfig(storage, toDelete.name, toDelete.params)
-      .catch((err) => {
-        window.alert(err);
-      })
+      .deleteAllocationPolicyConfig(
+        storage,
+        policy.policy_name,
+        toDelete.name,
+        toDelete.params
+      )
       .then(() => {
         setConfigs((prev) =>
           Object.keys(currentConfig.params).length
             ? prev.filter((config) => config != toDelete)
             : prev
         );
+      })
+      .catch((err) => {
+        window.alert(err);
       });
   }
 
@@ -76,6 +60,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
     api
       .setAllocationPolicyConfig(
         storage,
+        policy.policy_name,
         config.name,
         config.value,
         config.params
@@ -108,10 +93,11 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
       <AddConfigModal
         currentlyAdding={addingNew}
         setCurrentlyAdding={setAddingNew}
-        optionalConfigDefinitions={optionalConfigDefinitions}
+        optionalConfigDefinitions={policy.optional_config_definitions}
         saveConfig={addConfig}
       />
       <div style={containerStyle}>
+        <p>{policy.policy_name}</p>
         <p style={paragraphStyle}>These are the current configurations.</p>
         <Table
           headerData={[
@@ -127,7 +113,7 @@ function AllocationPolicyConfigs(props: { api: Client; storage: string }) {
           )}
           columnWidths={[3, 3, 2, 5, 1, 1]}
         />
-        {!addingNew && optionalConfigDefinitions.length != 0 && (
+        {!addingNew && policy.optional_config_definitions.length != 0 && (
           <a onClick={() => setAddingNew(true)} style={linkStyle}>
             add new
           </a>
