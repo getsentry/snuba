@@ -170,6 +170,7 @@ def build_executor_consumer(
             result_topic_spec.topic_name,
         ),
         commit_policy=ONCE_PER_SECOND,
+        join_timeout=5.0,
     )
 
 
