@@ -4,7 +4,7 @@ name: functions
 storage:
   key: functions
   set_key: functions
-readiness_state: partial
+readiness_state: complete
 schema:
   columns:
     [
