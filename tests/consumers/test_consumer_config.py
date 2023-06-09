@@ -6,7 +6,7 @@ from snuba.consumers.consumer_config import resolve_consumer_config
 def test_consumer_config() -> None:
     resolved = resolve_consumer_config(
         storage_names=["errors"],
-        raw_topic=None,
+        raw_topic="new-events",
         commit_log_topic=None,
         replacements_topic=None,
         slice_id=None,
@@ -19,7 +19,8 @@ def test_consumer_config() -> None:
 
     assert len(resolved.storages) == 1
     assert resolved.storages[0].clickhouse_table_name in ("errors_local", "errors_dist")
-    assert resolved.raw_topic.physical_topic_name == "events"
+    assert resolved.raw_topic.physical_topic_name == "new-events"
+    assert resolved.raw_topic.logical_topic_name == "events"
     assert resolved.commit_log_topic is not None
     assert resolved.commit_log_topic.physical_topic_name == "snuba-commit-log"
     assert resolved.replacements_topic is not None

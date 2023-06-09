@@ -53,6 +53,4 @@ stream_loader:
     name: CounterAggregateProcessor
   default_topic: snuba-metrics
   dlq_policy:
-    type: produce
-    args:
-      - snuba-dead-letter-metrics
+    topic: snuba-dead-letter-metrics

@@ -52,12 +52,7 @@ def generate_dlq_config(dlq_policy_config: dict[str, Any]) -> Optional[DlqConfig
     """
     Returns DLQ config if DLQ policy is configured, otherwise returns None
     """
-    if dlq_policy_config["type"] == "produce":
-        dlq_topic = dlq_policy_config["args"][0]
-        return DlqConfig(topic=Topic(dlq_topic))
-
-    # TODO: Add rest of DLQ policy types
-    return None
+    return DlqConfig(topic=Topic(dlq_policy_config["topic"]))
 
 
 def get_query_processors(

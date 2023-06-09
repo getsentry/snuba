@@ -313,7 +313,7 @@ class ProcessedMessageBatchWriter:
 
         assert isinstance(message.value, BrokerValue)
         self.__offsets_to_produce[message.value.partition] = (
-            message.value.offset,
+            message.value.next_offset,
             message.value.timestamp,
         )
 
@@ -587,12 +587,18 @@ def process_message(
             ),
         )
     except Exception as err:
+        local_metrics.increment(
+            "invalid_message",
+            tags={
+                "topic": snuba_logical_topic.name,
+                "processor": type(processor).__name__,
+            },
+        )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value
-            if state.get_config(f"enable_new_dlq_{snuba_logical_topic.name}", 1):
-                raise InvalidMessage(value.partition, value.offset) from err
+            raise InvalidMessage(value.partition, value.offset) from err
 
             return None
 
