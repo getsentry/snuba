@@ -295,7 +295,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "name": "is_enforced",
                 "type": "int",
                 "default": 1,
-                "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries.",
+                "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered.",
                 "value": 1,
                 "params": {},
             },
@@ -320,7 +320,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "name": "is_enforced",
         "type": "int",
         "default": 1,
-        "description": "Whether or not this policy is enforced.",
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered.",
         "value": 0,
         "params": {},
     } in policy_configs

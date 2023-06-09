@@ -329,7 +329,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
-                description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries.",
+                description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ENFORCED, 1),
             ),
