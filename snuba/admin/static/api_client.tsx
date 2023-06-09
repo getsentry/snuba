@@ -26,12 +26,7 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
-import {
-  AllocationPolicy,
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-  AllocationPolicy2,
-} from "./capacity_management/types";
+import { AllocationPolicy } from "./capacity_management/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -62,7 +57,7 @@ interface Client {
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
-  getAllocationPolicyConfigs: (storage: string) => Promise<AllocationPolicy2[]>;
+  getAllocationPolicyConfigs: (storage: string) => Promise<AllocationPolicy[]>;
   setAllocationPolicyConfig: (
     storage: string,
     policy: string,

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { Table } from "../table";
 import Client from "../api_client";
-import { AllocationPolicy2, AllocationPolicyConfig } from "./types";
+import { AllocationPolicy, AllocationPolicyConfig } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 import { getReadonlyRow } from "./row_data";
 import EditConfigModal from "./edit_config_modal";
@@ -11,7 +11,7 @@ import AddConfigModal from "./add_config_modal";
 function AllocationPolicyConfigs(props: {
   api: Client;
   storage: string;
-  policy: AllocationPolicy2;
+  policy: AllocationPolicy;
 }) {
   const { api, storage, policy } = props;
 

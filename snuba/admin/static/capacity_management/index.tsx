@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { selectStyle } from "./styles";
 import AllocationPolicyConfigs from "./allocation_policy";
-import { AllocationPolicy2 } from "./types";
+import { AllocationPolicy } from "./types";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;
@@ -10,7 +10,7 @@ function CapacityManagement(props: { api: Client }) {
   const [storages, setStorages] = useState<string[]>([]);
   const [selectedStorage, setStorage] = useState<string>();
   const [allocationPolicies, setAllocationPolicies] = useState<
-    AllocationPolicy2[]
+    AllocationPolicy[]
   >([]);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ function CapacityManagement(props: { api: Client }) {
       </p>
 
       {selectedStorage && allocationPolicies ? (
-        allocationPolicies.map((policy: AllocationPolicy2) => (
+        allocationPolicies.map((policy: AllocationPolicy) => (
           <>
             <AllocationPolicyConfigs
               api={api}
