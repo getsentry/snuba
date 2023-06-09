@@ -57,7 +57,7 @@ interface Client {
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
-  getAllocationPolicyConfigs: (storage: string) => Promise<AllocationPolicy[]>;
+  getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
   setAllocationPolicyConfig: (
     storage: string,
     policy: string,
@@ -293,18 +293,9 @@ function Client() {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicyConfigs: (storage: string) => {
+    getAllocationPolicies: (storage: string) => {
       const url =
         baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getAllocationPolicyOptionalConfigDefinitions: (storage: string) => {
-      const url =
-        baseUrl +
-        "allocation_policy_optional_config_definitions/" +
-        encodeURIComponent(storage);
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());

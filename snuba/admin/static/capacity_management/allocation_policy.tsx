@@ -119,6 +119,7 @@ function AllocationPolicyConfigs(props: {
           </a>
         )}
       </div>
+      <br />
     </>
   );
 }

@@ -26,9 +26,8 @@ function CapacityManagement(props: { api: Client }) {
 
   function loadAllocationPolicies(storage: string) {
     api
-      .getAllocationPolicyConfigs(storage)
+      .getAllocationPolicies(storage)
       .then((res) => {
-        console.log(res);
         setAllocationPolicies(res);
       })
       .catch((err) => {
@@ -58,15 +57,12 @@ function CapacityManagement(props: { api: Client }) {
 
       {selectedStorage && allocationPolicies ? (
         allocationPolicies.map((policy: AllocationPolicy) => (
-          <>
-            <AllocationPolicyConfigs
-              api={api}
-              storage={selectedStorage}
-              policy={policy}
-              key={selectedStorage + policy.policy_name}
-            />
-            <br />
-          </>
+          <AllocationPolicyConfigs
+            api={api}
+            storage={selectedStorage}
+            policy={policy}
+            key={selectedStorage + policy.policy_name}
+          />
         ))
       ) : (
         <p>Storage not selected.</p>
