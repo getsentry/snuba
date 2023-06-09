@@ -39,25 +39,16 @@
           "user:oliver.newland@sentry.io",
           "user:rahul.saini@sentry.io",
           "user:riya.chakraborty@sentry.io",
-          "user:volo.kluev@sentry.io"
+          "user:volo.kluev@sentry.io",
+          "user:david.tsukernik@sentry.io"
         ],
         "role": "roles/AllTools"
       },
       {
         "members": [
-            "user:colton.allen@sentry.io",
-            "user:josh.ferge@sentry.io",
-            "user:kevan.fisher@sentry.io"
+            "group:access-snuba-admin@sentry.io"
         ],
-        "role": "roles/SnQLToSQL"
-      },
-      {
-        "members": [
-            "user:colton.allen@sentry.io",
-            "user:josh.ferge@sentry.io",
-            "user:kevan.fisher@sentry.io"
-        ],
-        "role": "roles/Tracing"
+        "role": "roles/ProductTools"
       }
     ]
   }
