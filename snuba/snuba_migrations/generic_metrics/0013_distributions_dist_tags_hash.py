@@ -10,7 +10,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 
 storage_set_name = StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS
-dist_table_name = "generic_metric_distributions_aggregated_local"
+dist_table_name = "generic_metric_distributions_aggregated_dist"
 
 
 class Migration(migration.ClickhouseNodeMigration):
