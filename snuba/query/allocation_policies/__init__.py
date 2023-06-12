@@ -324,13 +324,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
-                description="Whether or not this policy is active.",
+                description="Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ACTIVE, 1),
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
-                description="Whether or not this policy is enforced.",
+                description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ENFORCED, 1),
             ),
