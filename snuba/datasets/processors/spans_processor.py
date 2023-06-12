@@ -47,7 +47,7 @@ def is_project_in_allowlist(project_id: int) -> bool:
             rolled_out_projects = [int(p.strip()) for p in project_allowlist.split(",")]
             if project_id in rolled_out_projects:
                 return True
-    return False
+    return True
 
 
 def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
