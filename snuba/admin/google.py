@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 
 import structlog
 from googleapiclient.discovery import Resource, build
+from sentry_sdk import capture_exception
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -21,6 +22,7 @@ class CloudIdentityAPI:
             self.initialized = True
         except Exception as e:
             logger.exception(e)
+            capture_exception(e)
 
     def _get_group_id(self, group_email: str) -> Optional[str]:
         if not self.initialized:
