@@ -72,7 +72,7 @@ class ConsumerBuilder:
         max_batch_time_ms: int,
         metrics: MetricsBackend,
         slice_id: Optional[int],
-        join_timeout: int,
+        join_timeout: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,

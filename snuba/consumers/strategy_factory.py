@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Callable, Mapping, Optional, Protocol, Union
+from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -115,13 +115,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
-        commit_strategy: ProcessingStrategy[Any]
-        if self.__max_messages_to_process is not None:
-            commit_strategy = ExitAfterNMessages(
-                commit, self.__max_messages_to_process, 2.0
-            )
-        else:
-            commit_strategy = CommitOffsets(commit)
+        commit_strategy = CommitOffsets(commit)
 
         collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
             self.__max_batch_size,
@@ -160,6 +154,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         if self.__prefilter is not None:
             strategy = FilterStep(
                 self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND
+            )
+
+        if self.__max_messages_to_process is not None:
+            strategy = ExitAfterNMessages(
+                strategy, self.__max_messages_to_process, 10.0
             )
 
         return strategy

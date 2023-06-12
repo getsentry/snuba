@@ -9,7 +9,7 @@ from typing import Optional, TypeVar
 
 import rapidjson
 from arroyo.processing.strategies.abstract import ProcessingStrategy
-from arroyo.types import Commit, Message
+from arroyo.types import Message
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
@@ -93,7 +93,7 @@ TPayload = TypeVar("TPayload")
 class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     """
     Commits offsets until N messages is reached, then forces the
-    consumer to terminate. This is used by the DLQ consumer
+    consumer to close. This is used by the DLQ consumer
     which is expected to process a fixed number of messages requested
     by the user.
 
@@ -102,13 +102,13 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
 
     def __init__(
         self,
-        commit: Commit,
+        next_step: ProcessingStrategy[TPayload],
         num_messages_to_process: int,
         max_message_timeout: float,
     ) -> None:
         self.__num_messages_to_process = num_messages_to_process
         self.__processed_messages = 0
-        self.__commit = commit
+        self.__next_step = next_step
         self.__last_message_time = time.time()
         self.__max_message_timeout = max_message_timeout
         self.__exiting = False
@@ -118,11 +118,11 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
             return
 
         self.__exiting = True
-        self.__commit({}, force=True)
         logger.info("Processed %d messages", self.__processed_messages)
         signal.raise_signal(signal.SIGINT)
 
     def poll(self) -> None:
+        self.__next_step.poll()
         if self.__last_message_time + self.__max_message_timeout < time.time():
             self.__exit()
 
@@ -132,14 +132,22 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     def submit(self, message: Message[TPayload]) -> None:
         if self.__processed_messages < self.__num_messages_to_process:
             self.__last_message_time = time.time()
-            self.__commit(message.committable)
+            self.__next_step.submit(message)
             self.__processed_messages += 1
 
     def close(self) -> None:
-        pass
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.close()
 
     def terminate(self) -> None:
-        pass
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
-        self.__commit({}, force=True)
+        self.__next_step.join(timeout)
