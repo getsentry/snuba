@@ -48,6 +48,13 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
+ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
 ######################
 # End Admin Settings #
 ######################
@@ -251,12 +258,7 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "spans",
-}
-
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
-    SKIPPED_MIGRATION_GROUPS.remove("spans")
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}

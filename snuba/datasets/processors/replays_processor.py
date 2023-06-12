@@ -86,11 +86,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
         # we have to set title to empty string as it is non-nullable,
         # and on clickhouse 20 this throws an error.
         processed["title"] = tags.transaction or ""
-
-        # Only ingest tags for the first segment.
-        if processed["segment_id"] == 0:
-            processed["tags.key"] = tags.keys
-            processed["tags.value"] = tags.values
+        processed["tags.key"] = tags.keys
+        processed["tags.value"] = tags.values
 
     def _add_user_column(
         self,
