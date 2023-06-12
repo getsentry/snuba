@@ -14,6 +14,7 @@ from typing import (
     MutableMapping,
     MutableSequence,
     Optional,
+    Tuple,
     Union,
     cast,
 )
@@ -79,6 +80,8 @@ from snuba.web import QueryException, QueryResult, constants
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
+
+ENABLE_PARALLEL_READING: str = "parallel_replica_reading_enabled"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -190,6 +193,8 @@ def execute_query(
     if consistent:
         clickhouse_query_settings["load_balancing"] = "in_order"
         clickhouse_query_settings["max_threads"] = 1
+
+    stats["parallel_read"] = "max_parallel_replicas" in clickhouse_query_settings
 
     result = reader.execute(
         formatted_query,
@@ -504,7 +509,7 @@ def _get_cache_wait_timeout(
 
 
 def _get_query_settings_from_config(
-    override_prefix: Optional[str],
+    override_prefix: Optional[str], settings_key: str = "query_settings"
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config.
@@ -520,15 +525,32 @@ def _get_query_settings_from_config(
     clickhouse_query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
-        if k.startswith("query_settings/")
+        if k.startswith(f"{settings_key}/")
     }
 
     if override_prefix:
         for k, v in all_confs.items():
-            if k.startswith(f"{override_prefix}/query_settings/"):
+            if k.startswith(f"{override_prefix}/{settings_key}/"):
                 clickhouse_query_settings[k.split("/", 2)[2]] = v
 
     return clickhouse_query_settings
+
+
+def _get_parallel_read_settings_from_config(
+    override_prefix: Optional[str],
+) -> Tuple[bool, MutableMapping[str, Any]]:
+    parallel_read_enabled = state.get_config(ENABLE_PARALLEL_READING)
+    if not parallel_read_enabled:
+        return (False, {})
+
+    parallel_read_settings: MutableMapping[str, Any] = _get_query_settings_from_config(
+        override_prefix, settings_key="parallel"
+    )
+    parallel_read_settings["datasets"] = [
+        ds.strip() for ds in parallel_read_settings.get("datasets", "").split(",")
+    ]
+
+    return True, parallel_read_settings
 
 
 def _raw_query(
@@ -553,6 +575,16 @@ def _raw_query(
     clickhouse_query_settings = _get_query_settings_from_config(
         reader.get_query_settings_prefix()
     )
+    (
+        parallel_read_enabled,
+        parallel_read_settings,
+    ) = _get_parallel_read_settings_from_config(reader.get_query_settings_prefix())
+    if parallel_read_enabled and dataset_name in parallel_read_settings.get(
+        "datasets", []
+    ):
+        clickhouse_query_settings["max_parallel_replicas"] = parallel_read_settings.get(
+            "max_parallel_replicas", 1
+        )
 
     timer.mark("get_configs")
 

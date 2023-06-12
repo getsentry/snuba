@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 from unittest import mock
 
 import pytest
@@ -30,7 +30,9 @@ from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.db_query import (
+    ENABLE_PARALLEL_READING,
     _apply_thread_quota_to_clickhouse_query_settings,
+    _get_parallel_read_settings_from_config,
     _get_query_settings_from_config,
     db_query,
 )
@@ -48,6 +50,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         None,
+        "query_settings",
         id="no override when query settings prefix empty",
     ),
     pytest.param(
@@ -62,6 +65,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         "other-query-prefix",
+        "query_settings",
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -76,21 +80,84 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 100000,
         },
         "some-query-prefix",
+        "query_settings",
         id="override for same query prefix",
+    ),
+    pytest.param(
+        {
+            "parallel/max_parallel_replicas": 4,
+            "parallel/datasets": "errors,transactions",
+        },
+        {
+            "max_parallel_replicas": 4,
+            "datasets": "errors,transactions",
+        },
+        None,
+        "parallel",
+        id="read parallel replica read settings",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.parametrize(
+    "query_config,expected,query_prefix,query_settings_key", test_data
+)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
+    query_settings_key: str,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix) == expected
+    assert (
+        _get_query_settings_from_config(query_prefix, settings_key=query_settings_key)
+        == expected
+    )
+
+
+parallel_read_test_data = [
+    pytest.param(
+        1,
+        {
+            "parallel/max_parallel_replicas": 4,
+            "parallel/datasets": "errors,transactions",
+        },
+        (
+            True,
+            {
+                "max_parallel_replicas": 4,
+                "datasets": ["errors", "transactions"],
+            },
+        ),
+        id="correct parallel read settings",
+    ),
+    pytest.param(
+        0,
+        {
+            "parallel/max_parallel_replicas": 4,
+        },
+        (
+            False,
+            {},
+        ),
+        id="main feature toggle off",
+    ),
+]
+
+
+@pytest.mark.parametrize("toggle,query_config,expected", parallel_read_test_data)
+@pytest.mark.redis_db
+def test_parallel_read_settings_from_config(
+    toggle: int,
+    query_config: Mapping[str, Any],
+    expected: Tuple[bool, MutableMapping[str, Any]],
+) -> None:
+    state.set_config(ENABLE_PARALLEL_READING, toggle)
+    for k, v in query_config.items():
+        state.set_config(k, v)
+    assert _get_parallel_read_settings_from_config(None) == expected
 
 
 test_thread_quota_data = [
@@ -468,3 +535,58 @@ def test_clickhouse_settings_applied_to_query() -> None:
         "group_by_overflow_mode" in clickhouse_settings_used
         and clickhouse_settings_used["group_by_overflow_mode"] == "any"
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_parallel_success() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    state.set_config(ENABLE_PARALLEL_READING, 1)
+    state.set_config("parallel/max_parallel_replicas", 4)
+    state.set_config("parallel/datasets", "errors")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name="errors",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert stats["parallel_read"]
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_parallel_ignored_for_incompatible_dataset() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    state.set_config(ENABLE_PARALLEL_READING, True)
+    state.set_config("parallel/max_parallel_replicas", 4)
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert not stats["parallel_read"]
