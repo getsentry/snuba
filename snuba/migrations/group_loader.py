@@ -293,6 +293,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0010_counters_aggregate_table",
             "0011_counters_raw_table",
             "0012_counters_mv",
+            "0013_distributions_dist_tags_hash",
         ]
 
 
