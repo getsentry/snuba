@@ -20,7 +20,7 @@ services:
       # Uncomment this to run sentry's snuba testsuite
       #SNUBA_SETTINGS: test
   clickhouse:
-    image: clickhouse/clickhouse-server:21.8
+    image: yandex/clickhouse-server:20.3.9.70
     ports:
       - "9000:9000"
       - "9009:9009"
@@ -28,13 +28,9 @@ services:
     volumes:
       - "clickhouse:/var/lib/clickhouse"
     ulimits:
-      nofile:
-        soft: 662144
-        hard: 662144
+      nofile: 262144
   redis:
     image: redis:5.0-alpine
-    ports:
-      - "6379:6379"
 
 volumes:
   clickhouse:

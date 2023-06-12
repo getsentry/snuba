@@ -31,18 +31,33 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+##################
+# Admin Settings #
+##################
+
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
-ADMIN_AUTH_PROVIDER = "NOOP"
-ADMIN_AUTH_JWT_AUDIENCE = ""
+ADMIN_AUTH_PROVIDER = os.environ.get("ADMIN_AUTH_PROVIDER", "NOOP")
+ADMIN_AUTH_JWT_AUDIENCE = os.environ.get("ADMIN_AUTH_JWT_AUDIENCE", "")
 
 # file path to the IAM policy file which contains the roles
 ADMIN_IAM_POLICY_FILE = os.environ.get(
     "ADMIN_IAM_POLICY_FILE",
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
+
+ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
+######################
+# End Admin Settings #
+######################
 
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
@@ -234,7 +249,8 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
+# (logical topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -248,8 +264,6 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
-READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
-READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
@@ -274,7 +288,8 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+# (entity name, buffer size)
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
@@ -290,10 +305,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 # Enable issue occurrence ingestion
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
-)
-
-ENABLE_PARALLEL_REPLICA_READING = os.environ.get(
-    "ENABLE_PARALLEL_REPLICA_READING", False
 )
 
 # Enable spans ingestion
@@ -375,6 +386,11 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # Mapping of (logical topic names, slice id) pairs to broker config
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
+
+# Toggle for max_parallel_replicas settings
+ENABLE_PARALLEL_REPLICA_READING = os.environ.get(
+    "ENABLE_PARALLEL_REPLICA_READING", False
+)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
