@@ -14,7 +14,6 @@ from typing import (
     MutableMapping,
     MutableSequence,
     Optional,
-    Tuple,
     Union,
     cast,
 )
@@ -25,7 +24,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -80,8 +79,6 @@ from snuba.web import QueryException, QueryResult, constants
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
-
-ENABLE_PARALLEL_READING: str = "parallel_replica_reading_enabled"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -194,7 +191,9 @@ def execute_query(
         clickhouse_query_settings["load_balancing"] = "in_order"
         clickhouse_query_settings["max_threads"] = 1
 
-    stats["parallel_read"] = "max_parallel_replicas" in clickhouse_query_settings
+    stats["max_parallel_replicas"] = clickhouse_query_settings.get(
+        "max_parallel_replicas", 1
+    )
 
     result = reader.execute(
         formatted_query,
@@ -538,10 +537,9 @@ def _get_query_settings_from_config(
 
 def _get_parallel_read_settings_from_config(
     override_prefix: Optional[str],
-) -> Tuple[bool, MutableMapping[str, Any]]:
-    parallel_read_enabled = state.get_config(ENABLE_PARALLEL_READING)
-    if not parallel_read_enabled:
-        return (False, {})
+) -> MutableMapping[str, Any]:
+    if not settings.ENABLE_PARALLEL_REPLICA_READING:
+        return {}
 
     parallel_read_settings: MutableMapping[str, Any] = _get_query_settings_from_config(
         override_prefix, settings_key="parallel"
@@ -550,7 +548,7 @@ def _get_parallel_read_settings_from_config(
         ds.strip() for ds in parallel_read_settings.get("datasets", "").split(",")
     ]
 
-    return True, parallel_read_settings
+    return parallel_read_settings
 
 
 def _raw_query(
@@ -575,13 +573,10 @@ def _raw_query(
     clickhouse_query_settings = _get_query_settings_from_config(
         reader.get_query_settings_prefix()
     )
-    (
-        parallel_read_enabled,
-        parallel_read_settings,
-    ) = _get_parallel_read_settings_from_config(reader.get_query_settings_prefix())
-    if parallel_read_enabled and dataset_name in parallel_read_settings.get(
-        "datasets", []
-    ):
+    parallel_read_settings = _get_parallel_read_settings_from_config(
+        reader.get_query_settings_prefix()
+    )
+    if dataset_name in parallel_read_settings.get("datasets", []):
         clickhouse_query_settings["max_parallel_replicas"] = parallel_read_settings.get(
             "max_parallel_replicas", 1
         )

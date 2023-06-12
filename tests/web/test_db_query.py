@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 from unittest import mock
 
 import pytest
 
-from snuba import state
+from snuba import settings, state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
@@ -30,7 +30,6 @@ from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.db_query import (
-    ENABLE_PARALLEL_READING,
     _apply_thread_quota_to_clickhouse_query_settings,
     _get_parallel_read_settings_from_config,
     _get_query_settings_from_config,
@@ -119,29 +118,23 @@ def test_query_settings_from_config(
 
 parallel_read_test_data = [
     pytest.param(
-        1,
+        True,
         {
             "parallel/max_parallel_replicas": 4,
             "parallel/datasets": "errors,transactions",
         },
-        (
-            True,
-            {
-                "max_parallel_replicas": 4,
-                "datasets": ["errors", "transactions"],
-            },
-        ),
+        {
+            "max_parallel_replicas": 4,
+            "datasets": ["errors", "transactions"],
+        },
         id="correct parallel read settings",
     ),
     pytest.param(
-        0,
+        False,
         {
             "parallel/max_parallel_replicas": 4,
         },
-        (
-            False,
-            {},
-        ),
+        {},
         id="main feature toggle off",
     ),
 ]
@@ -150,11 +143,11 @@ parallel_read_test_data = [
 @pytest.mark.parametrize("toggle,query_config,expected", parallel_read_test_data)
 @pytest.mark.redis_db
 def test_parallel_read_settings_from_config(
-    toggle: int,
+    toggle: bool,
     query_config: Mapping[str, Any],
-    expected: Tuple[bool, MutableMapping[str, Any]],
+    expected: MutableMapping[str, Any],
 ) -> None:
-    state.set_config(ENABLE_PARALLEL_READING, toggle)
+    settings.ENABLE_PARALLEL_REPLICA_READING = toggle
     for k, v in query_config.items():
         state.set_config(k, v)
     assert _get_parallel_read_settings_from_config(None) == expected
@@ -542,7 +535,7 @@ def test_clickhouse_settings_applied_to_query() -> None:
 def test_db_query_parallel_success() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
-    state.set_config(ENABLE_PARALLEL_READING, 1)
+    settings.ENABLE_PARALLEL_REPLICA_READING = True
     state.set_config("parallel/max_parallel_replicas", 4)
     state.set_config("parallel/datasets", "errors")
 
@@ -562,7 +555,7 @@ def test_db_query_parallel_success() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert stats["parallel_read"]
+    assert stats["max_parallel_replicas"] == 4
 
 
 @pytest.mark.clickhouse_db
@@ -570,7 +563,7 @@ def test_db_query_parallel_success() -> None:
 def test_db_query_parallel_ignored_for_incompatible_dataset() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
-    state.set_config(ENABLE_PARALLEL_READING, True)
+    settings.ENABLE_PARALLEL_REPLICA_READING = True
     state.set_config("parallel/max_parallel_replicas", 4)
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -589,4 +582,4 @@ def test_db_query_parallel_ignored_for_incompatible_dataset() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert not stats["parallel_read"]
+    assert stats["max_parallel_replicas"] == 1
