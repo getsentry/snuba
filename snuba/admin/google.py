@@ -13,14 +13,19 @@ class CloudIdentityAPI:
     """
 
     def __init__(self, service: Resource = None) -> None:
+        self.initialized = False
         try:
             self.service: Resource = (
                 service if service else build("cloudidentity", "v1")
             )
+            self.initialized = True
         except Exception as e:
             logger.exception(e)
 
     def _get_group_id(self, group_email: str) -> Optional[str]:
+        if not self.initialized:
+            return None
+
         try:
             query_params = f"groupKey.id={group_email}"
             request = self.service.groups().lookup()
@@ -42,6 +47,9 @@ class CloudIdentityAPI:
     def _check_transitive_membership(
         self, group_resource_name: str, member: str
     ) -> bool:
+        if not self.initialized:
+            return False
+
         try:
             query_params = urlencode({"query": "member_key_id == '{}'".format(member)})
             request = (
@@ -63,6 +71,9 @@ class CloudIdentityAPI:
         return False
 
     def check_group_membership(self, group_email: str, member: str) -> bool:
+        if not self.initialized:
+            return False
+
         group_resource_name = self._get_group_id(group_email)
         if group_resource_name:
             return self._check_transitive_membership(
