@@ -46,7 +46,7 @@ def test_eq() -> None:
 
 @pytest.mark.redis_db
 def test_passthrough_allows_queries() -> None:
-    set_config("query_settings/max_threads", 420)
+    DEFAULT_PASSTHROUGH_POLICY.set_config_value("max_threads", 420)
     assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}).can_run
     assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}).max_threads == 420
 
@@ -117,6 +117,12 @@ def test_bad_config_keys() -> None:
         str(err.value)
         == "'is_enforced' value needs to be of type int (not str) for PassthroughPolicy!"
     )
+    with pytest.raises(InvalidPolicyConfig) as err:
+        policy.set_config_value("max_threads", "bad_value")
+    assert (
+        str(err.value)
+        == "'max_threads' value needs to be of type int (not str) for PassthroughPolicy!"
+    )
 
     with pytest.raises(InvalidPolicyConfig) as err:
         policy.get_config_value("does_not_exist")
@@ -173,7 +179,7 @@ class TestAllocationPolicyLogs(TestCase):
             configs = policy.get_current_configs()
 
         # the bad configs are not returned
-        assert len(configs) == 3
+        assert len(configs) == 4
 
         # the bad configs are logged
         assert len(captured.records) == 3
@@ -255,7 +261,7 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_enforced_active(policy: AllocationPolicy) -> None:
+def test_default_config_overrides(policy: AllocationPolicy) -> None:
     assert policy.is_enforced == 1
     policy.set_config_value(config_key="is_enforced", value=0)
     assert policy.is_enforced == 0
@@ -268,10 +274,16 @@ def test_enforced_active(policy: AllocationPolicy) -> None:
     policy.set_config_value(config_key="is_active", value=1)
     assert policy.is_active == 1
 
+    assert policy.max_threads == 10
+    policy.set_config_value(config_key="max_threads", value=4)
+    assert policy.max_threads == 4
+    policy.set_config_value(config_key="max_threads", value=10)
+    assert policy.max_threads == 10
+
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 3
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert all(
         config in policy_configs
         for config in [
@@ -287,7 +299,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "name": "is_active",
                 "type": "int",
                 "default": 1,
-                "description": "Whether or not this policy is active.",
+                "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
                 "value": 1,
                 "params": {},
             },
@@ -295,8 +307,16 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "name": "is_enforced",
                 "type": "int",
                 "default": 1,
-                "description": "Whether or not this policy is enforced.",
+                "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 "value": 1,
+                "params": {},
+            },
+            {
+                "name": "max_threads",
+                "type": "int",
+                "default": 10,
+                "description": "The max threads Clickhouse can use for the query.",
+                "value": 10,
                 "params": {},
             },
         ]
@@ -307,7 +327,8 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
     )
     policy.set_config_value(config_key="is_enforced", value=0)
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    policy.set_config_value(config_key="max_threads", value=4)
+    assert len(policy_configs := policy.get_current_configs()) == 5
     assert {
         "name": "my_param_config",
         "type": "int",
@@ -320,11 +341,20 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "name": "is_enforced",
         "type": "int",
         "default": 1,
-        "description": "Whether or not this policy is enforced.",
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
         "value": 0,
         "params": {},
     } in policy_configs
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 4,
+        "params": {},
+    } in policy_configs
     assert policy.is_enforced == 0
+    assert policy.max_threads == 4
 
 
 @pytest.mark.redis_db

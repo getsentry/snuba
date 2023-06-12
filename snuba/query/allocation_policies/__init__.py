@@ -24,6 +24,7 @@ CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
+MAX_THREADS = "max_threads"
 
 
 @dataclass(frozen=True)
@@ -323,15 +324,21 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
-                description="Whether or not this policy is active.",
+                description="Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ACTIVE, 1),
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
-                description="Whether or not this policy is enforced.",
+                description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ENFORCED, 1),
+            ),
+            AllocationPolicyConfig(
+                name=MAX_THREADS,
+                description="The max threads Clickhouse can use for the query.",
+                value_type=int,
+                default=default_config_overrides.get(MAX_THREADS, 10),
             ),
         ]
         self._overridden_additional_config_definitions = (
@@ -365,7 +372,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @property
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
-        return cast(int, get_runtime_config("query_settings/max_threads", 8))
+        return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
     def config_key(cls) -> str:

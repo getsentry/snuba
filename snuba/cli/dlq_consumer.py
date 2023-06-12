@@ -162,7 +162,7 @@ def dlq_consumer(
             max_batch_time_ms=max_batch_time_ms,
             metrics=metrics,
             slice_id=instruction.slice_id,
-            join_timeout=5,
+            join_timeout=None,
         )
 
         consumer = consumer_builder.build_dlq_consumer(instruction)
