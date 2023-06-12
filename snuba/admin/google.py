@@ -1,4 +1,3 @@
-from abc import ABC
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -8,15 +7,9 @@ from googleapiclient.discovery import Resource, build
 logger = structlog.get_logger().bind(module=__name__)
 
 
-class GoogleAPIWrapper(ABC):
-    """
-    An abstract class defining an interface for google cloud APIs.
-    """
-
-
 class CloudIdentityAPI:
     """
-    An interface for the Google Cloud Identity API.
+    A class for interfacing with the Google Cloud Identity API.
     """
 
     def __init__(self, service: Resource = None) -> None:
