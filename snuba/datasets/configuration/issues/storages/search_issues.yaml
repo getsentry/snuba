@@ -106,5 +106,4 @@ stream_loader:
     name: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
-  dlq_policy:
-    topic: snuba-dead-letter-generic-events
+  dlq_topic: snuba-dead-letter-generic-events
