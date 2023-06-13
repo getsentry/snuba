@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -44,7 +45,10 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 )
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-@pytest.mark.skip(reason="This test is flaky and needs to be fixed.")
+@pytest.mark.skipif(
+    os.environ.get("SNUBA_SETTINGS") == "test_distributed",
+    reason="This test is flaky for distributed tests",
+)
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     def assert_partitions(
         *,
