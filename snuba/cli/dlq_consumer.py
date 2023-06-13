@@ -126,7 +126,7 @@ def dlq_consumer(
 
         metrics = MetricsWrapper(environment.metrics, "dlq_consumer", tags=metrics_tags)
 
-        configure_metrics(StreamMetricsAdapter(metrics))
+        configure_metrics(StreamMetricsAdapter(metrics), force=True)
 
         orig_consumer_config = resolve_consumer_config(
             storage_names=[instruction.storage_key.value],
