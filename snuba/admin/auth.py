@@ -74,7 +74,6 @@ def _set_roles(user: AdminUser) -> AdminUser:
         iam_roles = get_iam_roles_from_file(user)
 
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
-    print(user.roles)
     return user
 
 
