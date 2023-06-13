@@ -10,7 +10,6 @@ from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
-    generate_dlq_config,
     get_mandatory_condition_checkers,
     get_query_processors,
     get_query_splitters,
@@ -192,11 +191,8 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         else None
     )
     subscription_result_topic = __get_topic(loader_config, "subscription_result_topic")
-    dlq_config = (
-        generate_dlq_config(loader_config[DLQ_POLICY])
-        if DLQ_POLICY in loader_config and loader_config[DLQ_POLICY] is not None
-        else None
-    )
+
+    dlq_topic = __get_topic(loader_config, "dlq_topic")
 
     return build_kafka_stream_loader_from_settings(
         processor,
@@ -207,7 +203,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduler_mode,
         subscription_scheduled_topic,
         subscription_result_topic,
-        dlq_config,
+        dlq_topic,
     )
 
 

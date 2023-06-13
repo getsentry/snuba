@@ -51,5 +51,4 @@ stream_loader:
   subscription_scheduler_mode: global
   subscription_scheduled_topic: scheduled-subscriptions-metrics
   subscription_result_topic: metrics-subscription-results
-  dlq_policy:
-    topic: snuba-dead-letter-metrics
+  dlq_topic: snuba-dead-letter-metrics

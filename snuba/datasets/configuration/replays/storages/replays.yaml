@@ -169,8 +169,7 @@ stream_loader:
   processor:
     name: ReplaysProcessor
   default_topic: ingest-replay-events
-  dlq_policy:
-    topic: snuba-dead-letter-replays
+  dlq_topic: snuba-dead-letter-replays
 allocation_policies:
   - name: BytesScannedWindowAllocationPolicy
     args:

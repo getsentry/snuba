@@ -57,6 +57,10 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the replacements Kafka topic",
         },
+        "dlq_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the DLQ Kafka topic",
+        },
         "pre_filter": {
             "type": "object",
             "properties": {
@@ -67,17 +71,6 @@ STREAM_LOADER_SCHEMA = {
                 "args": {
                     "type": "object",
                     "description": "Key/value mappings required to instantiate StreamMessageFilter class.",
-                },
-            },
-            "additionalProperties": False,
-            "description": "Name of class which filter messages incoming from stream",
-        },
-        "dlq_policy": {
-            "type": "object",
-            "properties": {
-                "topic": {
-                    "type": "string",
-                    "description": "DLQ topic name",
                 },
             },
             "additionalProperties": False,

@@ -28,6 +28,8 @@ import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
 import { AllocationPolicy } from "./capacity_management/types";
 
+import { Topic } from "./dead_letter_queue/types";
+
 interface Client {
   getSettings: () => Promise<Settings>;
   getConfigs: () => Promise<Config[]>;
@@ -72,6 +74,7 @@ interface Client {
     key: string,
     params: object
   ) => Promise<void>;
+  getDlqTopics: () => Promise<Topic[]>;
 }
 
 function Client() {
@@ -349,6 +352,12 @@ function Client() {
           });
         }
       });
+    },
+    getDlqTopics: () => {
+      const url = baseUrl + "dead_letter_queue";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
     },
   };
 }
