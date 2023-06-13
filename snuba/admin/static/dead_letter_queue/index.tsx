@@ -16,13 +16,6 @@ function DeadLetterQueue(props: { api: Client }) {
 
   return (
     <div>
-      <div>
-        <p>
-          <mark>
-            This is a mockup of the dead letter queue UI. It does not work yet!
-          </mark>
-        </p>
-      </div>
       <form>
         <fieldset>
           <select
@@ -59,16 +52,10 @@ function DeadLetterQueue(props: { api: Client }) {
               Physical topic: <code>{topic.physicalName}</code>
             </div>
             <div>
-              Slice: <code>null</code>
+              Slice: <code>{topic.slice}</code>
             </div>
             <div>
               Storage: <code>{topic.storage}</code>
-            </div>
-            <div>
-              Current offsets: <code>{`\{0: 3\, 1: 1, 2: 3}`}</code>
-            </div>
-            <div>
-              Latest offsets: <code>{`\{0: 20\, 1: 1, 2: 3}`}</code>
             </div>
           </fieldset>
         )}
