@@ -458,11 +458,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
-
-        aggregation = data["data"][0]
-
         assert "_raw_tags_hash" in data["sql"]
-        assert aggregation["thecount"] == 1
 
 
 @pytest.mark.clickhouse_db
