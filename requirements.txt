@@ -39,3 +39,4 @@ pyuwsgi==2.0.20
 Werkzeug==2.2.2
 PyYAML==6.0
 sqlparse==0.4.2
+google-api-python-client==2.88.0

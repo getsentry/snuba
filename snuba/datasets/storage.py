@@ -172,6 +172,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
     ) -> None:
+        self.__storage_key = storage_key
         super().__init__(
             storage_key,
             storage_set_key,
@@ -192,6 +193,9 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             write_format=write_format,
         )
         self.__ignore_write_errors = ignore_write_errors
+
+    def get_storage_key(self) -> StorageKey:
+        return self.__storage_key
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
