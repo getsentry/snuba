@@ -40,7 +40,7 @@
           "user:rahul.saini@sentry.io",
           "user:riya.chakraborty@sentry.io",
           "user:volo.kluev@sentry.io",
-          "user:david.tsukernik@sentry.io"
+          "group:team-sns@sentry.io"
         ],
         "role": "roles/AllTools"
       },
