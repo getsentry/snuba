@@ -15,22 +15,24 @@ from snuba.admin.notifications.slack.utils import build_blocks
         pytest.param(
             {
                 "storage": "errors",
+                "policy": "BytesScannedWindowAllocationPolicy",
                 "key": "org_limit_bytes_scanned_override",
                 "value": "420",
                 "params": "{'org_id': 1}",
             },
             AuditLogAction.ALLOCATION_POLICY_UPDATE,
-            """*Storage errors Allocation Policy Changed:* :up: :date:\n\n```'org_limit_bytes_scanned_override({'org_id': 1})' = '420'```""",
+            """*Storage errors Allocation Policy Changed:* :up: :date:\n\n```'BytesScannedWindowAllocationPolicy.org_limit_bytes_scanned_override({'org_id': 1})' = '420'```""",
             id="Allocation policy update",
         ),
         pytest.param(
             {
                 "storage": "errors",
+                "policy": "BytesScannedWindowAllocationPolicy",
                 "key": "org_limit_bytes_scanned_override",
                 "params": "{'org_id': 1}",
             },
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            """*Storage errors Allocation Policy Changed:* :put_litter_in_its_place:\n\n~```'org_limit_bytes_scanned_override({'org_id': 1})'```~""",
+            """*Storage errors Allocation Policy Changed:* :put_litter_in_its_place:\n\n~```'BytesScannedWindowAllocationPolicy.org_limit_bytes_scanned_override({'org_id': 1})'```~""",
             id="Allocation policy delete",
         ),
     ],

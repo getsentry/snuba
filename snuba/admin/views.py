@@ -15,7 +15,9 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.clickhouse.capacity_management import get_allocation_policies
+from snuba.admin.clickhouse.capacity_management import (
+    get_storages_with_allocation_policies,
+)
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -24,6 +26,7 @@ from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
@@ -95,6 +98,26 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/settings")
+def settings_endpoint() -> Response:
+    """
+    IMPORTANT: This endpoint is only secure because the admin tool is only exposed on
+    our internal network. If this ever becomes a public app, this is a security risk.
+    """
+    # This must mirror the Settings type in the frontend code
+    return make_response(
+        jsonify(
+            {
+                "dsn": settings.ADMIN_FRONTEND_DSN,
+                "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
+                "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+            }
+        ),
+        200,
+    )
 
 
 @application.route("/tools")
@@ -712,35 +735,30 @@ def snql_to_sql() -> Response:
         )
 
 
-@application.route("/allocation_policies")
+@application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def allocation_policies() -> Response:
+def storages_with_allocation_policies() -> Response:
     return Response(
-        json.dumps(get_allocation_policies()),
+        json.dumps(get_storages_with_allocation_policies()),
         200,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
-    configs = policy.get_current_configs()
-    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
+def get_allocation_policy_configs(storage_key: str) -> Response:
 
-
-@application.route(
-    "/allocation_policy_optional_config_definitions/<path:storage>",
-    methods=["GET"],
-)
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
-    config_definitions = policy.get_optional_config_definitions_json()
-    return Response(
-        json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
-    )
+    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    data = [
+        {
+            "policy_name": policy.config_key(),
+            "configs": policy.get_current_configs(),
+            "optional_config_definitions": policy.get_optional_config_definitions_json(),
+        }
+        for policy in policies
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -750,7 +768,7 @@ def set_allocation_policy_config() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        storage, key = (data["storage"], data["key"])
+        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
 
         params = data.get("params", {})
 
@@ -758,8 +776,14 @@ def set_allocation_policy_config() -> Response:
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
+        assert isinstance(policy_name, str), "Invalid policy name"
 
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policy = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
         return Response(
@@ -773,7 +797,7 @@ def set_allocation_policy_config() -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            {"storage": storage, "key": key},
+            {"storage": storage, "policy": policy.config_key(), "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -787,7 +811,13 @@ def set_allocation_policy_config() -> Response:
             audit_log.record(
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
-                {"storage": storage, "key": key, "value": value, "params": str(params)},
+                {
+                    "storage": storage,
+                    "policy": policy.config_key(),
+                    "key": key,
+                    "value": value,
+                    "params": str(params),
+                },
                 notify=True,
             )
             return Response("", 200)
@@ -803,3 +833,9 @@ def set_allocation_policy_config() -> Response:
             405,
             {"Content-Type": "application/json"},
         )
+
+
+@application.route("/dead_letter_queue", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_topics() -> Response:
+    return make_response(jsonify(get_dlq_topics()), 200)

@@ -39,6 +39,16 @@ RetentionDays = int
 
 
 def is_project_in_allowlist(project_id: int) -> bool:
+    """
+    Allow spans to be written to Clickhouse if the project falls into one of the following
+    categories in order of priority:
+    1. The project falls in the configured sample rate
+    2. The project is in the allowlist
+    """
+    spans_sample_rate = state.get_config("spans_sample_rate", None)
+    if spans_sample_rate and project_id % 100 <= spans_sample_rate:
+        return True
+
     project_allowlist = state.get_config("spans_project_allowlist", None)
     if project_allowlist:
         # The expected format is [project,project,...]

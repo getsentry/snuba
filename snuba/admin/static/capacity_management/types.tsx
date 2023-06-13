@@ -1,8 +1,9 @@
 import { ReactNode } from "react";
 
 type AllocationPolicy = {
-  storage_name: string;
-  allocation_policy: string;
+  policy_name: string;
+  configs: AllocationPolicyConfig[];
+  optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
 };
 
 type AllocationPolicyConfig = {

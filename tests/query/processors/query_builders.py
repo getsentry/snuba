@@ -16,7 +16,7 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("test", ColumnSet([]), allocation_policy=DEFAULT_PASSTHROUGH_POLICY),
+        Table("test", ColumnSet([]), allocation_policies=[DEFAULT_PASSTHROUGH_POLICY]),
         selected_columns=[
             SelectedExpression(name=s.alias, expression=s)
             for s in selected_columns or []

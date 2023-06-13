@@ -12,7 +12,6 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
 )
 
 from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
@@ -126,9 +125,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-
         if not self.is_active:
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+            return QuotaAllowance(True, self.max_threads, {})
+
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             self.metrics.increment(
@@ -144,7 +143,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+            return QuotaAllowance(True, self.max_threads, {})
         if referrer in _SINGLE_THREAD_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
