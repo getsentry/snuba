@@ -6,7 +6,7 @@ import {
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
 } from "../../capacity_management/types";
-import { render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import React from "react";
 
 it("should populate configs table upon render", async () => {
@@ -50,7 +50,7 @@ it("should populate configs table upon render", async () => {
       .mockResolvedValueOnce(optionalConfigDefs),
   };
 
-  let { getByText } = render(
+  let { getByText, getByTestId } = render(
     <AllocationPolicyConfigs api={mockClient} storage="storage1" />
   );
 
@@ -67,4 +67,7 @@ it("should populate configs table upon render", async () => {
   expect(getByText("key1")).toBeTruthy();
   expect(getByText("key2")).toBeTruthy();
   expect(getByText(JSON.stringify(policyConfigs[1].params))).toBeTruthy();
+
+  act(() => fireEvent.click(getByTestId("key1_edit")));
+  expect(getByText("Editing:")).toBeTruthy(); // modal rendered
 });

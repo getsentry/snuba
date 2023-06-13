@@ -1,8 +1,8 @@
-import logging
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
+import structlog
 from clickhouse_driver import errors
 
 from snuba import settings
@@ -32,7 +32,7 @@ from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, M
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
 
-logger = logging.getLogger("snuba.migrations")
+logger = structlog.get_logger().bind(module=__name__)
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"

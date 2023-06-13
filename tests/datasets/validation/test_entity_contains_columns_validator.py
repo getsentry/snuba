@@ -26,6 +26,19 @@ def get_validator(entity: Entity) -> EntityContainsColumnsValidator:
     return validator
 
 
+def test_nested_columns_validation() -> None:
+    entity = build_entity_from_config(CONFIG_PATH)
+
+    query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
+    columns = [
+        SelectedExpression("tags", Column("_snuba_tags", None, "tags")),
+    ]
+
+    good_query = LogicalQuery(query_entity, selected_columns=columns)
+    validator = get_validator(entity)
+    validator.validate(good_query)
+
+
 def test_mapped_columns_validation() -> None:
     entity = build_entity_from_config(CONFIG_PATH)
 

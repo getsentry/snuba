@@ -12,7 +12,6 @@ from snuba.query.allocation_policies.bytes_scanned_window_policy import (
     _ORG_LESS_REFERRERS,
     BytesScannedWindowAllocationPolicy,
 )
-from snuba.state import set_config
 from snuba.web import QueryResult
 
 ORG_SCAN_LIMIT = 1000
@@ -33,9 +32,9 @@ def policy() -> AllocationPolicy:
 def _configure_policy(policy: AllocationPolicy) -> None:
     policy.set_config_value("is_active", 1)
     policy.set_config_value("is_enforced", 1)
+    policy.set_config_value("max_threads", MAX_THREAD_NUMBER)
     policy.set_config_value("org_limit_bytes_scanned", ORG_SCAN_LIMIT)
     policy.set_config_value("throttled_thread_number", THROTTLED_THREAD_NUMBER)
-    set_config("query_settings/max_threads", MAX_THREAD_NUMBER)
 
 
 @pytest.mark.redis_db
@@ -53,7 +52,8 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT}}, extra={}
+                result={"profile": {"bytes": ORG_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
@@ -81,7 +81,8 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}}, extra={}
+                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
@@ -106,7 +107,8 @@ def test_killswitch(policy: AllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}}, extra={}
+                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
@@ -127,7 +129,8 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}}, extra={}
+                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
@@ -153,7 +156,8 @@ def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
             tenant_ids,
             QueryResultOrError(
                 query_result=QueryResult(
-                    result={"profile": {"bytes": ORG_SCAN_LIMIT}}, extra={}  # type: ignore
+                    result={"profile": {"bytes": ORG_SCAN_LIMIT}},
+                    extra={"stats": {}, "sql": "", "experiments": {}},
                 ),
                 error=None,
             ),
@@ -170,6 +174,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "throttled_thread_number",
         "is_active",
         "is_enforced",
+        "max_threads",
     }
     assert policy.get_config_value("org_limit_bytes_scanned") == ORG_SCAN_LIMIT
     policy.set_config_value("org_limit_bytes_scanned", 100)
@@ -193,7 +198,8 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
@@ -213,7 +219,8 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
         tenant_ids,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}}, extra={}
+                result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),

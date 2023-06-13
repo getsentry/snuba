@@ -4,19 +4,20 @@ import logging
 import time
 from typing import Any
 
-from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
-    AllocationPolicy,
-    AllocationPolicyConfig,
-    QueryResultOrError,
-    QuotaAllowance,
-)
-from snuba.state.sliding_windows import (
+from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
     Quota,
     RedisSlidingWindowRateLimiter,
     RequestedQuota,
 )
+
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    AllocationPolicyConfig,
+    QueryResultOrError,
+    QuotaAllowance,
+)
+from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -28,12 +29,15 @@ _ORG_LESS_REFERRERS = set(
         "subscriptions_executor",
         "weekly_reports.outcomes",
         "reports.key_errors",
+        "reports.key_performance_issues",
         "weekly_reports.key_transactions.this_week",
         "weekly_reports.key_transactions.last_week",
         "dynamic_sampling.distribution.fetch_projects_with_count_per_root_total_volumes",
-        "reports.key_performance_issues",
+        "dynamic_sampling.distribution.fetch_orgs_with_count_per_root_total_volumes",
         "dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes",
         "dynamic_sampling.counters.fetch_projects_with_transaction_totals",
+        "dynamic_sampling.counters.get_org_transaction_volumes",
+        "dynamic_sampling.counters.get_active_orgs",
         "migration.backfill_perf_issue_events_issue_platform",
         "api.vroom",
         "replays.query.download_replay_segments",
@@ -71,7 +75,9 @@ _PASS_THROUGH_REFERRERS = set(
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter()
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(
+    get_redis_client(RedisClientKey.RATE_LIMITER)
+)
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
@@ -119,9 +125,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         return True, ""
 
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
-
         if not self.is_active:
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+            return QuotaAllowance(True, self.max_threads, {})
+
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             self.metrics.increment(
@@ -137,7 +143,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+            return QuotaAllowance(True, self.max_threads, {})
         if referrer in _SINGLE_THREAD_REFERRERS:
             return QuotaAllowance(
                 can_run=True,

@@ -3,7 +3,6 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
-import rapidjson
 import sentry_sdk
 from arroyo import configure_metrics
 
@@ -181,12 +180,7 @@ def consumer(
         max_batch_time_ms=max_batch_time_ms,
     )
 
-    def stats_callback(stats_json: str) -> None:
-        stats = rapidjson.loads(stats_json)
-        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
-
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
         consumer_config=consumer_config,
         kafka_params=KafkaParameters(
             group_id=consumer_group,
@@ -204,7 +198,6 @@ def consumer(
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
-        stats_callback=stats_callback,
         slice_id=slice_id,
         join_timeout=join_timeout,
         max_poll_interval_ms=max_poll_interval_ms,

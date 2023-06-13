@@ -63,3 +63,4 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 query_processors: []
 validators: []
+validate_data_model: error

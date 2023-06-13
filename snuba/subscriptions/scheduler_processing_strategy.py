@@ -450,6 +450,13 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
             encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
+        # Record the amount of time between the message timestamp and when scheduling
+        # for that timestamp occurs
+        self.__metrics.timing(
+            "scheduling_latency",
+            (time.time() - datetime.timestamp(message.value.timestamp)) * 1000,
+        )
+
         # If there are no subscriptions for a tick, immediately commit if an offset
         # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
@@ -457,13 +464,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             logger.info("Committing offset - no subscriptions: %r", offset)
             self.__commit(offset)
             return
-
-        # Record the amount of time between the message timestamp and when scheduling
-        # for that timestamp occurs
-        self.__metrics.timing(
-            "scheduling_latency",
-            (time.time() - datetime.timestamp(message.value.timestamp)) * 1000,
-        )
 
         self.__queue.append(
             message.value,

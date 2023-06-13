@@ -21,7 +21,7 @@ from snuba.utils.streams.topics import Topic
 
 def test_generate_dlq_config() -> None:
     assert generate_dlq_config(
-        {"type": "produce", "args": [Topic.DEAD_LETTER_GENERIC_METRICS.value]}
+        {"topic": Topic.DEAD_LETTER_GENERIC_METRICS.value}
     ) == DlqConfig(Topic.DEAD_LETTER_GENERIC_METRICS)
 
 
@@ -41,8 +41,7 @@ def test_build_stream_loader() -> None:
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_policy": {
-                "type": "produce",
-                "args": ["snuba-dead-letter-generic-metrics"],
+                "topic": "snuba-dead-letter-generic-metrics",
             },
         }
     )
@@ -95,8 +94,7 @@ def test_stream_loader_processor_init_arg() -> None:
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_policy": {
-                "type": "produce",
-                "args": ["snuba-dead-letter-generic-metrics"],
+                "topic": "snuba-dead-letter-generic-metrics",
             },
         }
     )

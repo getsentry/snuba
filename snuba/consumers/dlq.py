@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import logging
+import signal
+import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, TypeVar
 
 import rapidjson
+from arroyo.processing.strategies.abstract import ProcessingStrategy
+from arroyo.types import Message
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
 
 redis_client = get_redis_client(RedisClientKey.DLQ)
 DLQ_REDIS_KEY = "dlq_instruction"
+
+
+logger = logging.getLogger(__name__)
 
 
 class DlqPolicy(Enum):
@@ -54,6 +62,13 @@ class DlqInstruction:
             max_messages_to_process=decoded["max_messages_to_process"],
         )
 
+    def is_valid(self) -> bool:
+        """
+        Replaying topics with post processing enabled is not yet supported.
+        This will be supported in a future iteratrion and this code can be removed.
+        """
+        return self.storage_key.value not in ("errors", "transactions", "search_issues")
+
 
 def load_instruction() -> Optional[DlqInstruction]:
     value = redis_client.get(DLQ_REDIS_KEY)
@@ -70,3 +85,69 @@ def clear_instruction() -> None:
 
 def store_instruction(instruction: DlqInstruction) -> None:
     redis_client.set(DLQ_REDIS_KEY, instruction.to_bytes())
+
+
+TPayload = TypeVar("TPayload")
+
+
+class ExitAfterNMessages(ProcessingStrategy[TPayload]):
+    """
+    Commits offsets until N messages is reached, then forces the
+    consumer to close. This is used by the DLQ consumer
+    which is expected to process a fixed number of messages requested
+    by the user.
+
+    If max_timeout is hit, the consumer also exits.
+    """
+
+    def __init__(
+        self,
+        next_step: ProcessingStrategy[TPayload],
+        num_messages_to_process: int,
+        max_message_timeout: float,
+    ) -> None:
+        self.__num_messages_to_process = num_messages_to_process
+        self.__processed_messages = 0
+        self.__next_step = next_step
+        self.__last_message_time = time.time()
+        self.__max_message_timeout = max_message_timeout
+        self.__exiting = False
+
+    def __exit(self) -> None:
+        if self.__exiting:
+            return
+
+        self.__exiting = True
+        logger.info("Processed %d messages", self.__processed_messages)
+        signal.raise_signal(signal.SIGINT)
+
+    def poll(self) -> None:
+        self.__next_step.poll()
+        if self.__last_message_time + self.__max_message_timeout < time.time():
+            self.__exit()
+
+        if self.__processed_messages >= self.__num_messages_to_process:
+            self.__exit()
+
+    def submit(self, message: Message[TPayload]) -> None:
+        if self.__processed_messages < self.__num_messages_to_process:
+            self.__last_message_time = time.time()
+            self.__next_step.submit(message)
+            self.__processed_messages += 1
+
+    def close(self) -> None:
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.close()
+
+    def terminate(self) -> None:
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__next_step.join(timeout)

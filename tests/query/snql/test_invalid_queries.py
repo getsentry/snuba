@@ -41,37 +41,37 @@ test_cases = [
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
-        "missing >= condition on column timestamp for entity events",
+        "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')",
         id="simple query missing required conditions",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp <= toDateTime('2021-01-02')",
-        "missing < condition on column timestamp for entity events",
+        "Missing < condition with a datetime literal on column timestamp for entity events. Example: timestamp < toDateTime('2023-05-16 00:00')",
         id="simple query required conditions have wrong type",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1",
-        "missing >= condition on column timestamp for entity events",
+        "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')",
         id="simple query missing some required conditions",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
-        "missing >= condition on column timestamp for entity events",
+        "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')",
         id="join missing required conditions on both sides",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
-        "missing >= condition on column finish_ts for entity transactions",
+        "Missing >= condition with a datetime literal on column finish_ts for entity transactions. Example: finish_ts >= toDateTime('2023-05-16 00:00')",
         id="join missing required conditions on one side",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01') ",
-        "missing >= condition on column timestamp for entity events",
+        "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')",
         id="join missing some required conditions on both sides",
     ),
     pytest.param(
         "MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count",
-        "missing >= condition on column timestamp for entity events",
+        "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')",
         id="subquery missing required conditions",
     ),
     pytest.param(

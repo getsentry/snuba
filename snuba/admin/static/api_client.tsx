@@ -1,4 +1,4 @@
-import { AllowedTools } from "./types";
+import { AllowedTools, Settings } from "./types";
 
 import {
   Config,
@@ -33,6 +33,7 @@ import {
 } from "./capacity_management/types";
 
 interface Client {
+  getSettings: () => Promise<Settings>;
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (
     key: ConfigKey,
@@ -84,6 +85,10 @@ function Client() {
   const baseUrl = "/";
 
   return {
+    getSettings: () => {
+      const url = baseUrl + "settings";
+      return fetch(url).then((resp) => resp.json());
+    },
     getConfigs: () => {
       const url = baseUrl + "configs";
       return fetch(url).then((resp) => resp.json());
