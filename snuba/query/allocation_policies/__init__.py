@@ -677,7 +677,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
-            allowance = self._get_quota_allowance(tenant_ids)
+            if not self.is_active:
+                allowance = QuotaAllowance(True, self.max_threads, {})
+            else:
+                allowance = self._get_quota_allowance(tenant_ids)
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -699,6 +702,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
+            if not self.is_active:
+                return
             return self._update_quota_balance(tenant_ids, result_or_error)
         except Exception:
             logger.exception(
