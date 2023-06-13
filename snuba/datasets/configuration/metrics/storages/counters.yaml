@@ -52,4 +52,4 @@ stream_loader:
   processor:
     name: CounterAggregateProcessor
   default_topic: snuba-metrics
-  dlq_topic: snuba-dead-letter-metrics-counters
+  dlq_topic: snuba-dead-letter-metrics
