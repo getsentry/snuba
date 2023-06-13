@@ -146,8 +146,6 @@ class ErrorsProcessor(DatasetMessageProcessor):
         processing_errors = data.get("errors", None)
         if processing_errors is not None and isinstance(processing_errors, list):
             processed["num_processing_errors"] = len(processing_errors)
-        # else:
-        #     processed["num_processing_errors"] = None
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition

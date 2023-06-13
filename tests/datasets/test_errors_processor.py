@@ -819,7 +819,6 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
-            # errors=None,
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
