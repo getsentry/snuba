@@ -51,6 +51,11 @@ class Topic(Enum):
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
+    DEAD_LETTER_GENERIC_METRICS_SETS = "snuba-dead-letter-metrics-sets"
+    DEAD_LETTER_GENERIC_METRICS_COUNTERS = "snuba-dead-letter-generic-counters"
+    DEAD_LETTER_GENERIC_METRICS_DISTRIBUTIONS = (
+        "snuba-dead-letter-metrics-distributions"
+    )
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
