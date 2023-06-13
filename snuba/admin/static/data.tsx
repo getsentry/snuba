@@ -8,6 +8,7 @@ import Kafka from "./kafka";
 import QuerylogQueries from "./querylog";
 import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
+import CardinalityAnalyzer from "./cardinality_analyzer";
 
 function Placeholder(props: any) {
   return null;
@@ -61,6 +62,12 @@ const NAV_ITEMS = [
     display: "♻️ Dead Letter Queue",
     component: DeadLetterQueue,
   },
+  {
+    id: "cardinality_analyzer",
+    display: "🔢Cardinality Analyzer!!!",
+    component: CardinalityAnalyzer,
+  },
+
 ];
 
 export { NAV_ITEMS };
