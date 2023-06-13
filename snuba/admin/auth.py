@@ -50,7 +50,6 @@ def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
                 role: str = binding["role"].split("roles/")[-1]
                 for member in binding["members"]:
                     if f"user:{user.email}" == member:
-                        print(member)
                         iam_roles.append(role)
                         break
                     if member.startswith("group:"):
