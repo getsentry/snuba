@@ -6,7 +6,6 @@ from snuba import settings
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_writable_storage
-from snuba.datasets.table_storage import KafkaTopicSpec
 
 Topic = TypedDict(
     "Topic",
@@ -36,13 +35,11 @@ def get_dlq_topics() -> Sequence[Topic]:
     for storage in storages:
 
         stream_loader = storage.get_table_writer().get_stream_loader()
-        dlq_config = stream_loader.get_dlq_config()
-        if dlq_config is not None:
+        dlq_topic_spec = stream_loader.get_dlq_topic_spec()
+        if dlq_topic_spec is not None:
             for slice_id in get_slices(storage):
-                logical_name = dlq_config.topic.value
-                physical_name = KafkaTopicSpec(
-                    dlq_config.topic
-                ).get_physical_topic_name(slice_id)
+                logical_name = dlq_topic_spec.topic.value
+                physical_name = dlq_topic_spec.get_physical_topic_name(slice_id)
                 dlq_topics.append(
                     DlqTopic(
                         logical_name,
