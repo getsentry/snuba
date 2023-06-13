@@ -52,7 +52,7 @@ WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
-ALLOCATION_POLICY = "allocation_policy"
+ALLOCATION_POLICIES = "allocation_policies"
 
 
 def build_storage_from_config(
@@ -90,16 +90,17 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if MANDATORY_CONDITION_CHECKERS in config
             else []
         ),
-        ALLOCATION_POLICY: AllocationPolicy.get_from_name(
-            config[ALLOCATION_POLICY]["name"]
-        ).from_kwargs(
-            **{
-                **config[ALLOCATION_POLICY].get("args", {}),
-                "storage_key": storage_key.value,
-            }
-        )
-        if ALLOCATION_POLICY in config
-        else None,
+        ALLOCATION_POLICIES: [
+            AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                **{
+                    **policy.get("args", {}),
+                    "storage_key": storage_key.value,
+                }
+            )
+            for policy in config[ALLOCATION_POLICIES]
+        ]
+        if ALLOCATION_POLICIES in config
+        else [],
     }
 
 

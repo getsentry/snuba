@@ -97,6 +97,9 @@ class QuotaAllowance:
     # because I don't know what exactly should go in it yet
     explanation: dict[str, Any]
 
+    def __lt__(self, other: QuotaAllowance) -> bool:
+        return self.max_threads < other.max_threads
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -124,6 +127,31 @@ class AllocationPolicyViolation(SerializableException):
 
     def __str__(self) -> str:
         return f"{self.message}, explanation: {self.explanation}"
+
+
+class AllocationPolicyViolations(SerializableException):
+    """
+    An exception class which is used to collect multiple AllocationPolicyViolation
+    exceptions and raise them at once, useful for storages with multiple policies
+    defined on them.
+
+    Do not manually raise this exception! Use AllocationPolicyViolation instead within
+    your Allocation Policies for when a violation occurs and this exception will be
+    raised containing your raised exceptions at the end.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
+        should_report: bool = True,
+        **extra_data: JsonSerializable,
+    ) -> None:
+        self.violations = violations
+        super().__init__(message, should_report, **extra_data)
+
+    def __str__(self) -> str:
+        return str({k: str(v) for k, v in self.violations.items()})
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
