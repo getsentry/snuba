@@ -57,4 +57,4 @@ stream_loader:
     name: SetsAggregateProcessor
   default_topic: snuba-metrics
   dlq_policy:
-    topic: snuba-dead-letter-metrics
+    topic: snuba-dead-letter-metrics-sets
