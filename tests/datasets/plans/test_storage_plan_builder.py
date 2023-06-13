@@ -131,7 +131,7 @@ def test_storage_query_plan_builder(
         table_name = storage.get_schema().get_data_source().get_table_name()  # type: ignore
         if (
             table_name == ch_from_clause.table_name
-            and ch_from_clause.allocation_policy == storage.get_allocation_policy()
+            and ch_from_clause.allocation_policies == storage.get_allocation_policies()
         ):
             correct_policy_assigned = True
     assert correct_policy_assigned

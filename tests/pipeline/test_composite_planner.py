@@ -60,7 +60,7 @@ events_table_name = events_storage.get_table_writer().get_schema().get_table_nam
 events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
-    allocation_policy=events_storage.get_allocation_policy(),
+    allocation_policies=events_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
     mandatory_conditions=events_storage.get_schema()
@@ -78,7 +78,7 @@ assert isinstance(groups_schema, TableSchema)
 groups_table = Table(
     groups_schema.get_table_name(),
     groups_schema.get_columns(),
-    allocation_policy=groups_storage.get_allocation_policy(),
+    allocation_policies=groups_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
     mandatory_conditions=groups_schema.get_data_source().get_mandatory_conditions(),

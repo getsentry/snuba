@@ -8,6 +8,7 @@ from flask import request
 
 from snuba import settings
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
+from snuba.admin.google import CloudIdentityAPI
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
@@ -36,9 +37,8 @@ def authorize_request() -> AdminUser:
 
 
 def _is_member_of_group(user: AdminUser, group: str) -> bool:
-    # TODO this will be handled by gcp identity once we have the service account
-    # https://cloud.google.com/identity/docs/how-to/query-memberships#searching_for_all_memberships_in_a_group
-    return False
+    google_api = CloudIdentityAPI()
+    return google_api.check_group_membership(group_email=group, member=user.email)
 
 
 def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:

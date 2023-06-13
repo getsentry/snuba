@@ -37,7 +37,9 @@ from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyViolation,
+    AllocationPolicyViolations,
     QueryResultOrError,
+    QuotaAllowance,
 )
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
@@ -641,34 +643,34 @@ def _raw_query(
         )
 
 
-def _get_allocation_policy(
+def _get_allocation_policies(
     clickhouse_query: Union[Query, CompositeQuery[Table]]
-) -> AllocationPolicy:
-    """given a query, find the allocation policy in its from clause, in the case
+) -> list[AllocationPolicy]:
+    """given a query, find the allocation policies in its from clause, in the case
     of CompositeQuery, follow the from clause until something is querying from a table
-    and use that table's allocation policy.
+    and use that table's allocation policies.
 
     **GOTCHAS**
-        - Does not handle joins, will return PassthroughPolicy
-        - In case of error, returns PassthroughPolicy, fails quietly (but logs to sentry)
+        - Does not handle joins, will return [PassthroughPolicy]
+        - In case of error, returns [PassthroughPolicy], fails quietly (but logs to sentry)
     """
     from_clause = clickhouse_query.get_from_clause()
     if isinstance(from_clause, Table):
-        return from_clause.allocation_policy
+        return from_clause.allocation_policies
     elif isinstance(from_clause, ProcessableQuery):
-        return _get_allocation_policy(cast(Query, from_clause))
+        return _get_allocation_policies(cast(Query, from_clause))
     elif isinstance(from_clause, CompositeQuery):
-        return _get_allocation_policy(from_clause)
+        return _get_allocation_policies(from_clause)
     elif isinstance(from_clause, JoinClause):
         # HACK (Volo): Joins are a weird case for allocation policies and we don't
         # actually use them anywhere so I'm purposefully just kicking this can down the
         # road
-        return DEFAULT_PASSTHROUGH_POLICY
+        return [DEFAULT_PASSTHROUGH_POLICY]
     else:
         logger.exception(
-            f"Could not determine allocation policy for {clickhouse_query}"
+            f"Could not determine allocation policies for {clickhouse_query}"
         )
-        return DEFAULT_PASSTHROUGH_POLICY
+        return [DEFAULT_PASSTHROUGH_POLICY]
 
 
 def db_query(
@@ -722,34 +724,19 @@ def db_query(
         evolves it can be changed. The inconsistency was consciously chosen for expediency and to have
         allocation policy be applied at the top level of the db_query process
     """
+
+    allocation_policies = _get_allocation_policies(clickhouse_query)
+
+    _apply_allocation_policies_quota(
+        query_settings,
+        attribution_info,
+        formatted_query,
+        stats,
+        allocation_policies,
+    )
+
     result = None
     error = None
-    allocation_policy = _get_allocation_policy(clickhouse_query)
-    try:
-        quota_allowance = allocation_policy.get_quota_allowance(
-            attribution_info.tenant_ids
-        )
-        stats["quota_allowance"] = quota_allowance.to_dict()
-    except AllocationPolicyViolation as e:
-        stats["quota_allowance"] = e.quota_allowance
-        raise QueryException.from_args(
-            AllocationPolicyViolation.__name__,
-            "Query cannot be run due to allocation policy",
-            extra={"stats": stats, "sql": formatted_query.get_sql(), "experiments": {}},
-        ) from e
-
-    # Before allocation policies were a thing, the query pipeline would apply
-    # thread limits in a query processor. That is not necessary if there
-    # is an allocation_policy in place but nobody has removed that code yet.
-    # Therefore, the least permissive thread limit is taken
-    query_settings.set_resource_quota(
-        ResourceQuota(
-            max_threads=min(
-                quota_allowance.max_threads,
-                getattr(query_settings.get_resource_quota(), "max_threads", 10),
-            )
-        )
-    )
     try:
         result = _raw_query(
             clickhouse_query,
@@ -771,12 +758,64 @@ def db_query(
         # if it didn't do that, something is very wrong so we just panic out here
         raise e
     finally:
-        allocation_policy.update_quota_balance(
-            tenant_ids=attribution_info.tenant_ids,
-            result_or_error=QueryResultOrError(query_result=result, error=error),
-        )
+        for allocation_policy in allocation_policies:
+            allocation_policy.update_quota_balance(
+                tenant_ids=attribution_info.tenant_ids,
+                result_or_error=QueryResultOrError(query_result=result, error=error),
+            )
         if result:
             return result
         raise error or Exception(
             "No error or result when running query, this should never happen"
         )
+
+
+def _apply_allocation_policies_quota(
+    query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    formatted_query: FormattedQuery,
+    stats: MutableMapping[str, Any],
+    allocation_policies: list[AllocationPolicy],
+) -> None:
+    """
+    Sets the resource quota in the query_settings object to the minimum of all available
+    quota allowances from the given allocation policies.
+    """
+    quota_allowances: dict[str, QuotaAllowance] = {}
+    violations: dict[str, AllocationPolicyViolation] = {}
+    for allocation_policy in allocation_policies:
+        try:
+            quota_allowances[
+                allocation_policy.config_key()
+            ] = allocation_policy.get_quota_allowance(attribution_info.tenant_ids)
+
+        except AllocationPolicyViolation as e:
+            violations[allocation_policy.config_key()] = e
+    if violations:
+        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
+        raise QueryException.from_args(
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
+            extra={
+                "stats": stats,
+                "sql": formatted_query.get_sql(),
+                "experiments": {},
+            },
+        ) from AllocationPolicyViolations(
+            "Query cannot be run due to allocation policies", violations
+        )
+
+    stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
+
+    # Before allocation policies were a thing, the query pipeline would apply
+    # thread limits in a query processor. That is not necessary if there
+    # is an allocation_policy in place but nobody has removed that code yet.
+    # Therefore, the least permissive thread limit is taken
+    query_settings.set_resource_quota(
+        ResourceQuota(
+            max_threads=min(
+                min(quota_allowances.values()).max_threads,
+                getattr(query_settings.get_resource_quota(), "max_threads", 10),
+            )
+        )
+    )

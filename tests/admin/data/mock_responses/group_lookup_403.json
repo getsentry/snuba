@@ -1,0 +1,7 @@
+{
+    "error": {
+        "code": 403,
+        "message": "Error(2028): Permission denied for resource team-sns2@sentry.io (or it may not exist).",
+        "status": "PERMISSION_DENIED"
+    }
+}

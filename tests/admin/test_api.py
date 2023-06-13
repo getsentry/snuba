@@ -10,6 +10,13 @@ from flask.testing import FlaskClient
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    AllocationPolicyConfig,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 
 
 @pytest.fixture
@@ -355,6 +362,60 @@ def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
+    class FakePolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return [
+                AllocationPolicyConfig(
+                    "fake_optional_config", "", int, -1, param_types={"org_id": int}
+                )
+            ]
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            return QuotaAllowance(True, 1, {})
+
+        def _update_quota_balance(
+            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+        ) -> None:
+            pass
+
+    def mock_get_policies() -> list[AllocationPolicy]:
+        policy = FakePolicy(StorageKey("nothing"), [], {})
+        policy.set_config_value("fake_optional_config", 10, {"org_id": 10})
+        return [policy]
+
+    with mock.patch(
+        "snuba.datasets.storage.ReadableTableStorage.get_allocation_policies",
+        side_effect=mock_get_policies,
+    ):
+        response = admin_api.get("/allocation_policy_configs/errors")
+
+    assert response.status_code == 200
+    assert response.json is not None and len(response.json) == 1
+    [data] = response.json
+    assert data["policy_name"] == "FakePolicy"
+    assert data["optional_config_definitions"] == [
+        {
+            "name": "fake_optional_config",
+            "type": "int",
+            "default": -1,
+            "description": "",
+            "params": [{"name": "org_id", "type": "int"}],
+        }
+    ]
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 10,
+        "params": {"org_id": 10},
+    } in data["configs"]
+
+
+@pytest.mark.redis_db
 def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
     # an end to end test setting a config, retrieving allocation policy configs,
     # and deleting the config afterwards
@@ -370,6 +431,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             data=json.dumps(
                 {
                     "storage": "errors",
+                    "policy": "BytesScannedWindowAllocationPolicy",
                     "key": "org_limit_bytes_scanned_override",
                     "params": {"org_id": 1},
                     "value": "420",
@@ -382,6 +444,11 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert auditlog_records.pop()
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
+
+        # one policy
+        assert response.json is not None and len(response.json) == 1
+        [policy_configs] = response.json
+        assert policy_configs["policy_name"] == "BytesScannedWindowAllocationPolicy"
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -390,7 +457,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } in response.json  # type: ignore
+        } in policy_configs["configs"]
+
         # no need to record auditlog when nothing was updated
         assert not auditlog_records
         assert (
@@ -399,6 +467,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                 data=json.dumps(
                     {
                         "storage": "errors",
+                        "policy": "BytesScannedWindowAllocationPolicy",
                         "key": "org_limit_bytes_scanned_override",
                         "params": {"org_id": 1},
                     }
@@ -409,6 +478,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
+        assert response.json is not None and len(response.json) == 1
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -417,6 +487,6 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } not in response.json  # type: ignore
+        } not in response.json[0]["configs"]
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()

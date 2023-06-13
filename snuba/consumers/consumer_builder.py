@@ -1,7 +1,7 @@
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
 
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -31,7 +31,6 @@ from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
-from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
@@ -73,7 +72,6 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         slice_id: Optional[int],
         join_timeout: Optional[int],
-        stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
@@ -131,7 +129,6 @@ class ConsumerBuilder:
         else:
             self.commit_log_producer = None
 
-        self.stats_callback = stats_callback
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
@@ -174,19 +171,6 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
-
-        stats_collection_frequency_ms = get_config(
-            f"stats_collection_freq_ms_{self.group_id}",
-            get_config("stats_collection_freq_ms", 0),
-        )
-
-        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
-            configuration.update(
-                {
-                    "statistics.interval.ms": stats_collection_frequency_ms,
-                    "stats_cb": self.stats_callback,
-                }
-            )
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms

@@ -81,5 +81,4 @@ stream_loader:
   processor:
     name: DistributionsAggregateProcessor
   default_topic: snuba-metrics
-  dlq_policy:
-    topic: snuba-dead-letter-metrics
+  dlq_topic: snuba-dead-letter-metrics

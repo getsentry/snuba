@@ -8,7 +8,6 @@ from fastjsonschema.exceptions import JsonSchemaValueException
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.storage_builder import build_stream_loader
-from snuba.datasets.configuration.utils import DlqConfig, generate_dlq_config
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
@@ -17,12 +16,6 @@ from snuba.datasets.processors.generic_metrics_processor import (
 from snuba.processor import ProcessedMessage
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
-
-
-def test_generate_dlq_config() -> None:
-    assert generate_dlq_config(
-        {"topic": Topic.DEAD_LETTER_GENERIC_METRICS.value}
-    ) == DlqConfig(Topic.DEAD_LETTER_GENERIC_METRICS)
 
 
 def test_build_stream_loader() -> None:
@@ -40,9 +33,7 @@ def test_build_stream_loader() -> None:
             "subscription_scheduler_mode": "global",
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
-            "dlq_policy": {
-                "topic": "snuba-dead-letter-generic-metrics",
-            },
+            "dlq_topic": "snuba-dead-letter-generic-metrics",
         }
     )
     assert isinstance(loader.get_processor(), GenericSetsMetricsProcessor)
@@ -65,7 +56,11 @@ def test_build_stream_loader() -> None:
         result_topic_spec is not None
         and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS
     )
-    assert loader.get_dlq_config() == DlqConfig(topic=Topic.DEAD_LETTER_GENERIC_METRICS)
+    dlq_topic_spec = loader.get_dlq_topic_spec()
+    assert (
+        dlq_topic_spec is not None
+        and dlq_topic_spec.topic == Topic.DEAD_LETTER_GENERIC_METRICS
+    )
 
 
 def test_stream_loader_processor_init_arg() -> None:
