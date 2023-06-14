@@ -5,6 +5,7 @@ import QueryEditor from "../query_editor";
 function QueryDisplay(props: { api: Client }) {
   return (
     <div>
+      <h3 style={{ color: "red" }}>Currently in Development</h3>
       <h2>Construct a Production Query</h2>
       <QueryEditor onQueryUpdate={(sql) => {}} />
       <div style={executeActionsStyle}>
