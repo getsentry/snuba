@@ -4,6 +4,8 @@ from urllib.parse import urlencode
 import structlog
 from googleapiclient.discovery import Resource, build
 
+from snuba import settings
+
 logger = structlog.get_logger().bind(module=__name__)
 
 
@@ -20,7 +22,8 @@ class CloudIdentityAPI:
             )
             self.initialized = True
         except Exception as e:
-            logger.exception(e)
+            if not settings.DEBUG and not settings.TESTING:
+                logger.exception(e)
 
     def _get_group_id(self, group_email: str) -> Optional[str]:
         if not self.initialized:
