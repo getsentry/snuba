@@ -300,6 +300,7 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
+            -e REDIS_SSL=False \
             --name sentry_snuba \
             --network sentry \
             snuba-test

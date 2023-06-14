@@ -45,6 +45,7 @@ REDIS_CLUSTERS = {
         "port": int(os.environ.get("REDIS_PORT", 6379)),
         "password": os.environ.get("REDIS_PASSWORD"),
         "db": i,
+        "ssl": bool(os.environ.get("REDIS_SSL", False)),
         "reinitialize_steps": 10,
     }
     for i, key in [
