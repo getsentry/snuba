@@ -8,6 +8,7 @@ import Kafka from "./kafka";
 import QuerylogQueries from "./querylog";
 import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
+import ProductionQueries from "./production_queries";
 
 function Placeholder(props: any) {
   return null;
@@ -60,6 +61,11 @@ const NAV_ITEMS = [
     id: "dlq",
     display: "♻️ Dead Letter Queue",
     component: DeadLetterQueue,
+  },
+  {
+    id: "production-queries",
+    display: "🔦 Production Queries",
+    component: ProductionQueries,
   },
 ];
 
