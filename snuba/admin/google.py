@@ -21,7 +21,9 @@ class CloudIdentityAPI:
             return
 
         try:
-            self.service = build("cloudidentity", "v1")
+            self.service: Resource = (
+                service if service else build("cloudidentity", "v1")
+            )
             self.initialized = True
         except Exception as e:
             logger.exception(e)
