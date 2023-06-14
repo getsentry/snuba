@@ -15,8 +15,8 @@ class CloudIdentityAPI:
     """
 
     def __init__(self, service: Resource = None) -> None:
-        self.initialized = False
         self.service = service
+        self.initialized = service is not None
         if settings.DEBUG or settings.TESTING:
             return
 
