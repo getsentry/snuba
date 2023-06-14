@@ -22,6 +22,7 @@ from snuba.query.matchers import (
     Column,
     FunctionCall,
     Literal,
+    Or,
     Param,
     String,
 )
@@ -317,7 +318,7 @@ mapping_pattern = FunctionCall(
             String("indexOf"),
             (
                 Column(None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
-                Literal(Param(KEY_MAPPING_PARAM, Any(str))),
+                Literal(Param(KEY_MAPPING_PARAM, Or([Any(str), Any(int)]))),
             ),
         ),
     ),

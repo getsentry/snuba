@@ -105,5 +105,11 @@ allocation_policies:
         org_limit_bytes_scanned: 100000
 
 query_processors:
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _raw_tags_hash
+      killswitch: generic_metrics/tags_hash_map_enabled
+      value_subcolumn_name: raw_value
   - processor: TableRateLimit
   - processor: TupleUnaliaser

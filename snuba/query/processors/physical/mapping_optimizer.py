@@ -191,7 +191,11 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             return condition
         rhs = match.expression("right_hand_side")
         assert isinstance(rhs, LiteralExpr)
-        key = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
+        key = match.scalar(KEY_MAPPING_PARAM)
+        assert isinstance(key, (str, int))
+        if isinstance(key, str):
+            key = key.translate(ESCAPE_TRANSLATION)
+
         return FunctionExpr(
             alias=condition.alias,
             function_name="has",
@@ -252,7 +256,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
             sub_conditions = get_first_level_and_conditions(condition)
-            tag_eq_match_strings = set()
+            tag_eq_match_keys = set()
             matched_tag_exists_conditions = {}
             for condition_id, cond in enumerate(sub_conditions):
                 tag_exist_match = None
@@ -263,13 +267,13 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                 if not tag_exist_match:
                     eq_match = self.__optimizable_pattern.match(cond)
                     if eq_match:
-                        tag_eq_match_strings.add(eq_match.string(KEY_MAPPING_PARAM))
+                        tag_eq_match_keys.add(eq_match.scalar(KEY_MAPPING_PARAM))
             useful_conditions = []
             for condition_id, cond in enumerate(sub_conditions):
                 tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
                 if tag_exist_match:
-                    requested_tag = tag_exist_match.string("key")
-                    if requested_tag in tag_eq_match_strings:
+                    requested_tag = tag_exist_match.scalar("key")
+                    if requested_tag in tag_eq_match_keys:
                         # the clause is redundant, thus we continue the loop
                         # and do not add it to useful_conditions
                         continue
