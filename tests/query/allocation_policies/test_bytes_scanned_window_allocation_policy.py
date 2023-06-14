@@ -95,19 +95,14 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
     assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
-from unittest import mock
-
-
-@mock.patch("snuba.query.allocation_policies.AllocationPolicy")
 @pytest.mark.redis_db
-def test_killswitch(mock: mock.MagicMock, policy: AllocationPolicy) -> None:
+def test_killswitch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     policy.set_config_value("is_active", 0)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    mock_get_quota_allowance = mock.return_value
     policy.update_quota_balance(
         tenant_ids,
         QueryResultOrError(
@@ -119,9 +114,6 @@ def test_killswitch(mock: mock.MagicMock, policy: AllocationPolicy) -> None:
         ),
     )
     allowance = policy.get_quota_allowance(tenant_ids)
-    # assert that child methods were not called
-    mock_get_quota_allowance._update_quota_balance.assert_not_called()
-    mock_get_quota_allowance._get_quota_allowance.assert_not_called()
     # policy is not active so no change
     assert allowance.max_threads == MAX_THREAD_NUMBER
 

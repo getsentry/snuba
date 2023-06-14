@@ -17,6 +17,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.state import set_config
+from snuba.web import QueryResult
 
 
 def test_eq() -> None:
@@ -385,3 +386,35 @@ def test_bad_defaults() -> None:
         SomeParametrizedConfigPolicy(
             StorageKey("some_storage"), [], {"my_param_config": False}
         )
+
+
+@pytest.mark.redis_db
+@mock.patch("snuba.query.allocation_policies.AllocationPolicy")
+def test_is_not_active(
+    mock: mock.MagicMock,
+) -> None:
+    policy = SomeParametrizedConfigPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"my_param_config": 420, "is_active": 0, "is_enforced": 0},
+    )
+    mock_return_value = mock.return_value
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    policy.update_quota_balance(
+        tenant_ids,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"bytes": 420}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+    policy.get_quota_allowance(tenant_ids)
+
+    # assert that child methods were not called because policy is inactive
+    mock_return_value._update_quota_balance.assert_not_called()
+    mock_return_value._get_quota_allowance.assert_not_called()
