@@ -4,6 +4,8 @@ from urllib.parse import urlencode
 import structlog
 from googleapiclient.discovery import Resource, build
 
+from snuba import settings
+
 logger = structlog.get_logger().bind(module=__name__)
 
 
@@ -13,11 +15,13 @@ class CloudIdentityAPI:
     """
 
     def __init__(self, service: Resource = None) -> None:
-        self.initialized = False
+        self.service = service
+        self.initialized = service is not None
+        if settings.DEBUG or settings.TESTING or self.initialized:
+            return
+
         try:
-            self.service: Resource = (
-                service if service else build("cloudidentity", "v1")
-            )
+            self.service = build("cloudidentity", "v1")
             self.initialized = True
         except Exception as e:
             logger.exception(e)
