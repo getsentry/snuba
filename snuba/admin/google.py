@@ -16,14 +16,16 @@ class CloudIdentityAPI:
 
     def __init__(self, service: Resource = None) -> None:
         self.initialized = False
+        if settings.DEBUG or settings.TESTING:
+            return
+
         try:
             self.service: Resource = (
                 service if service else build("cloudidentity", "v1")
             )
             self.initialized = True
         except Exception as e:
-            if not settings.DEBUG and not settings.TESTING:
-                logger.exception(e)
+            logger.exception(e)
 
     def _get_group_id(self, group_email: str) -> Optional[str]:
         if not self.initialized:
