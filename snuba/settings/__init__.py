@@ -127,6 +127,7 @@ class RedisClusterConfig(TypedDict):
     port: int
     password: str | None
     db: int
+    ssl: bool
     reinitialize_steps: int
 
 
