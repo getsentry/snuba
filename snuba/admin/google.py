@@ -16,13 +16,12 @@ class CloudIdentityAPI:
 
     def __init__(self, service: Resource = None) -> None:
         self.initialized = False
+        self.service = service
         if settings.DEBUG or settings.TESTING:
             return
 
         try:
-            self.service: Resource = (
-                service if service else build("cloudidentity", "v1")
-            )
+            self.service = build("cloudidentity", "v1")
             self.initialized = True
         except Exception as e:
             logger.exception(e)
