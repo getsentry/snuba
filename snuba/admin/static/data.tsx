@@ -63,7 +63,7 @@ const NAV_ITEMS = [
     component: DeadLetterQueue,
   },
   {
-    id: "cardinality_analyzer",
+    id: "cardinality-analyzer",
     display: "🔢Cardinality Analyzer!!!",
     component: CardinalityAnalyzer,
   },
