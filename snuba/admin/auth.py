@@ -68,10 +68,7 @@ def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
 def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
     # to subset of DEFAULT_ROLES based on IAM roles
-    iam_roles: Sequence[str] = []
-    if not settings.DEBUG and not settings.TESTING:
-        iam_roles = get_iam_roles_from_file(user)
-
+    iam_roles = get_iam_roles_from_file(user)
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
     return user
 
