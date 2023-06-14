@@ -36,20 +36,38 @@ class TransactionEvent:
     status: str
 
     def __post_init__(self) -> None:
-        self.span1_start_timestamp = (
-            datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=1)
-        ).timestamp()
-        self.span1_end_timestamp = (
-            datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=500)
-        ).timestamp()
+        # Setup root span milliseconds
+        self.root_span_start_ms = int(
+            datetime.utcfromtimestamp(self.start_timestamp).microsecond / 1000
+        )
+        self.root_span_end_ms = int(
+            datetime.utcfromtimestamp(self.timestamp).microsecond / 1000
+        )
+
+        # Setup span1 timestamps and durations
+        self.span1_start_time = datetime.utcfromtimestamp(
+            self.start_timestamp
+        ) + timedelta(seconds=1)
+        self.span1_start_timestamp = self.span1_start_time.timestamp()
+        self.span1_start_ms = int(self.span1_start_time.microsecond / 1000)
+        self.span1_end_time = datetime.utcfromtimestamp(
+            self.start_timestamp
+        ) + timedelta(seconds=500)
+        self.span1_end_ms = int(self.span1_end_time.microsecond / 1000)
+        self.span1_end_timestamp = self.span1_end_time.timestamp()
         self.span1_duration = (
             int(self.span1_end_timestamp - self.span1_start_timestamp) * 1000
         )
 
-        self.span2_start_timestamp = (
-            datetime.utcfromtimestamp(self.start_timestamp) + timedelta(seconds=100)
-        ).timestamp()
+        # Setup span2 timestamps and durations
+        self.span2_start_time = datetime.utcfromtimestamp(
+            self.start_timestamp
+        ) + timedelta(seconds=100)
+        self.span2_start_timestamp = self.span2_start_time.timestamp()
+        self.span2_start_ms = int(self.span2_start_time.microsecond / 1000)
+        self.span2_end_time = self.span1_end_time
         self.span2_end_timestamp = self.span1_end_timestamp
+        self.span2_end_ms = self.span1_end_ms
         self.span2_duration = (
             int(self.span2_end_timestamp - self.span2_start_timestamp) * 1000
         )
@@ -228,7 +246,9 @@ class TransactionEvent:
                 "is_segment": 1,
                 "segment_name": self.transaction_name,
                 "start_timestamp": start_timestamp,
+                "start_ms": self.root_span_start_ms,
                 "end_timestamp": finish_timestamp,
+                "end_ms": self.root_span_end_ms,
                 "duration": int(
                     (finish_timestamp - start_timestamp).total_seconds() * 1000
                 ),
@@ -276,7 +296,9 @@ class TransactionEvent:
                 "start_timestamp": datetime.utcfromtimestamp(
                     self.span1_start_timestamp
                 ),
+                "start_ms": self.span1_start_ms,
                 "end_timestamp": datetime.utcfromtimestamp(self.span1_end_timestamp),
+                "end_ms": self.span1_end_ms,
                 "duration": self.span1_duration,
                 "exclusive_time": 0.1234,
                 "op": "http.client",
@@ -315,7 +337,9 @@ class TransactionEvent:
                 "start_timestamp": datetime.utcfromtimestamp(
                     self.span2_start_timestamp
                 ),
+                "start_ms": self.span2_start_ms,
                 "end_timestamp": datetime.utcfromtimestamp(self.span2_end_timestamp),
+                "end_ms": self.span2_end_ms,
                 "duration": self.span2_duration,
                 "exclusive_time": 0.4567,
                 "op": "db",
