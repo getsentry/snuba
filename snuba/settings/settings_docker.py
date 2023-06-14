@@ -10,7 +10,6 @@ REDIS_HOST = env("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(env("REDIS_PORT", 6379))
 REDIS_PASSWORD = env("REDIS_PASSWORD")
 REDIS_DB = int(env("REDIS_DB", 1))
-REDIS_SSL = bool(env("REDIS_SSL", False))
 USE_REDIS_CLUSTER = False
 
 # Dogstatsd Options
