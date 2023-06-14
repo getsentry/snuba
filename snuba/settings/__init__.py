@@ -127,6 +127,7 @@ class RedisClusterConfig(TypedDict):
     port: int
     password: str | None
     db: int
+    ssl: bool
     reinitialize_steps: int
 
 
@@ -140,6 +141,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
+REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
 
