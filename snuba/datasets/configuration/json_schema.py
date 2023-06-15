@@ -701,10 +701,6 @@ V1_DATASET_SCHEMA = {
         "version": {"const": "v1", "description": "Version of schema"},
         "kind": {"const": "dataset", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the dataset"},
-        "is_experimental": {
-            "type": "boolean",
-            "description": "Marks the dataset as experimental. Healthchecks failing on this dataset will not block deploys and affect Snuba server's SLOs",
-        },
         "entities": {
             "type": "array",
             "items": TYPE_STRING,
@@ -716,7 +712,6 @@ V1_DATASET_SCHEMA = {
         "kind",
         "name",
         "entities",
-        "is_experimental",
     ],
     "additionalProperties": False,
 }

@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: replays
 
-is_experimental: false
-
 entities:
   - replays

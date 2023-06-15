@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: spans
 
-is_experimental: true
-
 entities:
   - spans

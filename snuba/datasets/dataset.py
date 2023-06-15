@@ -43,15 +43,6 @@ class Dataset:
     def __init__(self, *, all_entities: Sequence[EntityKey]) -> None:
         self.__all_entities = all_entities
 
-    def is_experimental(self) -> bool:
-        """Marks the dataset as experimental. Healthchecks failing on this
-        dataset:
-            * do not block deploys
-            * affect the snuba server's SLO
-            * still have metrics reported
-        """
-        return False
-
     def get_all_entities(self) -> Sequence[Entity]:
         return [get_entity(entity_key) for entity_key in self.__all_entities]
 
