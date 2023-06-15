@@ -15,7 +15,6 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
@@ -33,6 +32,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -44,14 +44,6 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.consumers.dlq import (
-    DlqInstruction,
-    DlqInstructionStatus,
-    DlqReplayPolicy,
-    clear_instruction,
-    load_instruction,
-    store_instruction,
-)
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -844,66 +836,6 @@ def set_allocation_policy_config() -> Response:
         )
 
 
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    # HACK (Volo):
-    # mostly copypasta from querylog, should not stick around for too long
-    # when production query tool gets made this should not be necessary
-    user = request.headers.get(USER_HEADER_KEY, "unknown")
-    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
-        return Response(
-            json.dumps({"error": "Unauthorized"}),
-            401,
-            {"Content-Type": "application/json"},
-        )
-    req = json.loads(request.data)
-    try:
-        raw_sql = req["sql"]
-    except KeyError as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
-                    }
-                }
-            ),
-            400,
-        )
-    try:
-        result = run_metrics_query(raw_sql, user)
-        rows, columns = result.results, result.meta
-        if columns:
-            return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
-            )
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
-        )
-    except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
-    except InvalidCustomQuery as err:
-        return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except Exception as err:
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
-        )
-
-
 @application.route("/dead_letter_queue", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.KAFKA])
 def dlq_topics() -> Response:
@@ -946,3 +878,9 @@ def dlq_replay() -> Response:
         return make_response(jsonify(None), 200)
 
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
+
+
+@application.route("/production_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_query() -> Response:
+    return Response()
