@@ -65,18 +65,17 @@ def test_raises_on_false_can_run() -> None:
         ).get_quota_allowance({})
 
 
+class BadlyWrittenAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+        raise AttributeError("You messed up!")
+
+    def _update_quota_balance(
+        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+    ) -> None:
+        raise ValueError("you messed up AGAIN")
+
+
 def test_passes_through_on_error() -> None:
-    class BadlyWrittenAllocationPolicy(PassthroughPolicy):
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
-        ) -> QuotaAllowance:
-            raise AttributeError("You messed up!")
-
-        def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
-        ) -> None:
-            raise ValueError("you messed up AGAIN")
-
     with pytest.raises(AttributeError):
         BadlyWrittenAllocationPolicy(
             StorageKey("something"), [], {}
@@ -389,32 +388,34 @@ def test_bad_defaults() -> None:
 
 
 @pytest.mark.redis_db
-@mock.patch("snuba.query.allocation_policies.AllocationPolicy")
-def test_is_not_active(
-    mock: mock.MagicMock,
-) -> None:
-    policy = SomeParametrizedConfigPolicy(
+def test_is_not_active() -> None:
+    # active policy
+    policy = BadlyWrittenAllocationPolicy(
         StorageKey("some_storage"),
         [],
-        {"my_param_config": 420, "is_active": 0, "is_enforced": 0},
+        {"my_param_config": 420, "is_active": 1, "is_enforced": 0},
     )
-    mock_return_value = mock.return_value
+
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    policy.update_quota_balance(
-        tenant_ids,
-        QueryResultOrError(
-            query_result=QueryResult(
-                result={"profile": {"bytes": 420}},
-                extra={"stats": {}, "sql": "", "experiments": {}},
-            ),
-            error=None,
+    result_or_error = QueryResultOrError(
+        query_result=QueryResult(
+            result={"profile": {"bytes": 420}},
+            extra={"stats": {}, "sql": "", "experiments": {}},
         ),
+        error=None,
     )
-    policy.get_quota_allowance(tenant_ids)
 
-    # assert that child methods were not called because policy is inactive
-    mock_return_value._update_quota_balance.assert_not_called()
-    mock_return_value._get_quota_allowance.assert_not_called()
+    # Should error since private methods _get_quota_allowance and _update_quota_balance are called
+    with pytest.raises(AttributeError):
+        policy.get_quota_allowance(tenant_ids)
+    with pytest.raises(ValueError):
+        policy.update_quota_balance(tenant_ids, result_or_error)
+
+    policy.set_config_value(config_key="is_active", value=0)  # make policy inactive
+
+    # Should not error anymore since private methods are not called due to inactivity
+    policy.get_quota_allowance(tenant_ids)
+    policy.update_quota_balance(tenant_ids, result_or_error)
