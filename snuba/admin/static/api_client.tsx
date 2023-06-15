@@ -28,7 +28,7 @@ import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
 import { AllocationPolicy } from "./capacity_management/types";
 
-import { Topic } from "./dead_letter_queue/types";
+import { ReplayInstruction, Topic } from "./dead_letter_queue/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -75,6 +75,12 @@ interface Client {
     params: object
   ) => Promise<void>;
   getDlqTopics: () => Promise<Topic[]>;
+  getDlqInstruction: () => Promise<ReplayInstruction | null>;
+  setDlqInstruction: (
+    topic: Topic,
+    instruction: ReplayInstruction
+  ) => Promise<ReplayInstruction | null>;
+  clearDlqInstruction: () => Promise<ReplayInstruction | null>;
 }
 
 function Client() {
@@ -357,6 +363,43 @@ function Client() {
       const url = baseUrl + "dead_letter_queue";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    getDlqInstruction: () => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setDlqInstruction: (topic: Topic, instruction: ReplayInstruction) => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({
+          logicalName: topic.logicalName,
+          physicalName: topic.physicalName,
+          storage: topic.storage,
+          slice: topic.slice,
+          maxMessages: instruction.messagesToProcess,
+          policy: instruction.policy,
+        }),
+      }).then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not replay";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+    clearDlqInstruction: () => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
       }).then((resp) => resp.json());
     },
   };

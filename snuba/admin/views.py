@@ -43,6 +43,13 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.consumers.dlq import (
+    DlqInstruction,
+    DlqPolicy,
+    clear_instruction,
+    load_instruction,
+    store_instruction,
+)
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -839,3 +846,37 @@ def set_allocation_policy_config() -> Response:
 @check_tool_perms(tools=[AdminTools.KAFKA])
 def dlq_topics() -> Response:
     return make_response(jsonify(get_dlq_topics()), 200)
+
+
+@application.route("/dead_letter_queue/replay", methods=["GET", "POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_replay() -> Response:
+    if request.method == "POST":
+        req = request.get_json() or {}  # Required for typing
+
+        try:
+            policy = DlqPolicy(req["policy"])
+            storage_key = StorageKey(req["storage"])
+            slice_id = req["slice"]
+            max_messages_to_process = req["maxMessages"]
+            assert max_messages_to_process > 0, "maxMessages must be greater than 1"
+        except (KeyError, AssertionError):
+            return make_response("Missing required fields", 400)
+
+        if load_instruction() is not None:
+            return make_response("Instruction exists", 400)
+
+        instruction = DlqInstruction(
+            policy, storage_key, slice_id, max_messages_to_process
+        )
+        store_instruction(instruction)
+
+    if request.method == "DELETE":
+        clear_instruction()
+
+    loaded_instruction = load_instruction()
+
+    if loaded_instruction is None:
+        return make_response(jsonify(None), 200)
+
+    return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)

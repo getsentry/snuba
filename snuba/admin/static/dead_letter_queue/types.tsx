@@ -5,4 +5,11 @@ type Topic = {
   storage: string;
 };
 
-export { Topic };
+type Policy = "reinsert-dlq" | "stop-on-error" | "drop-invalid-messages";
+
+type ReplayInstruction = {
+  messagesToProcess: number;
+  policy: Policy;
+};
+
+export { Policy, Topic, ReplayInstruction };
