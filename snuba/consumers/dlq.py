@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class DlqPolicy(Enum):
-    CRASH = "stop-on-error"
+    STOP_ON_ERROR = "stop-on-error"
     REINSERT_DLQ = "reinsert-dlq"
     DROP_INVALID_MESSAGES = "drop-invalid-messages"
 
