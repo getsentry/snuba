@@ -192,8 +192,9 @@ class ConsumerBuilder:
             commit_retry_policy=self.__commit_retry_policy,
         )
 
+        self.dlq_producer: Optional[KafkaProducer]
         if self.__consumer_config.dlq_topic is not None:
-            dlq_producer = KafkaProducer(
+            self.dlq_producer = KafkaProducer(
                 build_kafka_configuration(
                     self.__consumer_config.dlq_topic.broker_config
                 )
@@ -201,13 +202,14 @@ class ConsumerBuilder:
 
             dlq_policy = DlqPolicy(
                 KafkaDlqProducer(
-                    dlq_producer,
+                    self.dlq_producer,
                     Topic(self.__consumer_config.dlq_topic.physical_topic_name),
                 ),
                 DlqLimit(),
                 None,
             )
         else:
+            self.dlq_producer = None
             dlq_policy = None
 
         return StreamProcessor(
@@ -323,6 +325,9 @@ class ConsumerBuilder:
 
         if self.commit_log_producer:
             self.commit_log_producer.flush()
+
+        if self.dlq_producer:
+            self.dlq_producer.close()
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
