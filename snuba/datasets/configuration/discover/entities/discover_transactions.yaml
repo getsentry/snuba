@@ -267,6 +267,8 @@ storages:
               - exception_main_thread
               - modules.name
               - modules.version
+              - trace_sampled
+              - num_processing_errors
       subscriptables:
         - mapper: SubscriptableMapper
           args:

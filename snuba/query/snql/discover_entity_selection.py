@@ -89,6 +89,8 @@ EVENTS_COLUMNS = ColumnSet(
         ),
         ("modules", Nested([("name", String()), ("version", String())])),
         ("exception_main_thread", UInt(8, Modifiers(nullable=True))),
+        ("trace_sampled", UInt(8, Modifiers(nullable=True))),
+        ("num_processing_errors", UInt(64, Modifiers(nullable=True))),
     ]
 )
 

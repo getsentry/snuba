@@ -1736,6 +1736,29 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)["data"]
         assert len(data) == 11
 
+    def test_trace_sample_num_processing_errors(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": ["trace_sampled", "num_processing_errors"],
+                    "limit": 1000,
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "conditions": [["project_id", "IN", [self.project_id]]],
+                    "consistent": False,
+                }
+            ),
+            entity="discover",
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data == [{"trace_sampled": None, "num_processing_errors": 0}]
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """

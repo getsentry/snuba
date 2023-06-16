@@ -259,6 +259,16 @@ schema:
       type: UUID,
       args: { schema_modifiers: [nullable] },
     },
+    {
+      name: trace_sampled,
+      type: UInt,
+      args: { schema_modifiers: [ nullable ], size: 8 },
+    },
+    {
+      name: num_processing_errors,
+      type: UInt,
+      args: { schema_modifiers: [ nullable ], size: 64 },
+    },
   ]
 required_time_column: timestamp
 storages:
