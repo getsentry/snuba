@@ -29,11 +29,7 @@ from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import (
-    _apply_thread_quota_to_clickhouse_query_settings,
-    _get_query_settings_from_config,
-    db_query,
-)
+from snuba.web.db_query_class import DBQuery
 
 test_data = [
     pytest.param(
@@ -90,7 +86,22 @@ def test_query_settings_from_config(
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix) == expected
+    query, storage, attribution_info = _build_test_query("count(project_id)")
+
+    db_query_class = DBQuery(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=[],
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats={},
+        trace_id="trace_id",
+    )
+    db_query_class._get_query_settings_from_config()
+    assert db_query_class.clickhouse_query_settings == expected
 
 
 test_thread_quota_data = [
@@ -118,11 +129,22 @@ def test_apply_thread_quota(
     for rlimit in rate_limit_params:
         settings.add_rate_limit(rlimit)
     settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings: dict[str, Any] = {}
-    _apply_thread_quota_to_clickhouse_query_settings(
-        settings, clickhouse_query_settings, rate_limit_stats
+    query, storage, attribution_info = _build_test_query("count(project_id)")
+    db_query_class = DBQuery(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=[],
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats={},
+        trace_id="trace_id",
     )
-    assert clickhouse_query_settings == expected_query_settings
+    db_query_class._apply_thread_quota_to_clickhouse_query_settings(rate_limit_stats)
+
+    assert db_query_class.clickhouse_query_settings == expected_query_settings
 
 
 def _build_test_query(
@@ -165,7 +187,7 @@ def test_db_query_success() -> None:
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
 
-    result = db_query(
+    result = DBQuery(
         clickhouse_query=query,
         query_settings=HTTPQuerySettings(),
         attribution_info=attribution_info,
@@ -177,7 +199,7 @@ def test_db_query_success() -> None:
         stats=stats,
         trace_id="trace_id",
         robust=False,
-    )
+    ).db_query()
     assert stats["quota_allowance"] == {
         "BytesScannedWindowAllocationPolicy": {
             "can_run": True,
@@ -211,7 +233,7 @@ def test_db_query_bypass_cache() -> None:
     with mock.patch("snuba.web.db_query._get_cache_partition"):
         # random() is less than `bypass_readthrough_cache_probability` therefore we bypass the cache
         with mock.patch("snuba.web.db_query.random", return_value=0.2):
-            result = db_query(
+            result = DBQuery(
                 clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
                 attribution_info=attribution_info,
@@ -223,7 +245,7 @@ def test_db_query_bypass_cache() -> None:
                 stats=stats,
                 trace_id="trace_id",
                 robust=False,
-            )
+            ).db_query()
             assert stats["quota_allowance"] == {
                 "BytesScannedWindowAllocationPolicy": {
                     "can_run": True,
@@ -250,7 +272,7 @@ def test_db_query_fail() -> None:
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
     with pytest.raises(QueryException) as excinfo:
-        db_query(
+        DBQuery(
             clickhouse_query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=attribution_info,
@@ -262,7 +284,7 @@ def test_db_query_fail() -> None:
             stats=stats,
             trace_id="trace_id",
             robust=False,
-        )
+        ).db_query()
 
     assert len(query_metadata_list) == 1
     assert query_metadata_list[0].status.value == "error"
@@ -302,7 +324,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
-            db_query(
+            DBQuery(
                 clickhouse_query=mock.Mock(),
                 query_settings=HTTPQuerySettings(),
                 attribution_info=mock.Mock(),
@@ -314,7 +336,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 stats=stats,
                 trace_id="trace_id",
                 robust=False,
-            )
+            ).db_query()
         assert stats["quota_allowance"] == {
             "RejectAllocationPolicy": {
                 "can_run": False,
@@ -382,7 +404,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     stats: dict[str, Any] = {}
     settings = HTTPQuerySettings()
     settings.set_resource_quota(ResourceQuota(max_threads=420))
-    db_query(
+    DBQuery(
         clickhouse_query=query,
         query_settings=settings,
         attribution_info=attribution_info,
@@ -394,7 +416,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         stats=stats,
         trace_id="trace_id",
         robust=False,
-    )
+    ).db_query()
     assert settings.get_resource_quota().max_threads == POLICY_THREADS  # type: ignore
     assert stats["max_threads"] == POLICY_THREADS
     assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
@@ -472,7 +494,7 @@ def test_allocation_policy_updates_quota() -> None:
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         settings = HTTPQuerySettings()
-        db_query(
+        DBQuery(
             clickhouse_query=query,
             query_settings=settings,
             attribution_info=attribution_info,
@@ -484,7 +506,7 @@ def test_allocation_policy_updates_quota() -> None:
             stats=stats,
             trace_id="trace_id",
             robust=False,
-        )
+        ).db_query()
 
     for _ in range(MAX_QUERIES_TO_RUN):
         _run_query()
@@ -528,7 +550,7 @@ def test_clickhouse_settings_applied_to_query() -> None:
     reader.execute.return_value = result
     result.get.return_value.get.return_value = 0
 
-    db_query(
+    DBQuery(
         clickhouse_query=query,
         query_settings=settings,
         attribution_info=attribution_info,
@@ -540,7 +562,7 @@ def test_clickhouse_settings_applied_to_query() -> None:
         stats=stats,
         trace_id="trace_id",
         robust=False,
-    )
+    ).db_query()
 
     clickhouse_settings_used = reader.execute.call_args.args[1]
     assert (

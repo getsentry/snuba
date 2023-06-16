@@ -6,9 +6,13 @@ from unittest import mock
 
 import pytest
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
@@ -21,7 +25,9 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.web.db_query import _get_allocation_policies
+from snuba.query.query_settings import HTTPQuerySettings
+from snuba.utils.metrics.timer import Timer
+from snuba.web.db_query_class import DBQuery
 
 events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
 assert events_storage is not None
@@ -127,8 +133,28 @@ join_query = CompositeQuery(
         ),
     ],
 )
+@pytest.mark.clickhouse_db
 def test__get_allocation_policies(
     query: Union[ClickhouseQuery, CompositeQuery[Table]],
     expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
-    assert _get_allocation_policies(query) == expected_allocation_policies
+    obj = DBQuery(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=AttributionInfo(
+            app_id=AppID(key="key"),
+            tenant_ids={"referrer": "something", "organization_id": 1234},
+            referrer="something",
+            team=None,
+            feature=None,
+            parent_api=None,
+        ),
+        dataset_name="",
+        query_metadata_list=[],
+        formatted_query=format_query(query),
+        reader=get_storage(StorageKey("errors_ro")).get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats={},
+    )
+    obj._get_allocation_policies()
+    assert obj.allocation_policies == expected_allocation_policies

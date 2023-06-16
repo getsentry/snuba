@@ -125,6 +125,7 @@ class DBQuery:
         robust: bool = False,
     ) -> None:
         self.clickhouse_query = clickhouse_query
+        self.clickhouse_query_settings: MutableMapping[str, Any] = {}
         self.query_settings = query_settings
         self.attribution_info = attribution_info
         self.dataset_name = dataset_name
@@ -193,7 +194,7 @@ class DBQuery:
         all_confs = state.get_all_configs()
 
         # Populate the query settings with the default values
-        self.clickhouse_query_settings: MutableMapping[str, Any] = {
+        self.clickhouse_query_settings = {
             k.split("/", 1)[1]: v
             for k, v in all_confs.items()
             if k.startswith("query_settings/")
