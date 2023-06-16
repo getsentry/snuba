@@ -16,8 +16,7 @@ from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
-from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
-from confluent_kafka import KafkaError, KafkaException, Producer
+from confluent_kafka import KafkaError, Producer
 from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
@@ -72,7 +71,6 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         slice_id: Optional[int],
         join_timeout: Optional[int],
-        commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
@@ -143,21 +141,6 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
 
-        if commit_retry_policy is None:
-            commit_retry_policy = BasicRetryPolicy(
-                3,
-                1,
-                lambda e: isinstance(e, KafkaException)
-                and e.args[0].code()
-                in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR,
-                    KafkaError._WAIT_COORD,
-                ),
-            )
-
-        self.__commit_retry_policy = commit_retry_policy
-
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
@@ -189,7 +172,6 @@ class ConsumerBuilder:
 
         consumer = KafkaConsumer(
             configuration,
-            commit_retry_policy=self.__commit_retry_policy,
         )
 
         self.dlq_producer: Optional[KafkaProducer]
