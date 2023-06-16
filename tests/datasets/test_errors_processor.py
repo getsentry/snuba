@@ -380,6 +380,7 @@ class ErrorEvent:
             "modules.name": ["cffi", "ipython-genutils", "isodate"],
             "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
             "transaction_name": "",
+            "num_processing_errors": len(self.errors) if self.errors is not None else 0,
         }
 
         if self.replay_id:

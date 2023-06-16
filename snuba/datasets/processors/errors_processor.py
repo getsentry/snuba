@@ -144,7 +144,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
         self.extract_stacktraces(processed, stacks, threads)
 
         processing_errors = data.get("errors", None)
-        if processing_errors is not None and isinstance(processing_errors, list):
+        if processing_errors is None:
+            processed["num_processing_errors"] = 0
+        elif processing_errors is not None and isinstance(processing_errors, list):
             processed["num_processing_errors"] = len(processing_errors)
 
         processed["offset"] = metadata.offset
