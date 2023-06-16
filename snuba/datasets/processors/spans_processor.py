@@ -138,7 +138,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             "span_id"
         ]
         processed["is_segment"] = 1
-        parent_span_id = transaction_ctx.get("parent_span_id", 0)
+        parent_span_id: str = transaction_ctx.get("parent_span_id", "0") or "0"
         processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
 
         processed["description"] = _unicodify(event_dict.get("description", ""))
@@ -292,7 +292,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span.update(copy.deepcopy(common_span_fields))
         processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
         processed_span["span_id"] = int(span_dict["span_id"], 16)
-        processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
+        processed_span["parent_span_id"] = int(
+            span_dict.get("parent_span_id", "0") or "0", 16
+        )
         processed_span["is_segment"] = 0
         processed_span["op"] = _unicodify(span_dict.get("op", ""))
         processed_span["group"] = int(span_dict.get("hash", 0), 16)
@@ -404,8 +406,11 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 "log_bad_span_message_percentage", default=0.0
             )
             if random.random() < float(log_bad_span_pct if log_bad_span_pct else 0.0):
+                # key fields in extra_bag are prefixed with "spans_" to avoid conflicts with
+                # other fields in LogRecords
+                extra_bag = {"spans_" + str(k): v for k, v in message[2].items()}
                 logger.warning(
-                    "Failed to process span message", extra=message[2], exc_info=e
+                    "Failed to process span message", extra=extra_bag, exc_info=e
                 )
             return None
 

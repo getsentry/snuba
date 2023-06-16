@@ -463,6 +463,37 @@ class TestSpansProcessor:
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
 
+    def test_missing_spans_id(self, caplog) -> None:
+        set_config("spans_project_allowlist", "[1]")
+        set_config("log_bad_span_message_percentage", "1")
+
+        # check that we set the parent_span_id to 0 it is missing
+        message = self.__get_transaction_event()
+        message.parent_span_id = None
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        actual_result = SpansMessageProcessor().process_message(
+            message.serialize(), meta
+        )
+        assert isinstance(actual_result, InsertBatch)
+        assert actual_result.rows[0]["parent_span_id"] == 0
+        expected_result = message.build_result(meta)
+        compare_types_and_values(actual_result.rows[0], expected_result[0])
+
+        # check that we fail gracefully and log if the span_id is missing
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        message.span_id = None
+        actual_result = SpansMessageProcessor().process_message(
+            message.serialize(), meta
+        )
+        # check pytest logs for the warning here
+        assert "Failed to process span message" in caplog.text
+        assert actual_result is None
+
 
 @pytest.mark.parametrize(
     "tags, expected_output",
