@@ -74,7 +74,7 @@ def _set_roles(user: AdminUser) -> AdminUser:
     iam_roles = redis_client.smembers(user.email)
     if not iam_roles:
         iam_roles = get_iam_roles_from_file(user)
-        redis_client.sadd(user.email, iam_roles)
+        redis_client.sadd(user.email, *iam_roles)
         redis_client.expire(user.email, settings.ADMIN_ROLES_REDIS_TTL)
 
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
