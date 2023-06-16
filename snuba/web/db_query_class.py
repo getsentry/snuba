@@ -134,20 +134,20 @@ class DBQuery:
         trace_id: Optional[str] = None,
         robust: bool = False,
     ) -> None:
+        self.sql = formatted_query.get_sql()
+        self.query_id = md5(force_bytes(self.sql)).hexdigest()
         self.clickhouse_query = clickhouse_query
-        self.clickhouse_query_settings: MutableMapping[str, Any] = {}
+        self.clickhouse_query_settings: dict[str, Any] = {"query_id": self.query_id}
         self.query_settings = query_settings
         self.attribution_info = attribution_info
         self.dataset_name = dataset_name
         self.query_metadata_list = query_metadata_list
         self.formatted_query = formatted_query
-        self.sql = formatted_query.get_sql()
         self.reader = reader
         self.timer = timer
         self.stats = stats
         self.trace_id = trace_id
         self.robust = robust
-        self.query_id = md5(force_bytes(self.sql)).hexdigest()
         self.allocation_policies: list[AllocationPolicy] = [DEFAULT_PASSTHROUGH_POLICY]
         self.cache_partitions = CACHE_PARTITIONS
 
@@ -155,7 +155,6 @@ class DBQuery:
     def db_query(self) -> QueryResult:
 
         self._get_query_settings_from_config()
-        self.clickhouse_query_settings["query_id"] = self.query_id
 
         cached_result = self._get_cached_query_result()
         if cached_result is not None:
@@ -197,11 +196,13 @@ class DBQuery:
         all_confs = state.get_all_configs()
 
         # Populate the query settings with the default values
-        self.clickhouse_query_settings = {
-            k.split("/", 1)[1]: v
-            for k, v in all_confs.items()
-            if k.startswith("query_settings/")
-        }
+        self.clickhouse_query_settings.update(
+            {
+                k.split("/", 1)[1]: v
+                for k, v in all_confs.items()
+                if k.startswith("query_settings/")
+            }
+        )
 
         if override_prefix := self.reader.get_query_settings_prefix():
             for k, v in all_confs.items():
