@@ -371,19 +371,6 @@ def _format_storage_query_and_run(
                 trace_id=span.trace_id,
                 robust=robust,
             ).db_query()
-            # return db_query(
-            #     clickhouse_query=clickhouse_query,
-            #     query_settings=query_settings,
-            #     attribution_info=attribution_info,
-            #     dataset_name=query_metadata.dataset,
-            #     formatted_query=formatted_query,
-            #     reader=reader,
-            #     timer=timer,
-            #     query_metadata_list=query_metadata.query_list,
-            #     stats=stats,
-            #     trace_id=span.trace_id,
-            #     robust=robust,
-            # )
 
         if concurrent_queries_gauge is not None:
             with concurrent_queries_gauge:

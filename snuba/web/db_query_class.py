@@ -172,13 +172,7 @@ class DBQuery:
             # if it didn't do that, something is very wrong so we just panic out here
             raise e
         finally:
-            for allocation_policy in self.allocation_policies:
-                allocation_policy.update_quota_balance(
-                    tenant_ids=self.attribution_info.tenant_ids,
-                    result_or_error=QueryResultOrError(
-                        query_result=result, error=error
-                    ),
-                )
+            self._update_allocation_policy_quotas(result, error)
             if result:
                 return result
             raise error or Exception(
@@ -226,33 +220,15 @@ class DBQuery:
             if span:
                 span.set_data("cache_status", span_tag)
         except Exception as cause:
+            # Log error to Sentry and let query go to ClickHouse
             request_status = get_request_status(cause)
-            sql = self.sql
             if request_status.slo == SLO.AGAINST:
-                logger.exception("Error running query: %s\n%s", sql, cause)
-
-            with configure_scope() as scope:
-                if scope.span:
-                    sentry_sdk.set_tag("slo_status", request_status.status.value)
-
-            self._update_stats_and_metadata(
-                status=QueryStatus.ERROR,
-                request_status=request_status,
-            )
-            raise QueryException.from_args(
-                # This exception needs to have the message of the cause in it for sentry
-                # to pick it up properly
-                cause.__class__.__name__,
-                str(cause),
-                {
-                    "stats": self.stats,
-                    "sql": sql,
-                    "experiments": self.clickhouse_query.get_experiments(),
-                },
-            ) from cause
+                logger.exception(f"Checking cached query failed: {cause}")
+            return None
         else:
             if result is None:
                 return None
+
             self._update_stats_and_metadata(
                 status=QueryStatus.SUCCESS,
                 request_status=get_request_status(),
@@ -394,6 +370,7 @@ class DBQuery:
                 },
             ) from cause
 
+    @with_span(op="db")
     def _try_running_query(self) -> QueryResult:
         try:
             result = self._execute_query_with_readthrough_caching()
@@ -451,6 +428,16 @@ class DBQuery:
                     "sql": self.sql,
                     "experiments": self.clickhouse_query.get_experiments(),
                 },
+            )
+
+    @with_span(op="capacity_management")
+    def _update_allocation_policy_quotas(
+        self, result: QueryResult | None, error: QueryException | None
+    ) -> None:
+        for allocation_policy in self.allocation_policies:
+            allocation_policy.update_quota_balance(
+                tenant_ids=self.attribution_info.tenant_ids,
+                result_or_error=QueryResultOrError(query_result=result, error=error),
             )
 
     def _get_cache_partition(self) -> Cache[Result]:
