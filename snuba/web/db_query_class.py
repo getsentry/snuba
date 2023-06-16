@@ -130,6 +130,7 @@ class DBQuery:
         self.attribution_info = attribution_info
         self.dataset_name = dataset_name
         self.query_metadata_list = query_metadata_list
+        self.formatted_query = formatted_query
         self.sql = formatted_query.get_sql()
         self.reader = reader
         self.timer = timer
@@ -138,7 +139,6 @@ class DBQuery:
         self.robust = robust
         self.query_id = md5(force_bytes(self.sql)).hexdigest()
         self.allocation_policies: list[AllocationPolicy] = [DEFAULT_PASSTHROUGH_POLICY]
-
         self.cache_partitions: MutableMapping[str, Cache[Result]] = {
             DEFAULT_CACHE_PARTITION_ID: RedisCache(
                 redis_cache_client,
@@ -149,9 +149,10 @@ class DBQuery:
         }
 
     @with_span(op="db")
-    def execute(self) -> QueryResult:
+    def db_query(self) -> QueryResult:
 
         self._get_query_settings_from_config()
+        self.clickhouse_query_settings["query_id"] = self.query_id
 
         cached_result = self._get_cached_query_result()
         if cached_result is not None:
@@ -159,14 +160,91 @@ class DBQuery:
 
         self._get_allocation_policies()
         self._apply_allocation_policy_quotas()
+        self._apply_rate_limits()
 
-        apply_table_rate_limits()
+        return self._try_running_query()
 
-        result = execute_query()
+    def _get_query_settings_from_config(
+        self,
+    ) -> None:
+        """
+        Helper function to get the query settings from the config.
 
-        set_cached_query_result()
+        #TODO: Make this configurable by entity/dataset. Since we want to use
+        #      different settings across different clusters belonging to the
+        #      same entity/dataset, using cache_partition right now. This is
+        #      not ideal but it works for now.
+        """
+        all_confs = state.get_all_configs()
 
-        return result
+        # Populate the query settings with the default values
+        self.clickhouse_query_settings: MutableMapping[str, Any] = {
+            k.split("/", 1)[1]: v
+            for k, v in all_confs.items()
+            if k.startswith("query_settings/")
+        }
+
+        if override_prefix := self.reader.get_query_settings_prefix():
+            for k, v in all_confs.items():
+                if k.startswith(f"{override_prefix}/query_settings/"):
+                    self.clickhouse_query_settings[k.split("/", 2)[2]] = v
+        self.timer.mark("get_configs")
+
+    @with_span(op="db")
+    def _get_cached_query_result(self) -> QueryResult | None:
+        span = Hub.current.scope.span
+        if span:
+            span.set_data("query_id", self.query_id)
+        try:
+            result = self._get_cache_partition().get_cached_result_and_record_timer(
+                self.query_id, self.timer
+            )
+            self.stats["cache_hit"] = 1
+            span_tag = "cache_hit"
+            sentry_sdk.set_tag("cache_status", span_tag)
+            if span:
+                span.set_data("cache_status", span_tag)
+        except Exception as cause:
+            request_status = get_request_status(cause)
+            sql = self.sql
+            if request_status.slo == SLO.AGAINST:
+                logger.exception("Error running query: %s\n%s", sql, cause)
+
+            with configure_scope() as scope:
+                if scope.span:
+                    sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+            self._update_stats_and_metadata(
+                status=QueryStatus.ERROR,
+                request_status=request_status,
+            )
+            raise QueryException.from_args(
+                # This exception needs to have the message of the cause in it for sentry
+                # to pick it up properly
+                cause.__class__.__name__,
+                str(cause),
+                {
+                    "stats": self.stats,
+                    "sql": sql,
+                    "experiments": self.clickhouse_query.get_experiments(),
+                },
+            ) from cause
+        else:
+            if result is None:
+                return None
+            self._update_stats_and_metadata(
+                status=QueryStatus.SUCCESS,
+                request_status=get_request_status(),
+                profile_data=result["profile"],
+            )
+            return QueryResult(
+                result,
+                {
+                    "stats": self.stats,
+                    "sql": self.sql,
+                    "experiments": self.clickhouse_query.get_experiments(),
+                },
+            )
 
     def _get_allocation_policies(
         self, clickhouse_query: Union[Query, CompositeQuery[Table]] | None = None
@@ -250,58 +328,38 @@ class DBQuery:
             )
         )
 
-    def _get_query_settings_from_config(
-        self,
-    ) -> None:
-        """
-        Helper function to get the query settings from the config.
-
-        #TODO: Make this configurable by entity/dataset. Since we want to use
-        #      different settings across different clusters belonging to the
-        #      same entity/dataset, using cache_partition right now. This is
-        #      not ideal but it works for now.
-        """
-        all_confs = state.get_all_configs()
-
-        # Populate the query settings with the default values
-        self.clickhouse_query_settings: MutableMapping[str, Any] = {
-            k.split("/", 1)[1]: v
-            for k, v in all_confs.items()
-            if k.startswith("query_settings/")
-        }
-
-        if override_prefix := self.reader.get_query_settings_prefix():
-            for k, v in all_confs.items():
-                if k.startswith(f"{override_prefix}/query_settings/"):
-                    self.clickhouse_query_settings[k.split("/", 2)[2]] = v
-
     @with_span(op="db")
-    def _get_cached_query_result(self) -> QueryResult | None:
-        span = Hub.current.scope.span
-        if span:
-            span.set_data("query_id", self.query_id)
+    def _apply_rate_limits(self) -> None:
         try:
-            result = self._get_cache_partition().get_cached_result_and_record_timer(
-                self.query_id, self.timer
-            )
-            self.stats["cache_hit"] = 1
-            span_tag = "cache_hit"
-            sentry_sdk.set_tag("cache_status", span_tag)
-            if span:
-                span.set_data("cache_status", span_tag)
-        except Exception as cause:
+            with RateLimitAggregator(
+                self.query_settings.get_rate_limit_params()
+            ) as rate_limit_stats_container:
+                self.stats.update(rate_limit_stats_container.to_dict())
+                self.timer.mark("rate_limit")
+
+                project_rate_limit_stats = rate_limit_stats_container.get_stats(
+                    PROJECT_RATE_LIMIT_NAME
+                )
+                self._apply_thread_quota_to_clickhouse_query_settings(
+                    project_rate_limit_stats
+                )
+                self._record_rate_limit_metrics(rate_limit_stats_container)
+        except RateLimitExceeded as cause:
             request_status = get_request_status(cause)
-            sql = self.sql
+            status = QueryStatus.RATE_LIMITED
+            trigger_rate_limiter = cause.extra_data.get("scope", "")
+
             if request_status.slo == SLO.AGAINST:
-                logger.exception("Error running query: %s\n%s", sql, cause)
+                logger.exception("Error running query: %s\n%s", self.sql, cause)
 
             with configure_scope() as scope:
                 if scope.span:
                     sentry_sdk.set_tag("slo_status", request_status.status.value)
 
             self._update_stats_and_metadata(
-                status=QueryStatus.ERROR,
+                status=status or QueryStatus.ERROR,
                 request_status=request_status,
+                triggered_rate_limiter=str(trigger_rate_limiter),
             )
             raise QueryException.from_args(
                 # This exception needs to have the message of the cause in it for sentry
@@ -310,13 +368,56 @@ class DBQuery:
                 str(cause),
                 {
                     "stats": self.stats,
-                    "sql": sql,
+                    "sql": self.sql,
+                    "experiments": self.clickhouse_query.get_experiments(),
+                },
+            ) from cause
+
+    def _try_running_query(self) -> QueryResult:
+        try:
+            result = self._execute_query_with_readthrough_caching()
+        except Exception as cause:
+            error_code = None
+            status = None
+            request_status = get_request_status(cause)
+            if isinstance(cause, ClickhouseError):
+                error_code = cause.code
+                status = get_query_status_from_error_codes(error_code)
+
+                with configure_scope() as scope:
+                    fingerprint = ["{{default}}", str(cause.code), self.dataset_name]
+                    if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                        fingerprint.append(self.attribution_info.referrer)
+                    scope.fingerprint = fingerprint
+            elif isinstance(cause, TimeoutError):
+                status = QueryStatus.TIMEOUT
+            elif isinstance(cause, ExecutionTimeoutError):
+                status = QueryStatus.TIMEOUT
+
+            if request_status.slo == SLO.AGAINST:
+                logger.exception("Error running query: %s\n%s", self.sql, cause)
+
+            with configure_scope() as scope:
+                if scope.span:
+                    sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+            self._update_stats_and_metadata(
+                status=status or QueryStatus.ERROR,
+                request_status=request_status,
+                error_code=error_code,
+            )
+            raise QueryException.from_args(
+                # This exception needs to have the message of the cause in it for sentry
+                # to pick it up properly
+                cause.__class__.__name__,
+                str(cause),
+                {
+                    "stats": self.stats,
+                    "sql": self.sql,
                     "experiments": self.clickhouse_query.get_experiments(),
                 },
             ) from cause
         else:
-            if result is None:
-                return None
             self._update_stats_and_metadata(
                 status=QueryStatus.SUCCESS,
                 request_status=get_request_status(),
@@ -330,6 +431,34 @@ class DBQuery:
                     "experiments": self.clickhouse_query.get_experiments(),
                 },
             )
+
+    def _get_cache_partition(self) -> Cache[Result]:
+        enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+        if not enable_cache_partitioning:
+            return self.cache_partitions[DEFAULT_CACHE_PARTITION_ID]
+
+        partition_id = self.reader.cache_partition_id
+        if partition_id is not None and partition_id not in self.cache_partitions:
+            with cache_partitions_lock:
+                # This condition was checked before as this lock should be acquired only
+                # during the first query. So, for the vast majority of queries, the overhead
+                # of acquiring the lock is not needed.
+                if partition_id not in self.cache_partitions:
+                    self.cache_partitions[partition_id] = RedisCache(
+                        redis_cache_client,
+                        f"snuba-query-cache:{partition_id}:",
+                        ResultCacheCodec(),
+                        ThreadPoolExecutor(),
+                    )
+
+        partition = self.cache_partitions[
+            partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
+        ]
+        metrics.increment(
+            "cache_partition_loaded",
+            tags={"partition_id": self.reader.cache_partition_id or "default"},
+        )
+        return partition
 
     def _update_stats_and_metadata(
         self,
@@ -367,30 +496,169 @@ class DBQuery:
             )
         )
 
-    def _get_cache_partition(self) -> Cache[Result]:
-        enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
-        if not enable_cache_partitioning:
-            return self.cache_partitions[DEFAULT_CACHE_PARTITION_ID]
+    def _apply_thread_quota_to_clickhouse_query_settings(
+        self,
+        project_rate_limit_stats: Optional[RateLimitStats],
+    ) -> None:
+        thread_quota = self.query_settings.get_resource_quota()
+        if "max_threads" in self.clickhouse_query_settings or thread_quota is not None:
+            maxt = (
+                self.clickhouse_query_settings["max_threads"]
+                if thread_quota is None
+                else thread_quota.max_threads
+            )
+            if project_rate_limit_stats:
+                self.clickhouse_query_settings["max_threads"] = max(
+                    1, maxt - project_rate_limit_stats.concurrent + 1
+                )
+            else:
+                self.clickhouse_query_settings["max_threads"] = maxt
 
-        partition_id = self.reader.cache_partition_id
-        if partition_id is not None and partition_id not in self.cache_partitions:
-            with cache_partitions_lock:
-                # This condition was checked before as this lock should be acquired only
-                # during the first query. So, for the vast majority of queries, the overhead
-                # of acquiring the lock is not needed.
-                if partition_id not in self.cache_partitions:
-                    self.cache_partitions[partition_id] = RedisCache(
-                        redis_cache_client,
-                        f"snuba-query-cache:{partition_id}:",
-                        ResultCacheCodec(),
-                        ThreadPoolExecutor(),
-                    )
-
-        partition = self.cache_partitions[
-            partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
-        ]
-        metrics.increment(
-            "cache_partition_loaded",
-            tags={"partition_id": self.reader.cache_partition_id or "default"},
+    def _record_rate_limit_metrics(
+        self,
+        rate_limit_stats_container: RateLimitStatsContainer,
+    ) -> None:
+        # This is a temporary metric that will be removed once the organization
+        # rate limit has been tuned.
+        org_rate_limit_stats = rate_limit_stats_container.get_stats(
+            ORGANIZATION_RATE_LIMIT_NAME
         )
-        return partition
+        if org_rate_limit_stats is not None:
+            metrics.gauge(
+                name="org_concurrent",
+                value=org_rate_limit_stats.concurrent,
+            )
+            metrics.gauge(
+                name="org_per_second",
+                value=org_rate_limit_stats.rate,
+            )
+        table_rate_limit_stats = rate_limit_stats_container.get_stats(
+            TABLE_RATE_LIMIT_NAME
+        )
+        if table_rate_limit_stats is not None:
+            metrics.gauge(
+                name="table_concurrent",
+                value=table_rate_limit_stats.concurrent,
+                tags={
+                    "table": self.stats.get("clickhouse_table", ""),
+                    "cache_partition": self.reader.cache_partition_id
+                    if self.reader.cache_partition_id
+                    else "default",
+                },
+            )
+            metrics.gauge(
+                name="table_per_second",
+                value=table_rate_limit_stats.rate,
+                tags={
+                    "table": self.stats.get("clickhouse_table", ""),
+                    "cache_partition": self.reader.cache_partition_id
+                    if self.reader.cache_partition_id
+                    else "default",
+                },
+            )
+            metrics.timing(
+                name="table_concurrent_v2",
+                value=table_rate_limit_stats.concurrent,
+                tags={
+                    "table": self.stats.get("clickhouse_table", ""),
+                    "cache_partition": self.reader.cache_partition_id
+                    if self.reader.cache_partition_id
+                    else "default",
+                },
+            )
+
+    @with_span(op="db")
+    def _execute_query_with_readthrough_caching(self) -> Result:
+
+        span = Hub.current.scope.span
+
+        def record_cache_hit_type(hit_type: int) -> None:
+            span_tag = "cache_miss"
+            if hit_type == RESULT_WAIT:
+                self.stats["is_duplicate"] = 1
+                span_tag = "cache_wait"
+            sentry_sdk.set_tag("cache_status", span_tag)
+            if span:
+                span.set_data("cache_status", span_tag)
+
+        execute_query = partial(
+            self._get_cache_partition().get_readthrough,
+            function=self._execute_query,
+            record_cache_hit_type=record_cache_hit_type,
+            timeout=self._get_cache_wait_timeout(),
+            timer=self.timer,
+        )
+
+        try:
+            return execute_query(query_id=self.query_id)
+        except ClickhouseError as e:
+            if (
+                e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+                or not state.get_config("retry_duplicate_query_id", False)
+            ):
+                raise
+
+            logger.error(
+                f"Query cache for query ID {self.query_id} lost, retrying query with random ID"
+            )
+            metrics.increment("query_cache_lost")
+            self.query_id = f"randomized-{uuid.uuid4().hex}"
+            return execute_query(query_id=self.query_id)
+
+    def _get_cache_wait_timeout(self) -> int:
+        """
+        Helper function to determine how long a query should wait when doing
+        a readthrough caching.
+
+        The overrides are primarily used for debugging the ExecutionTimeoutError
+        raised by the readthrough caching system on the tigers cluster. When we
+        have root caused the problem we can remove the overrides.
+        """
+        cache_wait_timeout: int = int(
+            self.clickhouse_query_settings.get("max_execution_time", 30)
+        )
+        if self.reader.cache_partition_id and self.reader.cache_partition_id in {
+            "tiger_errors",
+            "tiger_transactions",
+        }:
+            tiger_wait_timeout_config = state.get_config("tiger-cache-wait-time")
+            if tiger_wait_timeout_config:
+                cache_wait_timeout = tiger_wait_timeout_config
+        return cache_wait_timeout
+
+    @with_span(op="db")
+    def _execute_query(self) -> Result:
+        """
+        Execute a query and return a result.
+        """
+        # Apply clickhouse query setting overrides
+        self.clickhouse_query_settings.update(
+            self.query_settings.get_clickhouse_settings()
+        )
+
+        # Force query to use the first shard replica, which
+        # should have synchronously received any cluster writes
+        # before this query is run.
+        consistent = self.query_settings.get_consistent()
+        self.stats["consistent"] = consistent
+        if consistent:
+            self.clickhouse_query_settings["load_balancing"] = "in_order"
+            self.clickhouse_query_settings["max_threads"] = 1
+
+        result = self.reader.execute(
+            self.formatted_query,
+            self.clickhouse_query_settings,
+            with_totals=self.clickhouse_query.has_totals(),
+            robust=self.robust,
+        )
+
+        self.timer.mark("execute")
+        self.stats.update(
+            {
+                "result_rows": len(result["data"]),
+                "result_cols": len(result["meta"]),
+                "max_threads": self.clickhouse_query_settings.get("max_threads", None),
+            }
+        )
+
+        return result
