@@ -29,7 +29,7 @@
           "group:access-snuba-admin@sentry.io"
       ],
       "role": "roles/ProductTools"
-    }
+    },
     {
       "members": [
           "group:team-starfish@sentry.io"
