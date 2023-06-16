@@ -214,11 +214,6 @@ class DBQuery:
             result = self._get_cache_partition().get_cached_result_and_record_timer(
                 self.query_id, self.timer
             )
-            self.stats["cache_hit"] = 1
-            span_tag = "cache_hit"
-            sentry_sdk.set_tag("cache_status", span_tag)
-            if span:
-                span.set_data("cache_status", span_tag)
         except Exception as cause:
             # Log error to Sentry and let query go to ClickHouse
             request_status = get_request_status(cause)
@@ -228,6 +223,12 @@ class DBQuery:
         else:
             if result is None:
                 return None
+
+            self.stats["cache_hit"] = 1
+            span_tag = "cache_hit"
+            sentry_sdk.set_tag("cache_status", span_tag)
+            if span:
+                span.set_data("cache_status", span_tag)
 
             self._update_stats_and_metadata(
                 status=QueryStatus.SUCCESS,
