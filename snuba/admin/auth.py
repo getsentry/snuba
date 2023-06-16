@@ -11,8 +11,11 @@ from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.google import CloudIdentityAPI
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
+from snuba.redis import RedisClientKey, get_redis_client
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
+redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -68,7 +71,12 @@ def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
 def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
     # to subset of DEFAULT_ROLES based on IAM roles
-    iam_roles = get_iam_roles_from_file(user)
+    iam_roles = redis_client.smembers(user.email)
+    if not iam_roles:
+        iam_roles = get_iam_roles_from_file(user)
+        redis_client.sadd(user.email, iam_roles)
+        redis_client.expire(user.email, settings.ADMIN_ROLES_REDIS_TTL)
+
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
     return user
 

@@ -55,6 +55,8 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
+ADMIN_ROLES_REDIS_TTL = 600
+
 ######################
 # End Admin Settings #
 ######################
@@ -154,6 +156,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -164,6 +167,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
 
 # Query Recording Options

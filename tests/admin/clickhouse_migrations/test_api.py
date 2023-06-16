@@ -22,6 +22,7 @@ from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.redis import RedisClientKey, get_redis_client
 
 
 @pytest.fixture
@@ -281,6 +282,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert mock_run_migration.call_count == 1
 
 
+@pytest.mark.redis_db
 def test_get_iam_roles(caplog: Any) -> None:
     system_role = generate_migration_test_role("system", "all")
     tool_role = generate_tool_test_role("snql-to-sql")
@@ -342,6 +344,8 @@ def test_get_iam_roles(caplog: Any) -> None:
                 tool_role,
             ]
 
+            _set_roles(user1)
+
             user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
             _set_roles(user2)
 
@@ -355,6 +359,29 @@ def test_get_iam_roles(caplog: Any) -> None:
             _set_roles(user3)
 
             assert user3.roles == [
+                system_role,
+                tool_role,
+            ]
+
+        iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
+                system_role,
+                tool_role,
+            ]
+
+            redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
+            redis_client.delete(user1.email)
+            _set_roles(user1)
+
+            assert user1.roles == [
                 system_role,
                 tool_role,
             ]
