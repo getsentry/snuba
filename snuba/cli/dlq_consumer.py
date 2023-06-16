@@ -115,7 +115,7 @@ def dlq_consumer(
         # even if the consumer does not finish processing it.
         clear_instruction()
 
-        logger.info("Starting DLQ consumer", extra={"instruction": instruction})
+        logger.info(f"Starting DLQ consumer {instruction}")
 
         metrics_tags = {
             "consumer_group": consumer_group,
@@ -167,7 +167,5 @@ def dlq_consumer(
 
         consumer = consumer_builder.build_dlq_consumer(instruction)
 
-        while not shutdown_requested:
-            consumer._run_once()
-
+        consumer.run()
         consumer_builder.flush()
