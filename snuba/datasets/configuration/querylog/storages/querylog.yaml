@@ -167,5 +167,4 @@ stream_loader:
   processor:
     name: QuerylogProcessor
   default_topic: snuba-queries
-  dlq_policy:
-    topic: snuba-dead-letter-querylog
+  dlq_topic: snuba-dead-letter-querylog

@@ -77,6 +77,7 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
             port=config["port"],
             password=config["password"],
             db=config["db"],
+            ssl=config.get("ssl", False),
             socket_keepalive=True,
         )
 
@@ -89,6 +90,7 @@ _default_redis_client: RedisClientType = _initialize_redis_cluster(
         "port": settings.REDIS_PORT,
         "password": settings.REDIS_PASSWORD,
         "db": settings.REDIS_DB,
+        "ssl": settings.REDIS_SSL,
         "reinitialize_steps": settings.REDIS_REINITIALIZE_STEPS,
     }
 )

@@ -218,6 +218,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+      - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
         run: cd snuba/admin && yarn install && yarn run test --coverage
       - name: Upload to codecov

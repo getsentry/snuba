@@ -1,5 +1,45 @@
 # Changelog
 
+## 23.6.1
+
+### Various fixes & improvements
+
+- fix: Accidentally checked in useless text (#4355) by @lynnagara
+- fix(admin): Pin yarn and node using volta (#4349) by @untitaker
+- meta: Bump new development version (c2c6e3c3)
+- feat(dlq): Redesign admin UI, add API endpoints for replaying (#4347) by @lynnagara
+
+## 23.6.0
+
+### Various fixes & improvements
+
+- ref(DRS): Deprecate dataset experimental flag (#4321) by @enochtangg
+- Revert "fix: Temporarily revert dlq topic changes" (#4339) by @lynnagara
+- fix(iam-policy): Don't build google cloud API client in debug and test environments (#4344) by @davidtsuk
+- feat(prod-queries): Add preliminary UI for the production queries tool (#4345) by @davidtsuk
+- ref(iam-policy): Replace user emails with groups in iam_policy (#4346) by @davidtsuk
+- feat(spans): Add processors to extract millisecond granularity data (#4313) by @nikhars
+- ref(gen_met): Add mapping optimizer to generic metrics (#4336) by @evanh
+- Add optional Redis SSL support (#4343) by @frank-m
+- feat(spans): Add migration to create start_ms and end_ms columns (#4308) by @nikhars
+- ref(admin): Give team-sns google group full access to snuba admin (#4337) by @davidtsuk
+- feat(CapMan): Multiple Allocation Policies on a Storage [backend] (#4294) by @rahul-kumar-saini
+- chore(spans): Allow spans ingestion based on project sampling (#4214) by @nikhars
+- fix: Temporarily revert dlq topic changes (#4338) by @lynnagara
+- fix(tests): Skip flaky optimize tests (#4315) by @nikhars
+- ref(dlq): Simplify the way DLQ topic is configured (#4333) by @lynnagara
+- fix: All consumers have unique DLQ topics (#4335) by @lynnagara
+- feat(dlq): DLQ topics API for admin (#4334) by @lynnagara
+- Use Google Groups API for authorization (#4306) by @davidtsuk
+- fix(dlq): Pass for to configure_metrics (#4329) by @lynnagara
+- ref: Upgrade arroyo, and remove now-duplicated rdkafka.total_queue_size metric (#4330) by @untitaker
+- fix(gen-metrics): Add tags hash column to the generic metrics dist ta… (#4324) by @nikhars
+- ref: Set compression in `build_kafka_producer_configuration()` function (#4220) by @lynnagara
+- fix(dlq): ExitAfterNMessages strategy should be first step not last (#4318) by @lynnagara
+- feat(spans): Allow spans migrations to run locally (#4323) by @enochtangg
+
+_Plus 40 more_
+
 ## 23.5.2
 
 ### Various fixes & improvements

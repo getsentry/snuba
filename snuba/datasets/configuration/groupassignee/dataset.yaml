@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: groupassignee
 
-is_experimental: false
-
 entities:
   - groupassignee

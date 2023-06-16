@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
@@ -59,7 +61,9 @@ class Table(SimpleDataSource):
     # By default a table has a regular passthrough policy.
     # this is overwridden by the query pipeline if there
     # is one defined on the storage.
-    allocation_policy: AllocationPolicy = DEFAULT_PASSTHROUGH_POLICY
+    allocation_policies: list[AllocationPolicy] = field(
+        default_factory=lambda: [DEFAULT_PASSTHROUGH_POLICY]
+    )
     final: bool = False
     sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions out of

@@ -169,17 +169,13 @@ ROLES = {
         name="all-tools",
         actions={InteractToolAction([TOOL_RESOURCES["all"]])},
     ),
-    "SnQLToSQL": Role(
-        name="snql-to-snql",
+    "ProductTools": Role(
+        name="product-tools",
         actions={
-            InteractToolAction([TOOL_RESOURCES["snql-to-sql"]])
-        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
-    ),
-    "Tracing": Role(
-        name="tracing",
-        actions={
-            InteractToolAction([TOOL_RESOURCES["tracing"]])
-        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
+            InteractToolAction(
+                [TOOL_RESOURCES["snql-to-sql"], TOOL_RESOURCES["tracing"]]
+            )
+        },
     ),
     "CardinalityAnalyzer": Role(
         name="cardinality-analyzer",
@@ -191,7 +187,7 @@ DEFAULT_ROLES = [
     ROLES["MigrationsReader"],
     ROLES["TestMigrationsExecutor"],
     ROLES["SearchIssuesExecutor"],
-    ROLES["SnQLToSQL"],
+    ROLES["ProductTools"],
 ]
 
 if settings.TESTING or settings.DEBUG:

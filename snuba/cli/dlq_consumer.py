@@ -115,7 +115,7 @@ def dlq_consumer(
         # even if the consumer does not finish processing it.
         clear_instruction()
 
-        logger.info("Starting DLQ consumer", extra={"instruction": instruction})
+        logger.info(f"Starting DLQ consumer {instruction}")
 
         metrics_tags = {
             "consumer_group": consumer_group,
@@ -126,7 +126,7 @@ def dlq_consumer(
 
         metrics = MetricsWrapper(environment.metrics, "dlq_consumer", tags=metrics_tags)
 
-        configure_metrics(StreamMetricsAdapter(metrics))
+        configure_metrics(StreamMetricsAdapter(metrics), force=True)
 
         orig_consumer_config = resolve_consumer_config(
             storage_names=[instruction.storage_key.value],
@@ -162,12 +162,10 @@ def dlq_consumer(
             max_batch_time_ms=max_batch_time_ms,
             metrics=metrics,
             slice_id=instruction.slice_id,
-            join_timeout=5,
+            join_timeout=None,
         )
 
         consumer = consumer_builder.build_dlq_consumer(instruction)
 
-        while not shutdown_requested:
-            consumer._run_once()
-
+        consumer.run()
         consumer_builder.flush()

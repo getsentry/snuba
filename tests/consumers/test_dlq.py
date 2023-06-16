@@ -32,11 +32,11 @@ def test_store_instruction() -> None:
 
 
 def test_exit_after_n_messages() -> None:
-    commit = Mock()
+    next_step = Mock()
     num_messages_to_process = 10
     max_message_timeout = 1.0
     strategy: ProcessingStrategy[int] = ExitAfterNMessages(
-        commit, num_messages_to_process, max_message_timeout
+        next_step, num_messages_to_process, max_message_timeout
     )
 
     topic = Topic("topic")

@@ -16,7 +16,9 @@ from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
-from snuba.admin.clickhouse.capacity_management import get_allocation_policies
+from snuba.admin.clickhouse.capacity_management import (
+    get_storages_with_allocation_policies,
+)
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -25,6 +27,7 @@ from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
@@ -41,6 +44,13 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.consumers.dlq import (
+    DlqInstruction,
+    DlqPolicy,
+    clear_instruction,
+    load_instruction,
+    store_instruction,
+)
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -733,35 +743,30 @@ def snql_to_sql() -> Response:
         )
 
 
-@application.route("/allocation_policies")
+@application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def allocation_policies() -> Response:
+def storages_with_allocation_policies() -> Response:
     return Response(
-        json.dumps(get_allocation_policies()),
+        json.dumps(get_storages_with_allocation_policies()),
         200,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/allocation_policy_configs/<path:storage>", methods=["GET"])
+@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
-    configs = policy.get_current_configs()
-    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
+def get_allocation_policy_configs(storage_key: str) -> Response:
 
-
-@application.route(
-    "/allocation_policy_optional_config_definitions/<path:storage>",
-    methods=["GET"],
-)
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_optional_config_definitions(storage: str) -> Response:
-    policy = get_storage(StorageKey(storage)).get_allocation_policy()
-    config_definitions = policy.get_optional_config_definitions_json()
-    return Response(
-        json.dumps(config_definitions), 200, {"Content-Type": "application/json"}
-    )
+    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    data = [
+        {
+            "policy_name": policy.config_key(),
+            "configs": policy.get_current_configs(),
+            "optional_config_definitions": policy.get_optional_config_definitions_json(),
+        }
+        for policy in policies
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -771,7 +776,7 @@ def set_allocation_policy_config() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        storage, key = (data["storage"], data["key"])
+        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
 
         params = data.get("params", {})
 
@@ -779,8 +784,14 @@ def set_allocation_policy_config() -> Response:
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
+        assert isinstance(policy_name, str), "Invalid policy name"
 
-        policy = get_storage(StorageKey(storage)).get_allocation_policy()
+        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policy = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
         return Response(
@@ -794,7 +805,7 @@ def set_allocation_policy_config() -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            {"storage": storage, "key": key},
+            {"storage": storage, "policy": policy.config_key(), "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -808,7 +819,13 @@ def set_allocation_policy_config() -> Response:
             audit_log.record(
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
-                {"storage": storage, "key": key, "value": value, "params": str(params)},
+                {
+                    "storage": storage,
+                    "policy": policy.config_key(),
+                    "key": key,
+                    "value": value,
+                    "params": str(params),
+                },
                 notify=True,
             )
             return Response("", 200)
@@ -884,3 +901,43 @@ def cardinality_analyzer_query() -> Response:
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+@application.route("/dead_letter_queue", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_topics() -> Response:
+    return make_response(jsonify(get_dlq_topics()), 200)
+
+
+@application.route("/dead_letter_queue/replay", methods=["GET", "POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_replay() -> Response:
+    if request.method == "POST":
+        req = request.get_json() or {}  # Required for typing
+
+        try:
+            policy = DlqPolicy(req["policy"])
+            storage_key = StorageKey(req["storage"])
+            slice_id = req["slice"]
+            max_messages_to_process = req["maxMessages"]
+            assert max_messages_to_process > 0, "maxMessages must be greater than 1"
+        except (KeyError, AssertionError):
+            return make_response("Missing required fields", 400)
+
+        if load_instruction() is not None:
+            return make_response("Instruction exists", 400)
+
+        instruction = DlqInstruction(
+            policy, storage_key, slice_id, max_messages_to_process
+        )
+        store_instruction(instruction)
+
+    if request.method == "DELETE":
+        clear_instruction()
+
+    loaded_instruction = load_instruction()
+
+    if loaded_instruction is None:
+        return make_response(jsonify(None), 200)
+
+    return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)

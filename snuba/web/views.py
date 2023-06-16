@@ -58,7 +58,7 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage, StorageNotAvailable
-from snuba.query.allocation_policies import AllocationPolicyViolation
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
@@ -117,16 +117,8 @@ else:
             return False
 
 
-def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
-    if ignore_experimental:
-        datasets = [
-            get_dataset(name)
-            for name in get_enabled_dataset_names()
-            if not get_dataset(name).is_experimental()
-        ]
-    else:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-
+def filter_checked_storages() -> List[Storage]:
+    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
     entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
 
     storages: List[Storage] = []
@@ -137,15 +129,15 @@ def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
     return storages
 
 
-def check_clickhouse(
-    ignore_experimental: bool = True, metric_tags: dict[str, Any] | None = None
-) -> bool:
+def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
-    TODO: Eventually, when we fully migrate to readiness_states, we can remove is_experimental and DISABLED_DATASETS.
+    TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
     """
     try:
-        storages = filter_checked_storages(ignore_experimental)
+        storages = filter_checked_storages()
+        for storage in storages:
+            print(storage.get_storage_set_key())
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
@@ -367,11 +359,7 @@ def health() -> Response:
         "thorough": str(thorough),
     }
 
-    clickhouse_health = (
-        check_clickhouse(ignore_experimental=True, metric_tags=metric_tags)
-        if thorough
-        else True
-    )
+    clickhouse_health = check_clickhouse(metric_tags=metric_tags) if thorough else True
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
@@ -478,7 +466,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolation)):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
             status = 429
             details = {
                 "type": "rate-limited",

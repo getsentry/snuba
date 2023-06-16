@@ -9,6 +9,7 @@ import QuerylogQueries from "./querylog";
 import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
 import CardinalityAnalyzer from "./cardinality_analyzer";
+import ProductionQueries from "./production_queries";
 
 function Placeholder(props: any) {
   return null;
@@ -67,7 +68,11 @@ const NAV_ITEMS = [
     display: "🔢Cardinality Analyzer!!!",
     component: CardinalityAnalyzer,
   },
-
+  {
+    id: "production-queries",
+    display: "🔦 Production Queries",
+    component: ProductionQueries,
+  },
 ];
 
 export { NAV_ITEMS };

@@ -24,6 +24,7 @@ CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
+MAX_THREADS = "max_threads"
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,9 @@ class QuotaAllowance:
     # because I don't know what exactly should go in it yet
     explanation: dict[str, Any]
 
+    def __lt__(self, other: QuotaAllowance) -> bool:
+        return self.max_threads < other.max_threads
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -123,6 +127,31 @@ class AllocationPolicyViolation(SerializableException):
 
     def __str__(self) -> str:
         return f"{self.message}, explanation: {self.explanation}"
+
+
+class AllocationPolicyViolations(SerializableException):
+    """
+    An exception class which is used to collect multiple AllocationPolicyViolation
+    exceptions and raise them at once, useful for storages with multiple policies
+    defined on them.
+
+    Do not manually raise this exception! Use AllocationPolicyViolation instead within
+    your Allocation Policies for when a violation occurs and this exception will be
+    raised containing your raised exceptions at the end.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
+        should_report: bool = True,
+        **extra_data: JsonSerializable,
+    ) -> None:
+        self.violations = violations
+        super().__init__(message, should_report, **extra_data)
+
+    def __str__(self) -> str:
+        return str({k: str(v) for k, v in self.violations.items()})
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
@@ -323,15 +352,21 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
-                description="Whether or not this policy is active.",
+                description="Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ACTIVE, 1),
             ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
-                description="Whether or not this policy is enforced.",
+                description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
                 default=default_config_overrides.get(IS_ENFORCED, 1),
+            ),
+            AllocationPolicyConfig(
+                name=MAX_THREADS,
+                description="The max threads Clickhouse can use for the query.",
+                value_type=int,
+                default=default_config_overrides.get(MAX_THREADS, 10),
             ),
         ]
         self._overridden_additional_config_definitions = (
@@ -365,7 +400,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @property
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
-        return cast(int, get_runtime_config("query_settings/max_threads", 8))
+        return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
     def config_key(cls) -> str:
@@ -642,7 +677,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
         try:
-            allowance = self._get_quota_allowance(tenant_ids)
+            if not self.is_active:
+                allowance = QuotaAllowance(True, self.max_threads, {})
+            else:
+                allowance = self._get_quota_allowance(tenant_ids)
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -664,6 +702,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
+            if not self.is_active:
+                return
             return self._update_quota_balance(tenant_ids, result_or_error)
         except Exception:
             logger.exception(

@@ -4,7 +4,7 @@ name: functions
 storage:
   key: functions
   set_key: functions
-readiness_state: partial
+readiness_state: complete
 schema:
   columns:
     [
@@ -81,13 +81,13 @@ schema:
   dist_table_name: functions_mv_dist
 query_processors:
   - processor: TableRateLimit
-allocation_policy:
-  name: BytesScannedWindowAllocationPolicy
-  args:
-    required_tenant_types:
-      - organization_id
-      - referrer
-    default_config_overrides:
-      is_enforced: 1
-      throttled_thread_number: 1
-      org_limit_bytes_scanned: 100000
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000

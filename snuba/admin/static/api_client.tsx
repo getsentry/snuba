@@ -27,11 +27,9 @@ import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 import { CardinalityQueryRequest, CardinalityQueryResult } from "./cardinality_analyzer/types";
 
-import {
-  AllocationPolicy,
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-} from "./capacity_management/types";
+import { AllocationPolicy } from "./capacity_management/types";
+
+import { ReplayInstruction, Topic } from "./dead_letter_queue/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -63,24 +61,28 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
-  getAllocationPolicies: () => Promise<AllocationPolicy[]>;
-  getAllocationPolicyConfigs: (
-    storage: string
-  ) => Promise<AllocationPolicyConfig[]>;
-  getAllocationPolicyOptionalConfigDefinitions: (
-    storage: string
-  ) => Promise<AllocationPolicyOptionalConfigDefinition[]>;
+  getStoragesWithAllocationPolicies: () => Promise<string[]>;
+  getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
   setAllocationPolicyConfig: (
     storage: string,
+    policy: string,
     key: string,
     value: string,
     params: object
   ) => Promise<void>;
   deleteAllocationPolicyConfig: (
     storage: string,
+    policy: string,
     key: string,
     params: object
   ) => Promise<void>;
+  getDlqTopics: () => Promise<Topic[]>;
+  getDlqInstruction: () => Promise<ReplayInstruction | null>;
+  setDlqInstruction: (
+    topic: Topic,
+    instruction: ReplayInstruction
+  ) => Promise<ReplayInstruction | null>;
+  clearDlqInstruction: () => Promise<ReplayInstruction | null>;
 }
 
 function Client() {
@@ -315,30 +317,22 @@ function Client() {
       }).then((resp) => resp.json());
     },
 
-    getAllocationPolicies: () => {
-      const url = baseUrl + "allocation_policies";
+    getStoragesWithAllocationPolicies: () => {
+      const url = baseUrl + "storages_with_allocation_policies";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicyConfigs: (storage: string) => {
+    getAllocationPolicies: (storage: string) => {
       const url =
         baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicyOptionalConfigDefinitions: (storage: string) => {
-      const url =
-        baseUrl +
-        "allocation_policy_optional_config_definitions/" +
-        encodeURIComponent(storage);
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
     setAllocationPolicyConfig: (
       storage: string,
+      policy: string,
       key: string,
       value: string,
       params: object
@@ -347,7 +341,7 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ storage, key, value, params }),
+        body: JSON.stringify({ storage, policy, key, value, params }),
       }).then((res) => {
         if (res.ok) {
           return;
@@ -361,6 +355,7 @@ function Client() {
     },
     deleteAllocationPolicyConfig: (
       storage: string,
+      policy: string,
       key: string,
       params: object
     ) => {
@@ -368,17 +363,60 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ storage, key, params }),
+        body: JSON.stringify({ storage, policy, key, params }),
       }).then((res) => {
         if (res.ok) {
           return;
         } else {
           return res.json().then((err) => {
-            let errMsg = err?.error || "Could not set config";
+            let errMsg = err?.error || "Could not delete config";
             throw new Error(errMsg);
           });
         }
       });
+    },
+    getDlqTopics: () => {
+      const url = baseUrl + "dead_letter_queue";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    getDlqInstruction: () => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setDlqInstruction: (topic: Topic, instruction: ReplayInstruction) => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({
+          logicalName: topic.logicalName,
+          physicalName: topic.physicalName,
+          storage: topic.storage,
+          slice: topic.slice,
+          maxMessages: instruction.messagesToProcess,
+          policy: instruction.policy,
+        }),
+      }).then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error || "Could not replay";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+    clearDlqInstruction: () => {
+      const url = baseUrl + "dead_letter_queue/replay";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      }).then((resp) => resp.json());
     },
   };
 }

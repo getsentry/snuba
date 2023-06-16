@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: events
 
-is_experimental: false
-
 entities:
   - events

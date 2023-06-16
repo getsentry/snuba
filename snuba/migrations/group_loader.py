@@ -83,6 +83,8 @@ class EventsLoader(DirectoryLoader):
             "0020_add_main_thread_column",
             "0021_add_replay_id_errors_ro",
             "0022_add_main_thread_column_errors_ro",
+            "0023_add_trace_sampled_num_processing_errors_columns",
+            "0024_add_trace_sampled_num_processing_errors_columns_ro",
         ]
 
 
@@ -291,6 +293,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0010_counters_aggregate_table",
             "0011_counters_raw_table",
             "0012_counters_mv",
+            "0013_distributions_dist_tags_hash",
         ]
 
 
@@ -319,4 +322,6 @@ class SpansLoader(DirectoryLoader):
         return [
             "0001_spans_v1",
             "0002_spans_add_tags_hashmap",
+            "0003_spans_add_ms_columns",
+            "0004_spans_group_raw_col",
         ]
