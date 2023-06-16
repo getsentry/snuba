@@ -32,6 +32,7 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
@@ -77,6 +78,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         ]
 
 
+@pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
@@ -138,6 +140,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     assert sorted_response == sorted_expected_json
 
 
+@pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
