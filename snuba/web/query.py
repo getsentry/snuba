@@ -45,7 +45,9 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import db_query
+
+# from snuba.web.db_query import db_query
+from snuba.web.db_query_class import DBQuery
 
 logger = logging.getLogger("snuba.query")
 
@@ -356,7 +358,7 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return db_query(
+            return DBQuery(
                 clickhouse_query=clickhouse_query,
                 query_settings=query_settings,
                 attribution_info=attribution_info,
@@ -368,7 +370,20 @@ def _format_storage_query_and_run(
                 stats=stats,
                 trace_id=span.trace_id,
                 robust=robust,
-            )
+            ).db_query()
+            # return db_query(
+            #     clickhouse_query=clickhouse_query,
+            #     query_settings=query_settings,
+            #     attribution_info=attribution_info,
+            #     dataset_name=query_metadata.dataset,
+            #     formatted_query=formatted_query,
+            #     reader=reader,
+            #     timer=timer,
+            #     query_metadata_list=query_metadata.query_list,
+            #     stats=stats,
+            #     trace_id=span.trace_id,
+            #     robust=robust,
+            # )
 
         if concurrent_queries_gauge is not None:
             with concurrent_queries_gauge:
