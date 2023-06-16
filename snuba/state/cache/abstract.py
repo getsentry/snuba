@@ -31,6 +31,18 @@ class Cache(Generic[TValue], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_cached_result_and_record_metrics(
+        self,
+        key: str,
+        record_cache_hit_type: Callable[[int], None],
+        timer: Optional[Timer] = None,
+    ) -> Optional[TValue]:
+        """
+        Gets a value from the cache and records relevant metrics.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def get_readthrough(
         self,
         key: str,
@@ -41,10 +53,14 @@ class Cache(Generic[TValue], ABC):
     ) -> TValue:
         """
         Implements a read-through caching pattern for the value at the given
-        key. This method first attempts to fetch and return a preexisting
-        value from the cache. On a cache miss, the return value of the
-        provided function is used to populate the cache for subsequent
-        callers and is used as the return value for this method.
+        key.
+
+        This method should only be used if `self.get` or
+        `self.get_cached_result_and_record_metrics` results in a cache miss.
+
+        On a cache miss, the return value of the provided function is used
+        to populate the cache for subsequent callers and is used as the return
+        value for this method.
 
         This function also acts as an exclusive lock on the cache key to
         other callers of this method while the function is executing. Callers

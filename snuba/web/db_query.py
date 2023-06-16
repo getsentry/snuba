@@ -348,9 +348,14 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
                     ThreadPoolExecutor(),
                 )
 
-    return cache_partitions[
+    partition = cache_partitions[
         partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
     ]
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+    return partition
 
 
 @with_span(op="db")
@@ -435,24 +440,10 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    cache_partition = _get_cache_partition(reader)
-    metrics.increment(
-        "cache_partition_loaded",
-        tags={"partition_id": reader.cache_partition_id or "default"},
-    )
-
-    # -----------------------------------------------------------------
-    # HACK (Volo): This is a hack experiment to see if we can
-    # turn off the cache (but not all of it for everything at once).
-    # and still survive.
-
-    # depending on the `stats` dict to be populated ahead of time
-    # is not great style, but it is done in _format_storage_query_and_run.
-    # This should be removed by 07-05-2023
-    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
-        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
-        return execute_query_with_rate_limits(
+    return _get_cache_partition(reader).get_readthrough(
+        query_id,
+        partial(
+            execute_query_with_rate_limits,
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -461,26 +452,11 @@ def execute_query_with_readthrough_caching(
             stats,
             clickhouse_query_settings,
             robust,
-        )
-    # -----------------------------------------------------------------
-    else:
-        return cache_partition.get_readthrough(
-            query_id,
-            partial(
-                execute_query_with_rate_limits,
-                clickhouse_query,
-                query_settings,
-                formatted_query,
-                reader,
-                timer,
-                stats,
-                clickhouse_query_settings,
-                robust,
-            ),
-            record_cache_hit_type=record_cache_hit_type,
-            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
-            timer=timer,
-        )
+        ),
+        record_cache_hit_type=record_cache_hit_type,
+        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+        timer=timer,
+    )
 
 
 def _get_cache_wait_timeout(
@@ -673,6 +649,37 @@ def _get_allocation_policies(
         return [DEFAULT_PASSTHROUGH_POLICY]
 
 
+@with_span(op="db")
+def get_cached_query_result(
+    query_id: str,
+    reader: Reader,
+    timer: Timer,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    stats: MutableMapping[str, Any],
+) -> Result | None:
+
+    span = Hub.current.scope.span
+    if span:
+        span.set_data("query_id", query_id)
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        span_tag = "cache_miss"
+        if hit_type == RESULT_VALUE:
+            stats["cache_hit"] = 1
+            span_tag = "cache_hit"
+        elif hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+            span_tag = "cache_wait"
+        sentry_sdk.set_tag("cache_status", span_tag)
+        if span:
+            span.set_data("cache_status", span_tag)
+
+    return _get_cache_partition(reader).get_cached_result_and_record_metrics(
+        query_id, record_cache_hit_type, timer
+    )
+
+
+@with_span(op="db")
 def db_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -725,9 +732,29 @@ def db_query(
         allocation policy be applied at the top level of the db_query process
     """
 
+    result = None
+    error = None
+
+    query_id = get_query_cache_key(formatted_query)
+    cached_result = get_cached_query_result(query_id, reader, timer, stats)
+    if cached_result is not None:
+        return QueryResult(
+            cached_result,
+            {
+                "stats": {
+                    **stats,
+                    **query_settings,
+                    "status": QueryStatus.SUCCESS,
+                    "request_status": get_request_status(),
+                },
+                "sql": formatted_query.get_sql(),
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
+
     allocation_policies = _get_allocation_policies(clickhouse_query)
 
-    _apply_allocation_policies_quota(
+    apply_allocation_policies_quota(
         query_settings,
         attribution_info,
         formatted_query,
@@ -770,7 +797,8 @@ def db_query(
         )
 
 
-def _apply_allocation_policies_quota(
+@with_span(op="capacity_management")
+def apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     formatted_query: FormattedQuery,

@@ -73,6 +73,28 @@ class RedisCache(Cache[TValue]):
             ex=get_config("cache_expiry_sec", 1),
         )
 
+    def get_cached_result_and_record_metrics(
+        self,
+        key: str,
+        record_cache_hit_type: Callable[[int], None],
+        timer: Optional[Timer] = None,
+    ) -> Optional[TValue]:
+        if get_config("read_through_cache.short_circuit", 0):
+            return None
+
+        if timer is not None:
+            timer.mark("cache_get")
+
+        result = self.get(key)
+        if result is None:
+            return None
+
+        # This updates the stats object and querylog
+        record_cache_hit_type(RESULT_VALUE)
+        logger.debug("Immediately returning result from cache hit.")
+
+        return result
+
     def get_readthrough(
         self,
         key: str,
@@ -142,18 +164,12 @@ class RedisCache(Cache[TValue]):
             [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
-        if timer is not None:
-            timer.mark("cache_get")
         metric_tags = timer.tags if timer is not None else {}
 
         # This updates the stats object and querylog
         record_cache_hit_type(result[0])
 
-        if result[0] == RESULT_VALUE:
-            # If we got a cache hit, this is easy -- we just return it.
-            logger.debug("Immediately returning result from cache hit.")
-            return self.__codec.decode(result[1])
-        elif result[0] == RESULT_EXECUTE:
+        if result[0] == RESULT_EXECUTE:
 
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
