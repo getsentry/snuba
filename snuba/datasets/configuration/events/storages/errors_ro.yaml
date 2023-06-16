@@ -221,6 +221,16 @@ schema:
               [{ name: name, type: String }, { name: version, type: String }],
           },
       },
+      {
+        name: trace_sampled,
+        type: UInt,
+        args: { schema_modifiers: [ nullable ], size: 8 },
+      },
+      {
+        name: num_processing_errors,
+        type: UInt,
+        args: { schema_modifiers: [ nullable ], size: 64 },
+      },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
