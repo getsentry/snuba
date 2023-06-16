@@ -347,8 +347,6 @@ def test_get_iam_roles(caplog: Any) -> None:
                 tool_role,
             ]
 
-            _set_roles(user1)
-
             user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
             _set_roles(user2)
 
@@ -366,6 +364,8 @@ def test_get_iam_roles(caplog: Any) -> None:
                 tool_role,
             ]
 
+        iam_file.close()
+        iam_file = tempfile.NamedTemporaryFile()
         iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
         iam_file.flush()
 
@@ -381,7 +381,7 @@ def test_get_iam_roles(caplog: Any) -> None:
             ]
 
             redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
-            redis_client.delete(user1.email)
+            redis_client.delete(f"roles-{user1.email}")
             _set_roles(user1)
 
             assert user1.roles == [
