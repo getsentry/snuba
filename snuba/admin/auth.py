@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Sequence
 
+import rapidjson
 import structlog
 from flask import request
 
@@ -71,11 +72,13 @@ def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
 def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
     # to subset of DEFAULT_ROLES based on IAM roles
-    iam_roles = redis_client.smembers(user.email)
+    key = f"roles-{user.email}"
+    iam_roles_str = redis_client.get(key)
+    iam_roles = rapidjson.loads(iam_roles_str) if iam_roles_str else None
     if not iam_roles:
         iam_roles = get_iam_roles_from_file(user)
-        redis_client.sadd(user.email, *iam_roles)
-        redis_client.expire(user.email, settings.ADMIN_ROLES_REDIS_TTL)
+        redis_client.set(key, rapidjson.dumps(iam_roles))
+        redis_client.expire(key, settings.ADMIN_ROLES_REDIS_TTL)
 
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
     return user
