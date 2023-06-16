@@ -12,7 +12,7 @@ dist_table_name = "spans_dist"
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Adds group_raw columns to store the scrubbed group hash.
+    Adds group_raw column to store the hash of the raw description.
     """
 
     blocking = False
