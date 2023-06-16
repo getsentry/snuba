@@ -5,7 +5,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -56,7 +55,7 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
-from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
+from snuba.state.cache.redis.backend import RESULT_WAIT, RedisCache
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
@@ -160,9 +159,31 @@ class DBQuery:
 
         self._get_allocation_policies()
         self._apply_allocation_policy_quotas()
-        self._apply_rate_limits()
 
-        return self._try_running_query()
+        result = None
+        error = None
+        try:
+            self._apply_rate_limits()
+            result = self._try_running_query()
+        except QueryException as e:
+            error = e
+        except Exception as e:
+            # We count on above functions capturing all exceptions in a QueryException
+            # if it didn't do that, something is very wrong so we just panic out here
+            raise e
+        finally:
+            for allocation_policy in self.allocation_policies:
+                allocation_policy.update_quota_balance(
+                    tenant_ids=self.attribution_info.tenant_ids,
+                    result_or_error=QueryResultOrError(
+                        query_result=result, error=error
+                    ),
+                )
+            if result:
+                return result
+            raise error or Exception(
+                "No error or result when running query, this should never happen"
+            )
 
     def _get_query_settings_from_config(
         self,
