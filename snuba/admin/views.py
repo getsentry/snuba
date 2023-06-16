@@ -15,6 +15,7 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
@@ -839,6 +840,66 @@ def set_allocation_policy_config() -> Response:
             json.dumps({"error": "Method not allowed"}),
             405,
             {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/cardinality_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_analyzer_query() -> Response:
+    # HACK (Volo):
+    # mostly copypasta from querylog, should not stick around for too long
+    # when production query tool gets made this should not be necessary
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_metrics_query(raw_sql, user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+            500,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
         )
 
 

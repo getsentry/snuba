@@ -79,6 +79,7 @@ class InteractToolAction(ToolAction):
 TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
+    "cardinality-analyzer": ToolResource("cardinality-analyzer"),
     "all": ToolResource("all"),
 }
 
@@ -175,6 +176,10 @@ ROLES = {
                 [TOOL_RESOURCES["snql-to-sql"], TOOL_RESOURCES["tracing"]]
             )
         },
+    ),
+    "CardinalityAnalyzer": Role(
+        name="cardinality-analyzer",
+        actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
     ),
 }
 
