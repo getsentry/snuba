@@ -509,6 +509,99 @@ def _get_query_settings_from_config(
     return clickhouse_query_settings
 
 
+def query_with_error_handling(
+    query_executor: Any,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
+    formatted_query: FormattedQuery,
+    clickhouse_query_settings: dict[str, Any],
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    stats: MutableMapping[str, Any],
+    trace_id: Optional[str] = None,
+    robust: bool = False,
+) -> QueryResult | None:
+
+    sql = formatted_query.get_sql()
+
+    update_with_status = partial(
+        update_query_metadata_and_stats,
+        query=clickhouse_query,
+        query_metadata_list=query_metadata_list,
+        sql=sql,
+        stats=stats,
+        query_settings=clickhouse_query_settings,
+        trace_id=trace_id,
+    )
+
+    try:
+        result = query_executor()
+    except Exception as cause:
+        error_code = None
+        trigger_rate_limiter = None
+        status = None
+        request_status = get_request_status(cause)
+        if isinstance(cause, RateLimitExceeded):
+            status = QueryStatus.RATE_LIMITED
+            trigger_rate_limiter = cause.extra_data.get("scope", "")
+        elif isinstance(cause, ClickhouseError):
+            error_code = cause.code
+            status = get_query_status_from_error_codes(error_code)
+
+            with configure_scope() as scope:
+                fingerprint = ["{{default}}", str(cause.code), dataset_name]
+                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                    fingerprint.append(attribution_info.referrer)
+                scope.fingerprint = fingerprint
+        elif isinstance(cause, TimeoutError):
+            status = QueryStatus.TIMEOUT
+        elif isinstance(cause, ExecutionTimeoutError):
+            status = QueryStatus.TIMEOUT
+
+        if request_status.slo == SLO.AGAINST:
+            logger.exception("Error running query: %s\n%s", sql, cause)
+
+        with configure_scope() as scope:
+            if scope.span:
+                sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+        stats = update_with_status(
+            status=status or QueryStatus.ERROR,
+            request_status=request_status,
+            error_code=error_code,
+            triggered_rate_limiter=str(trigger_rate_limiter),
+        )
+        raise QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            cause.__class__.__name__,
+            str(cause),
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        ) from cause
+    else:
+        if result is None:
+            return None
+        stats = update_with_status(
+            status=QueryStatus.SUCCESS,
+            request_status=get_request_status(),
+            profile_data=result["profile"],
+        )
+        return QueryResult(
+            result,
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
+
+
 def _raw_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -519,6 +612,7 @@ def _raw_query(
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
+    clickhouse_query_settings: dict[str, Any],
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
@@ -528,9 +622,6 @@ def _raw_query(
     this function is responsible for running the clickhouse query and if there is any error, constructing the
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
-    clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix()
-    )
 
     timer.mark("get_configs")
 
@@ -656,6 +747,15 @@ def get_cached_query_result(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query_settings: MutableMapping[str, Any],
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
+    formatted_query: FormattedQuery,
+    trace_id: Optional[str] = None,
+    robust: bool = False,
 ) -> Result | None:
 
     span = Hub.current.scope.span
@@ -674,7 +774,25 @@ def get_cached_query_result(
         if span:
             span.set_data("cache_status", span_tag)
 
-    return _get_cache_partition(reader).get_cached_result_and_record_metrics(
+    query_with_error_handling(
+        partial(
+            _get_cache_partition(reader).get_cached_result_and_record_timer,
+            query_id,
+            record_cache_hit_type,
+            timer,
+        ),
+        clickhouse_query,
+        attribution_info,
+        dataset_name,
+        query_metadata_list,
+        formatted_query,
+        clickhouse_query_settings,
+        stats,
+        trace_id,
+        robust,
+    )
+
+    return _get_cache_partition(reader).get_cached_result_and_record_timer(
         query_id, record_cache_hit_type, timer
     )
 
@@ -735,22 +853,27 @@ def db_query(
     result = None
     error = None
 
+    clickhouse_query_settings = _get_query_settings_from_config(
+        reader.get_query_settings_prefix()
+    )
+
     query_id = get_query_cache_key(formatted_query)
-    cached_result = get_cached_query_result(query_id, reader, timer, stats)
+    cached_result = get_cached_query_result(
+        query_id,
+        reader,
+        timer,
+        stats,
+        clickhouse_query,
+        clickhouse_query_settings,
+        attribution_info,
+        dataset_name,
+        query_metadata_list,
+        formatted_query,
+        trace_id,
+        robust,
+    )
     if cached_result is not None:
-        return QueryResult(
-            cached_result,
-            {
-                "stats": {
-                    **stats,
-                    **query_settings,
-                    "status": QueryStatus.SUCCESS,
-                    "request_status": get_request_status(),
-                },
-                "sql": formatted_query.get_sql(),
-                "experiments": clickhouse_query.get_experiments(),
-            },
-        )
+        cached_result
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
 
@@ -847,3 +970,36 @@ def apply_allocation_policies_quota(
             )
         )
     )
+
+
+def db_query2(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    stats: MutableMapping[str, Any],
+    trace_id: Optional[str] = None,
+    robust: bool = False,
+) -> QueryResult:
+
+    query_id = get_query_cache_key(formatted_query)
+
+    cached_result = get_cached_query_result()
+    if cached_result is not None:
+        return cached_result
+
+    apply_allocation_policies_quota()
+
+    apply_table_rate_limits()
+
+    result = execute_query()
+
+    set_cached_query_result()
+
+    return result

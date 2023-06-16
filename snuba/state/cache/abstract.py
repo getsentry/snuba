@@ -31,14 +31,13 @@ class Cache(Generic[TValue], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cached_result_and_record_metrics(
+    def get_cached_result_and_record_timer(
         self,
         key: str,
-        record_cache_hit_type: Callable[[int], None],
         timer: Optional[Timer] = None,
     ) -> Optional[TValue]:
         """
-        Gets a value from the cache and records relevant metrics.
+        Gets a value from the cache and records timer metric.
         """
         raise NotImplementedError
 

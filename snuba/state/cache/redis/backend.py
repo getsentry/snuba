@@ -73,10 +73,9 @@ class RedisCache(Cache[TValue]):
             ex=get_config("cache_expiry_sec", 1),
         )
 
-    def get_cached_result_and_record_metrics(
+    def get_cached_result_and_record_timer(
         self,
         key: str,
-        record_cache_hit_type: Callable[[int], None],
         timer: Optional[Timer] = None,
     ) -> Optional[TValue]:
         if get_config("read_through_cache.short_circuit", 0):
@@ -89,10 +88,7 @@ class RedisCache(Cache[TValue]):
         if result is None:
             return None
 
-        # This updates the stats object and querylog
-        record_cache_hit_type(RESULT_VALUE)
         logger.debug("Immediately returning result from cache hit.")
-
         return result
 
     def get_readthrough(
