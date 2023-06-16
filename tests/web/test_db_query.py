@@ -100,7 +100,7 @@ def test_query_settings_from_config(
         stats={},
         trace_id="trace_id",
     )
-    db_query_class._get_query_settings_from_config()
+    db_query_class._load_query_settings_from_config()
     assert db_query_class.clickhouse_query_settings == expected
 
 

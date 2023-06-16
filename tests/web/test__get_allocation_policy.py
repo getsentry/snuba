@@ -156,5 +156,5 @@ def test__get_allocation_policies(
         timer=Timer("foo"),
         stats={},
     )
-    obj._get_allocation_policies()
+    obj._load_allocation_policies()
     assert obj.allocation_policies == expected_allocation_policies

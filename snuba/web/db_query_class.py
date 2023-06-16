@@ -154,13 +154,13 @@ class DBQuery:
     @with_span(op="db")
     def db_query(self) -> QueryResult:
 
-        self._get_query_settings_from_config()
+        self._load_query_settings_from_config()
 
         cached_result = self._get_cached_query_result()
         if cached_result is not None:
             return cached_result
 
-        self._get_allocation_policies()
+        self._load_allocation_policies()
         self._apply_allocation_policy_quotas()
 
         result = None
@@ -182,7 +182,7 @@ class DBQuery:
                 "No error or result when running query, this should never happen"
             )
 
-    def _get_query_settings_from_config(
+    def _load_query_settings_from_config(
         self,
     ) -> None:
         """
@@ -249,7 +249,7 @@ class DBQuery:
                 },
             )
 
-    def _get_allocation_policies(
+    def _load_allocation_policies(
         self, clickhouse_query: Union[Query, CompositeQuery[Table]] | None = None
     ) -> None:
         """given a query, find the allocation policies in its from clause, in the case
@@ -265,9 +265,9 @@ class DBQuery:
         if isinstance(from_clause, Table):
             self.allocation_policies = from_clause.allocation_policies
         elif isinstance(from_clause, ProcessableQuery):
-            self._get_allocation_policies(cast(Query, from_clause))
+            self._load_allocation_policies(cast(Query, from_clause))
         elif isinstance(from_clause, CompositeQuery):
-            self._get_allocation_policies(from_clause)
+            self._load_allocation_policies(from_clause)
         elif isinstance(from_clause, JoinClause):
             # HACK (Volo): Joins are a weird case for allocation policies and we don't
             # actually use them anywhere so I'm purposefully just kicking this can down the
