@@ -81,7 +81,6 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
-DEFAULT_CACHE_PARTITION_ID = "default"
 
 # This lock prevents us from initializing the cache twice. The cache is initialized
 # with a thread pool. In case of race condition we could create the threads twice which
@@ -105,6 +104,17 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
 
     def encode_exception(self, value: SerializableException) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
+
+
+DEFAULT_CACHE_PARTITION_ID = "default"
+CACHE_PARTITIONS: MutableMapping[str, Cache[Result]] = {
+    DEFAULT_CACHE_PARTITION_ID: RedisCache(
+        redis_cache_client,
+        "snuba-query-cache:",
+        ResultCacheCodec(),
+        ThreadPoolExecutor(),
+    )
+}
 
 
 class DBQuery:
@@ -139,14 +149,7 @@ class DBQuery:
         self.robust = robust
         self.query_id = md5(force_bytes(self.sql)).hexdigest()
         self.allocation_policies: list[AllocationPolicy] = [DEFAULT_PASSTHROUGH_POLICY]
-        self.cache_partitions: MutableMapping[str, Cache[Result]] = {
-            DEFAULT_CACHE_PARTITION_ID: RedisCache(
-                redis_cache_client,
-                "snuba-query-cache:",
-                ResultCacheCodec(),
-                ThreadPoolExecutor(),
-            )
-        }
+        self.cache_partitions = CACHE_PARTITIONS
 
     @with_span(op="db")
     def db_query(self) -> QueryResult:
