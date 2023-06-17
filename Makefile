@@ -36,7 +36,7 @@ api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
 backend-typing:
-	mypy snuba tests --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/state|tests/snapshots|tests/clickhouse|tests/test_split.py'
+	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/state|tests/snapshots|tests/clickhouse|tests/test_split.py'
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
