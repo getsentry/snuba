@@ -33,7 +33,6 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
-from markdown import markdown
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -305,23 +304,6 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
         500,
         {"Content-Type": "application/json"},
     )
-
-
-@application.route("/")
-def root() -> str:
-    with open("README.rst") as f:
-        return render_template("index.html", body=markdown(f.read()))
-
-
-@application.route("/css/<path:path>")
-def send_css(path: str) -> Response:
-    return application.send_static_file(os.path.join("css", path))
-
-
-@application.route("/img/<path:path>")
-@application.route("/snuba/web/static/img/<path:path>")
-def send_img(path: str) -> Response:
-    return application.send_static_file(os.path.join("img", path))
 
 
 @application.route("/health_envoy")
