@@ -27,7 +27,12 @@ class DlqPolicy(Enum):
     DROP_INVALID_MESSAGES = "drop-invalid-messages"
 
 
-@dataclass(frozen=True)
+class DlqInstructionStatus(Enum):
+    NOT_STARTED = "not-started"
+    IN_PROGRESS = "in-progress"
+
+
+@dataclass
 class DlqInstruction:
     """
     The DlqInstruction is a mechanism to notify the DLQ consumer to begin processing
@@ -36,6 +41,7 @@ class DlqInstruction:
     """
 
     policy: DlqPolicy
+    status: DlqInstructionStatus
     storage_key: StorageKey
     slice_id: Optional[int]
     max_messages_to_process: int
@@ -44,6 +50,7 @@ class DlqInstruction:
         encoded: str = rapidjson.dumps(
             {
                 "policy": self.policy.value,
+                "status": self.status.value,
                 "storage_key": self.storage_key.value,
                 "slice_id": self.slice_id,
                 "max_messages_to_process": self.max_messages_to_process,
@@ -57,6 +64,7 @@ class DlqInstruction:
 
         return cls(
             policy=DlqPolicy(decoded["policy"]),
+            status=DlqInstructionStatus(decoded["status"]),
             storage_key=StorageKey(decoded["storage_key"]),
             slice_id=decoded["slice_id"],
             max_messages_to_process=decoded["max_messages_to_process"],
@@ -77,6 +85,16 @@ def load_instruction() -> Optional[DlqInstruction]:
         return None
 
     return DlqInstruction.from_bytes(value)
+
+
+def mark_instruction_in_progress() -> None:
+    """
+    Mark the current instruction as in progress. Not atomic.
+    """
+    instruction = load_instruction()
+    if instruction:
+        instruction.status = DlqInstructionStatus.IN_PROGRESS
+        store_instruction(instruction)
 
 
 def clear_instruction() -> None:

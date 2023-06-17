@@ -46,6 +46,7 @@ from snuba.admin.tool_policies import (
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.dlq import (
     DlqInstruction,
+    DlqInstructionStatus,
     DlqPolicy,
     clear_instruction,
     load_instruction,
@@ -928,7 +929,11 @@ def dlq_replay() -> Response:
             return make_response("Instruction exists", 400)
 
         instruction = DlqInstruction(
-            policy, storage_key, slice_id, max_messages_to_process
+            policy,
+            DlqInstructionStatus.NOT_STARTED,
+            storage_key,
+            slice_id,
+            max_messages_to_process,
         )
         store_instruction(instruction)
 
