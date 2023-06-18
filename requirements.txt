@@ -34,7 +34,7 @@ structlog==22.3.0
 structlog-sentry==2.0.0
 sql-metadata==2.6.0
 typing-extensions==4.5.0
-urllib3==1.26.12
+urllib3==2.0.3
 pyuwsgi==2.0.20
 Werkzeug==2.2.2
 PyYAML==6.0
