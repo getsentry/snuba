@@ -463,3 +463,35 @@ def test_get_iam_roles_cache() -> None:
                 system_role,
                 tool_role,
             ]
+
+
+@pytest.mark.redis_db
+@patch("redis.Redis")
+def test_get_iam_roles_cache_fail(mock_redis: Any) -> None:
+    mock_redis.get.side_effect = Exception("Test exception")
+    mock_redis.set.side_effect = Exception("Test exception")
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role, tool_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                system_role,
+                tool_role,
+            ]
+
+            _set_roles(user1)
+
+            assert user1.roles == [
+                system_role,
+                tool_role,
+            ]
