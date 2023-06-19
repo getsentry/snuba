@@ -365,6 +365,81 @@ def test_get_iam_roles(caplog: Any) -> None:
             ]
 
         iam_file.close()
+
+        with patch(
+            "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
+        ):
+            log = CapturingLogger()
+            with patch("snuba.admin.auth.logger", log):
+                user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
+                _set_roles(user3)
+                assert "IAM policy file not found file_not_exists.json" in str(
+                    log.calls
+                )
+
+
+@pytest.mark.redis_db
+def test_get_iam_roles_cache() -> None:
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role, tool_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(
+            json.dumps(
+                {
+                    "bindings": [
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/NonBlockingMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/TestMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/owner",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/AllTools",
+                        },
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+        iam_file.flush()
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
+                system_role,
+                tool_role,
+            ]
+
         iam_file = tempfile.NamedTemporaryFile()
         iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
         iam_file.flush()
@@ -388,14 +463,3 @@ def test_get_iam_roles(caplog: Any) -> None:
                 system_role,
                 tool_role,
             ]
-
-        with patch(
-            "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
-        ):
-            log = CapturingLogger()
-            with patch("snuba.admin.auth.logger", log):
-                user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
-                _set_roles(user3)
-                assert "IAM policy file not found file_not_exists.json" in str(
-                    log.calls
-                )
