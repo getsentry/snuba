@@ -12,6 +12,16 @@ from snuba.datasets.storages.storage_key import StorageKey
 # HACK (VOLO): Everything in this file is a hack
 
 
+def _stringify_result(result: ClickhouseResult) -> ClickhouseResult:
+    # javascript stores numbers as doubles so in order for it to not round
+    # metric ids (which are all prefixed by (1 << 63)) we strigify them before sending
+    # them to the client
+    result_rows = []
+    for row in result.results:
+        result_rows.append([str(col) for col in row])
+    return ClickhouseResult(result_rows, result.meta)
+
+
 @audit_log
 def run_metrics_query(query: str, user: str) -> ClickhouseResult:
     """
@@ -28,7 +38,7 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
             "generic_metric_distributions_aggregated_dist",
         },
     )
-    return __run_query(query)
+    return _stringify_result(__run_query(query))
 
 
 def __run_query(query: str) -> ClickhouseResult:
