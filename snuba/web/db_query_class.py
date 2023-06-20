@@ -604,7 +604,7 @@ class DBQuery:
         )
 
         try:
-            return execute_query(query_id=self.query_id)
+            return execute_query(key=self.query_id)
         except ClickhouseError as e:
             if (
                 e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
@@ -617,7 +617,7 @@ class DBQuery:
             )
             metrics.increment("query_cache_lost")
             self.query_id = f"randomized-{uuid.uuid4().hex}"
-            return execute_query(query_id=self.query_id)
+            return execute_query(key=self.query_id)
 
     def _get_cache_wait_timeout(self) -> int:
         """
