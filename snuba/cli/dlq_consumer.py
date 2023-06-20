@@ -16,7 +16,12 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.consumers.dlq import clear_instruction, load_instruction
+from snuba.consumers.dlq import (
+    DlqInstructionStatus,
+    clear_instruction,
+    load_instruction,
+    mark_instruction_in_progress,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -107,13 +112,14 @@ def dlq_consumer(
     while not shutdown_requested:
         instruction = load_instruction()
 
-        if instruction is None:
+        if (
+            instruction is None
+            or instruction.status != DlqInstructionStatus.NOT_STARTED
+        ):
             time.sleep(2.0)
             continue
 
-        # Immediately clear the instruction so it does not get picked up more than once
-        # even if the consumer does not finish processing it.
-        clear_instruction()
+        mark_instruction_in_progress()
 
         logger.info(f"Starting DLQ consumer {instruction}")
 
@@ -169,3 +175,4 @@ def dlq_consumer(
 
         consumer.run()
         consumer_builder.flush()
+        clear_instruction()
