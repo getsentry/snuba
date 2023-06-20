@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import MutableSequence, NamedTuple, Optional, Sequence, TypedDict
+from typing import NamedTuple, Optional, Sequence, TypedDict
 
 from snuba import settings
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages.factory import get_all_storage_keys, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storages
 
 Topic = TypedDict(
     "Topic",
@@ -59,15 +59,3 @@ def get_slices(storage: WritableTableStorage) -> Sequence[Optional[int]]:
         return list(range(settings.SLICED_STORAGE_SETS[storage_set_key.value]))
     else:
         return [None]
-
-
-def get_writable_storages() -> Sequence[WritableTableStorage]:
-    writable_storages: MutableSequence[WritableTableStorage] = []
-    storage_keys = get_all_storage_keys()
-    for storage_key in storage_keys:
-        try:
-            writable_storages.append(get_writable_storage(storage_key))
-        except AssertionError:
-            pass
-
-    return writable_storages
