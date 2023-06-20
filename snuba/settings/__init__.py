@@ -424,12 +424,8 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             )
 
         for attr in dir(settings_module):
-            new_attr = getattr(settings_module, attr)
             if attr.isupper():
-                if isinstance(obj[attr], dict) and isinstance(new_attr, dict):
-                    obj[attr].update(new_attr)
-                else:
-                    obj[attr] = new_attr
+                obj[attr] = getattr(settings_module, attr)
 
 
 _load_settings()
