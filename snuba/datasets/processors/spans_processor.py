@@ -275,6 +275,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span["platform"] = _unicodify(span_data.get("span.system", ""))
         processed_span["action"] = _unicodify(span_data.get("span.action", ""))
         processed_span["status"] = span_data.get("span.status_code", 0)
+        processed_span["group"] = int(span_data.get("span.group", "0"), 16)
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
@@ -298,7 +299,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span["is_segment"] = 0
         processed_span["op"] = _unicodify(span_dict.get("op", ""))
         processed_span["group_raw"] = int(span_dict.get("hash", "0"), 16)
-        processed_span["group"] = int(span_dict.get("group", "0"), 16)
         processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
         processed_span["description"] = _unicodify(span_dict.get("description", ""))
 
