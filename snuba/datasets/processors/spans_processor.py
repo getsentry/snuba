@@ -148,7 +148,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["transaction_op"] = processed["op"]
 
         span_hash = transaction_ctx.get("hash", None)
-        processed["group"] = 0 if not span_hash else int(span_hash, 16)
+        processed["group_raw"] = 0 if not span_hash else int(span_hash, 16)
         processed["segment_name"] = _unicodify(
             event_dict["data"].get("transaction") or ""
         )
@@ -297,7 +297,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         )
         processed_span["is_segment"] = 0
         processed_span["op"] = _unicodify(span_dict.get("op", ""))
-        processed_span["group"] = int(span_dict.get("hash", 0), 16)
+        processed_span["group_raw"] = int(span_dict.get("hash", "0"), 16)
+        processed_span["group"] = int(span_dict.get("group", "0"), 16)
         processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
         processed_span["description"] = _unicodify(span_dict.get("description", ""))
 
