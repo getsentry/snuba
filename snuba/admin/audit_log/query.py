@@ -18,7 +18,7 @@ class QueryExecutionStatus(Enum):
     FAILED = "failed"
 
 
-__querylog_audit_log_notification_client = AuditLog()
+__query_audit_log_notification_client = AuditLog()
 
 
 def audit_log(
@@ -36,7 +36,7 @@ def audit_log(
             "query": query,
         }
         audit_log_notify = partial(
-            __querylog_audit_log_notification_client.record,
+            __query_audit_log_notification_client.record,
             user=user,
             action=AuditLogAction.RAN_QUERY,
         )
