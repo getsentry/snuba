@@ -320,9 +320,9 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     assert set(data) == set(get_enabled_dataset_names())
 
 
-def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
+def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -330,9 +330,9 @@ def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
+def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -344,7 +344,7 @@ def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
+def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (sessions)
     SELECT sessions_crashed
@@ -354,11 +354,17 @@ def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     AND started < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": snql_query})
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
     )
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
+    assert len(data["explain"]["steps"]) > 0
+    assert {
+        "category": "entity_processor",
+        "name": "BasicFunctionsProcessor",
+        "data": {},
+    } in data["explain"]["steps"]
 
 
 @pytest.mark.redis_db

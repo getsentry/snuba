@@ -2,6 +2,7 @@ from typing import Callable, Sequence
 
 import sentry_sdk
 
+from snuba.state import explain_meta
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.logical import Query as LogicalQuery
@@ -74,4 +75,7 @@ def execute_entity_processors(query: LogicalQuery, settings: QuerySettings) -> N
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"
         ):
+            if settings.get_dry_run():
+                explain_meta.add_step("entity_processor", type(processor).__name__)
+
             processor.process_query(query, settings)
