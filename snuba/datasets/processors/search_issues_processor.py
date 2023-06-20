@@ -276,6 +276,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
+            "message": _unicodify(event["message"]),
         }
 
         # optional fields
