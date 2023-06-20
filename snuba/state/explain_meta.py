@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from flask import g
+
+ExplainType = Literal["query_transform"]
 
 
 @dataclass
 class ExplainStep:
-    category: str  # The type of step e.g. "processor"
+    category: str  # The class of step e.g. "processor"
+    type: ExplainType  # A value that tells the frontend what data the step has
     name: str  # The specific name for the step e.g. "TimeSeriesProcessor"
     data: dict[str, Any] = field(
         default_factory=dict
@@ -17,6 +20,7 @@ class ExplainStep:
 
 @dataclass
 class ExplainMeta:
+    original_ast: str = "TBD"
     steps: list[ExplainStep] = field(default_factory=list)
 
     def add_step(self, step: ExplainStep) -> None:
@@ -27,7 +31,7 @@ def add_step(category: str, name: str, data: dict[str, Any] | None = None) -> No
     try:
         if data is None:
             data = {}
-        step = ExplainStep(category, name, data)
+        step = ExplainStep(category, "query_transform", name, data)
 
         if not hasattr(g, "explain_meta"):
             g.explain_meta = ExplainMeta()

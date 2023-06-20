@@ -52,8 +52,8 @@ interface Client {
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
-  convertSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
+  debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
@@ -188,7 +188,7 @@ function Client() {
       return fetch(url).then((resp) => resp.json());
     },
 
-    convertSnQLQuery: (query: SnQLRequest) => {
+    debugSnQLQuery: (query: SnQLRequest) => {
       const url = baseUrl + "snuba_debug";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
