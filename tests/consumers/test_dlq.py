@@ -8,7 +8,7 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 from snuba.consumers.dlq import (
     DlqInstruction,
     DlqInstructionStatus,
-    DlqPolicy,
+    DlqReplayPolicy,
     ExitAfterNMessages,
     clear_instruction,
     load_instruction,
@@ -21,7 +21,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 @pytest.mark.redis_db
 def test_dlq_instruction() -> None:
     instruction = DlqInstruction(
-        DlqPolicy.STOP_ON_ERROR,
+        DlqReplayPolicy.STOP_ON_ERROR,
         DlqInstructionStatus.NOT_STARTED,
         StorageKey.QUERYLOG,
         None,
@@ -34,7 +34,7 @@ def test_dlq_instruction() -> None:
 @pytest.mark.redis_db
 def test_store_instruction() -> None:
     instruction = DlqInstruction(
-        DlqPolicy.STOP_ON_ERROR,
+        DlqReplayPolicy.STOP_ON_ERROR,
         DlqInstructionStatus.NOT_STARTED,
         StorageKey.QUERYLOG,
         None,
