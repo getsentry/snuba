@@ -16,7 +16,10 @@ from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
-from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.serializable_exception import (
+    SerializableException,
+    SerializableExceptionDict,
+)
 from tests.assertions import assert_changes, assert_does_not_change
 
 redis_client = get_redis_client(RedisClientKey.CACHE)
@@ -44,7 +47,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
 
     def decode(self, value: bytes) -> bytes:
         try:
-            ret = rapidjson.loads(value)
+            ret: SerializableExceptionDict = rapidjson.loads(value)
             if not isinstance(ret, dict):
                 return value
             if ret.get("__type__", "NOP") == "SerializableException":
@@ -55,7 +58,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
         return value
 
     def encode_exception(self, value: SerializableException) -> bytes:
-        return rapidjson.dumps(value.to_dict()).encode("utf-8")
+        return bytes(rapidjson.dumps(value.to_dict()).encode("utf-8"))
 
 
 @pytest.fixture
@@ -260,10 +263,10 @@ def test_notify_queue_ttl() -> None:
     num_waiters = 9
 
     class DelayedRedisClient:
-        def __init__(self, redis_client):
+        def __init__(self, redis_client: RedisClientType) -> None:
             self._client = redis_client
 
-        def __getattr__(self, attr: str):
+        def __getattr__(self, attr: str) -> Any:
             # simulate the queue pop taking longer than expected.
             # the notification queue TTL is 60 seconds so running into a timeout
             # shouldn't happen (unless something has drastically changed in the TTL
