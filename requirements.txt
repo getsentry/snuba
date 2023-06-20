@@ -12,7 +12,7 @@ honcho==1.1.0
 python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
 fastjsonschema==2.16.2
-packaging==21.3
+packaging==23.1
 # Do not update parsimonious, there is a performance issue in newer versions
 parsimonious==0.8.1
 progressbar2==4.0.0
