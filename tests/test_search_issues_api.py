@@ -29,6 +29,7 @@ def base_insert_event(
             "primary_hash": str(uuid.uuid4()),
             "datetime": datetime.utcnow().isoformat() + "Z",
             "platform": "other",
+            "message": "message",
             "data": {
                 "received": now.timestamp(),
             },
@@ -94,6 +95,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             primary_hash=str(uuid.uuid4().hex),
             datetime=datetime.utcnow().isoformat() + "Z",
             platform="other",
+            message="message",
             data={"received": now.timestamp()},
             occurrence_data=dict(
                 id=str(uuid.uuid4().hex),
