@@ -92,6 +92,7 @@ class SearchIssueEvent(TypedDict, total=False):
     group_id: int
     platform: str
     primary_hash: str
+    message: str
     datetime: str
 
     data: IssueEventData
