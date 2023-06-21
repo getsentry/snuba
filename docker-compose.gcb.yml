@@ -14,6 +14,7 @@ services:
     command:
       - '-m'
       - 'pytest'
+      - '-x'
       - '-vv'
       - '${TEST_LOCATION:-tests}'
       - '--cov'
