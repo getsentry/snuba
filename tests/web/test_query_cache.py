@@ -64,16 +64,14 @@ def run_query() -> None:
 def test_cache_retries_on_bad_query_id(
     monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
 ) -> None:
-    # idk how to fix this
-    return
-    from snuba.web import db_query
+    from snuba.web.db_query_class import DBQuery
 
     calls = []
 
-    old_excecute_query_with_rate_limits = db_query.execute_query_with_rate_limits
+    old_excecute_query_with_rate_limits = DBQuery._execute_query
 
     def execute_query_with_rate_limits(*args: Any) -> Any:
-        calls.append(args[-2]["query_id"])
+        calls.append(args[0].query_id)
 
         if len(calls) == 1:
             raise ClickhouseError(
@@ -84,9 +82,7 @@ def test_cache_retries_on_bad_query_id(
 
         return old_excecute_query_with_rate_limits(*args)
 
-    monkeypatch.setattr(
-        db_query, "execute_query_with_rate_limits", execute_query_with_rate_limits
-    )
+    monkeypatch.setattr(DBQuery, "_execute_query", execute_query_with_rate_limits)
 
     with pytest.raises(QueryException):
         run_query()
