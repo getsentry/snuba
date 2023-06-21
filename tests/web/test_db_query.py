@@ -228,6 +228,78 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+def test_readthrough_behaviour() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = DBQuery(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    ).db_query()
+    assert stats["quota_allowance"] == {
+        "BytesScannedWindowAllocationPolicy": {
+            "can_run": True,
+            "explanation": {},
+            "max_threads": 10,
+        }
+    }
+    assert len(query_metadata_list) == 1
+    assert result.extra["stats"] == stats
+    assert result.extra["sql"] is not None
+    assert set(result.result["profile"].keys()) == {  # type: ignore
+        "elapsed",
+        "bytes",
+        "blocks",
+        "rows",
+    }
+
+    # cached result response shouldn't let query run on clickhouse
+    query_metadata_list = []
+    stats = {}
+    run_query = mock.Mock()
+    with mock.patch(
+        "snuba.web.db_query_class.DBQuery._try_running_query", side_effect=run_query
+    ):
+        obj = DBQuery(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+        result = obj.db_query()
+        assert run_query.call_count == 0
+    assert stats["cache_hit"] == 1
+    assert len(query_metadata_list) == 1
+    assert result.extra["stats"] == stats
+    assert result.extra["sql"] is not None
+    assert set(result.result["profile"].keys()) == {  # type: ignore
+        "elapsed",
+        "bytes",
+        "blocks",
+        "rows",
+    }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_db_query_fail() -> None:
     query, storage, attribution_info = _build_test_query("count(non_existent_column)")
 
@@ -421,7 +493,6 @@ def test_cached_query_not_hitting_allocation_policy() -> None:
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         settings = HTTPQuerySettings()
-        print("running query")
         DBQuery(
             clickhouse_query=query,
             query_settings=settings,
