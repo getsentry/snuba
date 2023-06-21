@@ -51,10 +51,10 @@ class TestApiCodes(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    @patch("snuba.web.db_query_class.DBQuery._apply_rate_limits")
+    @patch("snuba.state.rate_limit.RateLimitAggregator.__enter__")
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test_correct_error_codes(
+    def test_correct_rate_limit_error_codes(
         self, execute_mock: MagicMock, record_query: MagicMock
     ) -> None:
         # pytest.param doesn't play well with patch so put the list here
@@ -77,6 +77,28 @@ class TestApiCodes(BaseApiTest):
                 "rate-limited",
                 "for",
             ),
+        ]
+
+        for exception, status, slo in tests:
+            execute_mock.side_effect = exception
+            self.post()
+
+            metadata = record_query.call_args[0][0]
+            assert metadata["request_status"] == status, exception
+            assert metadata["slo"] == slo, exception
+            execute_mock.reset_mock()
+            record_query.reset_mock()
+
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    @patch("snuba.web.db_query_class.DBQuery._execute_query_with_readthrough_caching")
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_correct_clickhouse_error_codes(
+        self, execute_mock: MagicMock, record_query: MagicMock
+    ) -> None:
+        # pytest.param doesn't play well with patch so put the list here
+        tests = [
             (
                 ClickhouseError("test", code=ErrorCodes.TOO_SLOW),
                 "predicted-timeout",
@@ -102,8 +124,6 @@ class TestApiCodes(BaseApiTest):
                 "memory-exceeded",
                 "for",
             ),
-            (TimeoutError("test"), "cache-set-timeout", "against"),
-            (ExecutionTimeoutError("test"), "cache-wait-timeout", "against"),
             (
                 ClickhouseError(
                     "DB::Exception: There is no supertype for types UInt32, String because some of them are String/FixedString and some of them are not: While processing has(exception_frames.colno AS `_snuba_exception_frames.colno`, '300'). Stack trace:",
@@ -112,6 +132,8 @@ class TestApiCodes(BaseApiTest):
                 "invalid-typing",
                 "for",
             ),
+            (TimeoutError("test"), "cache-set-timeout", "against"),
+            (ExecutionTimeoutError("test"), "cache-wait-timeout", "against"),
         ]
 
         for exception, status, slo in tests:

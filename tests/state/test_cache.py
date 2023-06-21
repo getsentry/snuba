@@ -17,7 +17,7 @@ from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutEr
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import SerializableException
-from tests.assertions import assert_changes, assert_does_not_change
+from tests.assertions import assert_changes
 
 redis_client = get_redis_client(RedisClientKey.CACHE)
 
@@ -97,14 +97,13 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     function = mock.MagicMock(return_value=value)
 
     assert backend.get(key) is None
+    assert backend.get_cached_result_and_record_timer(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
         backend.get_readthrough(key, function, noop, 5) == value
 
     assert backend.get(key) == value
-
-    with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+    assert backend.get_cached_result_and_record_timer(key) == value
 
 
 @pytest.mark.redis_db
