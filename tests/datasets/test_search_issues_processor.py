@@ -36,6 +36,7 @@ def message_base() -> SearchIssueEvent:
         "primary_hash": str(uuid.uuid4()),
         "datetime": datetime.utcnow().isoformat() + "Z",
         "platform": "other",
+        "message": "something",
         "data": {
             "received": datetime.now().timestamp(),
         },
@@ -70,6 +71,7 @@ class TestSearchIssuesMessageProcessor:
         "platform",
         "tags.key",
         "tags.value",
+        "message",
     }
 
     def process_message(
@@ -438,6 +440,14 @@ class TestSearchIssuesMessageProcessor:
             message_base["data"]["contexts"]["replay"]["replay_id"] = invalid_replay_id
             with pytest.raises(ValueError):
                 self.process_message(message_base)
+
+    def test_extract_message(self, message_base):
+        message = "a message"
+        message_base["message"] = message
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["message"] == message
 
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):
