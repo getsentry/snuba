@@ -266,7 +266,8 @@ def test_readthrough_behaviour() -> None:
     stats = {}
     run_query = mock.Mock()
     with mock.patch(
-        "snuba.web.db_query.DBQuery._try_running_query", side_effect=run_query
+        "snuba.web.db_query.DBQuery._try_executing_and_caching_query",
+        side_effect=run_query,
     ):
         result = DBQuery(
             clickhouse_query=query,

@@ -180,7 +180,7 @@ class DBQuery:
         error = None
         try:
             self._apply_rate_limits()
-            result = self._try_running_query()
+            result = self._try_executing_and_caching_query()
         except QueryException as e:
             error = e
         except Exception as e:
@@ -396,7 +396,7 @@ class DBQuery:
             ) from cause
 
     @with_span(op="db")
-    def _try_running_query(self) -> QueryResult:
+    def _try_executing_and_caching_query(self) -> QueryResult:
         """
         Requirements:
         - Query is not cached
