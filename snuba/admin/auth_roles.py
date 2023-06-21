@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Optional, Sequence, Set, Type, TypeVar
+from typing import Generic, Sequence, Set, TypeVar
 
 from snuba import settings
 from snuba.migrations.runner import get_active_migration_groups
@@ -119,29 +119,6 @@ MIGRATIONS_RESOURCES = {
 class Role:
     name: str
     actions: Set[MigrationAction | ToolAction]
-
-
-def generate_migration_test_role(
-    group: str,
-    policy: str,
-    override_resource: bool = False,
-    name: Optional[str] = None,
-) -> Role:
-    if not name:
-        name = f"{group}-{policy}"
-
-    if policy == "all":
-        action: Type[MigrationAction] = ExecuteAllAction
-    elif policy == "non_blocking":
-        action = ExecuteNonBlockingAction
-    else:
-        action = ExecuteNoneAction
-
-    resource = (
-        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
-    )
-
-    return Role(name=name, actions={action([resource])})
 
 
 def generate_tool_test_role(tool: str) -> Role:

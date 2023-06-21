@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 from dataclasses import asdict
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence, Type
 from unittest.mock import patch
 
 import pytest
@@ -12,8 +12,14 @@ from structlog.testing import CapturingLogger
 
 from snuba.admin.auth import _set_roles
 from snuba.admin.auth_roles import (
+    MIGRATIONS_RESOURCES,
     ROLES,
-    generate_migration_test_role,
+    ExecuteAllAction,
+    ExecuteNonBlockingAction,
+    ExecuteNoneAction,
+    MigrationAction,
+    MigrationResource,
+    Role,
     generate_tool_test_role,
 )
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
@@ -22,6 +28,29 @@ from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+
+
+def generate_migration_test_role(
+    group: str,
+    policy: str,
+    override_resource: bool = False,
+    name: Optional[str] = None,
+) -> Role:
+    if not name:
+        name = f"{group}-{policy}"
+
+    if policy == "all":
+        action: Type[MigrationAction] = ExecuteAllAction
+    elif policy == "non_blocking":
+        action = ExecuteNonBlockingAction
+    else:
+        action = ExecuteNoneAction
+
+    resource = (
+        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
+    )
+
+    return Role(name=name, actions={action([resource])})
 
 
 @pytest.fixture
