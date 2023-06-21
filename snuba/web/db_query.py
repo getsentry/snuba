@@ -167,12 +167,12 @@ class DBQuery:
         """
         The main entrypoint of executing a ClickHouse Query.
         """
-        self._load_query_settings_from_config()
 
         cached_result = self._get_cached_query_result()
         if cached_result is not None:
             return cached_result
 
+        self._load_query_settings_from_config()
         self._load_allocation_policies()
         self._apply_allocation_policy_quotas()
 
