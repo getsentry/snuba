@@ -42,7 +42,7 @@ class Cache(Generic[TValue], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_readthrough(
+    def queue_and_cache_query(
         self,
         key: str,
         function: Callable[[], TValue],
@@ -51,9 +51,6 @@ class Cache(Generic[TValue], ABC):
         timer: Optional[Timer] = None,
     ) -> TValue:
         """
-        Implements a read-through caching pattern for the value at the given
-        key.
-
         This method should only be used if `self.get` or
         `self.get_cached_result_and_record_metrics` results in a cache miss.
 

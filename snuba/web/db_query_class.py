@@ -596,7 +596,7 @@ class DBQuery:
                 span.set_data("cache_status", span_tag)
 
         execute_query = partial(
-            self._get_cache_partition().get_readthrough,
+            self._get_cache_partition().queue_and_cache_query,
             function=self._execute_query,
             record_cache_hit_type=record_cache_hit_type,
             timeout=self._get_cache_wait_timeout(),

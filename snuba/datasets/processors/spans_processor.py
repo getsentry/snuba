@@ -65,7 +65,7 @@ def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
     A lot of metadata regarding spans is sent in spans.data. We do not want to store everything
     as tags in clickhouse. This method allows only a few pre defined keys to be stored as tags.
     """
-    allowed_keys = {"environment", "release", "user"}
+    allowed_keys = {"environment", "release", "user", "transaction.method"}
     return {k: v for k, v in tags.items() if k in allowed_keys}
 
 
@@ -138,7 +138,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             "span_id"
         ]
         processed["is_segment"] = 1
-        parent_span_id = transaction_ctx.get("parent_span_id", 0)
+        parent_span_id: str = transaction_ctx.get("parent_span_id", "0") or "0"
         processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
 
         processed["description"] = _unicodify(event_dict.get("description", ""))
@@ -148,7 +148,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["transaction_op"] = processed["op"]
 
         span_hash = transaction_ctx.get("hash", None)
-        processed["group"] = 0 if not span_hash else int(span_hash, 16)
+        processed["group_raw"] = 0 if not span_hash else int(span_hash, 16)
         processed["segment_name"] = _unicodify(
             event_dict["data"].get("transaction") or ""
         )
@@ -275,6 +275,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span["platform"] = _unicodify(span_data.get("span.system", ""))
         processed_span["action"] = _unicodify(span_data.get("span.action", ""))
         processed_span["status"] = span_data.get("span.status_code", 0)
+        processed_span["group"] = int(span_data.get("span.group", "0"), 16)
 
     def _process_span(
         self, span_dict: SpanDict, common_span_fields: CommonSpanDict
@@ -292,10 +293,12 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed_span.update(copy.deepcopy(common_span_fields))
         processed_span["trace_id"] = str(uuid.UUID(span_dict["trace_id"]))
         processed_span["span_id"] = int(span_dict["span_id"], 16)
-        processed_span["parent_span_id"] = int(span_dict.get("parent_span_id", 0), 16)
+        processed_span["parent_span_id"] = int(
+            span_dict.get("parent_span_id", "0") or "0", 16
+        )
         processed_span["is_segment"] = 0
         processed_span["op"] = _unicodify(span_dict.get("op", ""))
-        processed_span["group"] = int(span_dict.get("hash", 0), 16)
+        processed_span["group_raw"] = int(span_dict.get("hash", "0"), 16)
         processed_span["exclusive_time"] = span_dict.get("exclusive_time", 0)
         processed_span["description"] = _unicodify(span_dict.get("description", ""))
 
@@ -404,8 +407,11 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 "log_bad_span_message_percentage", default=0.0
             )
             if random.random() < float(log_bad_span_pct if log_bad_span_pct else 0.0):
+                # key fields in extra_bag are prefixed with "spans_" to avoid conflicts with
+                # other fields in LogRecords
+                extra_bag = {"spans_" + str(k): v for k, v in message[2].items()}
                 logger.warning(
-                    "Failed to process span message", extra=message[2], exc_info=e
+                    "Failed to process span message", extra=extra_bag, exc_info=e
                 )
             return None
 

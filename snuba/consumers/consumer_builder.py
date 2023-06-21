@@ -11,13 +11,12 @@ from arroyo.backends.kafka import (
     build_kafka_consumer_configuration,
 )
 from arroyo.commit import IMMEDIATE
-from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
+from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
-from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
-from confluent_kafka import KafkaError, KafkaException, Producer
+from confluent_kafka import KafkaError, Producer
 from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
@@ -26,7 +25,7 @@ from snuba.consumers.consumer import (
     process_message,
 )
 from snuba.consumers.consumer_config import ConsumerConfig
-from snuba.consumers.dlq import DlqInstruction
+from snuba.consumers.dlq import DlqInstruction, DlqReplayPolicy
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -72,7 +71,6 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         slice_id: Optional[int],
         join_timeout: Optional[int],
-        commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
@@ -143,24 +141,12 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
 
-        if commit_retry_policy is None:
-            commit_retry_policy = BasicRetryPolicy(
-                3,
-                1,
-                lambda e: isinstance(e, KafkaException)
-                and e.args[0].code()
-                in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR,
-                    KafkaError._WAIT_COORD,
-                ),
-            )
-
-        self.__commit_retry_policy = commit_retry_policy
+        self.dlq_producer: Optional[KafkaProducer] = None
 
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
@@ -189,26 +175,7 @@ class ConsumerBuilder:
 
         consumer = KafkaConsumer(
             configuration,
-            commit_retry_policy=self.__commit_retry_policy,
         )
-
-        if self.__consumer_config.dlq_topic is not None:
-            dlq_producer = KafkaProducer(
-                build_kafka_configuration(
-                    self.__consumer_config.dlq_topic.broker_config
-                )
-            )
-
-            dlq_policy = DlqPolicy(
-                KafkaDlqProducer(
-                    dlq_producer,
-                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
-                ),
-                DlqLimit(),
-                None,
-            )
-        else:
-            dlq_policy = None
 
         return StreamProcessor(
             consumer,
@@ -324,19 +291,65 @@ class ConsumerBuilder:
         if self.commit_log_producer:
             self.commit_log_producer.flush()
 
+        if self.dlq_producer:
+            self.dlq_producer.close()
+
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(self.build_streaming_strategy_factory())
+        return self.__build_consumer(
+            self.build_streaming_strategy_factory(), self.__build_default_dlq_policy()
+        )
 
     def build_dlq_consumer(
         self, instruction: DlqInstruction
     ) -> StreamProcessor[KafkaPayload]:
         """
         Dlq consumer. Same as the base consumer but exits after `max_messages_to_process`
+        and applies the user defined DLQ policy.
         """
         if not instruction.is_valid():
             raise ValueError("Invalid DLQ instruction")
 
-        return self.__build_consumer(self.build_dlq_strategy_factory(instruction))
+        if instruction.policy == DlqReplayPolicy.REINSERT_DLQ:
+            dlq_policy = self.__build_default_dlq_policy()
+        elif instruction.policy == DlqReplayPolicy.DROP_INVALID_MESSAGES:
+            dlq_policy = DlqPolicy(
+                NoopDlqProducer(),
+                None,
+                None,
+            )
+        elif instruction.policy == DlqReplayPolicy.STOP_ON_ERROR:
+            dlq_policy = None
+        else:
+            raise ValueError("Invalid DLQ policy")
+
+        return self.__build_consumer(
+            self.build_dlq_strategy_factory(instruction), dlq_policy
+        )
+
+    def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
+        """
+        Default DLQ policy applies to the base consumer or the DLQ consumer when
+        the selected policy is re-insert to DLQ.
+        """
+        if self.__consumer_config.dlq_topic is not None:
+            self.dlq_producer = KafkaProducer(
+                build_kafka_configuration(
+                    self.__consumer_config.dlq_topic.broker_config
+                )
+            )
+
+            dlq_policy = DlqPolicy(
+                KafkaDlqProducer(
+                    self.dlq_producer,
+                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
+                ),
+                DlqLimit(),
+                None,
+            )
+        else:
+            dlq_policy = None
+
+        return dlq_policy

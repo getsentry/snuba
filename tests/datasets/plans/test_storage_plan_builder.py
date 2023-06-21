@@ -165,6 +165,7 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
     query, _ = parse_snql_query(str(snql_query), dataset)
 
     temp_settings.SUPPORTED_STATES = {}  # remove all supported states
+    temp_settings.READINESS_STATE_FAIL_QUERIES = True
 
     assert isinstance(query, Query)
     with pytest.raises(

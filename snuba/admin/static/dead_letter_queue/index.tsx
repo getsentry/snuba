@@ -131,7 +131,7 @@ function DeadLetterQueue(props: { api: Client }) {
                 >
                   <option value="">Select invalid message policy</option>
                   <option value="reinsert-dlq">
-                    Re-insert to DLQ some long description
+                    Re-insert to DLQ
                   </option>
                   <option value="stop-on-error">Crash on error</option>
                   <option value="drop-invalid-messages">

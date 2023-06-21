@@ -1,8 +1,12 @@
-import logging
+import multiprocessing
+import os
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Mapping, MutableSequence, Optional, Sequence
+
+import structlog
+from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
@@ -22,17 +26,20 @@ from snuba.settings import (
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger("snuba.optimize")
 
 # include thread and process info in log messages
-log_handler = logging.StreamHandler()
-log_handler.setFormatter(
-    logging.Formatter(
-        "%(levelname)s %(asctime)s %(name)s %(process)d-%(threadName)s %(message)s"
-    )
-)
-logger.addHandler(log_handler)
-logger.propagate = False
+def thread_info_processor(
+    _: WrappedLogger, __: str, event_dict: EventDict
+) -> EventDict:
+    event_dict["threadName"] = threading.current_thread().name
+    event_dict["thread_id"] = threading.get_ident()
+    event_dict["processName"] = multiprocessing.current_process().name
+    event_dict["process"] = os.getpid()
+    return event_dict
+
+
+logger = structlog.get_logger().bind(module=__name__)
+logger = structlog.wrap_logger(logger, processors=[thread_info_processor])
 
 metrics = MetricsWrapper(environment.metrics, "optimize")
 

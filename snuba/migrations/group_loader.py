@@ -311,6 +311,7 @@ class SearchIssuesLoader(DirectoryLoader):
             "0006_add_subtitle_culprit_level_resource_id",
             "0007_add_transaction_duration",
             "0008_add_profile_id_replay_id",
+            "0009_add_message",
         ]
 
 
@@ -323,4 +324,5 @@ class SpansLoader(DirectoryLoader):
             "0001_spans_v1",
             "0002_spans_add_tags_hashmap",
             "0003_spans_add_ms_columns",
+            "0004_spans_group_raw_col",
         ]

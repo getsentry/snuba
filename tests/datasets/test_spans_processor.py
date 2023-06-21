@@ -141,12 +141,14 @@ class TransactionEvent:
                                 "span.domain": "targetdomain.tld:targetport",
                                 "span.module": "http",
                                 "span.op": "http.client",
+                                "span.group": "b" * 16,
                                 "span.status": "ok",
                                 "span.system": self.platform,
                                 "span.status_code": 200,
                                 "status_code": 200,
                                 "transaction": self.transaction_name,
                                 "transaction.op": self.op,
+                                "transaction.method": "GET",
                             },
                             "op": "http.client",
                             "hash": "b" * 16,
@@ -166,11 +168,13 @@ class TransactionEvent:
                                 "span.action": "SELECT",
                                 "span.module": "db",
                                 "span.op": "db",
+                                "span.group": "d" * 16,
                                 "span.domain": "sentry_tagkey",
                                 "span.system": self.platform,
                                 "span.status": "ok",
                                 "transaction": self.transaction_name,
                                 "transaction.op": self.op,
+                                "transaction.method": "GET",
                             },
                             "op": "db",
                             "hash": "c" * 16,
@@ -254,7 +258,7 @@ class TransactionEvent:
                 ),
                 "exclusive_time": 1.2345,
                 "op": self.op,
-                "group": int("a" * 16, 16),
+                "group_raw": int("a" * 16, 16),
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get(self.status),
                 "span_kind": "",
                 "description": "",
@@ -303,6 +307,7 @@ class TransactionEvent:
                 "exclusive_time": 0.1234,
                 "op": "http.client",
                 "group": int("b" * 16, 16),
+                "group_raw": int("b" * 16, 16),
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
                 "span_kind": "",
                 "description": "GET /api/0/organizations/sentry/tags/?project=1",
@@ -311,11 +316,12 @@ class TransactionEvent:
                 "domain": "targetdomain.tld:targetport",
                 "platform": self.platform,
                 "action": "GET",
-                "tags.key": ["release", "user", "environment"],
+                "tags.key": ["release", "user", "environment", "transaction.method"],
                 "tags.value": [
                     "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
                     "123",
                     self.environment,
+                    "GET",
                 ],
                 "measurements.key": [],
                 "measurements.value": [],
@@ -343,7 +349,8 @@ class TransactionEvent:
                 "duration": self.span2_duration,
                 "exclusive_time": 0.4567,
                 "op": "db",
-                "group": int("c" * 16, 16),
+                "group": int("d" * 16, 16),
+                "group_raw": int("c" * 16, 16),
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
                 "span_kind": "",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
@@ -352,11 +359,8 @@ class TransactionEvent:
                 "domain": "sentry_tagkey",
                 "platform": self.platform,
                 "action": "SELECT",
-                "tags.key": ["release", "user"],
-                "tags.value": [
-                    self.release,
-                    self.user_id,
-                ],
+                "tags.key": ["release", "user", "transaction.method"],
+                "tags.value": [self.release, self.user_id, "GET"],
                 "measurements.key": [],
                 "measurements.value": [],
                 "partition": meta.partition,
@@ -462,6 +466,37 @@ class TestSpansProcessor:
         assert len(rows) == len(expected_result)
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
+
+    def test_missing_spans_id(self, caplog) -> None:
+        set_config("spans_project_allowlist", "[1]")
+        set_config("log_bad_span_message_percentage", "1")
+
+        # check that we set the parent_span_id to 0 it is missing
+        message = self.__get_transaction_event()
+        message.parent_span_id = None
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        actual_result = SpansMessageProcessor().process_message(
+            message.serialize(), meta
+        )
+        assert isinstance(actual_result, InsertBatch)
+        assert actual_result.rows[0]["parent_span_id"] == 0
+        expected_result = message.build_result(meta)
+        compare_types_and_values(actual_result.rows[0], expected_result[0])
+
+        # check that we fail gracefully and log if the span_id is missing
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        message.span_id = None
+        actual_result = SpansMessageProcessor().process_message(
+            message.serialize(), meta
+        )
+        # check pytest logs for the warning here
+        assert "Failed to process span message" in caplog.text
+        assert actual_result is None
 
 
 @pytest.mark.parametrize(

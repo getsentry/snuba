@@ -1,5 +1,14 @@
 # Changelog
 
+## 23.6.1
+
+### Various fixes & improvements
+
+- fix: Accidentally checked in useless text (#4355) by @lynnagara
+- fix(admin): Pin yarn and node using volta (#4349) by @untitaker
+- meta: Bump new development version (c2c6e3c3)
+- feat(dlq): Redesign admin UI, add API endpoints for replaying (#4347) by @lynnagara
+
 ## 23.6.0
 
 ### Various fixes & improvements

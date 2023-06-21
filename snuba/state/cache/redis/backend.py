@@ -91,7 +91,7 @@ class RedisCache(Cache[TValue]):
         logger.debug("Immediately returning result from cache hit.")
         return result
 
-    def get_readthrough(
+    def queue_and_cache_query(
         self,
         key: str,
         function: Callable[[], TValue],

@@ -16,7 +16,10 @@ from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
-from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.serializable_exception import (
+    SerializableException,
+    SerializableExceptionDict,
+)
 from tests.assertions import assert_changes
 
 redis_client = get_redis_client(RedisClientKey.CACHE)
@@ -44,7 +47,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
 
     def decode(self, value: bytes) -> bytes:
         try:
-            ret = rapidjson.loads(value)
+            ret: SerializableExceptionDict = rapidjson.loads(value)
             if not isinstance(ret, dict):
                 return value
             if ret.get("__type__", "NOP") == "SerializableException":
@@ -55,7 +58,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
         return value
 
     def encode_exception(self, value: SerializableException) -> bytes:
-        return rapidjson.dumps(value.to_dict()).encode("utf-8")
+        return bytes(rapidjson.dumps(value.to_dict()).encode("utf-8"))
 
 
 @pytest.fixture
@@ -79,31 +82,16 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
     function = mock.MagicMock(return_value=value)
 
     assert backend.get(key) is None
+    assert backend.get_cached_result_and_record_timer(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
-
-    assert backend.get(key) is None
-
-    with assert_changes(lambda: function.call_count, 1, 2):
-        backend.get_readthrough(key, function, noop, 5) == value
-
-
-@pytest.mark.redis_db
-@pytest.mark.clickhouse_db
-def test_get_readthrough(backend: Cache[bytes]) -> None:
-    key = "key"
-    value = b"value"
-    function = mock.MagicMock(return_value=value)
+        backend.queue_and_cache_query(key, function, noop, 5) == value
 
     assert backend.get(key) is None
     assert backend.get_cached_result_and_record_timer(key) is None
 
-    with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
-
-    assert backend.get(key) == value
-    assert backend.get_cached_result_and_record_timer(key) == value
+    with assert_changes(lambda: function.call_count, 1, 2):
+        backend.queue_and_cache_query(key, function, noop, 5) == value
 
 
 @pytest.mark.redis_db
@@ -116,9 +104,10 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
         return value
 
     with pytest.raises(TimeoutError):
-        backend.get_readthrough(key, function, noop, 1)
+        backend.queue_and_cache_query(key, function, noop, 1)
 
     assert backend.get(key) is None
+    assert backend.get_cached_result_and_record_timer(key) is None
 
 
 @pytest.mark.redis_db
@@ -132,7 +121,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, function, noop, 1)
+        backend.queue_and_cache_query(key, function, noop, 1)
 
 
 @pytest.mark.redis_db
@@ -144,7 +133,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
         return f"{random.random()}".encode("utf-8")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.queue_and_cache_query(key, function, noop, 10)
 
     setter = execute(worker)
     waiter = execute(worker)
@@ -164,7 +153,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.queue_and_cache_query(key, function, noop, 10)
 
     setter = execute(worker)
     time.sleep(0.5)
@@ -200,7 +189,9 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
         return value + f"{id}".encode()
 
     def worker(timeout: int) -> bytes:
-        return backend.get_readthrough(key, partial(function, timeout), noop, timeout)
+        return backend.queue_and_cache_query(
+            key, partial(function, timeout), noop, timeout
+        )
 
     setter = execute(partial(worker, 2))
     time.sleep(0.1)
@@ -232,10 +223,10 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         return b"hello"
 
     def transient_error() -> bytes:
-        return backend.get_readthrough(key, error_function, noop, 10)
+        return backend.queue_and_cache_query(key, error_function, noop, 10)
 
     def functioning_query() -> bytes:
-        return backend.get_readthrough(key, normal_function, noop, 10)
+        return backend.queue_and_cache_query(key, normal_function, noop, 10)
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise
@@ -260,10 +251,10 @@ def test_notify_queue_ttl() -> None:
     num_waiters = 9
 
     class DelayedRedisClient:
-        def __init__(self, redis_client):
+        def __init__(self, redis_client: RedisClientType) -> None:
             self._client = redis_client
 
-        def __getattr__(self, attr: str):
+        def __getattr__(self, attr: str) -> Any:
             # simulate the queue pop taking longer than expected.
             # the notification queue TTL is 60 seconds so running into a timeout
             # shouldn't happen (unless something has drastically changed in the TTL
@@ -294,10 +285,12 @@ def test_notify_queue_ttl() -> None:
         return b"hello-not-cached"
 
     def cached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function, noop, 10)
+        return delayed_backend.queue_and_cache_query(key, normal_function, noop, 10)
 
     def uncached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function_uncached, noop, 10)
+        return delayed_backend.queue_and_cache_query(
+            key, normal_function_uncached, noop, 10
+        )
 
     setter = execute(cached_query)
     waiters = []

@@ -178,7 +178,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storage_connection = self.get_storage(query, settings)
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
-        cluster = self.get_cluster(storage, query, settings)
 
         # Return failure if storage readiness state is not supported in current environment
         if snuba_settings.READINESS_STATE_FAIL_QUERIES:
@@ -189,6 +188,9 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     StorageNotAvailable.__name__,
                     f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
                 )
+
+        # If storage is supported in this environment, we can safely check get the existing cluster.
+        cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"

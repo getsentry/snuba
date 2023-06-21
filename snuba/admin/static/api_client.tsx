@@ -25,6 +25,7 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
+import { CardinalityQueryRequest, CardinalityQueryResult } from "./cardinality_analyzer/types";
 
 import { AllocationPolicy } from "./capacity_management/types";
 
@@ -56,6 +57,7 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  executeCardinalityQuery: (req: CardinalityQueryRequest) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -255,6 +257,20 @@ function Client() {
     },
     executeQuerylogQuery: (query: QuerylogRequest) => {
       const url = baseUrl + "clickhouse_querylog_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    executeCardinalityQuery: (query: CardinalityQueryRequest) => {
+      const url = baseUrl + "cardinality_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
