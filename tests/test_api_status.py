@@ -51,7 +51,7 @@ class TestApiCodes(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    @patch("snuba.web.db_query.execute_query_with_rate_limits")
+    @patch("snuba.web.db_query_class.DBQuery._apply_rate_limits")
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_correct_error_codes(

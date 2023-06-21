@@ -318,7 +318,7 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    @patch("snuba.web.db_query.execute_query_with_readthrough_caching")
+    @patch("snuba.web.db_query_class.DBQuery._execute_query_with_readthrough_caching")
     def test_record_queries_on_error(
         self, execute_query_mock: MagicMock, record_query_mock: MagicMock
     ) -> None:
@@ -1252,13 +1252,14 @@ class TestSnQLApi(BaseApiTest):
 
     def test_allocation_policy_violation(self) -> None:
         with patch(
-            "snuba.web.db_query._get_allocation_policies",
+            "snuba.datasets.storage.ReadableTableStorage.get_allocation_policies",
             return_value=[
                 RejectAllocationPolicy123(
                     StorageKey("doesntmatter"), ["a", "b", "c"], {}
                 )
             ],
         ):
+
             response = self.post(
                 "/discover/snql",
                 data=json.dumps(
