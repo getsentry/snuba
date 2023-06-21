@@ -55,7 +55,7 @@ from confluent_kafka import Producer as ConfluentProducer
 
 from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.schemas import get_json_codec
+from snuba.consumers.schemas import _NOOP_CODEC, get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -553,6 +553,10 @@ def process_message(
                 scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
 
                 try:
+                    # Occasionally log errors if no validator is configured
+                    if codec == _NOOP_CODEC:
+                        raise Exception("No validator configured for topic")
+
                     codec.validate(decoded)
                 except Exception as err:
                     local_metrics.increment(
