@@ -3,44 +3,37 @@ from typing import Sequence
 from unittest.mock import Mock
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors.logical import LogicalQueryProcessor
 
-EVENTS_SCHEMA = EntityColumnSet(
-    ColumnSet(
-        [
-            ("event_id", UUID()),
-            ("project_id", UInt(32)),
-            ("message", String()),
-            ("group_id", UInt(32)),
-            ("user_id", UInt(64)),
-        ]
-    ).columns
+EVENTS_SCHEMA = ColumnSet(
+    [
+        ("event_id", UUID()),
+        ("project_id", UInt(32)),
+        ("message", String()),
+        ("group_id", UInt(32)),
+        ("user_id", UInt(64)),
+    ]
 )
 
-GROUPS_SCHEMA = EntityColumnSet(
-    ColumnSet(
-        [
-            ("id", UUID()),
-            ("project_id", UInt(32)),
-            ("message", String()),
-            ("user_id", UInt(64)),
-        ]
-    ).columns
+GROUPS_SCHEMA = ColumnSet(
+    [
+        ("id", UUID()),
+        ("project_id", UInt(32)),
+        ("message", String()),
+        ("user_id", UInt(64)),
+    ]
 )
 
-GROUPS_ASSIGNEE = EntityColumnSet(
-    ColumnSet(
-        [
-            ("group_id", UUID()),
-            ("project_id", UInt(32)),
-            ("message", String()),
-            ("user_id", UInt(64)),
-        ]
-    ).columns
+GROUPS_ASSIGNEE = ColumnSet(
+    [
+        ("group_id", UUID()),
+        ("project_id", UInt(32)),
+        ("message", String()),
+        ("user_id", UInt(64)),
+    ]
 )
 
 
