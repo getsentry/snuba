@@ -105,14 +105,12 @@ class RedisCache(Cache[TValue]):
             return function()
 
         # This method is designed with the following goals in mind:
-        # 1. The value generation function is only executed when no value
-        # already exists for the key.
-        # 2. Only one client can execute the value generation function at a
+        # 1. Only one client can execute the value generation function at a
         # time (up to a deadline, at which point the client is assumed to be
         # dead and its results are no longer valid.)
-        # 3. The other clients waiting for the result of the value generation
+        # 2. The other clients waiting for the result of the value generation
         # function receive a result as soon as it is available.
-        # 4. This remains compatible with the existing get/set API (at least
+        # 3. This remains compatible with the existing get/set API (at least
         # for the time being.)
 
         # This method shares the same keyspace as the conventional get and set
@@ -157,7 +155,7 @@ class RedisCache(Cache[TValue]):
         # task creation parameters -- the timeout (execution deadline) and a
         # new task identity just in case we are the first in line.
         result = self.__script_get(
-            [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
+            [wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
         metric_tags = timer.tags if timer is not None else {}

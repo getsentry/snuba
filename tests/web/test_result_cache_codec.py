@@ -2,7 +2,7 @@ import pytest
 
 from snuba.reader import Result
 from snuba.utils.serializable_exception import SerializableException
-from snuba.web.db_query_class import ResultCacheCodec
+from snuba.web.db_query import ResultCacheCodec
 
 
 def test_encode_decode() -> None:

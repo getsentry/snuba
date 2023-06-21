@@ -64,7 +64,7 @@ def run_query() -> None:
 def test_cache_retries_on_bad_query_id(
     monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
 ) -> None:
-    from snuba.web.db_query_class import DBQuery
+    from snuba.web.db_query import DBQuery
 
     calls = []
 

@@ -29,7 +29,7 @@ from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query_class import DBQuery
+from snuba.web.db_query import DBQuery
 
 test_data = [
     pytest.param(
@@ -92,7 +92,7 @@ def test_query_settings_from_config(
     with mock.patch(
         "snuba.reader.Reader.get_query_settings_prefix", return_value=query_prefix
     ):
-        db_query_class = DBQuery(
+        db_query = DBQuery(
             clickhouse_query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=attribution_info,
@@ -104,8 +104,8 @@ def test_query_settings_from_config(
             stats={},
             trace_id="trace_id",
         )
-        db_query_class._load_query_settings_from_config()
-    assert expected.items() <= db_query_class.clickhouse_query_settings.items()
+        db_query._load_query_settings_from_config()
+    assert expected.items() <= db_query.clickhouse_query_settings.items()
 
 
 test_thread_quota_data = [
@@ -135,7 +135,7 @@ def test_apply_thread_quota(
         settings.add_rate_limit(rlimit)
     settings.set_resource_quota(resource_quota)
     query, storage, attribution_info = _build_test_query("count(project_id)")
-    db_query_class = DBQuery(
+    db_query = DBQuery(
         clickhouse_query=query,
         query_settings=settings,
         attribution_info=attribution_info,
@@ -147,12 +147,9 @@ def test_apply_thread_quota(
         stats={},
         trace_id="trace_id",
     )
-    db_query_class._apply_thread_quota_to_clickhouse_query_settings(rate_limit_stats)
+    db_query._apply_thread_quota_to_clickhouse_query_settings(rate_limit_stats)
 
-    assert (
-        expected_query_settings.items()
-        <= db_query_class.clickhouse_query_settings.items()
-    )
+    assert expected_query_settings.items() <= db_query.clickhouse_query_settings.items()
 
 
 def _build_test_query(
@@ -269,9 +266,9 @@ def test_readthrough_behaviour() -> None:
     stats = {}
     run_query = mock.Mock()
     with mock.patch(
-        "snuba.web.db_query_class.DBQuery._try_running_query", side_effect=run_query
+        "snuba.web.db_query.DBQuery._try_running_query", side_effect=run_query
     ):
-        obj = DBQuery(
+        result = DBQuery(
             clickhouse_query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=attribution_info,
@@ -283,8 +280,7 @@ def test_readthrough_behaviour() -> None:
             stats=stats,
             trace_id="trace_id",
             robust=False,
-        )
-        result = obj.db_query()
+        ).db_query()
         assert run_query.call_count == 0
     assert stats["cache_hit"] == 1
     assert len(query_metadata_list) == 1

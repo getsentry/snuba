@@ -95,7 +95,7 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
+def test_queue_and_cache_missed_deadline(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
 
@@ -111,7 +111,7 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
+def test_queue_and_cache_exception(backend: Cache[bytes]) -> None:
     key = "key"
 
     class CustomException(SerializableException):
@@ -125,7 +125,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
+def test_queue_and_cache_set_wait(backend: Cache[bytes]) -> None:
     key = "key"
 
     def function() -> bytes:
@@ -142,15 +142,15 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
+def test_queue_and_cache_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
 
-    class ReadThroughCustomException(SerializableException):
+    class CacheCustomException(SerializableException):
         pass
 
     def function() -> bytes:
         time.sleep(1)
-        raise ReadThroughCustomException("error")
+        raise CacheCustomException("error")
 
     def worker() -> bytes:
         return backend.queue_and_cache_query(key, function, noop, 10)
@@ -159,12 +159,12 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     time.sleep(0.5)
     waiter = execute(worker)
 
-    with pytest.raises(ReadThroughCustomException):
+    with pytest.raises(CacheCustomException):
         setter.result()
 
     # notice that we raised the same exception class in the waiter despite it being deserialized
     # from redis
-    with pytest.raises(ReadThroughCustomException) as excinfo:
+    with pytest.raises(CacheCustomException) as excinfo:
         waiter.result()
 
     assert excinfo.value.message == "error"
@@ -180,7 +180,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     ],
 )
 @pytest.mark.redis_db
-def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
+def test_queue_and_cache_set_wait_timeout(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
 

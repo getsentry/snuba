@@ -45,7 +45,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query_class import DBQuery
+from snuba.web.db_query import DBQuery
 
 logger = logging.getLogger("snuba.query")
 

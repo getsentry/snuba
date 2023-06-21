@@ -17,7 +17,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web.db_query_class import DBQuery
+from snuba.web.db_query import DBQuery
 
 
 def _build_test_query() -> tuple[ClickhouseQuery, AttributionInfo]:

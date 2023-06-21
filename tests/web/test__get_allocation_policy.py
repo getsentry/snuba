@@ -27,7 +27,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web.db_query_class import DBQuery
+from snuba.web.db_query import DBQuery
 
 events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
 assert events_storage is not None

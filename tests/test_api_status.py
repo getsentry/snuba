@@ -91,10 +91,10 @@ class TestApiCodes(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    @patch("snuba.web.db_query_class.DBQuery._execute_query_with_readthrough_caching")
+    @patch("snuba.web.db_query.DBQuery._execute_and_cache_query")
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test_correct_clickhouse_error_codes(
+    def test_correct_execution_error_codes(
         self, execute_mock: MagicMock, record_query: MagicMock
     ) -> None:
         # pytest.param doesn't play well with patch so put the list here

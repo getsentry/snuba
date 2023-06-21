@@ -1,11 +1,9 @@
--- KEYS[1]: The value key.
--- KEYS[2]: The waiting queue key.
--- KEYS[3]: The task unique ID key.
+-- KEYS[1]: The waiting queue key.
+-- KEYS[2]: The task unique ID key.
 -- ARGV[1]: The task execution timeout. Only used when creating a new task.
 -- ARGV[2]: The task unique ID. Only used when creating a new task.
-local value_key = KEYS[1]
-local wait_queue_key = KEYS[2]
-local task_id_key = KEYS[3]
+local wait_queue_key = KEYS[1]
+local task_id_key = KEYS[2]
 local task_timeout = ARGV[1]
 local task_id = ARGV[2]
 

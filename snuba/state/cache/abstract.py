@@ -54,14 +54,14 @@ class Cache(Generic[TValue], ABC):
         This method should only be used if `self.get` or
         `self.get_cached_result_and_record_metrics` results in a cache miss.
 
-        On a cache miss, the return value of the provided function is used
-        to populate the cache for subsequent callers and is used as the return
+        The return value of the provided function is used to populate the
+        cache for subsequent callers of the getters and is used as the return
         value for this method.
 
         This function also acts as an exclusive lock on the cache key to
         other callers of this method while the function is executing. Callers
         will be blocked until the client that holds the lock (the first
-        client to get a cache miss) has completed executing the function and
+        client to run this method) has completed executing the function and
         placed its result in cache.
 
         If the client holding the lock does not successfully execute the

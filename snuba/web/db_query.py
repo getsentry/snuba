@@ -118,18 +118,29 @@ CACHE_PARTITIONS: MutableMapping[str, Cache[Result]] = {
 
 
 class DBQuery:
+    """
+    A class responsible for managing a variety of states when executing a ClickHouse Query.
+
+    Usage:
+    >>> DBQuery(...).db_query()
+
+    Much of the internal data of this class is manipulated in a certain order upon executing
+    the `db_query()` method, nothing is guaranteed to be accurate until the function has
+    executed.
+    """
+
     def __init__(
         self,
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         attribution_info: AttributionInfo,
         dataset_name: str,
-        # NOTE: This variable is a piece of state which is updated and used outside this function
+        # NOTE: This variable is a piece of state which is updated and used outside this class
         query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
         formatted_query: FormattedQuery,
         reader: Reader,
         timer: Timer,
-        # NOTE: This variable is a piece of state which is updated and used outside this function
+        # NOTE: This variable is a piece of state which is updated and used outside this class
         stats: MutableMapping[str, Any],
         trace_id: Optional[str] = None,
         robust: bool = False,
@@ -153,7 +164,9 @@ class DBQuery:
 
     @with_span(op="db")
     def db_query(self) -> QueryResult:
-
+        """
+        The main entrypoint of executing a ClickHouse Query.
+        """
         self._load_query_settings_from_config()
 
         cached_result = self._get_cached_query_result()
@@ -171,6 +184,12 @@ class DBQuery:
         except QueryException as e:
             error = e
         except Exception as e:
+            # setting error for allocation policy quota update
+            error = QueryException.from_args(
+                "unknwon",
+                "unknown",
+                extra={"stats": self.stats, "sql": self.sql, "experiments": {}},
+            )
             # We count on above functions capturing all exceptions in a QueryException
             # if it didn't do that, something is very wrong so we just panic out here
             raise e
@@ -378,8 +397,16 @@ class DBQuery:
 
     @with_span(op="db")
     def _try_running_query(self) -> QueryResult:
+        """
+        Requirements:
+        - Query is not cached
+        - Query is not rejected by any Allocation Policy
+        - Query is not rate limited
+
+        Attempts to execute query and cache + return results.
+        """
         try:
-            result = self._execute_query_with_readthrough_caching()
+            result = self._execute_and_cache_query()
         except Exception as cause:
             error_code = None
             status = None
@@ -582,8 +609,10 @@ class DBQuery:
             )
 
     @with_span(op="db")
-    def _execute_query_with_readthrough_caching(self) -> Result:
-
+    def _execute_and_cache_query(self) -> Result:
+        """
+        Execute a query against ClickHouse and cache + return results.
+        """
         span = Hub.current.scope.span
 
         def record_cache_hit_type(hit_type: int) -> None:
@@ -622,10 +651,10 @@ class DBQuery:
     def _get_cache_wait_timeout(self) -> int:
         """
         Helper function to determine how long a query should wait when doing
-        a readthrough caching.
+        a queueing and caching.
 
         The overrides are primarily used for debugging the ExecutionTimeoutError
-        raised by the readthrough caching system on the tigers cluster. When we
+        raised by the queue + caching system on the tigers cluster. When we
         have root caused the problem we can remove the overrides.
         """
         cache_wait_timeout: int = int(
@@ -643,7 +672,7 @@ class DBQuery:
     @with_span(op="db")
     def _execute_query(self) -> Result:
         """
-        Execute a query and return a result.
+        Execute a query against ClickHouse and return a result.
         """
         # Apply clickhouse query setting overrides
         self.clickhouse_query_settings.update(
