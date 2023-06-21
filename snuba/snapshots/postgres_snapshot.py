@@ -6,7 +6,7 @@ import logging
 import os.path
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Generator, Iterable, NewType, Sequence
+from typing import Generator, Iterable, Iterator, NewType, Sequence
 
 import jsonschema
 
@@ -162,7 +162,7 @@ class PostgresSnapshot(BulkLoadSource):
     def get_parsed_table_file(
         self,
         table: str,
-    ) -> Generator[Iterable[SnapshotTableRow], None, None]:
+    ) -> Generator[Iterator[SnapshotTableRow], None, None]:
         table_desc = self.__descriptor.get_table(table)
         assert not table_desc.zip, "Cannot parse a gzip table file on the fly"
 
@@ -211,13 +211,13 @@ class PostgresSnapshot(BulkLoadSource):
     @contextmanager
     def get_preprocessed_table_file(
         self, table: str
-    ) -> Generator[Iterable[bytes], None, None]:
+    ) -> Generator[Iterator[bytes], None, None]:
         table_path = self.__get_table_path(table)
 
         try:
             with open(table_path, "rb") as table_file:
 
-                def chunks_provider() -> Iterable[bytes]:
+                def chunks_provider() -> Iterator[bytes]:
                     for chunk in iter(
                         lambda: table_file.read(settings.BULK_BINARY_LOAD_CHUNK), b""
                     ):

@@ -21,7 +21,7 @@ DLQ_REDIS_KEY = "dlq_instruction"
 logger = logging.getLogger(__name__)
 
 
-class DlqPolicy(Enum):
+class DlqReplayPolicy(Enum):
     STOP_ON_ERROR = "stop-on-error"
     REINSERT_DLQ = "reinsert-dlq"
     DROP_INVALID_MESSAGES = "drop-invalid-messages"
@@ -40,7 +40,7 @@ class DlqInstruction:
     Snuba admin and periodically checked for updates by the DLQ consumer.
     """
 
-    policy: DlqPolicy
+    policy: DlqReplayPolicy
     status: DlqInstructionStatus
     storage_key: StorageKey
     slice_id: Optional[int]
@@ -63,7 +63,7 @@ class DlqInstruction:
         decoded = rapidjson.loads(raw.decode("utf-8"))
 
         return cls(
-            policy=DlqPolicy(decoded["policy"]),
+            policy=DlqReplayPolicy(decoded["policy"]),
             status=DlqInstructionStatus(decoded["status"]),
             storage_key=StorageKey(decoded["storage_key"]),
             slice_id=decoded["slice_id"],

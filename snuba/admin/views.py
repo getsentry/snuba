@@ -47,7 +47,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.dlq import (
     DlqInstruction,
     DlqInstructionStatus,
-    DlqPolicy,
+    DlqReplayPolicy,
     clear_instruction,
     load_instruction,
     store_instruction,
@@ -928,7 +928,7 @@ def dlq_replay() -> Response:
         req = request.get_json() or {}  # Required for typing
 
         try:
-            policy = DlqPolicy(req["policy"])
+            policy = DlqReplayPolicy(req["policy"])
             storage_key = StorageKey(req["storage"])
             slice_id = req["slice"]
             max_messages_to_process = req["maxMessages"]

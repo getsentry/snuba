@@ -213,6 +213,7 @@ def test_multistorage_strategy(
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(topic=Topic(name="topic"), index=0): 3}),
                 call({}, force=True),
             ],
@@ -268,6 +269,7 @@ def test_metrics_writing_e2e() -> None:
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(Topic("topic"), 0): 1}),
                 call({}, force=True),
             ],
