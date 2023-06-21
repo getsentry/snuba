@@ -90,6 +90,7 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
