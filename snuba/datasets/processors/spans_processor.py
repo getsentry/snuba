@@ -65,7 +65,7 @@ def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
     A lot of metadata regarding spans is sent in spans.data. We do not want to store everything
     as tags in clickhouse. This method allows only a few pre defined keys to be stored as tags.
     """
-    allowed_keys = {"environment", "release", "user"}
+    allowed_keys = {"environment", "release", "user", "transaction.method"}
     return {k: v for k, v in tags.items() if k in allowed_keys}
 
 
