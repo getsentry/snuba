@@ -211,6 +211,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             strategy.terminate();
                         }
                     }
+                    drop(trait_callbacks); // unlock mutex so we can close consumer
                     self.consumer.close();
                     return Err(e);
                 }
