@@ -16,7 +16,7 @@ from snuba.migrations.operations import OperationTarget
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
-    view_name = "generic_metric_sets_aggregation_mv"
+    view_name = "generic_metric_sets_aggregation_mv_2"
     dest_table_columns: Sequence[Column[Modifiers]] = [
         Column("org_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -81,4 +81,10 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return []
+        return [
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.view_name,
+                target=OperationTarget.LOCAL,
+            )
+        ]

@@ -17,7 +17,7 @@ from snuba.utils.schemas import Float
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
-    view_name = "generic_metric_counters_aggregation_mv"
+    view_name = "generic_metric_counters_aggregation_mv_2"
     dest_table_name = "generic_metric_counters_aggregated_local"
     dest_table_columns: Sequence[Column[Modifiers]] = [
         Column("org_id", UInt(64)),
