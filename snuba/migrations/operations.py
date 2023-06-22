@@ -59,7 +59,7 @@ class SqlOperation(ABC):
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-            logger.info(f"Executing on node: {node}")
+            logger.info(f"Executing on {self.target.value} node: {node}")
             connection.execute(self.format_sql(), settings=self._settings)
 
     @abstractmethod
