@@ -9,6 +9,7 @@ schema:
     { name: group_id, type: UInt, args: { size: 64 } },
     { name: search_title, type: String },
     { name: resource_id, type: String },
+    { name: message, type: String },
     { name: subtitle, type: String },
     { name: culprit, type: String },
     { name: level, type: String, args: { schema_modifiers: [ low_cardinality ] } },

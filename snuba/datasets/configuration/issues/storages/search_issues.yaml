@@ -23,6 +23,7 @@ schema:
 
 
       { name: resource_id, type: String, args: { schema_modifiers: [ nullable ] } },
+      { name: message, type: String },
       { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: culprit, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: level, type: String, args: { schema_modifiers: [ nullable ] } },

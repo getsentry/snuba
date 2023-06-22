@@ -92,6 +92,7 @@ class SearchIssueEvent(TypedDict, total=False):
     group_id: int
     platform: str
     primary_hash: str
+    message: str
     datetime: str
 
     data: IssueEventData
@@ -276,6 +277,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
+            "message": _unicodify(event["message"]),
         }
 
         # optional fields
