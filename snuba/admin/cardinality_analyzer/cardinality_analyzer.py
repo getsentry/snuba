@@ -1,4 +1,4 @@
-from snuba.admin.audit_log.querylog import audit_log
+from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,

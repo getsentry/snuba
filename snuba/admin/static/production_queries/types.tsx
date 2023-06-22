@@ -1,14 +1,17 @@
-type SnubaDatasetName = string;
-type SnQLQueryState = Partial<SnQLRequest>;
-
 type SnQLRequest = {
   dataset: string;
   query: string;
 };
 
-type SnQLResult = {
+type QueryResult = {
   input_query?: string;
-  sql: string;
+  columns: [string];
+  rows: [[string]];
 };
 
-export { SnubaDatasetName, SnQLRequest, SnQLResult, SnQLQueryState };
+type QueryResultColumnMeta = {
+  name: string;
+  type: string;
+};
+
+export { SnQLRequest, QueryResult, QueryResultColumnMeta };

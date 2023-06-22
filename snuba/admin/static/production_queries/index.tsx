@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import {
-  SnQLQueryState,
-  SnQLRequest,
-  SnQLResult,
-  SnubaDatasetName,
-} from "../snql_to_sql/types";
-import { TextArea } from "../snql_to_sql/utils";
-import {
-  executeActionsStyle,
-  executeButtonStyle,
-  selectStyle,
-} from "../snql_to_sql/styles";
+import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
+import { executeActionsStyle, executeButtonStyle, selectStyle } from "./styles";
 
 function ProductionQueries(props: { api: Client }) {
-  const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({});
-  const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
+  const [datasets, setDatasets] = useState<string[]>([]);
+  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({});
+  const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -46,7 +36,7 @@ function ProductionQueries(props: { api: Client }) {
     });
   }
 
-  function convertQuery() {
+  function executeQuery() {
     if (isExecuting) {
       window.alert("A query is already running");
     }
@@ -54,10 +44,17 @@ function ProductionQueries(props: { api: Client }) {
     props.api
       .executeSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
-        console.log(result);
+        const result_columns = result.meta.map(
+          (col: QueryResultColumnMeta) => col.name
+        );
         const query_result = {
           input_query: snql_query.query,
-          sql: result.sql,
+          columns: result_columns,
+          rows: result.data.map((obj: object) => {
+            result_columns.map(
+              (col_name: string) => obj[col_name as keyof typeof obj] || ""
+            );
+          }),
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
       })
@@ -75,7 +72,13 @@ function ProductionQueries(props: { api: Client }) {
       <form>
         <h2>Run a SnQL Query</h2>
         <div>
-          <TextArea value={snql_query.query || ""} onChange={updateQuerySql} />
+          <textarea
+            spellCheck={false}
+            value={snql_query.query || ""}
+            onChange={(evt) => updateQuerySql(evt.target.value)}
+            style={{ width: "100%", height: 100 }}
+            placeholder={"Write your query here"}
+          />
         </div>
         <div style={executeActionsStyle}>
           <div>
@@ -96,7 +99,7 @@ function ProductionQueries(props: { api: Client }) {
           </div>
           <div>
             <button
-              onClick={(_) => convertQuery()}
+              onClick={(_) => executeQuery()}
               style={executeButtonStyle}
               disabled={
                 isExecuting ||
@@ -104,7 +107,7 @@ function ProductionQueries(props: { api: Client }) {
                 snql_query.query == undefined
               }
             >
-              Convert Query
+              Execute Query
             </button>
           </div>
         </div>
@@ -112,12 +115,8 @@ function ProductionQueries(props: { api: Client }) {
       <div>
         <h2>Query results</h2>
         <Table
-          headerData={["SnQL", "Generated SQL"]}
-          rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <span>{queryResult.sql}</span>,
-          ])}
-          columnWidths={[2, 5]}
+          headerData={queryResultHistory[0].columns}
+          rowData={queryResultHistory[0].rows}
         />
       </div>
     </div>
