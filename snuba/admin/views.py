@@ -32,7 +32,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_prod_query
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -880,52 +880,24 @@ def dlq_replay() -> Response:
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
 
 
-@application.route("/production_query", methods=["POST"])
+@application.route("/production_snql_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
-def production_query() -> Response:
-    req = json.loads(request.data)
+def production_snql_query() -> Response:
+    body = json.loads(request.data)
+    body["tenant_ids"] = {"referrer": request.referrer}
     try:
-        storage = req["storage"]
-        raw_sql = req["sql"]
-    except KeyError as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
-                    }
-                }
-            ),
-            400,
-        )
-    try:
-        result = run_prod_query(raw_sql, g.user.email, storage)
-        rows, columns = result.results, result.meta
-        if columns:
-            return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
-            )
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
-        )
-    except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
-    except InvalidCustomQuery as err:
+        ret = run_snql_query(body, g.user.email)
+        print(json.loads(ret.data))
+        return ret
+    except InvalidQueryException as exception:
         return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
             400,
             {"Content-Type": "application/json"},
         )
-    except Exception as err:
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
         )
