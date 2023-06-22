@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional, TypeVar
 
 import rapidjson
+from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies.abstract import ProcessingStrategy
 from arroyo.types import Message
 
@@ -150,7 +151,12 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     def submit(self, message: Message[TPayload]) -> None:
         if self.__processed_messages < self.__num_messages_to_process:
             self.__last_message_time = time.time()
-            self.__next_step.submit(message)
+
+            try:
+                self.__next_step.submit(message)
+            except InvalidMessage:
+                self.__processed_messages += 1
+                raise
             self.__processed_messages += 1
 
     def close(self) -> None:
