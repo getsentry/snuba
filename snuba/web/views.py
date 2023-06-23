@@ -644,7 +644,7 @@ if application.debug or application.testing:
                         stream_loader.get_processor(),
                         "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
-                        False,
+                        True,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
                     max_batch_size=1,
