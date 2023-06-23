@@ -495,7 +495,6 @@ TEST_CASES = [
 ]
 
 
-@pytest.skip(reason="Grouped messages storage doesn't exist anymore")
 @pytest.mark.parametrize("logical_query, composite_plan, processed_query", TEST_CASES)
 @pytest.mark.clickhouse_db
 def test_composite_planner(
