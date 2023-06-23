@@ -28,6 +28,7 @@ from snuba.utils.streams.topics import Topic as SnubaTopic
 def test_dlq_consumer_cli() -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.DEAD_LETTER_QUERYLOG])
+    topic = Topic(SnubaTopic.DEAD_LETTER_QUERYLOG.value)
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(SnubaTopic.DEAD_LETTER_QUERYLOG)
@@ -65,7 +66,7 @@ def test_dlq_consumer_cli() -> None:
     assert loaded_instruction.status == DlqInstructionStatus.IN_PROGRESS
 
     producer.produce(
-        Topic(SnubaTopic.DEAD_LETTER_QUERYLOG.value),
+        topic,
         payload=KafkaPayload(
             None, rapidjson.dumps({"message": "invalid-message"}).encode("utf-8"), []
         ),
@@ -90,7 +91,12 @@ def test_dlq_consumer_cli() -> None:
         )
     )
 
-    message = consumer.poll(1.0)
+    consumer.subscribe([topic])
+
+    # Longer poll since we need to wait for assignment and the first message
+    message = consumer.poll(5.0)
 
     # Since we picked re-insert DLQ, there should be a new message
     assert message is not None
+    assert rapidjson.loads(message.payload.value) == {"message": "invalid-message"}
+    consumer.close()
