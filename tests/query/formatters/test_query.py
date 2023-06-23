@@ -16,38 +16,31 @@ from snuba.query import (
 )
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
-from snuba.query.data_source.join import (
-    IndividualNode,
-    JoinClause,
-    JoinCondition,
-    JoinConditionExpression,
-    JoinType,
-)
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.formatters.tracing import TExpression, format_query
 from snuba.query.logical import Query as LogicalQuery
-from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
+from tests.query.joins.equivalence_schema import EVENTS_SCHEMA
 
 columns = ColumnSet([("some_int", UInt(8, Modifiers(nullable=True)))])
 
-BASIC_JOIN = JoinClause(
-    left_node=IndividualNode(
-        alias="ev",
-        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
-    ),
-    right_node=IndividualNode(
-        alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
-    ),
-    keys=[
-        JoinCondition(
-            left=JoinConditionExpression("ev", "group_id"),
-            right=JoinConditionExpression("gr", "id"),
-        )
-    ],
-    join_type=JoinType.INNER,
-)
+# BASIC_JOIN = JoinClause(
+#     left_node=IndividualNode(
+#         alias="ev",
+#         data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+#     ),
+#     right_node=IndividualNode(
+#         alias="gr",
+#         data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
+#     ),
+#     keys=[
+#         JoinCondition(
+#             left=JoinConditionExpression("ev", "group_id"),
+#             right=JoinConditionExpression("gr", "id"),
+#         )
+#     ],
+#     join_type=JoinType.INNER,
+# )
 
 SIMPLE_SELECT_QUERY = LogicalQuery(
     from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
@@ -154,32 +147,33 @@ TEST_JOIN = [
         ],
         id="Nested Query",
     ),
-    pytest.param(
-        CompositeQuery(
-            from_clause=BASIC_JOIN,
-            selected_columns=[
-                SelectedExpression("c1", Column("_snuba_c1", "ev", "c")),
-                SelectedExpression(
-                    "f1", FunctionCall("_snuba_f1", "f", (Column(None, "ev", "c2"),))
-                ),
-            ],
-        ),
-        [
-            "SELECT",
-            "  ev.c AS `_snuba_c1` |> c1,",
-            "  f(",
-            "    ev.c2",
-            "  ) AS `_snuba_f1` |> f1",
-            "FROM",
-            "    ['Entity(events)'] AS `ev`",
-            "  INNER JOIN",
-            "    ['Entity(groupedmessage)'] AS `gr`",
-            "  ON",
-            "    ev.group_id",
-            "    gr.id",
-        ],
-        id="Basic Join",
-    ),
+    # pytest.param(
+    #     CompositeQuery(
+    #         from_clause=BASIC_JOIN,
+    #         selected_columns=[
+    #             SelectedExpression("c1", Column("_snuba_c1", "ev", "c")),
+    #             SelectedExpression(
+    #                 "f1", FunctionCall("_snuba_f1", "f", (Column(None, "ev", "c2"),))
+    #             ),
+    #         ],
+    #     ),
+    #     [
+    #         "SELECT",
+    #         "  ev.c AS `_snuba_c1` |> c1,",
+    #         "  f(",
+    #         "    ev.c2",
+    #         "  ) AS `_snuba_f1` |> f1",
+    #         "FROM",
+    #         "    ['Entity(events)'] AS `ev`",
+    #         "  INNER JOIN",
+    #         "    ['Entity(groupedmessage)'] AS `gr`",
+    #         "  ON",
+    #         "    ev.group_id",
+    #         "    gr.id",
+    #     ],
+    #     id="Basic Join",
+    #     marks=pytest.mark.skip(reason="Dataset no longer exists"),
+    # ),
     pytest.param(
         CompositeQuery(
             from_clause=CompositeQuery(

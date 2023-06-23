@@ -24,6 +24,8 @@ from tests.query.joins.equivalence_schema import (
     GroupedMessage,
 )
 
+pytest.skip(allow_module_level=True, reason="Dataset no longer exists")
+
 TEST_CASES = [
     pytest.param(
         JoinClause(

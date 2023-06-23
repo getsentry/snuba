@@ -10,6 +10,8 @@ from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import parse_snql_query
 
+pytest.skip(allow_module_level=True, reason="Dataset no longer exists")
+
 test_cases = [
     # below are cases that are not parsed completely
     # i.e. the entire string is not consumed

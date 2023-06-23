@@ -1030,312 +1030,312 @@ test_cases = [
         ),
         id="Basic join match with sample",
     ),
-    pytest.param(
-        f"""MATCH
-            (e: events) -[contains]-> (t: transactions),
-            (e: events) -[assigned]-> (ga: groupassignee)
-        SELECT 4-5, ga.c
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=JoinClause(
-                    left_node=IndividualNode(
-                        "e",
-                        QueryEntity(
-                            EntityKey.EVENTS,
-                            get_entity(EntityKey.EVENTS).get_data_model(),
-                        ),
-                    ),
-                    right_node=IndividualNode(
-                        "ga",
-                        QueryEntity(
-                            EntityKey.GROUPASSIGNEE,
-                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
-                        ),
-                    ),
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("e", "event_id"),
-                            JoinConditionExpression("ga", "group_id"),
-                        )
-                    ],
-                    join_type=JoinType.INNER,
-                ),
-                right_node=IndividualNode(
-                    "t",
-                    QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
-                    ),
-                ),
-                keys=[
-                    JoinCondition(
-                        JoinConditionExpression("e", "event_id"),
-                        JoinConditionExpression("t", "event_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
-                ),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                    ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-            limit=1000,
-            offset=0,
-        ),
-        id="Multi join match",
-    ),
-    pytest.param(
-        f"""MATCH
-            (e: events) -[contains]-> (t: transactions),
-            (e: events) -[assigned]-> (ga: groupassignee),
-            (e: events) -[bookmark]-> (gm: groupedmessage),
-            (e: events) -[activity]-> (se: sessions)
-        SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
-        WHERE {build_cond('e')} AND {build_cond('t')}
-        AND se.org_id = 1 AND se.project_id = 1
-        AND se.started >= toDateTime('2021-01-01') AND se.started < toDateTime('2021-01-02')""",
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=JoinClause(
-                    left_node=JoinClause(
-                        left_node=JoinClause(
-                            left_node=IndividualNode(
-                                "e",
-                                QueryEntity(
-                                    EntityKey.EVENTS,
-                                    get_entity(EntityKey.EVENTS).get_data_model(),
-                                ),
-                            ),
-                            right_node=IndividualNode(
-                                "se",
-                                QueryEntity(
-                                    EntityKey.SESSIONS,
-                                    get_entity(EntityKey.SESSIONS).get_data_model(),
-                                ),
-                            ),
-                            keys=[
-                                JoinCondition(
-                                    JoinConditionExpression("e", "event_id"),
-                                    JoinConditionExpression("se", "org_id"),
-                                )
-                            ],
-                            join_type=JoinType.INNER,
-                        ),
-                        right_node=IndividualNode(
-                            "gm",
-                            QueryEntity(
-                                EntityKey.GROUPEDMESSAGE,
-                                get_entity(EntityKey.GROUPEDMESSAGE).get_data_model(),
-                            ),
-                        ),
-                        keys=[
-                            JoinCondition(
-                                JoinConditionExpression("e", "event_id"),
-                                JoinConditionExpression("gm", "first_release_id"),
-                            )
-                        ],
-                        join_type=JoinType.INNER,
-                    ),
-                    right_node=IndividualNode(
-                        "ga",
-                        QueryEntity(
-                            EntityKey.GROUPASSIGNEE,
-                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
-                        ),
-                    ),
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("e", "event_id"),
-                            JoinConditionExpression("ga", "group_id"),
-                        )
-                    ],
-                    join_type=JoinType.INNER,
-                ),
-                right_node=IndividualNode(
-                    "t",
-                    QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
-                    ),
-                ),
-                keys=[
-                    JoinCondition(
-                        JoinConditionExpression("e", "event_id"),
-                        JoinConditionExpression("t", "event_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
-                ),
-                SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
-                SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
-                SelectedExpression("gm.d", Column("_snuba_gm.d", "gm", "d")),
-                SelectedExpression("se.e", Column("_snuba_se.e", "se", "e")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                    ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "and",
-                                    binary_condition(
-                                        "less",
-                                        Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                        Literal(
-                                            None, datetime.datetime(2021, 1, 2, 0, 0)
-                                        ),
-                                    ),
-                                    binary_condition(
-                                        "and",
-                                        binary_condition(
-                                            "equals",
-                                            Column("_snuba_se.org_id", "se", "org_id"),
-                                            Literal(None, 1),
-                                        ),
-                                        binary_condition(
-                                            "and",
-                                            binary_condition(
-                                                "equals",
-                                                Column(
-                                                    "_snuba_se.project_id",
-                                                    "se",
-                                                    "project_id",
-                                                ),
-                                                Literal(None, 1),
-                                            ),
-                                            binary_condition(
-                                                "and",
-                                                binary_condition(
-                                                    "greaterOrEquals",
-                                                    Column(
-                                                        "_snuba_se.started",
-                                                        "se",
-                                                        "started",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 1, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                                binary_condition(
-                                                    "less",
-                                                    Column(
-                                                        "_snuba_se.started",
-                                                        "se",
-                                                        "started",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 2, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-            limit=1000,
-            offset=0,
-        ),
-        id="Multi multi join match",
-    ),
+    # pytest.param(
+    #     f"""MATCH
+    #         (e: events) -[contains]-> (t: transactions),
+    #         (e: events) -[assigned]-> (ga: groupassignee)
+    #     SELECT 4-5, ga.c
+    #     WHERE {build_cond('e')} AND {build_cond('t')}""",
+    #     CompositeQuery(
+    #         from_clause=JoinClause(
+    #             left_node=JoinClause(
+    #                 left_node=IndividualNode(
+    #                     "e",
+    #                     QueryEntity(
+    #                         EntityKey.EVENTS,
+    #                         get_entity(EntityKey.EVENTS).get_data_model(),
+    #                     ),
+    #                 ),
+    #                 right_node=IndividualNode(
+    #                     "ga",
+    #                     QueryEntity(
+    #                         EntityKey.GROUPASSIGNEE,
+    #                         get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+    #                     ),
+    #                 ),
+    #                 keys=[
+    #                     JoinCondition(
+    #                         JoinConditionExpression("e", "event_id"),
+    #                         JoinConditionExpression("ga", "group_id"),
+    #                     )
+    #                 ],
+    #                 join_type=JoinType.INNER,
+    #             ),
+    #             right_node=IndividualNode(
+    #                 "t",
+    #                 QueryEntity(
+    #                     EntityKey.TRANSACTIONS,
+    #                     get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+    #                 ),
+    #             ),
+    #             keys=[
+    #                 JoinCondition(
+    #                     JoinConditionExpression("e", "event_id"),
+    #                     JoinConditionExpression("t", "event_id"),
+    #                 )
+    #             ],
+    #             join_type=JoinType.INNER,
+    #         ),
+    #         selected_columns=[
+    #             SelectedExpression(
+    #                 "4-5",
+    #                 FunctionCall(
+    #                     "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+    #                 ),
+    #             ),
+    #             SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
+    #         ],
+    #         condition=binary_condition(
+    #             "and",
+    #             binary_condition(
+    #                 "equals",
+    #                 Column("_snuba_e.project_id", "e", "project_id"),
+    #                 Literal(None, 1),
+    #             ),
+    #             binary_condition(
+    #                 "and",
+    #                 binary_condition(
+    #                     "greaterOrEquals",
+    #                     Column("_snuba_e.timestamp", "e", "timestamp"),
+    #                     Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+    #                 ),
+    #                 binary_condition(
+    #                     "and",
+    #                     binary_condition(
+    #                         "less",
+    #                         Column("_snuba_e.timestamp", "e", "timestamp"),
+    #                         Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    #                     ),
+    #                     binary_condition(
+    #                         "and",
+    #                         binary_condition(
+    #                             "equals",
+    #                             Column("_snuba_t.project_id", "t", "project_id"),
+    #                             Literal(None, 1),
+    #                         ),
+    #                         binary_condition(
+    #                             "and",
+    #                             binary_condition(
+    #                                 "greaterOrEquals",
+    #                                 Column("_snuba_t.finish_ts", "t", "finish_ts"),
+    #                                 Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+    #                             ),
+    #                             binary_condition(
+    #                                 "less",
+    #                                 Column("_snuba_t.finish_ts", "t", "finish_ts"),
+    #                                 Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    #                             ),
+    #                         ),
+    #                     ),
+    #                 ),
+    #             ),
+    #         ),
+    #         limit=1000,
+    #         offset=0,
+    #     ),
+    #     id="Multi join match",
+    # ),
+    # pytest.param(
+    #     f"""MATCH
+    #         (e: events) -[contains]-> (t: transactions),
+    #         (e: events) -[assigned]-> (ga: groupassignee),
+    #         (e: events) -[bookmark]-> (gm: groupedmessage),
+    #         (e: events) -[activity]-> (se: sessions)
+    #     SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
+    #     WHERE {build_cond('e')} AND {build_cond('t')}
+    #     AND se.org_id = 1 AND se.project_id = 1
+    #     AND se.started >= toDateTime('2021-01-01') AND se.started < toDateTime('2021-01-02')""",
+    #     CompositeQuery(
+    #         from_clause=JoinClause(
+    #             left_node=JoinClause(
+    #                 left_node=JoinClause(
+    #                     left_node=JoinClause(
+    #                         left_node=IndividualNode(
+    #                             "e",
+    #                             QueryEntity(
+    #                                 EntityKey.EVENTS,
+    #                                 get_entity(EntityKey.EVENTS).get_data_model(),
+    #                             ),
+    #                         ),
+    #                         right_node=IndividualNode(
+    #                             "se",
+    #                             QueryEntity(
+    #                                 EntityKey.SESSIONS,
+    #                                 get_entity(EntityKey.SESSIONS).get_data_model(),
+    #                             ),
+    #                         ),
+    #                         keys=[
+    #                             JoinCondition(
+    #                                 JoinConditionExpression("e", "event_id"),
+    #                                 JoinConditionExpression("se", "org_id"),
+    #                             )
+    #                         ],
+    #                         join_type=JoinType.INNER,
+    #                     ),
+    #                     right_node=IndividualNode(
+    #                         "gm",
+    #                         QueryEntity(
+    #                             EntityKey.GROUPEDMESSAGE,
+    #                             get_entity(EntityKey.GROUPEDMESSAGE).get_data_model(),
+    #                         ),
+    #                     ),
+    #                     keys=[
+    #                         JoinCondition(
+    #                             JoinConditionExpression("e", "event_id"),
+    #                             JoinConditionExpression("gm", "first_release_id"),
+    #                         )
+    #                     ],
+    #                     join_type=JoinType.INNER,
+    #                 ),
+    #                 right_node=IndividualNode(
+    #                     "ga",
+    #                     QueryEntity(
+    #                         EntityKey.GROUPASSIGNEE,
+    #                         get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+    #                     ),
+    #                 ),
+    #                 keys=[
+    #                     JoinCondition(
+    #                         JoinConditionExpression("e", "event_id"),
+    #                         JoinConditionExpression("ga", "group_id"),
+    #                     )
+    #                 ],
+    #                 join_type=JoinType.INNER,
+    #             ),
+    #             right_node=IndividualNode(
+    #                 "t",
+    #                 QueryEntity(
+    #                     EntityKey.TRANSACTIONS,
+    #                     get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+    #                 ),
+    #             ),
+    #             keys=[
+    #                 JoinCondition(
+    #                     JoinConditionExpression("e", "event_id"),
+    #                     JoinConditionExpression("t", "event_id"),
+    #                 )
+    #             ],
+    #             join_type=JoinType.INNER,
+    #         ),
+    #         selected_columns=[
+    #             SelectedExpression(
+    #                 "4-5",
+    #                 FunctionCall(
+    #                     "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+    #                 ),
+    #             ),
+    #             SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
+    #             SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
+    #             SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
+    #             SelectedExpression("gm.d", Column("_snuba_gm.d", "gm", "d")),
+    #             SelectedExpression("se.e", Column("_snuba_se.e", "se", "e")),
+    #         ],
+    #         condition=binary_condition(
+    #             "and",
+    #             binary_condition(
+    #                 "equals",
+    #                 Column("_snuba_e.project_id", "e", "project_id"),
+    #                 Literal(None, 1),
+    #             ),
+    #             binary_condition(
+    #                 "and",
+    #                 binary_condition(
+    #                     "greaterOrEquals",
+    #                     Column("_snuba_e.timestamp", "e", "timestamp"),
+    #                     Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+    #                 ),
+    #                 binary_condition(
+    #                     "and",
+    #                     binary_condition(
+    #                         "less",
+    #                         Column("_snuba_e.timestamp", "e", "timestamp"),
+    #                         Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    #                     ),
+    #                     binary_condition(
+    #                         "and",
+    #                         binary_condition(
+    #                             "equals",
+    #                             Column("_snuba_t.project_id", "t", "project_id"),
+    #                             Literal(None, 1),
+    #                         ),
+    #                         binary_condition(
+    #                             "and",
+    #                             binary_condition(
+    #                                 "greaterOrEquals",
+    #                                 Column("_snuba_t.finish_ts", "t", "finish_ts"),
+    #                                 Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+    #                             ),
+    #                             binary_condition(
+    #                                 "and",
+    #                                 binary_condition(
+    #                                     "less",
+    #                                     Column("_snuba_t.finish_ts", "t", "finish_ts"),
+    #                                     Literal(
+    #                                         None, datetime.datetime(2021, 1, 2, 0, 0)
+    #                                     ),
+    #                                 ),
+    #                                 binary_condition(
+    #                                     "and",
+    #                                     binary_condition(
+    #                                         "equals",
+    #                                         Column("_snuba_se.org_id", "se", "org_id"),
+    #                                         Literal(None, 1),
+    #                                     ),
+    #                                     binary_condition(
+    #                                         "and",
+    #                                         binary_condition(
+    #                                             "equals",
+    #                                             Column(
+    #                                                 "_snuba_se.project_id",
+    #                                                 "se",
+    #                                                 "project_id",
+    #                                             ),
+    #                                             Literal(None, 1),
+    #                                         ),
+    #                                         binary_condition(
+    #                                             "and",
+    #                                             binary_condition(
+    #                                                 "greaterOrEquals",
+    #                                                 Column(
+    #                                                     "_snuba_se.started",
+    #                                                     "se",
+    #                                                     "started",
+    #                                                 ),
+    #                                                 Literal(
+    #                                                     None,
+    #                                                     datetime.datetime(
+    #                                                         2021, 1, 1, 0, 0
+    #                                                     ),
+    #                                                 ),
+    #                                             ),
+    #                                             binary_condition(
+    #                                                 "less",
+    #                                                 Column(
+    #                                                     "_snuba_se.started",
+    #                                                     "se",
+    #                                                     "started",
+    #                                                 ),
+    #                                                 Literal(
+    #                                                     None,
+    #                                                     datetime.datetime(
+    #                                                         2021, 1, 2, 0, 0
+    #                                                     ),
+    #                                                 ),
+    #                                             ),
+    #                                         ),
+    #                                     ),
+    #                                 ),
+    #                             ),
+    #                         ),
+    #                     ),
+    #                 ),
+    #             ),
+    #         ),
+    #         limit=1000,
+    #         offset=0,
+    #     ),
+    #     id="Multi multi join match",
+    # ),
     pytest.param(
         "MATCH { MATCH (events) SELECT count() AS count BY title WHERE %s } SELECT max(count) AS max_count"
         % added_condition,

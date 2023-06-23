@@ -37,6 +37,9 @@ from tests.query.joins.join_structures import (
     groups_node,
 )
 
+pytest.skip(allow_module_level=True, reason="Dataset no longer exists")
+
+
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
         alias="ev",
