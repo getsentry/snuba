@@ -1,8 +1,11 @@
+import pytest
+
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.describer import Description, Property
 
 
+@pytest.mark.skip(reason="Dataset no longer exists")
 def test_entity_describer() -> None:
     entity = get_entity(EntityKey.GROUPASSIGNEE)
     description = entity.describe()
