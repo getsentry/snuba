@@ -93,7 +93,8 @@ def test_dlq_consumer_cli() -> None:
 
     consumer.subscribe([topic])
 
-    # Longer poll since we need to wait for assignment and the first message
+    # Wait for assignment and the first message
+    time.sleep(1.0)
     message = consumer.poll(10.0)
 
     # Since we picked re-insert DLQ, there should be a new message
