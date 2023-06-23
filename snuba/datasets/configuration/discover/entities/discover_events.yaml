@@ -195,12 +195,12 @@ schema:
     {
       name: trace_sampled,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 8 },
+      args: { schema_modifiers: [nullable], size: 8 },
     },
     {
       name: num_processing_errors,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 64 },
+      args: { schema_modifiers: [nullable], size: 64 },
     },
   ]
 required_time_column: timestamp
@@ -536,18 +536,3 @@ subscription_validators:
         - having
         - orderby
       required_time_column: timestamp
-
-
-join_relationships:
-  grouped:
-    rhs_entity: groupedmessage
-    join_type: inner
-    columns:
-      - [project_id, project_id]
-      - [group_id, id]
-  assigned:
-    rhs_entity: groupassignee
-    join_type: inner
-    columns:
-      - [project_id, project_id]
-      - [group_id, group_id]
