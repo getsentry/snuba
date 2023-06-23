@@ -169,6 +169,7 @@ def dlq_consumer(
             metrics=metrics,
             slice_id=instruction.slice_id,
             join_timeout=None,
+            enforce_schema=False,
         )
 
         consumer = consumer_builder.build_dlq_consumer(instruction)

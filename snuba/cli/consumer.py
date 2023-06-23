@@ -117,6 +117,13 @@ logger = logging.getLogger(__name__)
 )
 @click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
 @click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
+@click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 @click.option(
@@ -144,6 +151,7 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     join_timeout: int = 5,
+    enforce_schema: bool = False,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
@@ -201,6 +209,7 @@ def consumer(
         slice_id=slice_id,
         join_timeout=join_timeout,
         max_poll_interval_ms=max_poll_interval_ms,
+        enforce_schema=enforce_schema,
     )
 
     consumer = consumer_builder.build_base_consumer()
