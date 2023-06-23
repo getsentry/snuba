@@ -18,8 +18,6 @@ def test_get_dataset() -> None:
     for ds_name in [
         "discover",
         "events",
-        "groupassignee",
-        "groupedmessage",
         "metrics",
         "outcomes",
         "outcomes_raw",
@@ -64,8 +62,6 @@ def test_all_names() -> None:
         [
             "discover",
             "events",
-            "groupassignee",
-            "groupedmessage",
             "metrics",
             "outcomes",
             "outcomes_raw",
