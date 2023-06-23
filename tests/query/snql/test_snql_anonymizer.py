@@ -114,6 +114,7 @@ test_cases = [
             "LIMIT 1000 OFFSET 0"
         ),
         id="Multi join match",
+        marks=pytest.mark.skip(reason="Dataset no longer exists"),
     ),
     pytest.param(
         "MATCH { MATCH (events) SELECT count() AS count BY title WHERE %s } SELECT max(count) AS max_count"
@@ -156,8 +157,8 @@ def test_format_expressions(query_body: str, expected_snql_anonymized: str) -> N
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
+        # "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
+        # "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 
