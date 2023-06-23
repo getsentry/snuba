@@ -643,7 +643,7 @@ if application.debug or application.testing:
                         process_message,
                         stream_loader.get_processor(),
                         "consumer_grouup",
-                        True,
+                        False,
                         stream_loader.get_default_topic_spec().topic,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
