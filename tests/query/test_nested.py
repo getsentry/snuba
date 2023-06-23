@@ -1,3 +1,5 @@
+import pytest
+
 from snuba.clickhouse.columns import Any, ColumnSet, String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
@@ -47,6 +49,7 @@ def test_nested_query() -> None:
     )
 
 
+@pytest.mark.skip(reason="Dataset no longer exists")
 def test_join_query() -> None:
     events_query = LogicalQuery(
         Entity(

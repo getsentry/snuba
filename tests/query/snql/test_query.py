@@ -567,6 +567,7 @@ test_cases = [
             offset=0,
         ),
         id="Query with multiple conditions joined by AND",
+        marks=pytest.mark.skip(reason="Dataset no longer exists"),
     ),
     pytest.param(
         f"MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND {added_condition}",
@@ -657,6 +658,7 @@ test_cases = [
             offset=0,
         ),
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
+        marks=pytest.mark.skip(reason="Dataset no longer exists"),
     ),
     pytest.param(
         """MATCH (events)
@@ -1960,8 +1962,8 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
+        # "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
+        # "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 

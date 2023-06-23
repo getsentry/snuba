@@ -31,6 +31,7 @@ def test_entity_node() -> None:
     assert node.get_column_sets() == {"err": e.schema}
 
 
+@pytest.mark.skip(reason="Dataset no longer exists")
 def test_simple_join() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
@@ -73,6 +74,7 @@ def test_simple_join() -> None:
         )
 
 
+@pytest.mark.skip(reason="Dataset no longer exists")
 def test_complex_joins() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)

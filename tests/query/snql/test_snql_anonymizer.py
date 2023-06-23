@@ -58,6 +58,7 @@ test_cases = [
             "LIMIT 1000 OFFSET 0"
         ),
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
+        marks=pytest.mark.skip(reason="Dataset no longer exists"),
     ),
     pytest.param(
         """MATCH (events)
