@@ -46,6 +46,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--storage=transactions",
                 "--consumer-group=transactions_group",
+                "--enforce-schema",
             ],
         ),
         (
@@ -58,6 +59,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--storage=sessions_raw",
                 "--consumer-group=sessions_group",
+                "--enforce-schema",
             ],
         ),
         (
@@ -70,6 +72,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--storage=outcomes_raw",
                 "--consumer-group=outcomes_group",
+                "--enforce-schema",
             ],
         ),
         (
@@ -214,6 +217,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--consumer-group=snuba-metrics-consumers",
+                    "--enforce-schema",
                 ],
             ),
             (
@@ -226,6 +230,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-distributions-consumers",
+                    "--enforce-schema",
                 ],
             ),
             (
@@ -238,6 +243,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
+                    "--enforce-schema",
                 ],
             ),
             (
@@ -250,6 +256,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
+                    "--enforce-schema",
                 ],
             ),
         ]
@@ -371,6 +378,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--storage=profiles",
+                    "--enforce-schema",
                 ],
             ),
             (
@@ -382,6 +390,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--storage=functions_raw",
+                    "--enforce-schema",
                 ],
             ),
         ]
@@ -397,6 +406,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--no-strict-offset-reset",
                     "--log-level=debug",
                     "--storage=replays",
+                    "--enforce-schema",
                 ],
             ),
         ]
@@ -413,6 +423,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--log-level=debug",
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
+                    "--enforce-schema",
                 ],
             ),
         ]
@@ -429,6 +440,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--log-level=debug",
                     "--storage=spans",
                     "--consumer-group=spans_group",
+                    "--enforce-schema",
                 ],
             ),
         ]
