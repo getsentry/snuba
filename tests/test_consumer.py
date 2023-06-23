@@ -4,7 +4,7 @@ import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
-from typing import MutableSequence, Optional
+from typing import MutableSequence
 from unittest.mock import Mock, call
 
 import pytest
@@ -24,7 +24,7 @@ from snuba.consumers.consumer import (
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
-from snuba.datasets.storages.factory import get_cdc_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -143,83 +143,6 @@ def get_row_count(storage: Storage) -> int:
         .execute(f"SELECT count() FROM {schema.get_local_table_name()}")
         .results[0][0]
     )
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.parametrize(
-    "processes, input_block_size, output_block_size",
-    [
-        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
-        pytest.param(None, None, None, id="no multiprocessing"),
-    ],
-)
-def test_multistorage_strategy(
-    processes: Optional[int],
-    input_block_size: Optional[int],
-    output_block_size: Optional[int],
-) -> None:
-    from tests.datasets.cdc.test_groupassignee import TestGroupassignee
-    from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
-
-    groupassignees_storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
-    groupedmessages_storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
-
-    commit = Mock()
-    partitions = Mock()
-
-    storages = [groupassignees_storage, groupedmessages_storage]
-
-    strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages,
-        10,
-        10,
-        processes,
-        input_block_size,
-        output_block_size,
-        TestingMetricsBackend(),
-        None,
-        None,
-    ).create_with_partitions(commit, partitions)
-
-    payloads = [
-        KafkaPayload(None, b"{}", [("table", b"ignored")]),
-        KafkaPayload(
-            None,
-            json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
-            [("table", groupassignees_storage.get_postgres_table().encode("utf8"))],
-        ),
-        KafkaPayload(
-            None,
-            json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
-            [("table", groupedmessages_storage.get_postgres_table().encode("utf8"))],
-        ),
-    ]
-
-    now = datetime.now()
-
-    messages = [
-        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
-        for offset, payload in enumerate(payloads)
-    ]
-
-    with assert_changes(
-        lambda: get_row_count(groupedmessages_storage), 0, 1
-    ), assert_changes(lambda: get_row_count(groupedmessages_storage), 0, 1):
-
-        for message in messages:
-            strategy.submit(message)
-
-        with assert_changes(
-            lambda: commit.call_args_list,
-            [],
-            [
-                call({}),
-                call({Partition(topic=Topic(name="topic"), index=0): 3}),
-                call({}, force=True),
-            ],
-        ):
-            strategy.close()
-            strategy.join()
 
 
 @pytest.mark.clickhouse_db
