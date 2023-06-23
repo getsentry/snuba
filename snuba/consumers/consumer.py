@@ -604,8 +604,6 @@ def process_message(
             value = message.value
             raise InvalidMessage(value.partition, value.offset) from err
 
-            return None
-
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
