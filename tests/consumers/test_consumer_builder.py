@@ -18,7 +18,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from tests.fixtures import get_raw_event
+from tests.fixtures import get_raw_error_message
 from tests.test_consumer import get_row_count
 
 test_storage_key = StorageKey("errors")
@@ -160,8 +160,7 @@ def test_run_processing_strategy() -> None:
     strategy_factory = consumer_builder.build_streaming_strategy_factory()
     strategy = strategy_factory.create_with_partitions(commit, partitions)
 
-    raw_message = get_raw_event()
-    json_string = json.dumps([2, "insert", raw_message, []])
+    json_string = json.dumps(get_raw_error_message())
 
     message = Message(
         BrokerValue(
