@@ -621,6 +621,9 @@ if application.debug or application.testing:
 
         storage = entity.get_writable_storage()
         assert storage is not None
+        storage_name = storage.get_storage_key().value
+        # TODO: A few storages are currently excluded from schema validation
+        should_validate_schema = storage_name not in ["search_issues", "replays"]
 
         try:
             if type_ == "insert":
@@ -644,7 +647,7 @@ if application.debug or application.testing:
                         stream_loader.get_processor(),
                         "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
-                        False,
+                        should_validate_schema,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
                     max_batch_size=1,
