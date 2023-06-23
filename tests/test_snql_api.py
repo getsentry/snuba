@@ -26,6 +26,8 @@ from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
+pytest.skip(allow_module_level=True, reason="Dataset no longer exists")
+
 
 class RejectAllocationPolicy123(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
