@@ -105,6 +105,7 @@ class TestEntityConfiguration(ConfigurationTest):
         entity_validators = set(pluggable_entity.get_validators())
         assert len(entity_validators) == len(pluggable_entity._get_builtin_validators())
 
+    @pytest.mark.skip(reason="Dataset no longer exists")
     def test_entity_loader_join_relationships(self) -> None:
         pluggable_entity = build_entity_from_config(
             "tests/datasets/configuration/entity_join_relationships.yaml"
