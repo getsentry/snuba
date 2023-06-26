@@ -23,7 +23,7 @@ python-dateutil==2.8.2
 python-rapidjson==1.8
 pytz==2022.2.1
 redis==4.3.4
-sentry-arroyo==2.13.0
+sentry-arroyo==2.14.0
 sentry-kafka-schemas==0.1.14
 sentry-redis-tools==0.1.6
 sentry-relay==0.8.21
