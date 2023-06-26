@@ -90,7 +90,10 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         set_final = False
 
         if flags.needs_final:
-            tags["cause"] = "final_flag"
+            if len(flags.replacement_types) == 1:
+                tags["cause"] = "flag_{next(iter(flags.replacement_types))}"
+            else:
+                tags["cause"] = "flag_multiple"
             metrics.increment(
                 name=FINAL_METRIC,
                 tags=tags,
