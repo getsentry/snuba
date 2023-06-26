@@ -40,11 +40,10 @@ def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
 
 
 class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
-    TEN_SECONDS = 10
     ONE_MINUTE = 60
     ONE_HOUR = 3600
     ONE_DAY = 3600 * 24
-    GRANULARITIES_SECONDS = [TEN_SECONDS, ONE_MINUTE, ONE_HOUR, ONE_DAY]
+    GRANULARITIES_SECONDS = [ONE_MINUTE, ONE_HOUR, ONE_DAY]
 
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
