@@ -113,7 +113,6 @@ class RedisClientKey(Enum):
     CONFIG = "config"
     DLQ = "dlq"
     OPTIMIZE = "optimize"
-    ADMIN_AUTH = "admin_auth"
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
@@ -137,9 +136,6 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     ),
     RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["optimize"]
-    ),
-    RedisClientKey.ADMIN_AUTH: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["admin_auth"]
     ),
 }
 

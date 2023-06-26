@@ -16,7 +16,6 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
-@pytest.mark.redis_db
 def test_tools(admin_api: FlaskClient) -> None:
     response = admin_api.get("/tools")
     assert response.status_code == 200
@@ -26,7 +25,6 @@ def test_tools(admin_api: FlaskClient) -> None:
     assert "all" in data["tools"]
 
 
-@pytest.mark.redis_db
 @patch("snuba.admin.auth.DEFAULT_ROLES", [ROLES["ProductTools"]])
 def test_product_tools_role(
     admin_api: FlaskClient,

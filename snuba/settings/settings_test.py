@@ -55,6 +55,5 @@ REDIS_CLUSTERS = {
         (6, "config"),
         (7, "dlq"),
         (8, "optimize"),
-        (9, "admin_auth"),
     ]
 }
