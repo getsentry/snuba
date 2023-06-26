@@ -81,6 +81,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--no-strict-offset-reset",
                 "--log-level=debug",
                 "--storage=errors",
+                "--enforce-schema",
             ],
         ),
         (

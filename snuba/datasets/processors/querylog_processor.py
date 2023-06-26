@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
@@ -11,7 +12,7 @@ from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
     QueryMetadata,
 )
 
-from snuba import environment
+from snuba import environment, state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage
@@ -150,6 +151,12 @@ class QuerylogProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Querylog, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        # XXX: Temporary code for the DLQ test.
+        reject_rate = state.get_config("querylog_reject_rate", 0.0)
+        assert isinstance(reject_rate, float)
+        if random.random() < reject_rate:
+            raise ValueError("This message is rejected on purpose.")
+
         processed = {
             "request_id": str(uuid.UUID(message["request"]["id"])),
             "request_body": self.__to_json_string(message["request"]["body"]),
