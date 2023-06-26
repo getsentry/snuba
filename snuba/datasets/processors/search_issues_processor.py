@@ -327,7 +327,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             processed = self.process_insert_v1(event, metadata)
         except EventTooOld:
             metrics.increment("event_too_old")
-            raise
+            return None
         except IndexError:
             metrics.increment("invalid_message")
             raise
