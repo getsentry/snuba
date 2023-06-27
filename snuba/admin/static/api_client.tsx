@@ -25,7 +25,10 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
-import { CardinalityQueryRequest, CardinalityQueryResult } from "./cardinality_analyzer/types";
+import {
+  CardinalityQueryRequest,
+  CardinalityQueryResult,
+} from "./cardinality_analyzer/types";
 
 import { AllocationPolicy } from "./capacity_management/types";
 
@@ -58,7 +61,9 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
-  executeCardinalityQuery: (req: CardinalityQueryRequest) => Promise<CardinalityQueryResult>;
+  executeCardinalityQuery: (
+    req: CardinalityQueryRequest
+  ) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -212,7 +217,7 @@ function Client() {
           return Promise.resolve(res.json());
         } else {
           return res.json().then((err) => {
-            let errMsg = err?.error.message || "Could not convert SnQL";
+            let errMsg = err?.error.message || "Could not execute SnQL";
             throw new Error(errMsg);
           });
         }
