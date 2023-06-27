@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
+
+import { RichTextEditor } from "@mantine/tiptap";
+import { useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { lowlight } from "lowlight";
+import sqlLanguageSyntax from "highlight.js/lib/languages/sql";
+
 import { Table } from "../table";
 import { LogLine, TracingRequest, TracingResult } from "./types";
 import { parseLogLine } from "./util";
@@ -15,6 +23,8 @@ enum MessageCategory {
   memory_tracker,
   unknown,
 }
+
+lowlight.registerLanguage("sql", sqlLanguageSyntax);
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -170,12 +180,12 @@ function TracingQueries(props: { api: Client }) {
             );
           } else if (title === "Trace") {
             return (
-                <div>
-                    <br />
-                    <b>Number of rows in result set:</b> {value.num_rows_result}
-                    <br />
-                    {heirarchicalTraceDisplay(title, value.trace_output)}
-                </div>
+              <div>
+                <br />
+                <b>Number of rows in result set:</b> {value.num_rows_result}
+                <br />
+                {heirarchicalTraceDisplay(title, value.trace_output)}
+              </div>
             );
           }
         })}
@@ -299,6 +309,19 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      CodeBlockLowlight.configure({
+        lowlight,
+      }),
+    ],
+    content: `<pre><code>${query.sql || ""}</code></pre>`,
+    onUpdate({ editor }) {
+      updateQuerySql(editor.getText());
+    },
+  });
+
   return (
     <div>
       <form>
@@ -306,9 +329,15 @@ function TracingQueries(props: { api: Client }) {
         <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
           🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
         </a>
-        <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
-        </div>
+        <RichTextEditor editor={editor}>
+          <RichTextEditor.Toolbar>
+            <RichTextEditor.ControlsGroup>
+              <RichTextEditor.CodeBlock />
+            </RichTextEditor.ControlsGroup>
+          </RichTextEditor.Toolbar>
+
+          <RichTextEditor.Content />
+        </RichTextEditor>
         <div style={executeActionsStyle}>
           <div>
             <select
@@ -388,7 +417,7 @@ function TextArea(props: {
       value={value}
       onChange={(evt) => onChange(evt.target.value)}
       style={{ width: "100%", height: 100 }}
-      placeholder={"Write your query here"}
+      placeholder={"Write your SQL query here"}
     />
   );
 }
