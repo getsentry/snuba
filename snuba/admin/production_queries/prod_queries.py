@@ -2,6 +2,7 @@ from typing import Any, Dict
 
 from flask import Response
 
+from snuba import settings
 from snuba.admin.audit_log.query import audit_log
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
@@ -12,10 +13,6 @@ from snuba.query.snql.parser import parse_snql_query
 from snuba.request.schema import RequestSchema
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
-
-# For now, we only allow project_id = 1 for all queries.
-# This is a temporary variable and will be replaced by a role based system in the future.
-ALLOWED_PROJECT_IDS = [3]
 
 
 def run_snql_query(body: Dict[str, Any], user: str) -> Response:
@@ -45,7 +42,9 @@ def validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
     if project_ids is None:
         raise InvalidQueryException("Missing project ID")
 
-    disallowed_project_ids = project_ids.difference(set(ALLOWED_PROJECT_IDS))
+    disallowed_project_ids = project_ids.difference(
+        set(settings.ADMIN_ALLOWED_PROD_PROJECTS)
+    )
     if len(disallowed_project_ids) > 0:
         raise InvalidQueryException(
             f"Cannot access the following project ids: {disallowed_project_ids}"
