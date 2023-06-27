@@ -310,8 +310,7 @@ function TracingQueries(props: { api: Client }) {
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder:
-          "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
+        placeholder: "Write your query here.",
       }),
     ],
     content: `${query.sql || ""}`,

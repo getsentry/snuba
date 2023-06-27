@@ -67,10 +67,10 @@ function QueryEditor(props: {
       StarterKit,
       Placeholder.configure({
         placeholder:
-          "Write your queries here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
+          "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
       }),
     ],
-    content: `${queryTemplate}`,
+    content: `<code>${queryTemplate}</code>`,
     onUpdate({ editor }) {
       setQueryTemplate(editor.getText());
     },
@@ -166,27 +166,7 @@ function QueryEditor(props: {
       <RichTextEditor editor={editor}>
         <RichTextEditor.Content />
       </RichTextEditor>
-
-      {/* <textarea
-        value={queryTemplate || ""}
-        placeholder={
-          "Edit your queries here, add '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
-        }
-        style={textAreaStyle}
-        onChange={(evt) => {
-          setSelectedPredefinedQuery(undefined);
-          setQueryTemplate(evt.target.value);
-        }}
-        data-testid="text-area-input"
-      /> */}
       {renderParameterSetters()}
-      {/* <textarea
-        disabled={true}
-        placeholder={"The final query you send to snuba will be here"}
-        style={textAreaStyle}
-        value={query}
-        data-testid="text-area-output"
-      ></textarea> */}
       <Prism withLineNumbers language="sql">
         {query || ""}
       </Prism>
