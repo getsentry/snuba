@@ -55,7 +55,7 @@ from confluent_kafka import Producer as ConfluentProducer
 
 from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.schemas import get_json_codec
+from snuba.consumers.schemas import _NOOP_CODEC, get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -523,6 +523,7 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
+    enforce_schema: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     local_metrics = MetricsWrapper(
@@ -553,6 +554,10 @@ def process_message(
                 scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
 
                 try:
+                    # Occasionally log errors if no validator is configured
+                    if codec == _NOOP_CODEC:
+                        raise Exception("No validator configured for topic")
+
                     codec.validate(decoded)
                 except Exception as err:
                     local_metrics.increment(
@@ -569,6 +574,8 @@ def process_message(
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
+                    if enforce_schema:
+                        raise
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -599,8 +606,6 @@ def process_message(
             logger.warning(err, exc_info=True)
             value = message.value
             raise InvalidMessage(value.partition, value.offset) from err
-
-            return None
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
