@@ -534,7 +534,8 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     AND timestamp < toDateTime('2023-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "events", "query": snql_query})
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -552,8 +553,9 @@ def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     AND timestamp < toDateTime('2023-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "events", "query": snql_query})
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert data["error"]["message"] == "Cannot access the following project ids: \{2\}"
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"
