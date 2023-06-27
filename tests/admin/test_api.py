@@ -500,6 +500,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert auditlog_records.pop()
 
 
+@pytest.mark.redis_db
 def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})

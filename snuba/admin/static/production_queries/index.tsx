@@ -71,6 +71,7 @@ function ProductionQueries(props: { api: Client }) {
     <div>
       <form>
         <h2>Run a SnQL Query</h2>
+        <p>Currently, we only support queries with project_id = 1</p>
         <div>
           <textarea
             spellCheck={false}
