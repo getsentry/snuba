@@ -247,7 +247,9 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
 # Capacity Management
-
+# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
+# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
+# available for single tenant since we can enable/disable policies at runtime there.
 ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # By default, allocation policies won't block requests from going through in a production
