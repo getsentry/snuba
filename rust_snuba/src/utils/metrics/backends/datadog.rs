@@ -53,13 +53,7 @@ impl MetricsClientTrait for DatadogMetricsBackend {
 
         match value {
             Some(v) => {
-                for _ in 0..v.abs() {
-                    if v < 0 {
-                        self.client_sd.decr(key, &tags_str).unwrap();
-                    } else {
-                        self.client_sd.incr(key, &tags_str).unwrap();
-                    }
-                }
+                self.client_sd.count(key, v, &tags_str).unwrap();
             }
             None => {
                 self.client_sd.incr(key, tags_str).unwrap();
