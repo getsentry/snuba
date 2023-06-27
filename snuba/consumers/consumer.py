@@ -523,6 +523,7 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
+    enforce_schema: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     local_metrics = MetricsWrapper(
@@ -573,6 +574,8 @@ def process_message(
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
+                    if enforce_schema:
+                        raise
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -603,8 +606,6 @@ def process_message(
             logger.warning(err, exc_info=True)
             value = message.value
             raise InvalidMessage(value.partition, value.offset) from err
-
-            return None
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
