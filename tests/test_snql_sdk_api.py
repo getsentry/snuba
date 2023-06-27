@@ -11,12 +11,10 @@ from snuba_sdk import (
     Entity,
     Function,
     Identifier,
-    Join,
     Lambda,
     Op,
     OrderBy,
     Query,
-    Relationship,
     Request,
 )
 
@@ -28,8 +26,6 @@ from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
-
-pytest.skip(allow_module_level=True, reason="Dataset no longer exists")
 
 
 @pytest.mark.clickhouse_db
@@ -128,42 +124,6 @@ class TestSDKSnQLApi(BaseApiTest):
             tenant_ids={"referrer": "r", "organization_id": 123},
         )
         response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
-
-    def test_join_query(self) -> None:
-        ev = Entity("events", "ev")
-        gm = Entity("groupedmessage", "gm")
-        join = Join([Relationship(ev, "grouped", gm)])
-        query = (
-            Query(join)
-            .set_select(
-                [
-                    Column("group_id", ev),
-                    Column("status", gm),
-                    Function("avg", [Column("retention_days", ev)], "avg"),
-                ]
-            )
-            .set_groupby([Column("group_id", ev), Column("status", gm)])
-            .set_where(
-                [
-                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
-                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
-                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
-                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
-                ]
-            )
-        )
-
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-            tenant_ids={"referrer": "r", "organization_id": 123},
-        )
-        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -290,46 +250,6 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
-
-    def test_array_condition_unpack_in_join_query(self) -> None:
-        ev = Entity("events", "ev")
-        gm = Entity("groupedmessage", "gm")
-        join = Join([Relationship(ev, "grouped", gm)])
-        query = (
-            Query(join)
-            .set_select(
-                [
-                    Column("group_id", ev),
-                    Column("status", gm),
-                    Function("avg", [Column("retention_days", ev)], "avg"),
-                ]
-            )
-            .set_groupby([Column("group_id", ev), Column("status", gm)])
-            .set_where(
-                [
-                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
-                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
-                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
-                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
-                    Condition(
-                        Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"
-                    ),
-                ]
-            )
-        )
-
-        request = Request(
-            dataset="discover",
-            query=query,
-            app_id="default",
-            tenant_ids={"referrer": "r", "organization_id": 123},
-        )
-        request.flags.debug = True
-        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
 
     def test_escape_edge_cases(self) -> None:
         query = (

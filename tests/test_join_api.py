@@ -6,6 +6,17 @@ from typing import Any
 
 import pytest
 import simplejson as json
+from snuba_sdk import (
+    Column,
+    Condition,
+    Entity,
+    Function,
+    Join,
+    Op,
+    Query,
+    Relationship,
+    Request,
+)
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -222,3 +233,79 @@ class TestSnQLJoinApi(BaseApiTest):
         # assert json.loads(response.data)["error"]["message"] == error_message
 
         assert response.status_code == 500
+
+    def test_sdk_join_query(self) -> None:
+        ev = Entity("events", "ev")
+        gm = Entity("groupedmessage", "gm")
+        join = Join([Relationship(ev, "grouped", gm)])
+        query = (
+            Query(join)
+            .set_select(
+                [
+                    Column("group_id", ev),
+                    Column("status", gm),
+                    Function("avg", [Column("retention_days", ev)], "avg"),
+                ]
+            )
+            .set_groupby([Column("group_id", ev), Column("status", gm)])
+            .set_where(
+                [
+                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
+                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
+                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
+                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
+                ]
+            )
+        )
+
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
+
+    def test_array_condition_unpack_in_join_query(self) -> None:
+        ev = Entity("events", "ev")
+        gm = Entity("groupedmessage", "gm")
+        join = Join([Relationship(ev, "grouped", gm)])
+        query = (
+            Query(join)
+            .set_select(
+                [
+                    Column("group_id", ev),
+                    Column("status", gm),
+                    Function("avg", [Column("retention_days", ev)], "avg"),
+                ]
+            )
+            .set_groupby([Column("group_id", ev), Column("status", gm)])
+            .set_where(
+                [
+                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
+                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
+                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
+                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
+                    Condition(
+                        Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"
+                    ),
+                ]
+            )
+        )
+
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
+        request.flags.debug = True
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
