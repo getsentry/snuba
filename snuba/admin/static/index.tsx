@@ -31,6 +31,7 @@ client.getSettings().then((settings) => {
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
     });
+    Sentry.setUser({ email: settings.userEmail });
   }
 });
 
