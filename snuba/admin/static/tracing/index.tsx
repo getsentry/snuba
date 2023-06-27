@@ -4,9 +4,8 @@ import Client from "../api_client";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import { lowlight } from "lowlight";
-import sqlLanguageSyntax from "highlight.js/lib/languages/sql";
+
+import { Prism } from "@mantine/prism";
 
 import { Table } from "../table";
 import { LogLine, TracingRequest, TracingResult } from "./types";
@@ -23,8 +22,6 @@ enum MessageCategory {
   memory_tracker,
   unknown,
 }
-
-lowlight.registerLanguage("sql", sqlLanguageSyntax);
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -310,12 +307,7 @@ function TracingQueries(props: { api: Client }) {
   }
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-    ],
+    extensions: [StarterKit],
     content: `<pre><code>${query.sql || ""}</code></pre>`,
     onUpdate({ editor }) {
       updateQuerySql(editor.getText());
@@ -330,14 +322,11 @@ function TracingQueries(props: { api: Client }) {
           🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
         </a>
         <RichTextEditor editor={editor}>
-          <RichTextEditor.Toolbar>
-            <RichTextEditor.ControlsGroup>
-              <RichTextEditor.CodeBlock />
-            </RichTextEditor.ControlsGroup>
-          </RichTextEditor.Toolbar>
-
           <RichTextEditor.Content />
         </RichTextEditor>
+        <Prism withLineNumbers language="sql">
+          {query.sql || ""}
+        </Prism>
         <div style={executeActionsStyle}>
           <div>
             <select
@@ -405,21 +394,5 @@ const selectStyle = {
   marginRight: 8,
   height: 30,
 };
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 100 }}
-      placeholder={"Write your SQL query here"}
-    />
-  );
-}
 
 export default TracingQueries;
