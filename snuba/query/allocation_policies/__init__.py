@@ -395,7 +395,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_enforced(self) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED))
+        return (
+            bool(self.get_config_value(IS_ENFORCED))
+            and settings.ENFORCE_BYTES_SCANNED_WINDOW_POLICY
+        )
 
     @property
     def max_threads(self) -> int:
