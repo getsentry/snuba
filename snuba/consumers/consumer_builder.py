@@ -268,6 +268,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
