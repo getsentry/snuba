@@ -8,10 +8,11 @@ from arroyo.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
+    RunTask,
     RunTaskInThreads,
+    RunTaskWithMultiprocessing,
 )
 from arroyo.processing.strategies.commit import CommitOffsets
-from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
@@ -136,11 +137,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
         if self.__processes is None:
-            strategy = TransformStep(transform_function, collect)
+            strategy = RunTask(transform_function, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
+            strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
                 self.__processes,
