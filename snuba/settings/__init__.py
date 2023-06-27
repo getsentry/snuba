@@ -174,11 +174,8 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 CONFIG_STATE: Mapping[str, Optional[Any]] = {}
 
 # Sentry Options
-SENTRY_DSN: str | None = (
-    "https://ba91403d8b944ce4867387984fd2fbff@o921932.ingest.sentry.io/5868848"
-)
-
-SENTRY_TRACE_SAMPLE_RATE = 1
+SENTRY_DSN: str | None = None
+SENTRY_TRACE_SAMPLE_RATE = 0
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
