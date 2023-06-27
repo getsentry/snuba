@@ -18,7 +18,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-select-event": "^5.5.1",
-    "react-syntax-highlighter": "^15.5.0",
     "ts-loader": "^9.4.1",
     "typescript": "^4.8.3"
   },
