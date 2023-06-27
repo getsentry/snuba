@@ -47,14 +47,14 @@ function ProductionQueries(props: { api: Client }) {
         const result_columns = result.meta.map(
           (col: QueryResultColumnMeta) => col.name
         );
-        const query_result = {
+        const query_result: QueryResult = {
           input_query: snql_query.query,
           columns: result_columns,
-          rows: result.data.map((obj: object) => {
+          rows: result.data.map((obj: object) =>
             result_columns.map(
-              (col_name: string) => obj[col_name as keyof typeof obj] || ""
-            );
-          }),
+              (col_name: string) => obj[col_name as keyof typeof obj]
+            )
+          ),
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
       })
@@ -114,10 +114,19 @@ function ProductionQueries(props: { api: Client }) {
       </form>
       <div>
         <h2>Query results</h2>
-        <Table
-          headerData={queryResultHistory[0].columns}
-          rowData={queryResultHistory[0].rows}
-        />
+        {queryResultHistory.map((queryResult, idx) => {
+          if (idx === 0) {
+            console.log(queryResult);
+            return (
+              <div>
+                <Table
+                  headerData={queryResult.columns}
+                  rowData={queryResult.rows}
+                />
+              </div>
+            );
+          }
+        })}
       </div>
     </div>
   );

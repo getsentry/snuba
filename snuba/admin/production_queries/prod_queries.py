@@ -15,7 +15,7 @@ from snuba.web.views import dataset_query
 
 # For now, we only allow project_id = 1 for all queries.
 # This is a temporary variable and will be replaced by a role based system in the future.
-ALLOWED_PROJECT_IDS = [1]
+ALLOWED_PROJECT_IDS = [3]
 
 
 def run_snql_query(body: Dict[str, Any], user: str) -> Response:

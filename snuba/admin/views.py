@@ -956,7 +956,6 @@ def production_snql_query() -> Response:
     body["tenant_ids"] = {"referrer": request.referrer}
     try:
         ret = run_snql_query(body, g.user.email)
-        print(json.loads(ret.data))
         return ret
     except InvalidQueryException as exception:
         return Response(
