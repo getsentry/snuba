@@ -181,6 +181,7 @@ pipelines:
                                     --container-name="transactions-subscriptions-scheduler" \
                                     --container-name="rust-querylog-consumer" \
                                     --container-name="spans-consumer" \
+                                    --container-name="dlq-consumer" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
