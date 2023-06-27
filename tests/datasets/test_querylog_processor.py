@@ -17,7 +17,6 @@ from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     ClickhouseQueryProfile,
     FilterProfile,
-    QueryStatus,
     RequestStatus,
     SnubaQueryMetadata,
     Status,
@@ -79,7 +78,6 @@ def test_simple() -> None:
                     "error_code": 386,
                     "triggered_rate_limiter": "test_rate_limiter",
                 },
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
@@ -122,11 +120,11 @@ def test_simple() -> None:
                 "organization": None,
                 "timestamp": timer.for_json()["timestamp"],
                 "duration_ms": 10,
-                "status": "success",
+                "status": "deprecated",
                 "clickhouse_queries.sql": [
                     "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
                 ],
-                "clickhouse_queries.status": ["success"],
+                "clickhouse_queries.status": ["deprecated"],
                 "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
                 "clickhouse_queries.duration_ms": [42],
                 "clickhouse_queries.stats": [
@@ -202,7 +200,6 @@ def test_missing_fields() -> None:
                 start_timestamp=None,
                 end_timestamp=None,
                 stats={"sample": 10},
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
@@ -225,14 +222,15 @@ def test_missing_fields() -> None:
     ).to_dict()
 
     messages = []
-    first = deepcopy(orig_message)
+    first = dict(deepcopy(orig_message))
     del first["timing"]
     del first["status"]
     messages.append(first)
 
-    second = deepcopy(orig_message)
+    second = dict(deepcopy(orig_message))
     second["timing"] = None
     second["status"] = None
+    messages.append(second)
 
     for message in messages:
         processor = (
@@ -256,7 +254,7 @@ def test_missing_fields() -> None:
                     "clickhouse_queries.sql": [
                         "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
                     ],
-                    "clickhouse_queries.status": ["success"],
+                    "clickhouse_queries.status": ["deprecated"],
                     "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
                     "clickhouse_queries.duration_ms": [0],
                     "clickhouse_queries.stats": ['{"sample": 10}'],
@@ -330,7 +328,6 @@ def test_negative_project_id_fields() -> None:
                 start_timestamp=None,
                 end_timestamp=None,
                 stats={"sample": 10},
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
