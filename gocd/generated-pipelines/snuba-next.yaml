@@ -1,6 +1,7 @@
 format_version: 10
 pipelines:
   deploy-snuba-next:
+    display_order: 0
     group: snuba-next
     lock_behavior: unlockWhenFinished
     materials:
