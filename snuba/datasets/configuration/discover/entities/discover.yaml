@@ -3,10 +3,11 @@ kind: entity
 name: discover
 schema:
   [
-    { name: event_id, type: FixedString, args: { length: 32 }},
+    { name: event_id, type: FixedString, args: { length: 32 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: type, type: String, args: { schema_modifiers: [nullable] } },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
     { name: platform, type: String, args: { schema_modifiers: [nullable] } },
     { name: environment, type: String, args: { schema_modifiers: [nullable] } },
     { name: release, type: String, args: { schema_modifiers: [nullable] } },
@@ -254,20 +255,16 @@ schema:
       type: String,
       args: { schema_modifiers: [nullable] },
     },
-    {
-      name: profile_id,
-      type: UUID,
-      args: { schema_modifiers: [nullable] },
-    },
+    { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
     {
       name: trace_sampled,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 8 },
+      args: { schema_modifiers: [nullable], size: 8 },
     },
     {
       name: num_processing_errors,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 64 },
+      args: { schema_modifiers: [nullable], size: 64 },
     },
   ]
 required_time_column: timestamp

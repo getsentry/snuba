@@ -6,6 +6,7 @@ schema:
     { name: org_id, type: UInt, args: { size: 64 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: started, type: DateTime },
+    { name: time, type: DateTime },
     { name: release, type: String },
     { name: environment, type: String },
     { name: user_agent, type: String },
@@ -164,96 +165,96 @@ schema:
   ]
 required_time_column: started
 storages:
-- storage: sessions_hourly
-  is_writable: false
-  translation_mappers:
-    columns:
-    - mapper: DurationQuantilesHourlyMapper
-    - mapper: FunctionColumn
-      args:
-        col_name: duration_avg
-        function_name: avgIfMerge
-    - mapper: PlusFunctionColumns
-      args:
-        col_name: sessions
-        op1_col: sessions
-        op1_func: countIfMerge
-        op2_col: sessions_preaggr
-        op2_func: sumIfMerge
-    - mapper: PlusFunctionColumns
-      args:
-        col_name: sessions_crashed
-        op1_col: sessions_crashed
-        op1_func: countIfMerge
-        op2_col: sessions_crashed_preaggr
-        op2_func: sumIfMerge
-    - mapper: PlusFunctionColumns
-      args:
-        col_name: sessions_abnormal
-        op1_col: sessions_abnormal
-        op1_func: countIfMerge
-        op2_col: sessions_abnormal_preaggr
-        op2_func: sumIfMerge
-    - mapper: PlusFunctionColumns
-      args:
-        col_name: sessions_errored
-        op1_col: sessions_errored
-        op1_func: uniqIfMerge
-        op2_col: sessions_errored_preaggr
-        op2_func: sumIfMerge
-    - mapper: FunctionColumn
-      args:
-        col_name: users
-        function_name: uniqIfMerge
-    - mapper: FunctionColumn
-      args:
-        col_name: users_crashed
-        function_name: uniqIfMerge
-    - mapper: FunctionColumn
-      args:
-        col_name: users_abnormal
-        function_name: uniqIfMerge
-    - mapper: FunctionColumn
-      args:
-        col_name: users_errored
-        function_name: uniqIfMerge
-- storage: sessions_raw
-  is_writable: true
-  translation_mappers:
-    columns:
-    - mapper: DurationQuantilesRawMapper
-    - mapper: DurationAvgRawMapper
-    - mapper: SessionsRawNumSessionsMapper
-    - mapper: SessionsRawCrashedMapper
-    - mapper: SessionsRawSessionsAbnormalMapper
-    - mapper: SessionsRawErroredMapper
-    - mapper: SessionsRawUsersMapper
-    - mapper: SessionsRawUsersCrashedMapper
-    - mapper: SessionsRawUsersAbnormalMapper
-    - mapper: SessionsRawUsersErroredMapper
+  - storage: sessions_hourly
+    is_writable: false
+    translation_mappers:
+      columns:
+        - mapper: DurationQuantilesHourlyMapper
+        - mapper: FunctionColumn
+          args:
+            col_name: duration_avg
+            function_name: avgIfMerge
+        - mapper: PlusFunctionColumns
+          args:
+            col_name: sessions
+            op1_col: sessions
+            op1_func: countIfMerge
+            op2_col: sessions_preaggr
+            op2_func: sumIfMerge
+        - mapper: PlusFunctionColumns
+          args:
+            col_name: sessions_crashed
+            op1_col: sessions_crashed
+            op1_func: countIfMerge
+            op2_col: sessions_crashed_preaggr
+            op2_func: sumIfMerge
+        - mapper: PlusFunctionColumns
+          args:
+            col_name: sessions_abnormal
+            op1_col: sessions_abnormal
+            op1_func: countIfMerge
+            op2_col: sessions_abnormal_preaggr
+            op2_func: sumIfMerge
+        - mapper: PlusFunctionColumns
+          args:
+            col_name: sessions_errored
+            op1_col: sessions_errored
+            op1_func: uniqIfMerge
+            op2_col: sessions_errored_preaggr
+            op2_func: sumIfMerge
+        - mapper: FunctionColumn
+          args:
+            col_name: users
+            function_name: uniqIfMerge
+        - mapper: FunctionColumn
+          args:
+            col_name: users_crashed
+            function_name: uniqIfMerge
+        - mapper: FunctionColumn
+          args:
+            col_name: users_abnormal
+            function_name: uniqIfMerge
+        - mapper: FunctionColumn
+          args:
+            col_name: users_errored
+            function_name: uniqIfMerge
+  - storage: sessions_raw
+    is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: DurationQuantilesRawMapper
+        - mapper: DurationAvgRawMapper
+        - mapper: SessionsRawNumSessionsMapper
+        - mapper: SessionsRawCrashedMapper
+        - mapper: SessionsRawSessionsAbnormalMapper
+        - mapper: SessionsRawErroredMapper
+        - mapper: SessionsRawUsersMapper
+        - mapper: SessionsRawUsersCrashedMapper
+        - mapper: SessionsRawUsersAbnormalMapper
+        - mapper: SessionsRawUsersErroredMapper
 storage_selector:
   selector: SessionsQueryStorageSelector
 query_processors:
-- processor: BasicFunctionsProcessor
-- processor: TimeSeriesProcessor
-  args:
-    time_group_columns:
-      bucketed_started: started
-    time_parse_columns:
-    - started
-    - received
-- processor: OrganizationRateLimiterProcessor
-  args:
-    org_column: org_id
-- processor: ProjectRateLimiterProcessor
-  args:
-    project_column: project_id
+  - processor: BasicFunctionsProcessor
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_started: started
+      time_parse_columns:
+        - started
+        - received
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: org_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
 validators:
-- validator: EntityRequiredColumnValidator
-  args:
-    required_filter_columns:
-    - org_id
-    - project_id
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - org_id
+        - project_id
 subscription_processors:
   - processor: AddColumnCondition
     args:

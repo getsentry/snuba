@@ -16,6 +16,7 @@ schema:
     },
     { name: transaction_op, type: String },
     { name: transaction_status, type: UInt, args: { size: 8 } },
+    { name: time, type: DateTime },
     { name: start_ts, type: DateTime },
     { name: start_ms, type: UInt, args: { size: 16 } },
     { name: finish_ts, type: DateTime },
@@ -139,11 +140,7 @@ storages:
             [
               {
                 mapper: ColumnToIPAddress,
-                args:
-                  {
-                    from_table_name,
-                    from_col_name: "ip_address",
-                  },
+                args: { from_table_name, from_col_name: "ip_address" },
               },
               {
                 mapper: ColumnToNullIf,
@@ -295,7 +292,7 @@ storages:
                     to_function_name: "arrayJoin",
                     to_function_column: "tags.value",
                   },
-              }
+              },
             ],
           subscriptables:
             [
@@ -342,14 +339,11 @@ storages:
                   },
               },
             ],
-        }
-    }
+        },
+    },
   ]
 
-storage_selector:
-  {
-    selector: DefaultQueryStorageSelector
-  }
+storage_selector: { selector: DefaultQueryStorageSelector }
 
 query_processors:
   [
@@ -382,14 +376,8 @@ validators:
       validator: EntityRequiredColumnValidator,
       args: { required_filter_columns: [project_id] },
     },
-    {
-      validator: TagConditionValidator,
-      args: {}
-    },
-    {
-      validator: DatetimeConditionValidator,
-      args: {}
-    },
+    { validator: TagConditionValidator, args: {} },
+    { validator: DatetimeConditionValidator, args: {} },
   ]
 
 required_time_column: finish_ts
@@ -401,7 +389,7 @@ subscription_validators:
         {
           max_allowed_aggregations: 1,
           disallowed_aggregations: [groupby, having, orderby],
-          required_time_column: finish_ts
+          required_time_column: finish_ts,
         },
     },
   ]

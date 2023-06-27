@@ -16,6 +16,7 @@ from snuba.query.conditions import (
     build_match,
     get_first_level_and_conditions,
 )
+from snuba.query.data_source.simple import Entity as SimpleEntity
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
@@ -141,7 +142,14 @@ class EntityContainsColumnsValidator(QueryValidator):
                 missing.add(column.column_name)
 
         if missing:
-            error_message = f"query column(s) {', '.join(missing)} do not exist"
+            prefix = ""
+            if isinstance(entity := query.get_from_clause(), SimpleEntity):
+                prefix = f"Entity {entity.key.value}: "
+            error_message = (
+                f"{prefix}query columns ({', '.join(missing)}) do not exist"
+                if len(missing) > 1
+                else f"{prefix}Query column '{missing.pop()}' does not exist"
+            )
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:

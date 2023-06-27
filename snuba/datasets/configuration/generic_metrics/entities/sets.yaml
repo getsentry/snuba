@@ -8,6 +8,7 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
     { name: bucketed_time, type: DateTime },
     {
       name: tags,
@@ -127,14 +128,12 @@ validators:
 required_time_column: timestamp
 partition_key_column_name: org_id
 subscription_processors:
-  -
-    processor: AddColumnCondition
+  - processor: AddColumnCondition
     args:
       extra_condition_data_key: organization
       extra_condition_column: org_id
 subscription_validators:
-  -
-    validator: AggregationValidator
+  - validator: AggregationValidator
     args:
       max_allowed_aggregations: 3
       disallowed_aggregations: [having, orderby]
