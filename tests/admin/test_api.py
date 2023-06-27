@@ -326,6 +326,7 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     assert set(data) == set(get_enabled_dataset_names())
 
 
+@pytest.mark.redis_db
 def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
