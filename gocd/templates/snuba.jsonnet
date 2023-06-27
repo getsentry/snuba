@@ -3,7 +3,6 @@ local pipedream = import 'github.com/getsentry/gocd-jsonnet/v1.0.0/pipedream.lib
 
 local pipedream_config = {
   name: 'snuba-next',
-  auto_deploy: false,
   materials: {
     snuba_repo: {
       git: 'git@github.com:getsentry/snuba.git',
@@ -12,6 +11,11 @@ local pipedream_config = {
       destination: 'snuba',
     },
   },
+
+  // Set to true to auto-deploy changes (defaults to true)
+  auto_deploy: false,
+  // Set to true if you want each pipeline to require manual approval
+  auto_pipeline_progression: false,
 };
 
 pipedream.render(pipedream_config, snuba)

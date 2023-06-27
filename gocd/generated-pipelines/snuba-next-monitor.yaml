@@ -17,6 +17,20 @@ pipelines:
         git: git@github.com:getsentry/snuba.git
         shallow_clone: false
     stages:
+      - ready:
+          jobs:
+            ready:
+              tasks:
+                - exec:
+                    command: true
+      - wait:
+          approval:
+            type: manual
+          jobs:
+            wait:
+              tasks:
+                - exec:
+                    command: true
       - checks:
           jobs:
             checks:
