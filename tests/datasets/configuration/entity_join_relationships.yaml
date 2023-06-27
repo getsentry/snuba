@@ -14,7 +14,7 @@ schema:
   ]
 
 storages:
-  - storage: groupassignees
+  - storage: discover
     is_writable: true
 
 storage_selector:
