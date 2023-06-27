@@ -4,7 +4,7 @@ import Client from "../api_client";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-
+import Placeholder from "@tiptap/extension-placeholder";
 import { Prism } from "@mantine/prism";
 
 import { Table } from "../table";
@@ -307,8 +307,14 @@ function TracingQueries(props: { api: Client }) {
   }
 
   const editor = useEditor({
-    extensions: [StarterKit],
-    content: `<pre><code>${query.sql || ""}</code></pre>`,
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder:
+          "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
+      }),
+    ],
+    content: `${query.sql || ""}`,
     onUpdate({ editor }) {
       updateQuerySql(editor.getText());
     },
