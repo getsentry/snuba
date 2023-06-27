@@ -158,12 +158,25 @@ schema:
   dist_table_name: replays_dist
 query_processors:
   - processor: TableRateLimit
+  - processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_rows_to_group_by: 1000000
+        group_by_overflow_mode: any
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 stream_loader:
   processor:
     name: ReplaysProcessor
   default_topic: ingest-replay-events
-  dlq_policy:
-    type: produce
-    args: [snuba-dead-letter-replays]
+  dlq_topic: snuba-dead-letter-replays
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000

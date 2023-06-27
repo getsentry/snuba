@@ -113,7 +113,15 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
-        return InsertBatch([processed], None)
+        sentry_received_timestamp = None
+        if message.get("sentry_received_timestamp"):
+            sentry_received_timestamp = datetime.utcfromtimestamp(
+                message["sentry_received_timestamp"]
+            )
+
+        return InsertBatch(
+            [processed], None, sentry_received_timestamp=sentry_received_timestamp
+        )
 
 
 class SetsMetricsProcessor(MetricsBucketProcessor):

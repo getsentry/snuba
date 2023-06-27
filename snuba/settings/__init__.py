@@ -31,18 +31,35 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+##################
+# Admin Settings #
+##################
+
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
-ADMIN_AUTH_PROVIDER = "NOOP"
-ADMIN_AUTH_JWT_AUDIENCE = ""
+ADMIN_AUTH_PROVIDER = os.environ.get("ADMIN_AUTH_PROVIDER", "NOOP")
+ADMIN_AUTH_JWT_AUDIENCE = os.environ.get("ADMIN_AUTH_JWT_AUDIENCE", "")
 
 # file path to the IAM policy file which contains the roles
 ADMIN_IAM_POLICY_FILE = os.environ.get(
     "ADMIN_IAM_POLICY_FILE",
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
+
+ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
+ADMIN_ROLES_REDIS_TTL = 600
+
+######################
+# End Admin Settings #
+######################
 
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
@@ -112,6 +129,7 @@ class RedisClusterConfig(TypedDict):
     port: int
     password: str | None
     db: int
+    ssl: bool
     reinitialize_steps: int
 
 
@@ -125,6 +143,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
+REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
 
@@ -137,6 +156,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -147,6 +167,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
 
 # Query Recording Options
@@ -234,7 +255,8 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
+# (logical topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -242,27 +264,12 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "querylog",
-    "profiles",
-    "functions",
-    "test_migration",
-    "search_issues",
-    "spans",
-}
-
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
-    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
-
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
-    SKIPPED_MIGRATION_GROUPS.remove("spans")
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
-READINESS_STATE_MIGRATION_GROUPS_ENABLED: set[str] = set()
-READINESS_STATE_STORAGES_ENABLED: set[str] = set()
 READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
@@ -287,7 +294,8 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+# (entity name, buffer size)
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views

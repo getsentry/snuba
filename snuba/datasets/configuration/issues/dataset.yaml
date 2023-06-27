@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: search_issues
 
-is_experimental: true
-
 entities:
   - search_issues

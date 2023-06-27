@@ -33,7 +33,6 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
-from markdown import markdown
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -57,8 +56,8 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import ReadableTableStorage, Storage, StorageNotAvailable
-from snuba.query.allocation_policies import AllocationPolicyViolation
+from snuba.datasets.storage import Storage, StorageNotAvailable
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
@@ -117,41 +116,27 @@ else:
             return False
 
 
-def filter_checked_storages(ignore_experimental: bool) -> List[Storage]:
-    if ignore_experimental:
-        datasets = [
-            get_dataset(name)
-            for name in get_enabled_dataset_names()
-            if not get_dataset(name).is_experimental()
-        ]
-    else:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-
+def filter_checked_storages() -> List[Storage]:
+    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
     entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
 
     storages: List[Storage] = []
     for entity in entities:
-        entity_storages = entity.get_all_storages()
-        for storage in entity_storages:
-            assert isinstance(storage, ReadableTableStorage)
-            storage_name = storage.get_storage_key().value
-            if storage_name in settings.READINESS_STATE_STORAGES_ENABLED:
-                if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
-                    storages.append(storage)
-            else:
+        for storage in entity.get_all_storages():
+            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
                 storages.append(storage)
     return storages
 
 
-def check_clickhouse(
-    ignore_experimental: bool = True, metric_tags: dict[str, Any] | None = None
-) -> bool:
+def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
-    TODO: Eventually, when we fully migrate to readiness_states, we can remove is_experimental and DISABLED_DATASETS.
+    TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
     """
     try:
-        storages = filter_checked_storages(ignore_experimental)
+        storages = filter_checked_storages()
+        for storage in storages:
+            print(storage.get_storage_set_key())
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
@@ -321,23 +306,6 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
     )
 
 
-@application.route("/")
-def root() -> str:
-    with open("README.rst") as f:
-        return render_template("index.html", body=markdown(f.read()))
-
-
-@application.route("/css/<path:path>")
-def send_css(path: str) -> Response:
-    return application.send_static_file(os.path.join("css", path))
-
-
-@application.route("/img/<path:path>")
-@application.route("/snuba/web/static/img/<path:path>")
-def send_img(path: str) -> Response:
-    return application.send_static_file(os.path.join("img", path))
-
-
 @application.route("/health_envoy")
 def health_envoy() -> Response:
     """K8s can decide to shut down the pod, at which point it will write the down file.
@@ -373,11 +341,7 @@ def health() -> Response:
         "thorough": str(thorough),
     }
 
-    clickhouse_health = (
-        check_clickhouse(ignore_experimental=True, metric_tags=metric_tags)
-        if thorough
-        else True
-    )
+    clickhouse_health = check_clickhouse(metric_tags=metric_tags) if thorough else True
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
@@ -484,7 +448,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolation)):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
             status = 429
             details = {
                 "type": "rate-limited",
@@ -657,6 +621,9 @@ if application.debug or application.testing:
 
         storage = entity.get_writable_storage()
         assert storage is not None
+        storage_name = storage.get_storage_key().value
+        # TODO: A few storages are currently excluded from schema validation
+        should_validate_schema = storage_name not in ["search_issues", "replays"]
 
         try:
             if type_ == "insert":
@@ -680,6 +647,7 @@ if application.debug or application.testing:
                         stream_loader.get_processor(),
                         "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
+                        should_validate_schema,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
                     max_batch_size=1,

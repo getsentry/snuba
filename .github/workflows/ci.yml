@@ -15,10 +15,10 @@ jobs:
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
+        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc # v2.0.0
         continue-on-error: true
         with:
-          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v4
         with:
@@ -59,7 +59,7 @@ jobs:
       # If working tree is dirty, commit and update if we have a token
       - name: Apply any pre-commit fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
-        uses: getsentry/action-github-commit@main
+        uses: getsentry/action-github-commit@v1.0.0
         with:
           github-token: ${{ steps.token.outputs.token }}
 
@@ -161,7 +161,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       matrix:
         snuba_settings:
@@ -206,7 +206,6 @@ jobs:
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
-
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
@@ -218,6 +217,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+      - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
         run: cd snuba/admin && yarn install && yarn run test --coverage
       - name: Upload to codecov
@@ -300,7 +300,6 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
-            -e ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES=1 \
             --name sentry_snuba \
             --network sentry \
             snuba-test

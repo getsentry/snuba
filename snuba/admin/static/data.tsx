@@ -6,7 +6,10 @@ import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
 import Kafka from "./kafka";
 import QuerylogQueries from "./querylog";
+import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
+import CardinalityAnalyzer from "./cardinality_analyzer";
+import ProductionQueries from "./production_queries";
 
 function Placeholder(props: any) {
   return null;
@@ -15,6 +18,11 @@ function Placeholder(props: any) {
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "capacity-management",
+    display: "🪫 Capacity Management",
+    component: CapacityManagement,
+  },
   {
     id: "snql-to-sql",
     display: "🌐 SnQL to SQL",
@@ -54,6 +62,16 @@ const NAV_ITEMS = [
     id: "dlq",
     display: "♻️ Dead Letter Queue",
     component: DeadLetterQueue,
+  },
+  {
+    id: "cardinality-analyzer",
+    display: "🔢Cardinality Analyzer!!!",
+    component: CardinalityAnalyzer,
+  },
+  {
+    id: "production-queries",
+    display: "🔦 Production Queries",
+    component: ProductionQueries,
   },
 ];
 

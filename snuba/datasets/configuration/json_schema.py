@@ -57,6 +57,10 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the replacements Kafka topic",
         },
+        "dlq_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the DLQ Kafka topic",
+        },
         "pre_filter": {
             "type": "object",
             "properties": {
@@ -67,22 +71,6 @@ STREAM_LOADER_SCHEMA = {
                 "args": {
                     "type": "object",
                     "description": "Key/value mappings required to instantiate StreamMessageFilter class.",
-                },
-            },
-            "additionalProperties": False,
-            "description": "Name of class which filter messages incoming from stream",
-        },
-        "dlq_policy": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "type": "string",
-                    "description": "DLQ policy type",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Key/value mappings required to instantiate DLQ class (e.g. topic name).",
                 },
             },
             "additionalProperties": False,
@@ -348,7 +336,7 @@ STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
-STORAGE_ALLOCATION_POLICY_SCHEMA = registered_class_schema(
+STORAGE_ALLOCATION_POLICIES_SCHEMA = registered_class_array_schema(
     "name",
     "AllocationPolicy",
     "Name of the AllocationPolicy used for allocating read resources per query on this storage.",
@@ -550,7 +538,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
-        "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
     },
     "required": [
         "version",
@@ -577,7 +565,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
-        "allocation_policy": STORAGE_ALLOCATION_POLICY_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
@@ -615,6 +603,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
@@ -712,10 +701,6 @@ V1_DATASET_SCHEMA = {
         "version": {"const": "v1", "description": "Version of schema"},
         "kind": {"const": "dataset", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the dataset"},
-        "is_experimental": {
-            "type": "boolean",
-            "description": "Marks the dataset as experimental. Healthchecks failing on this dataset will not block deploys and affect Snuba server's SLOs",
-        },
         "entities": {
             "type": "array",
             "items": TYPE_STRING,
@@ -727,7 +712,6 @@ V1_DATASET_SCHEMA = {
         "kind",
         "name",
         "entities",
-        "is_experimental",
     ],
     "additionalProperties": False,
 }

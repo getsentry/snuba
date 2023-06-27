@@ -92,6 +92,7 @@ class SearchIssueEvent(TypedDict, total=False):
     group_id: int
     platform: str
     primary_hash: str
+    message: str
     datetime: str
 
     data: IssueEventData
@@ -189,6 +190,18 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             if trace_id is not None:
                 processed["trace_id"] = ensure_uuid(trace_id)
 
+        profile = contexts.get("profile", {})
+        if profile.get("profile_id") is not None:
+            profile_id = _unicodify(profile["profile_id"])
+            if profile_id is not None:
+                processed["profile_id"] = ensure_uuid(profile_id)
+
+        replay = contexts.get("replay", {})
+        if replay.get("replay_id") is not None:
+            replay_id = _unicodify(replay["replay_id"])
+            if replay_id is not None:
+                processed["replay_id"] = ensure_uuid(replay_id)
+
     def __extract_timestamp(self, field: int) -> datetime:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
@@ -264,6 +277,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
+            "message": _unicodify(event["message"]),
         }
 
         # optional fields
@@ -313,7 +327,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             processed = self.process_insert_v1(event, metadata)
         except EventTooOld:
             metrics.increment("event_too_old")
-            raise
+            return None
         except IndexError:
             metrics.increment("invalid_message")
             raise

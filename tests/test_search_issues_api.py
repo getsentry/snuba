@@ -29,6 +29,7 @@ def base_insert_event(
             "primary_hash": str(uuid.uuid4()),
             "datetime": datetime.utcnow().isoformat() + "Z",
             "platform": "other",
+            "message": "message",
             "data": {
                 "received": now.timestamp(),
             },
@@ -77,6 +78,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
             headers={"referer": "test"},
@@ -93,6 +95,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             primary_hash=str(uuid.uuid4().hex),
             datetime=datetime.utcnow().isoformat() + "Z",
             platform="other",
+            message="message",
             data={"received": now.timestamp()},
             occurrence_data=dict(
                 id=str(uuid.uuid4().hex),
@@ -259,3 +262,41 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             assert response.status_code == 200, data
             assert data["stats"]["consistent"]
             assert data["data"] == [{"project_id": 1, f"{alias}": transaction_name}]
+
+    def test_eventstream_query_profile_id_replay_id(self) -> None:
+        profile_id = str(uuid.uuid4())
+        replay_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+        insert_row = base_insert_event(now)
+        insert_row[2]["data"]["contexts"] = {
+            "profile": {"profile_id": profile_id},
+            "replay": {"replay_id": replay_id},
+        }
+
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                        SELECT project_id, profile_id, replay_id
+                        WHERE project_id = 1
+                        AND timestamp >= toDateTime('{from_date}')
+                        AND timestamp < toDateTime('{to_date}')
+                    """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "project_id": 1,
+                "profile_id": profile_id.replace("-", ""),
+                "replay_id": replay_id.replace("-", ""),
+            }
+        ]

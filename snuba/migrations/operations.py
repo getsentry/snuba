@@ -3,11 +3,15 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
+import structlog
+
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
+
+logger = structlog.get_logger().bind(module=__name__)
 
 
 class OperationTarget(Enum):
@@ -49,12 +53,13 @@ class SqlOperation(ABC):
             nodes = dist_nodes
         else:
             raise ValueError(f"Target not set for {self}")
-
+        if nodes:
+            logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-
+            logger.info(f"Executing on {self.target.value} node: {node}")
             connection.execute(self.format_sql(), settings=self._settings)
 
     @abstractmethod

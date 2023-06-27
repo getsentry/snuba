@@ -10,7 +10,6 @@ from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
-    generate_dlq_config,
     get_mandatory_condition_checkers,
     get_query_processors,
     get_query_splitters,
@@ -53,7 +52,7 @@ WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
-ALLOCATION_POLICY = "allocation_policy"
+ALLOCATION_POLICIES = "allocation_policies"
 
 
 def build_storage_from_config(
@@ -74,8 +73,9 @@ def build_storage_from_config(
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    storage_key = register_storage_key(config[STORAGE]["key"])
     return {
-        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
+        STORAGE_KEY: storage_key,
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
         SCHEMA: __build_storage_schema(config),
         READINESS_STATE: ReadinessState(config[READINESS_STATE]),
@@ -90,11 +90,17 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if MANDATORY_CONDITION_CHECKERS in config
             else []
         ),
-        ALLOCATION_POLICY: AllocationPolicy.get_from_name(
-            config[ALLOCATION_POLICY]["name"]
-        ).from_kwargs(**config[ALLOCATION_POLICY].get("args", {}))
-        if ALLOCATION_POLICY in config
-        else None,
+        ALLOCATION_POLICIES: [
+            AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                **{
+                    **policy.get("args", {}),
+                    "storage_key": storage_key.value,
+                }
+            )
+            for policy in config[ALLOCATION_POLICIES]
+        ]
+        if ALLOCATION_POLICIES in config
+        else [],
     }
 
 
@@ -185,11 +191,8 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         else None
     )
     subscription_result_topic = __get_topic(loader_config, "subscription_result_topic")
-    dlq_config = (
-        generate_dlq_config(loader_config[DLQ_POLICY])
-        if DLQ_POLICY in loader_config and loader_config[DLQ_POLICY] is not None
-        else None
-    )
+
+    dlq_topic = __get_topic(loader_config, "dlq_topic")
 
     return build_kafka_stream_loader_from_settings(
         processor,
@@ -200,7 +203,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduler_mode,
         subscription_scheduled_topic,
         subscription_result_topic,
-        dlq_config,
+        dlq_topic,
     )
 
 

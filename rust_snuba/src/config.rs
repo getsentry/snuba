@@ -9,6 +9,7 @@ pub struct ConsumerConfig {
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
+    pub dlq_topic: Option<TopicConfig>,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
     pub env: Option<EnvConfig>,
@@ -17,6 +18,7 @@ pub struct ConsumerConfig {
 #[derive(Deserialize)]
 pub struct TopicConfig {
     pub physical_topic_name: String,
+    pub logical_topic_name: String,
     pub broker_config: BrokerConfig,
 }
 

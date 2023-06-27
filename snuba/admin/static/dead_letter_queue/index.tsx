@@ -1,175 +1,196 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import Client from "../api_client";
 import { COLORS } from "../theme";
+import { Policy, ReplayInstruction, Topic } from "./types";
 
-type Topic = {
-  logicalTopic: string;
-  physicalTopic: string;
-  slice: number | null;
-  storage: string;
-};
-
-const dlq_topics: Topic[] = [
-  {
-    logicalTopic: "snuba-dead-letter-metrics-sets",
-    physicalTopic: "snuba-dead-letter-metrics-sets",
-    slice: null,
-    storage: "generic_metrics_sets_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-metrics-counters",
-    physicalTopic: "snuba-dead-letter-metrics-counters",
-    slice: null,
-    storage: "generic_metrics_counters_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-metrics-distributions",
-    physicalTopic: "snuba-dead-letter-metrics-distributions",
-    slice: null,
-    storage: "generic_metrics_distributions_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-generic-metrics-sets",
-    physicalTopic: "snuba-dead-letter-generic-metrics-sets",
-    slice: null,
-    storage: "generic_metrics_sets_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-generic-metrics-counters",
-    physicalTopic: "snuba-dead-letter-generic-metrics-counters",
-    slice: null,
-    storage: "generic_metrics_counters_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-generic-metrics-distributions",
-    physicalTopic: "snuba-dead-letter-generic-metrics-distributions",
-    slice: null,
-    storage: "generic_metrics_distributions_raw",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-replays",
-    physicalTopic: "snuba-dead-letter-replays",
-    slice: null,
-    storage: "replays",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-generic-events",
-    physicalTopic: "snuba-dead-letter-generic-events",
-    slice: null,
-    storage: "search_issues",
-  },
-  {
-    logicalTopic: "snuba-dead-letter-querylog",
-    physicalTopic: "snuba-dead-letter-querylog",
-    slice: null,
-    storage: "querylog",
-  },
-];
-
-function DeadLetterQueue() {
+function DeadLetterQueue(props: { api: Client }) {
+  // Undefined means not loaded yet, null means no instruction was set
+  const [instruction, setInstruction] = useState<
+    ReplayInstruction | null | undefined
+  >(undefined);
+  const [isEditing, setIsEditing] = useState(false);
+  const [dlqTopics, setDlqTopics] = useState<Topic[]>([]);
   const [topic, setTopic] = useState<Topic | null>(null);
-  const [messagesToProcess, setMessagesToProcess] = useState(0);
+  const [messagesToProcess, setMessagesToProcess] = useState(1);
+  const [policy, setPolicy] = useState<Policy | null>(null);
+
+  useEffect(() => {
+    props.api.getDlqInstruction().then((res) => {
+      setInstruction(res);
+    });
+    props.api.getDlqTopics().then((res) => {
+      setDlqTopics(res);
+    });
+  }, []);
+
+  function clearInstruction() {
+    props.api.clearDlqInstruction().then((res) => {
+      setInstruction(res);
+    });
+  }
+
+  function replayDlq() {
+    if (policy === null || topic === null) {
+      return;
+    }
+
+    let instruction: ReplayInstruction = {
+      messagesToProcess,
+      policy,
+    };
+
+    props.api.setDlqInstruction(topic, instruction).then((res) => {
+      setInstruction(res);
+      setIsEditing(false);
+      setTopic(null);
+      setMessagesToProcess(0);
+      setPolicy(null);
+    });
+  }
+
+  if (typeof instruction === undefined) {
+    return null;
+  }
 
   return (
     <div>
-      <div>
+      <div style={currentValue}>
+        <p style={paragraphStyle}>This is the currently set DLQ instruction:</p>
         <p>
-          <mark>
-            This is a mockup of the dead letter queue UI. It does not work yet!
-          </mark>
+          <code>{JSON.stringify(instruction) || "None set"}</code>
         </p>
       </div>
-      <form>
-        <fieldset>
-          <select
-            value={topic ? topic.logicalTopic : ""}
-            style={selectStyle}
-            onChange={(evt) => {
-              for (let topic of dlq_topics) {
-                if (topic.logicalTopic === evt.target.value) {
-                  setTopic(topic);
-                  return;
-                }
-              }
-
-              setTopic(null);
+      {!isEditing && (
+        <div>
+          <a
+            style={linkStyle}
+            onClick={() => {
+              setIsEditing(true);
             }}
           >
-            <option disabled value="">
-              Select DLQ topic
-            </option>
-            {dlq_topics.map((topic) => (
-              <option
-                key={topic.logicalTopic}
-                value={topic.logicalTopic}
-              >{`${topic.logicalTopic} (slice: ${topic.slice})`}</option>
-            ))}
-          </select>
-        </fieldset>
-        {topic && (
-          <fieldset>
-            <div>
-              Logical topic: <code>{topic.logicalTopic}</code>
-            </div>
-            <div>
-              Physical topic: <code>{topic.physicalTopic}</code>
-            </div>
-            <div>
-              Slice: <code>null</code>
-            </div>
-            <div>
-              Storage: <code>{topic.storage}</code>
-            </div>
-            <div>
-              Current offsets: <code>{`\{0: 3\, 1: 1, 2: 3}`}</code>
-            </div>
-            <div>
-              Latest offsets: <code>{`\{0: 20\, 1: 1, 2: 3}`}</code>
-            </div>
-          </fieldset>
-        )}
-      </form>
-      {topic && (
-        <form style={reprocessForm}>
-          <h3 style={{ margin: "0 0 10px 0" }}>Reprocess messages:</h3>
-          <fieldset>
-            <label htmlFor="policy" style={label}>
-              DLQ policy:
-            </label>
-            <select id="policy" name="policy" style={selectStyle}>
-              <option>Select invalid message policy</option>
-              <option>Re-produce to DLQ</option>
-              <option>Crash on error</option>
-              <option>Drop invalid messages</option>
-            </select>
-          </fieldset>
-          <fieldset>
-            <label htmlFor="messagesToProcess" style={label}>
-              Max messages to process:
-            </label>
-            <input
-              type="number"
-              name="messagesToProcess"
-              value={messagesToProcess}
-              placeholder="Max messages to process"
-              onChange={(evt) => {
-                setMessagesToProcess(parseInt(evt.target.value, 10));
-              }}
-            />
-          </fieldset>
-          <fieldset>
-            <button
-              type="button"
-              style={buttonStyle}
-              onClick={(evt) => console.log("Do reprocess")}
+            edit
+          </a>
+        </div>
+      )}
+      {isEditing && (
+        <div style={{ margin: "30px 0 0 0" }}>
+          <h3 style={{ margin: "0 0 10px 0" }}>Editing</h3>
+          {instruction && (
+            <a
+              style={{ ...linkStyle, color: "red" }}
+              onClick={clearInstruction}
             >
-              Reprocess messages
-            </button>
-          </fieldset>
-        </form>
+              clear instruction
+            </a>
+          )}
+          {!instruction && (
+            <form style={formStyle}>
+              <fieldset>
+                <label htmlFor="topic" style={label}>
+                  Storage/topic:
+                </label>
+                <select
+                  id="topic"
+                  name="topic"
+                  value={topic ? topic.logicalName : ""}
+                  style={selectStyle}
+                  onChange={(evt) => {
+                    for (let topic of dlqTopics) {
+                      if (topic.logicalName === evt.target.value) {
+                        setTopic(topic);
+                        return;
+                      }
+                    }
+
+                    setTopic(null);
+                  }}
+                >
+                  <option disabled value="">
+                    Select DLQ topic
+                  </option>
+                  {dlqTopics.map((topic) => (
+                    <option
+                      key={`${topic.storage}-${topic.logicalName}-${topic.slice}`}
+                      value={topic.logicalName}
+                    >{`${topic.storage} - ${topic.logicalName} (slice: ${topic.slice})`}</option>
+                  ))}
+                </select>
+              </fieldset>
+              <fieldset>
+                <label htmlFor="policy" style={label}>
+                  DLQ policy:
+                </label>
+                <select
+                  id="policy"
+                  name="policy"
+                  style={selectStyle}
+                  onChange={(evt) => {
+                    let value = (evt.target.value as Policy) || null;
+                    setPolicy(value);
+                  }}
+                >
+                  <option value="">Select invalid message policy</option>
+                  <option value="reinsert-dlq">
+                    Re-insert to DLQ
+                  </option>
+                  <option value="stop-on-error">Crash on error</option>
+                  <option value="drop-invalid-messages">
+                    Drop invalid messages
+                  </option>
+                </select>
+              </fieldset>
+              <fieldset>
+                <label htmlFor="messagesToProcess" style={label}>
+                  Max messages to process:
+                </label>
+                <input
+                  type="number"
+                  id="messagesToProcess"
+                  name="messagesToProcess"
+                  value={messagesToProcess}
+                  placeholder="Max messages to process"
+                  onChange={(evt) => {
+                    let value = parseInt(evt.target.value, 10);
+                    if (!isNaN(value) && value >= 0) {
+                      setMessagesToProcess(value);
+                    }
+                  }}
+                />
+              </fieldset>
+              <fieldset>
+                <button
+                  type="button"
+                  style={buttonStyle}
+                  onClick={replayDlq}
+                  disabled={policy === null || topic === null}
+                >
+                  Reprocess messages
+                </button>
+              </fieldset>
+            </form>
+          )}
+          <div>
+            <a
+              style={linkStyle}
+              onClick={() => {
+                setIsEditing(false);
+              }}
+            >
+              cancel
+            </a>
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+const currentValue = {
+  display: "block",
+  width: "100%",
+  border: `1px solid ${COLORS.TABLE_BORDER}`,
+  padding: 10,
+};
 
 const selectStyle = {
   marginBottom: 8,
@@ -186,10 +207,20 @@ const label = {
   display: "block",
 };
 
-const reprocessForm = {
-  width: 1000,
-  padding: 20,
-  backgroundColor: COLORS.BG_LIGHT,
+const paragraphStyle = {
+  fontSize: 15,
+  color: COLORS.TEXT_LIGHTER,
+};
+
+const linkStyle = {
+  cursor: "pointer",
+  fontSize: 13,
+  color: COLORS.TEXT_LIGHTER,
+  textDecoration: "underline",
+};
+
+const formStyle = {
+  padding: "20px 0",
 };
 
 export default DeadLetterQueue;

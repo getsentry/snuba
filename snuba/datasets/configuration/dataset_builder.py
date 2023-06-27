@@ -11,5 +11,4 @@ def build_dataset_from_config(config_file_path: str) -> PluggableDataset:
     return PluggableDataset(
         name=config["name"],
         all_entities=[EntityKey(key) for key in config["entities"]],
-        is_experimental=bool(config["is_experimental"]),
     )

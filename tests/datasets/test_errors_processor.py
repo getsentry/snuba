@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 from uuid import UUID
 
 import pytest
@@ -33,9 +33,11 @@ class ErrorEvent:
     geo: Mapping[str, str]
     threads: Mapping[str, Any] | None
     trace_id: str
+    trace_sampled: bool | None
     environment: str
     replay_id: uuid.UUID | None
     received_timestamp: datetime
+    errors: Sequence[Mapping[str, Any]] | None
 
     def serialize(self) -> tuple[int, str, Mapping[str, Any]]:
         serialized_event: dict[str, Any] = {
@@ -252,6 +254,12 @@ class ErrorEvent:
             }
         if self.threads:
             serialized_event["data"]["threads"] = self.threads
+        if self.trace_sampled:
+            serialized_event["data"]["contexts"]["trace"][
+                "sampled"
+            ] = self.trace_sampled
+        if self.errors:
+            serialized_event["data"]["errors"] = self.errors
 
         return (
             2,
@@ -372,12 +380,17 @@ class ErrorEvent:
             "modules.name": ["cffi", "ipython-genutils", "isodate"],
             "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
             "transaction_name": "",
+            "num_processing_errors": len(self.errors) if self.errors is not None else 0,
         }
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
             expected_result["tags.key"].insert(4, "replayId")
             expected_result["tags.value"].insert(4, self.replay_id.hex)
+
+        if self.trace_sampled:
+            expected_result["contexts.key"].insert(5, "trace.sampled")
+            expected_result["contexts.value"].insert(5, str(self.trace_sampled))
 
         return expected_result
 
@@ -410,6 +423,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             threads=None,
@@ -427,6 +441,7 @@ class TestErrorsProcessor:
                 "city": "fake_city",
                 "subdivision": "fake_subdivision",
             },
+            errors=None,
         )
 
     def test_errors_basic(self) -> None:
@@ -458,6 +473,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             threads=None,
@@ -475,6 +491,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             replay_id=uuid.uuid4(),
+            errors=None,
         )
 
         payload = message.serialize()
@@ -494,6 +511,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             threads=None,
             received_timestamp=recieved,
@@ -511,6 +529,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             replay_id=None,
+            errors=None,
         )
         replay_id = uuid.uuid4()
         payload = message.serialize()
@@ -537,6 +556,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             release="1.0.0",
@@ -554,6 +574,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             replay_id=replay_id,
+            errors=None,
         )
 
         payload = message.serialize()
@@ -577,6 +598,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             threads=None,
@@ -594,6 +616,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             replay_id=None,
+            errors=None,
         )
         invalid_replay_id = "imnotavaliduuid"
         payload = message.serialize()
@@ -619,6 +642,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             release="1.0.0",
@@ -650,6 +674,7 @@ class TestErrorsProcessor:
                     },
                 ]
             },
+            errors=None,
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -671,6 +696,7 @@ class TestErrorsProcessor:
             platform="python",
             message="",
             trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
             timestamp=timestamp,
             received_timestamp=recieved,
             release="1.0.0",
@@ -702,12 +728,115 @@ class TestErrorsProcessor:
                     },
                 ]
             },
+            errors=None,
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         result = message.build_result(meta)
         result["exception_main_thread"] = False
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
+
+    def test_trace_sampled(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=True,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=None,
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
+        result["trace_sampled"] = True
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
+
+        # verify processing trace.sampled=None works as it did before
+        message.trace_sampled = None
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result2 = message.build_result(meta)
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result2], None
+        )
+
+    def test_errors_processed(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
+        result["num_processing_errors"] = 3
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], None
+        )
+
+        # ensure old behavior where data.errors=None won't set 'num_processing_errors'
+        message.errors = None
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], None

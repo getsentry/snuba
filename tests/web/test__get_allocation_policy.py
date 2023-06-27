@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Union
 from unittest import mock
@@ -5,9 +7,9 @@ from unittest import mock
 import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
@@ -19,7 +21,7 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.web.db_query import _get_allocation_policy
+from snuba.web.db_query import _get_allocation_policies
 
 events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
 assert events_storage is not None
@@ -29,7 +31,7 @@ events_table_name = events_storage.get_table_writer().get_schema().get_table_nam
 events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
-    allocation_policy=PassthroughPolicy(StorageSetKey("flimflam"), []),
+    allocation_policies=[PassthroughPolicy(StorageKey("flimflam"), [], {})],
     final=False,
     sampling_rate=None,
     mandatory_conditions=events_storage.get_schema()
@@ -80,11 +82,11 @@ join_query = CompositeQuery(
 
 
 @pytest.mark.parametrize(
-    "query,expected_allocation_policy",
+    "query,expected_allocation_policies",
     [
         pytest.param(
             composite_query,
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -99,12 +101,12 @@ join_query = CompositeQuery(
                     ),
                 ],
             ),
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
             join_query,
-            DEFAULT_PASSTHROUGH_POLICY,
+            [DEFAULT_PASSTHROUGH_POLICY],
             id="Joins just pass through (this is a hack)",
         ),
         pytest.param(
@@ -120,13 +122,13 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            PassthroughPolicy(StorageSetKey("flimflam"), []),
+            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
             id="simple query uses table's allocation policy",
         ),
     ],
 )
-def test__get_allocation_policy(
+def test__get_allocation_policies(
     query: Union[ClickhouseQuery, CompositeQuery[Table]],
-    expected_allocation_policy: AllocationPolicy,
+    expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
-    assert _get_allocation_policy(query) == expected_allocation_policy
+    assert _get_allocation_policies(query) == expected_allocation_policies

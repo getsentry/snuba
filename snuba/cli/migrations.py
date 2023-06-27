@@ -29,6 +29,7 @@ def list() -> None:
     """
     Lists migrations and their statuses
     """
+    setup_logging()
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():

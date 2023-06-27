@@ -26,6 +26,11 @@ class AdminTools(Enum):
     QUERYLOG = "querylog"
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
+    CAPACITY_MANAGEMENT = "capacity-management"
+    CARDINALITY_ANALYZER = "cardinality-analyzer"
+
+
+DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
 
 
 def get_user_allowed_tools(user: AdminUser) -> set[AdminTools]:

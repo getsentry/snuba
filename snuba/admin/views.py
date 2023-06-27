@@ -15,6 +15,10 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
+from snuba.admin.clickhouse.capacity_management import (
+    get_storages_with_allocation_policies,
+)
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -23,6 +27,7 @@ from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
@@ -39,11 +44,21 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.consumers.dlq import (
+    DlqInstruction,
+    DlqInstructionStatus,
+    DlqReplayPolicy,
+    clear_instruction,
+    load_instruction,
+    store_instruction,
+)
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
@@ -92,6 +107,26 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/settings")
+def settings_endpoint() -> Response:
+    """
+    IMPORTANT: This endpoint is only secure because the admin tool is only exposed on
+    our internal network. If this ever becomes a public app, this is a security risk.
+    """
+    # This must mirror the Settings type in the frontend code
+    return make_response(
+        jsonify(
+            {
+                "dsn": settings.ADMIN_FRONTEND_DSN,
+                "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
+                "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+            }
+        ),
+        200,
+    )
 
 
 @application.route("/tools")
@@ -346,8 +381,7 @@ def clickhouse_trace_query() -> Response:
 
     try:
         result = run_query_and_get_trace(storage, raw_sql)
-        trace_output = result.trace_output
-        return make_response(jsonify({"trace_output": trace_output}), 200)
+        return make_response(jsonify(asdict(result)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -708,3 +742,207 @@ def snql_to_sql() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+
+
+@application.route("/storages_with_allocation_policies")
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def storages_with_allocation_policies() -> Response:
+    return Response(
+        json.dumps(get_storages_with_allocation_policies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_allocation_policy_configs(storage_key: str) -> Response:
+
+    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    data = [
+        {
+            "policy_name": policy.config_key(),
+            "configs": policy.get_current_configs(),
+            "optional_config_definitions": policy.get_optional_config_definitions_json(),
+        }
+        for policy in policies
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_allocation_policy_config() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
+
+        params = data.get("params", {})
+
+        assert isinstance(storage, str), "Invalid storage"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+        assert isinstance(policy_name, str), "Invalid policy name"
+
+        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policy = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        assert policy is not None, "Policy not found on storage"
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        policy.delete_config_value(config_key=key, params=params, user=user)
+        audit_log.record(
+            user or "",
+            AuditLogAction.ALLOCATION_POLICY_DELETE,
+            {"storage": storage, "policy": policy.config_key(), "key": key},
+            notify=True,
+        )
+        return Response("", 200)
+    elif request.method == "POST":
+        try:
+            value = data["value"]
+            assert isinstance(value, str), "Invalid value"
+            policy.set_config_value(
+                config_key=key, value=value, params=params, user=user
+            )
+            audit_log.record(
+                user or "",
+                AuditLogAction.ALLOCATION_POLICY_UPDATE,
+                {
+                    "storage": storage,
+                    "policy": policy.config_key(),
+                    "key": key,
+                    "value": value,
+                    "params": str(params),
+                },
+                notify=True,
+            )
+            return Response("", 200)
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+    else:
+        return Response(
+            json.dumps({"error": "Method not allowed"}),
+            405,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/cardinality_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_analyzer_query() -> Response:
+    # HACK (Volo):
+    # mostly copypasta from querylog, should not stick around for too long
+    # when production query tool gets made this should not be necessary
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_metrics_query(raw_sql, user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+            500,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/dead_letter_queue", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_topics() -> Response:
+    return make_response(jsonify(get_dlq_topics()), 200)
+
+
+@application.route("/dead_letter_queue/replay", methods=["GET", "POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.KAFKA])
+def dlq_replay() -> Response:
+    if request.method == "POST":
+        req = request.get_json() or {}  # Required for typing
+
+        try:
+            policy = DlqReplayPolicy(req["policy"])
+            storage_key = StorageKey(req["storage"])
+            slice_id = req["slice"]
+            max_messages_to_process = req["maxMessages"]
+            assert max_messages_to_process > 0, "maxMessages must be greater than 1"
+        except (KeyError, AssertionError):
+            return make_response("Missing required fields", 400)
+
+        if load_instruction() is not None:
+            return make_response("Instruction exists", 400)
+
+        instruction = DlqInstruction(
+            policy,
+            DlqInstructionStatus.NOT_STARTED,
+            storage_key,
+            slice_id,
+            max_messages_to_process,
+        )
+        store_instruction(instruction)
+
+    if request.method == "DELETE":
+        clear_instruction()
+
+    loaded_instruction = load_instruction()
+
+    if loaded_instruction is None:
+        return make_response(jsonify(None), 200)
+
+    return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)

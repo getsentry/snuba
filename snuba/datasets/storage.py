@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -15,7 +17,7 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -97,8 +99,8 @@ class ReadableStorage(Storage):
         """
         return []
 
-    def get_allocation_policy(self) -> AllocationPolicy:
-        return PassthroughPolicy(self.get_storage_set_key(), [])
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return [DEFAULT_PASSTHROUGH_POLICY]
 
 
 class WritableStorage(Storage):
@@ -130,13 +132,13 @@ class ReadableTableStorage(ReadableStorage):
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-        allocation_policy: Optional[AllocationPolicy] = None,
+        allocation_policies: Optional[list[AllocationPolicy]] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
-        self.__allocation_policy = allocation_policy
+        self.__allocation_policies = allocation_policies or []
         super().__init__(storage_set_key, schema, readiness_state)
 
     def get_storage_key(self) -> StorageKey:
@@ -151,8 +153,8 @@ class ReadableTableStorage(ReadableStorage):
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
 
-    def get_allocation_policy(self) -> AllocationPolicy:
-        return self.__allocation_policy or super().get_allocation_policy()
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return self.__allocation_policies or super().get_allocation_policies()
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -166,12 +168,13 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-        allocation_policy: Optional[AllocationPolicy] = None,
+        allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
     ) -> None:
+        self.__storage_key = storage_key
         super().__init__(
             storage_key,
             storage_set_key,
@@ -180,7 +183,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             query_processors,
             query_splitters,
             mandatory_condition_checkers,
-            allocation_policy,
+            allocation_policies,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(
@@ -192,6 +195,9 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             write_format=write_format,
         )
         self.__ignore_write_errors = ignore_write_errors
+
+    def get_storage_key(self) -> StorageKey:
+        return self.__storage_key
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer

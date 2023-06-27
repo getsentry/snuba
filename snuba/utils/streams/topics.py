@@ -51,6 +51,9 @@ class Topic(Enum):
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
+    DEAD_LETTER_METRICS_SETS = "snuba-dead-letter-metrics-sets"
+    DEAD_LETTER_METRICS_COUNTERS = "snuba-dead-letter-metrics-counters"
+    DEAD_LETTER_METRICS_DISTRIBUTIONS = "snuba-dead-letter-metrics-distributions"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
@@ -70,5 +73,6 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         },
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.QUERYLOG: {"max.message.bytes": "2000000"},
     }
     return config.get(topic, {})

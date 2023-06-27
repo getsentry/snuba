@@ -225,6 +225,7 @@ class TestSpansApi(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
                 }
             ),
             headers={"referer": "test"},

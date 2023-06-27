@@ -2,6 +2,7 @@ from typing import cast
 
 import pytest
 
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
@@ -39,11 +40,15 @@ from tests.query.joins.join_structures import (
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
         alias="ev",
-        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+        data_source=Entity(
+            EntityKey.EVENTS, EntityColumnSet(EVENTS_SCHEMA.columns), None
+        ),
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
+        data_source=Entity(
+            EntityKey.GROUPEDMESSAGE, EntityColumnSet(GROUPS_SCHEMA.columns), None
+        ),
     ),
     keys=[
         JoinCondition(

@@ -7,6 +7,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
+from snuba.query.logical import Query
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
@@ -30,6 +31,7 @@ def test_get_time_range() -> None:
     events = get_dataset("events")
     entity = get_entity(EntityKey.EVENTS)
     query, _ = parse_snql_query(body, events)
+    assert isinstance(query, Query)
     processors = entity.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):

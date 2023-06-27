@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Optional, Sequence, Set, Type, TypeVar
+from typing import Generic, Sequence, Set, TypeVar
 
 from snuba import settings
 from snuba.migrations.runner import get_active_migration_groups
@@ -79,6 +79,7 @@ class InteractToolAction(ToolAction):
 TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
+    "cardinality-analyzer": ToolResource("cardinality-analyzer"),
     "all": ToolResource("all"),
 }
 
@@ -120,29 +121,6 @@ class Role:
     actions: Set[MigrationAction | ToolAction]
 
 
-def generate_migration_test_role(
-    group: str,
-    policy: str,
-    override_resource: bool = False,
-    name: Optional[str] = None,
-) -> Role:
-    if not name:
-        name = f"{group}-{policy}"
-
-    if policy == "all":
-        action: Type[MigrationAction] = ExecuteAllAction
-    elif policy == "non_blocking":
-        action = ExecuteNonBlockingAction
-    else:
-        action = ExecuteNoneAction
-
-    resource = (
-        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
-    )
-
-    return Role(name=name, actions={action([resource])})
-
-
 def generate_tool_test_role(tool: str) -> Role:
     return Role(name=tool, actions={InteractToolAction([ToolResource(tool)])})
 
@@ -168,17 +146,17 @@ ROLES = {
         name="all-tools",
         actions={InteractToolAction([TOOL_RESOURCES["all"]])},
     ),
-    "SnQLToSQL": Role(
-        name="snql-to-snql",
+    "ProductTools": Role(
+        name="product-tools",
         actions={
-            InteractToolAction([TOOL_RESOURCES["snql-to-sql"]])
-        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
+            InteractToolAction(
+                [TOOL_RESOURCES["snql-to-sql"], TOOL_RESOURCES["tracing"]]
+            )
+        },
     ),
-    "Tracing": Role(
-        name="tracing",
-        actions={
-            InteractToolAction([TOOL_RESOURCES["tracing"]])
-        },  # Matches the `id` in snuba/admin/static/data.tsx/NAV_ITEMS
+    "CardinalityAnalyzer": Role(
+        name="cardinality-analyzer",
+        actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
     ),
 }
 
@@ -186,7 +164,7 @@ DEFAULT_ROLES = [
     ROLES["MigrationsReader"],
     ROLES["TestMigrationsExecutor"],
     ROLES["SearchIssuesExecutor"],
-    ROLES["SnQLToSQL"],
+    ROLES["ProductTools"],
 ]
 
 if settings.TESTING or settings.DEBUG:

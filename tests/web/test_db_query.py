@@ -16,7 +16,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
-    AllocationPolicyViolation,
+    AllocationPolicyConfig,
+    AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -125,7 +126,7 @@ def test_apply_thread_quota(
 
 
 def _build_test_query(
-    select_expression: str, allocation_policy: AllocationPolicy | None = None
+    select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
     return (
@@ -134,7 +135,8 @@ def _build_test_query(
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policy=allocation_policy or storage.get_allocation_policy(),
+                allocation_policies=allocation_policies
+                or storage.get_allocation_policies(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -176,7 +178,13 @@ def test_db_query_success() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert stats["quota_allowance"] == dict(can_run=True, max_threads=8, explanation={})
+    assert stats["quota_allowance"] == {
+        "BytesScannedWindowAllocationPolicy": {
+            "can_run": True,
+            "explanation": {},
+            "max_threads": 10,
+        }
+    }
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
@@ -216,9 +224,13 @@ def test_db_query_bypass_cache() -> None:
                 trace_id="trace_id",
                 robust=False,
             )
-            assert stats["quota_allowance"] == dict(
-                can_run=True, max_threads=8, explanation={}
-            )
+            assert stats["quota_allowance"] == {
+                "BytesScannedWindowAllocationPolicy": {
+                    "can_run": True,
+                    "explanation": {},
+                    "max_threads": 10,
+                }
+            }
             assert len(query_metadata_list) == 1
             assert result.extra["stats"] == stats
             assert result.extra["sql"] is not None
@@ -262,6 +274,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     class RejectAllocationPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
@@ -279,8 +294,10 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             return
 
     with mock.patch(
-        "snuba.web.db_query._get_allocation_policy",
-        return_value=RejectAllocationPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[
+            RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+        ],
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
@@ -298,14 +315,23 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 trace_id="trace_id",
                 robust=False,
             )
-        cause = excinfo.value.__cause__
-        assert stats["quota_allowance"] == dict(
-            can_run=False,
-            max_threads=0,
-            explanation={"reason": "policy rejects all queries"},
+        assert stats["quota_allowance"] == {
+            "RejectAllocationPolicy": {
+                "can_run": False,
+                "explanation": {"reason": "policy rejects all queries"},
+                "max_threads": 0,
+            }
+        }
+        # extra data contains policy failure information
+        assert (
+            excinfo.value.extra["stats"]["quota_allowance"]["RejectAllocationPolicy"][
+                "explanation"
+            ]["reason"]
+            == "policy rejects all queries"
         )
-        assert isinstance(cause, AllocationPolicyViolation)
-        assert cause.extra_data["quota_allowance"]["explanation"]["reason"] == "policy rejects all queries"  # type: ignore
+        cause = excinfo.value.__cause__
+        assert isinstance(cause, AllocationPolicyViolations)
+        assert "RejectAllocationPolicy" in cause.violations
 
 
 @pytest.mark.clickhouse_db
@@ -314,6 +340,9 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
@@ -330,9 +359,23 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         ) -> None:
             return
 
+    class ThreadLimitPolicyDuplicate(ThreadLimitPolicy):
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=POLICY_THREADS + 1,
+                explanation={"reason": "Throttle everything!"},
+            )
+
+    # Should limit to minimal threads across policies
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        ThreadLimitPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        [
+            ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            ThreadLimitPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        ],
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -360,10 +403,14 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
-    queries_run = 0
     MAX_QUERIES_TO_RUN = 2
 
+    queries_run = 0
+
     class CountQueryPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int]
         ) -> QuotaAllowance:
@@ -384,9 +431,41 @@ def test_allocation_policy_updates_quota() -> None:
             nonlocal queries_run
             queries_run += 1
 
+    queries_run_duplicate = 0
+
+    class CountQueryPolicyDuplicate(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int]
+        ) -> QuotaAllowance:
+            can_run = True
+            if queries_run_duplicate + 1 > MAX_QUERIES_TO_RUN:
+                can_run = False
+            return QuotaAllowance(
+                can_run=can_run,
+                max_threads=0,
+                explanation={
+                    "reason": f"can only run {queries_run_duplicate} queries!"
+                },
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            nonlocal queries_run_duplicate
+            queries_run_duplicate += 1
+
+    # both policies should error
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        CountQueryPolicy("doesntmatter", ["a", "b", "c"]),  # type: ignore
+        [
+            CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            CountQueryPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        ],
     )
 
     def _run_query() -> None:
@@ -411,4 +490,64 @@ def test_allocation_policy_updates_quota() -> None:
         _run_query()
     with pytest.raises(QueryException) as e:
         _run_query()
-    assert isinstance(e.value.__cause__, AllocationPolicyViolation)
+
+    assert e.value.extra["stats"]["quota_allowance"] == {
+        "CountQueryPolicy": {
+            "can_run": False,
+            "max_threads": 0,
+            "explanation": {"reason": "can only run 2 queries!"},
+        },
+        "CountQueryPolicyDuplicate": {
+            "can_run": False,
+            "max_threads": 0,
+            "explanation": {"reason": "can only run 2 queries!"},
+        },
+    }
+    cause = e.value.__cause__
+    assert isinstance(cause, AllocationPolicyViolations)
+    assert "CountQueryPolicy" in cause.violations
+    assert "CountQueryPolicyDuplicate" in cause.violations
+
+
+@pytest.mark.redis_db
+def test_clickhouse_settings_applied_to_query() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    settings = HTTPQuerySettings()
+    clickhouse_settings = {
+        "max_rows_to_group_by": 1000000,
+        "group_by_overflow_mode": "any",
+    }
+    settings.set_clickhouse_settings(clickhouse_settings)
+
+    reader = mock.MagicMock()
+    result = mock.MagicMock()
+    reader.execute.return_value = result
+    result.get.return_value.get.return_value = 0
+
+    db_query(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=reader,
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+
+    clickhouse_settings_used = reader.execute.call_args.args[1]
+    assert (
+        "max_rows_to_group_by" in clickhouse_settings_used
+        and clickhouse_settings_used["max_rows_to_group_by"] == 1000000
+    )
+    assert (
+        "group_by_overflow_mode" in clickhouse_settings_used
+        and clickhouse_settings_used["group_by_overflow_mode"] == "any"
+    )

@@ -49,27 +49,67 @@ query_processors:
       column_name: a
       hash_map_name: hashmap
       killswitch: kill
+  -
+    processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_rows_to_group_by: 1000000
+        group_by_overflow_mode: any
 
-allocation_policy:
-  name: PassthroughPolicy
-  args:
-    storage_set_key: test-storage-set
-    required_tenant_types: ["some_tenant"]
-
+allocation_policies:
+  -
+    name: PassthroughPolicy
+    args:
+      required_tenant_types: ["some_tenant"]
+  -
+    name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types: ["some_other_tenant"]
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
             with open(filename, "w") as f:
                 f.write(yml_text)
             storage = build_storage_from_config(filename)
-            assert len(storage.get_query_processors()) == 1
-            qp = storage.get_query_processors()[0]
-            assert getattr(qp, "_MappingOptimizer__column_name") == "a"
-            assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
-            assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"
-            assert storage.get_allocation_policy()._required_tenant_types == {
-                "some_tenant"
+            assert len(storage.get_query_processors()) == 2
+            (
+                mapping_optimizer_qp,
+                clickhouse_settings_override_qp,
+            ) = storage.get_query_processors()
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
+            )
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name")
+                == "hashmap"
+            )
+            assert (
+                getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
+            )
+            assert (
+                getattr(
+                    clickhouse_settings_override_qp,
+                    "_ClickhouseSettingsOverride__settings",
+                )["max_rows_to_group_by"]
+                == 1000000
+            )
+            assert (
+                getattr(
+                    clickhouse_settings_override_qp,
+                    "_ClickhouseSettingsOverride__settings",
+                )["group_by_overflow_mode"]
+                == "any"
+            )
+            assert len(policies := storage.get_allocation_policies()) == 2
+            assert set([p.config_key() for p in policies]) == {
+                "BytesScannedWindowAllocationPolicy",
+                "PassthroughPolicy",
             }
+            passthru = next(
+                p for p in policies if p.config_key() == "PassthroughPolicy"
+            )
+            assert passthru.runtime_config_prefix == "test-storage.PassthroughPolicy"
+            assert passthru._required_tenant_types == {"some_tenant"}
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [

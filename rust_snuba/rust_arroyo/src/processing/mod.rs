@@ -3,7 +3,6 @@ pub mod strategies;
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
-use std::mem::replace;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -160,7 +159,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                     }
                 };
 
-                let msg = replace(&mut self.message, None);
+                let msg = self.message.take();
                 if let Some(msg_s) = msg {
                     let ret = strategy.submit(msg_s);
                     match ret {
@@ -211,6 +210,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             strategy.terminate();
                         }
                     }
+                    drop(trait_callbacks); // unlock mutex so we can close consumer
                     self.consumer.close();
                     return Err(e);
                 }

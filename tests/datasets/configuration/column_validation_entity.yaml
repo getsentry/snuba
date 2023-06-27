@@ -1,0 +1,66 @@
+version: v1
+kind: entity
+name: nested
+
+schema:
+- name: event_id
+  type: String
+- name: fixed_event_id
+  type: FixedString
+  args:
+    length: 420
+- name: project_id
+  type: UInt
+  args:
+    size: 64
+- name: primary_hash
+  type: FixedString
+  args:
+    length: 69
+    schema_modifiers:
+    - nullable
+- name: tags
+  type: Nested
+  args:
+    subcolumns:
+      - name: key,
+        type: String
+      - name: value
+        type: String
+storages:
+- storage: discover
+  translation_mappers:
+    columns:
+      -
+        mapper: ColumnToIPAddress
+        args:
+          from_table_name:
+          from_col_name: ip_address
+      -
+        mapper: ColumnToNullIf
+        args:
+          from_table_name:
+          from_col_name: userColumnToNullIf
+      -
+        mapper: ColumnToMapping
+        args:
+          from_table_name:
+          from_col_name: geo_country_code
+          to_nested_col_table_name:
+          to_nested_col_name: contexts
+          to_nested_mapping_key: geo.country_code
+          nullable: True
+      -
+        mapper: ColumnToColumn
+        args:
+          from_table_name:
+          from_col_name: email
+          to_table_name:
+          to_col_name: user_email
+  is_writable: false
+required_time_column: event_id
+storage_selector:
+  selector: DefaultQueryStorageSelector
+query_processors: []
+validators: []
+validate_data_model: error

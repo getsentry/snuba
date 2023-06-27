@@ -1,6 +1,7 @@
 import pytest
 
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
+from snuba.datasets.entity import Entity
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
@@ -11,17 +12,60 @@ from snuba.query.validation.validators import (
     EntityContainsColumnsValidator,
 )
 
-entity_contains_columns_tests = [
-    pytest.param(
-        "tests/datasets/configuration/entity_with_fixed_string.yaml",
-        id="Validate Entity Columns",
+CONFIG_PATH = "tests/datasets/configuration/column_validation_entity.yaml"
+
+
+def get_validator(entity: Entity) -> EntityContainsColumnsValidator:
+    validator = None
+    for v in entity.get_validators():
+        if isinstance(v, EntityContainsColumnsValidator):
+            validator = v
+
+    assert validator is not None
+    validator.validation_mode = ColumnValidationMode.ERROR
+    return validator
+
+
+def test_nested_columns_validation() -> None:
+    entity = build_entity_from_config(CONFIG_PATH)
+
+    query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
+    columns = [
+        SelectedExpression("tags", Column("_snuba_tags", None, "tags")),
+    ]
+
+    good_query = LogicalQuery(query_entity, selected_columns=columns)
+    validator = get_validator(entity)
+    validator.validate(good_query)
+
+
+def test_mapped_columns_validation() -> None:
+    entity = build_entity_from_config(CONFIG_PATH)
+
+    query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
+    columns = [
+        SelectedExpression(
+            "ip_address", Column("_snuba_ip_address", None, "ip_address")
+        ),
+        SelectedExpression("email", Column("_snuba_email", None, "email")),
+    ]
+
+    bad_query = LogicalQuery(
+        query_entity,
+        selected_columns=columns
+        + [SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf"))],
     )
-]
+
+    good_query = LogicalQuery(query_entity, selected_columns=columns)
+    validator = get_validator(entity)
+    with pytest.raises(InvalidQueryException):
+        validator.validate(bad_query)
+
+    validator.validate(good_query)
 
 
-@pytest.mark.parametrize("config_path", entity_contains_columns_tests)
-def test_outcomes_columns_validation(config_path: str) -> None:
-    entity = build_entity_from_config(config_path)
+def test_outcomes_columns_validation() -> None:
+    entity = build_entity_from_config(CONFIG_PATH)
 
     query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
 
@@ -47,20 +91,15 @@ def test_outcomes_columns_validation(config_path: str) -> None:
             for column in entity.get_data_model().columns
         ],
     )
-
-    validator = EntityContainsColumnsValidator(
-        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
-    )
-
+    validator = get_validator(entity)
     with pytest.raises(InvalidQueryException):
         validator.validate(bad_query)
 
     validator.validate(good_query)
 
 
-@pytest.mark.parametrize("config_path", entity_contains_columns_tests)
-def test_in_where_clause_and_function(config_path):
-    entity = build_entity_from_config(config_path)
+def test_in_where_clause_and_function() -> None:
+    entity = build_entity_from_config(CONFIG_PATH)
 
     query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
 
@@ -76,9 +115,7 @@ def test_in_where_clause_and_function(config_path):
         ],
         condition=FunctionCall(None, "f1", (Column(None, None, "bad_column"),)),
     )
-    validator = EntityContainsColumnsValidator(
-        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
-    )
+    validator = get_validator(entity)
 
     with pytest.raises(InvalidQueryException):
         validator.validate(bad_query)

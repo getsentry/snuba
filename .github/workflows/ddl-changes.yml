@@ -1,6 +1,8 @@
 name: ddl-changes
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
 
 jobs:
   post_changes:
@@ -36,6 +38,9 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           migration: "./snuba/migrations/groups.py"
           cmd: python scripts/ddl-changes.py
+
       - name: Check migrations are not coupled with other changes
         run: |
-          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py
+          # Check that the migration is not coupled with other changes
+          # If the label skip-check-migrations is present, the check is skipped
+          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --labels ${{join(github.event.pull_request.labels.*.name, '')}}
