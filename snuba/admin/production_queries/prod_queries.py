@@ -29,13 +29,13 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
             return response
 
         body["dry_run"] = False
-        validate_projects_in_query(body, dataset)
+        _validate_projects_in_query(body, dataset)
         return dataset_query(dataset, body, Timer("admin"))
 
     return run_query_with_audit(body["query"], user)
 
 
-def validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
+def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
     request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
     query = parse_snql_query(request_parts.query["query"], dataset)[0]
     project_ids = get_object_ids_in_query_ast(query, "project_id")

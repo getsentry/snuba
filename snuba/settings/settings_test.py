@@ -37,6 +37,8 @@ OPTIMIZE_JOB_CUTOFF_TIME = 24
 
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
+ADMIN_ALLOWED_PROD_PROJECTS = [1]
+
 REDIS_CLUSTERS = {
     key: {
         "use_redis_cluster": os.environ.get("USE_REDIS_CLUSTER", "0") != "0",
