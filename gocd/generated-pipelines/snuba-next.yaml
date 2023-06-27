@@ -1,0 +1,20 @@
+format_version: 10
+pipelines:
+  deploy-snuba-next:
+    group: snuba-next
+    lock_behavior: unlockWhenFinished
+    materials:
+      snuba_repo:
+        branch: master
+        destination: snuba
+        git: git@github.com:getsentry/snuba.git
+        shallow_clone: true
+    stages:
+      - pipeline-complete:
+          approval:
+            type: manual
+          jobs:
+            pipeline-complete:
+              tasks:
+                - exec:
+                    command: true
