@@ -539,3 +539,21 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 2
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/snql_to_sql", data=json.dumps({"dataset": "events", "query": snql_query})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: \{2\}"
