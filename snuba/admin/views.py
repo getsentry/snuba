@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
+import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -96,7 +97,9 @@ def authorize() -> None:
     if request.endpoint != "health":
         user = authorize_request()
         logger.info("authorize.finished", user=user)
-        g.user = user
+        with sentry_sdk.push_scope() as scope:
+            scope.user = {"email": user.email}
+            g.user = user
 
 
 @application.route("/")
@@ -123,6 +126,7 @@ def settings_endpoint() -> Response:
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+                "userEmail": g.user.email,
             }
         ),
         200,
