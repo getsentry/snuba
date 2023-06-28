@@ -53,6 +53,7 @@ def test_dlq_consumer_cli() -> None:
             "dlq-test",
             "--auto-offset-reset",
             "latest",
+            "--no-strict-offset-reset",
         ]
     )
     # XXX: We have to wait long enough for Snuba initialization and an assignment
