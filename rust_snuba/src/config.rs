@@ -40,7 +40,7 @@ pub struct StoragesConfig {
     pub message_processor: MessageProcessorConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ClickhouseConfig {
     pub host: String,
