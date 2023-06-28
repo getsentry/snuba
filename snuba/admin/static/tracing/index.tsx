@@ -334,7 +334,7 @@ function TracingQueries(props: { api: Client }) {
         <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
           🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
         </a>
-        <RichTextEditor editor={editor}>
+        <RichTextEditor editor={editor} role="textbox">
           <RichTextEditor.Content />
         </RichTextEditor>
         <Prism withLineNumbers language="sql">

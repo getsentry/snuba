@@ -61,8 +61,6 @@ function QueryEditor(props: {
   >(undefined);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
-  const textAreaStyle = { width: "100%", height: 140 };
-
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -172,7 +170,7 @@ function QueryEditor(props: {
       ) : null}
 
       <RichTextEditor editor={editor}>
-        <RichTextEditor.Content />
+        <RichTextEditor.Content data-testid="text-editor-input" />
       </RichTextEditor>
       {renderParameterSetters()}
       <Prism withLineNumbers language="sql">
