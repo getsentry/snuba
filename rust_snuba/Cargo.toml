@@ -27,3 +27,4 @@ glob = "0.3.1"
 pyo3 = { version = "0.18.1", features = ["chrono", "extension-module"] }
 ctrlc = "3.2.5"
 sentry = "0.31.0"
+async-trait = "0.1.68"

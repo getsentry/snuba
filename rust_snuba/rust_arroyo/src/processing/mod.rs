@@ -111,7 +111,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
-    pub fn run_once(&mut self) -> Result<(), RunError> {
+    pub async fn run_once(&mut self) -> Result<(), RunError> {
         let message_carried_over = self.message.is_some();
 
         if message_carried_over {
@@ -161,7 +161,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
                 let msg = self.message.take();
                 if let Some(msg_s) = msg {
-                    let ret = strategy.submit(msg_s);
+                    let ret = strategy.submit(msg_s).await;
                     match ret {
                         Ok(()) => {}
                         Err(_) => {
@@ -192,13 +192,13 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     }
 
     /// The main run loop, see class docstring for more information.
-    pub fn run(&mut self) -> Result<(), RunError> {
+    pub async fn run(&mut self) -> Result<(), RunError> {
         while !self
             .processor_handle
             .shutdown_requested
             .load(Ordering::Relaxed)
         {
-            let ret = self.run_once();
+            let ret = self.run_once().await;
             match ret {
                 Ok(()) => {}
                 Err(e) => {

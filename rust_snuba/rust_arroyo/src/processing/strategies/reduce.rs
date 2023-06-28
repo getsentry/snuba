@@ -1,3 +1,6 @@
+use async_trait::async_trait;
+use futures::executor::block_on;
+
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
@@ -44,13 +47,14 @@ pub struct Reduce<T, TResult> {
     max_batch_time: Duration,
     batch_state: BatchState<T, TResult>,
 }
+#[async_trait]
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.flush(false);
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         if self.batch_state.is_complete {
             return Err(MessageRejected);
         }
@@ -109,7 +113,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
                 )),
             };
 
-            match self.next_step.submit(next_message) {
+            match block_on(self.next_step.submit(next_message)) {
                 Ok(_) => {
                     self.batch_state = BatchState::new(self.initial_value.clone(), self.accumulator.clone());
                 }

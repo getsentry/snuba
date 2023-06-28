@@ -3,18 +3,20 @@ use crate::types::{Message, Partition};
 use log::info;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
+use async_trait::async_trait;
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
+#[async_trait]
+impl<T: Clone + Send> ProcessingStrategy<T> for CommitOffsets where T: 'static{
     fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }

@@ -3,7 +3,9 @@ use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, TopicOrPartition};
+use async_trait::async_trait;
 use futures::Future;
+use futures::executor::block_on;
 use log::warn;
 use std::collections::VecDeque;
 use std::pin::Pin;
@@ -52,6 +54,7 @@ impl Produce<KafkaPayload> {
     }
 }
 
+#[async_trait]
 impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
     fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty() {
@@ -59,11 +62,8 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
 
             if handle.is_finished() {
                 let new_message = message.clone();
-                // block_on(async{
-                //     handle.await.unwrap();
-                // });
                 self.next_step.poll();
-                self.next_step.submit(new_message).unwrap()
+                block_on(self.next_step.submit(new_message));
             } else {
                 break;
             }
@@ -72,7 +72,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         None
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
@@ -119,7 +119,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
                 let new_message = message.clone();
                 self.next_step.poll();
                 // TODO: Handle message rejected
-                self.next_step.submit(new_message).unwrap()
+                block_on(self.next_step.submit(new_message));
             } else {
                 break;
             }
