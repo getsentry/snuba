@@ -52,7 +52,7 @@ def test_dlq_consumer_cli() -> None:
             "--consumer-group",
             "dlq-test",
             "--auto-offset-reset",
-            "latest",
+            "earliest",
             "--no-strict-offset-reset",
         ]
     )
