@@ -31,13 +31,16 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.fixtures import get_raw_error_message
 
 
 def test_streaming_consumer_strategy() -> None:
     messages = (
         Message(
             BrokerValue(
-                KafkaPayload(None, b"{}", []),
+                KafkaPayload(
+                    None, json.dumps(get_raw_error_message()).encode("utf-8"), []
+                ),
                 Partition(Topic("events"), 0),
                 i,
                 datetime.now(),
@@ -72,7 +75,7 @@ def test_streaming_consumer_strategy() -> None:
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
-            process_message, processor, "consumer_group", SnubaTopic.EVENTS
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS, True
         ),
         write_step,
         max_batch_size=10,
@@ -215,6 +218,7 @@ def test_multistorage_strategy(
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(topic=Topic(name="topic"), index=0): 3}),
                 call({}, force=True),
             ],
@@ -270,6 +274,7 @@ def test_metrics_writing_e2e() -> None:
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(Topic("topic"), 0): 1}),
                 call({}, force=True),
             ],

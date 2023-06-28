@@ -3,7 +3,6 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
-import rapidjson
 import sentry_sdk
 from arroyo import configure_metrics
 
@@ -136,6 +135,13 @@ logger = logging.getLogger(__name__)
 )
 @click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
 @click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
+@click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 @click.option(
@@ -165,6 +171,7 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     join_timeout: int = 5,
+    enforce_schema: bool = False,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
@@ -201,12 +208,7 @@ def consumer(
         max_batch_time_ms=max_batch_time_ms,
     )
 
-    def stats_callback(stats_json: str) -> None:
-        stats = rapidjson.loads(stats_json)
-        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
-
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
         consumer_config=consumer_config,
         kafka_params=KafkaParameters(
             group_id=consumer_group,
@@ -226,10 +228,10 @@ def consumer(
         max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
-        stats_callback=stats_callback,
         slice_id=slice_id,
         join_timeout=join_timeout,
         max_poll_interval_ms=max_poll_interval_ms,
+        enforce_schema=enforce_schema,
     )
 
     consumer = consumer_builder.build_base_consumer()

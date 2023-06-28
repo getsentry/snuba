@@ -21,7 +21,9 @@ schema:
       { name: is_segment, type: UInt, args: { size: 8 } },
       { name: segment_name, type: String },
       { name: start_timestamp, type: DateTime },
+      { name: start_ms, type: UInt, args: { size: 16 } },
       { name: end_timestamp, type: DateTime },
+      { name: end_ms, type: UInt, args: { size: 16 } },
       { name: duration, type: UInt, args: { size: 32 } },
       { name: exclusive_time, type: Float, args: { size: 64 } },
       { name: op, type: String },
@@ -73,7 +75,16 @@ schema:
   local_table_name: spans_local
   dist_table_name: spans_dist
   partition_format: [retention_days, date]
-
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor

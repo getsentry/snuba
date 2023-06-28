@@ -13,7 +13,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
@@ -152,6 +152,27 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
     )
 
     assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+
+
+@pytest.mark.redis_db
+def test_remove_final_subscriptions(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
+    )
+
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.ERRORS
+    ).process_query(query, SubscriptionQuerySettings())
+    assert query.get_condition() == build_in("project_id", [2])
+    assert query.get_from_clause().final
+
+    state.set_config("skip_final_subscriptions_projects", "[2,3,4]")
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.ERRORS
+    ).process_query(query, SubscriptionQuerySettings())
     assert not query.get_from_clause().final
 
 

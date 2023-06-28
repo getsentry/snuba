@@ -1,4 +1,3 @@
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -17,6 +16,8 @@ from typing import (
     TypeVar,
 )
 
+import structlog
+
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
@@ -31,7 +32,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 
 class ClickhouseClientSettingsType(NamedTuple):

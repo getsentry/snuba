@@ -6,7 +6,7 @@ from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.query.allocation_policies import PassthroughPolicy
 
 
-def get_allocation_policies() -> list[dict[str, str]]:
+def get_storages_with_allocation_policies() -> list[str]:
 
     storages = [
         storage
@@ -19,10 +19,7 @@ def get_allocation_policies() -> list[dict[str, str]]:
     ]
 
     return [
-        {
-            "storage_name": storage.get_storage_key().value,
-            "allocation_policy": storage.get_allocation_policy().config_key(),
-        }
+        storage.get_storage_key().value
         for storage in storages
-        if not isinstance(storage.get_allocation_policy(), PassthroughPolicy)
+        if not isinstance(storage.get_allocation_policies()[0], PassthroughPolicy)
     ]

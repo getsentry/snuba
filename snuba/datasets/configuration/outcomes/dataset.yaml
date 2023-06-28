@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: outcomes
 
-is_experimental: false
-
 entities:
   - outcomes

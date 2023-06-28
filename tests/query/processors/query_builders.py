@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
@@ -16,7 +18,7 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("test", ColumnSet([]), allocation_policy=DEFAULT_PASSTHROUGH_POLICY),
+        Table("test", ColumnSet([]), allocation_policies=[DEFAULT_PASSTHROUGH_POLICY]),
         selected_columns=[
             SelectedExpression(name=s.alias, expression=s)
             for s in selected_columns or []
@@ -32,7 +34,7 @@ def column(name: str, no_alias: bool = False) -> Column:
     )
 
 
-def nested_expression(column: str, key: str) -> FunctionCall:
+def nested_expression(column: str, key: str | int) -> FunctionCall:
     return build_mapping_expr(
         alias=f"{column}[{key}]",
         table_name=None,
@@ -44,7 +46,7 @@ def nested_expression(column: str, key: str) -> FunctionCall:
 
 def nested_condition(
     column_name: str,
-    key: str,
+    key: str | int,
     operator: str,
     val: str,
 ) -> Expression:

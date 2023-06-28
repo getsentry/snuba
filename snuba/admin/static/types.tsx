@@ -2,4 +2,12 @@ type AllowedTools = {
   tools: string[];
 };
 
-export { AllowedTools };
+type Settings = {
+  dsn: string;
+  tracesSampleRate: number;
+  replaysSessionSampleRate: number;
+  replaysOnErrorSampleRate: number;
+  userEmail: string;
+};
+
+export { AllowedTools, Settings };

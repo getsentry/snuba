@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from glob import glob
+from typing import MutableSequence, Sequence
 
 import sentry_sdk
 
@@ -80,6 +81,18 @@ def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
     storage = _storage_factory().get(storage_key)
     assert isinstance(storage, WritableTableStorage)
     return storage
+
+
+def get_writable_storages() -> Sequence[WritableTableStorage]:
+    writable_storages: MutableSequence[WritableTableStorage] = []
+    storage_keys = get_all_storage_keys()
+    for storage_key in storage_keys:
+        try:
+            writable_storages.append(get_writable_storage(storage_key))
+        except AssertionError:
+            pass
+
+    return writable_storages
 
 
 def get_cdc_storage(storage_key: StorageKey) -> CdcStorage:

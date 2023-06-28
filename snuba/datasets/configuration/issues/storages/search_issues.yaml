@@ -23,6 +23,7 @@ schema:
 
 
       { name: resource_id, type: String, args: { schema_modifiers: [ nullable ] } },
+      { name: message, type: String },
       { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: culprit, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: level, type: String, args: { schema_modifiers: [ nullable ] } },
@@ -51,6 +52,8 @@ schema:
       { name: http_method, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: http_referer, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: transaction_duration, type: UInt, args: { size: 32 } },
+      { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
 
       { name: message_timestamp, type: DateTime },
       { name: partition, type: UInt, args: { size: 16 } },
@@ -59,6 +62,17 @@ schema:
     ]
   local_table_name: search_issues_local_v2
   dist_table_name: search_issues_dist_v2
+
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
 
 query_processors:
   - processor: TableRateLimit
@@ -73,7 +87,7 @@ query_processors:
       column_name: tags
   - processor: UUIDColumnProcessor
     args:
-      columns: [occurrence_id, event_id, trace_id]
+      columns: [occurrence_id, event_id, trace_id, profile_id, replay_id]
   - processor: MappingColumnPromoter
     args:
       mapping_specs:
@@ -93,6 +107,4 @@ stream_loader:
     name: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
-  dlq_policy:
-    type: produce
-    args: [ snuba-dead-letter-generic-events ]
+  dlq_topic: snuba-dead-letter-generic-events

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Optional, Type, TypedDict
+from typing import Any, Type, TypedDict
 
 from snuba.clickhouse.columns import (
     Array,
@@ -25,7 +24,6 @@ from snuba.utils.schemas import (
     IPv4,
     IPv6,
 )
-from snuba.utils.streams.topics import Topic
 
 
 class QueryProcessorDefinition(TypedDict):
@@ -41,23 +39,6 @@ class QuerySplitterDefinition(TypedDict):
 class MandatoryConditionCheckerDefinition(TypedDict):
     condition: str
     args: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class DlqConfig:
-    topic: Topic
-
-
-def generate_dlq_config(dlq_policy_config: dict[str, Any]) -> Optional[DlqConfig]:
-    """
-    Returns DLQ config if DLQ policy is configured, otherwise returns None
-    """
-    if dlq_policy_config["type"] == "produce":
-        dlq_topic = dlq_policy_config["args"][0]
-        return DlqConfig(topic=Topic(dlq_topic))
-
-    # TODO: Add rest of DLQ policy types
-    return None
 
 
 def get_query_processors(

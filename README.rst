@@ -1,4 +1,4 @@
-.. image:: https://github.com/getsentry/snuba/raw/master/snuba/web/static/img/snuba.svg
+.. image:: https://github.com/getsentry/snuba/raw/master/snuba/admin/dist/snuba.svg
     :width: 280
 
 Snuba is a service that provides a rich data model on top of Clickhouse

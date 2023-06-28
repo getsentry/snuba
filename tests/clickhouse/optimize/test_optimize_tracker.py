@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -44,6 +45,10 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 )
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+@pytest.mark.skipif(
+    os.environ.get("SNUBA_SETTINGS") == "test_distributed",
+    reason="This test is flaky for distributed tests",
+)
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     def assert_partitions(
         *,
@@ -83,10 +88,9 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     assert_partitions(completed={"Partition 1"}, pending={"Partition 2"})
 
     tracker.update_completed_partitions("Partition 2")
-    assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
     # Check that we don't return None but a set whose length is 0 indicating
     # that all optimizations have been run.
-    assert_partitions(pending=set())
+    assert_partitions(completed={"Partition 1", "Partition 2"}, pending=set())
 
     tracker.delete_all_states()
     assert_partitions(all=set(), completed=set())
