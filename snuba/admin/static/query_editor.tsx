@@ -1,11 +1,12 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
-import { RichTextEditor } from "@mantine/tiptap";
-import { useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
 import { Editor } from "@tiptap/core";
 import { Prism } from "@mantine/prism";
+import { RichTextEditor } from "@mantine/tiptap";
+import { useEditor } from "@tiptap/react";
+import HardBreak from "@tiptap/extension-hard-break";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
 
 type PredefinedQuery = {
   name: string;
@@ -69,8 +70,15 @@ function QueryEditor(props: {
         placeholder:
           "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
       }),
+      HardBreak.extend({
+        addKeyboardShortcuts() {
+          return {
+            Enter: () => this.editor.commands.setHardBreak(),
+          };
+        },
+      }),
     ],
-    content: `<code>${queryTemplate}</code>`,
+    content: `${queryTemplate}`,
     onUpdate({ editor }) {
       setQueryTemplate(editor.getText());
     },

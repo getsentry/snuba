@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
 
+import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Prism } from "@mantine/prism";
+import StarterKit from "@tiptap/starter-kit";
 
 import {
   ClickhouseNodeData,
@@ -248,6 +249,13 @@ function TextArea(props: {
       StarterKit,
       Placeholder.configure({
         placeholder: "Write your query here.",
+      }),
+      HardBreak.extend({
+        addKeyboardShortcuts() {
+          return {
+            Enter: () => this.editor.commands.setHardBreak(),
+          };
+        },
       }),
     ],
     content: `${value}`,
