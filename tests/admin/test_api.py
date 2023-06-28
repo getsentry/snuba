@@ -511,7 +511,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_prod_snql_query_invalid_invalid_query(admin_api: FlaskClient) -> None:
+def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "sessions", "query": ""})
     )
@@ -536,6 +536,7 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query",
         data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
