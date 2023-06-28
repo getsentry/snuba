@@ -17,7 +17,6 @@ schema:
     { name: event_id, type: UUID, args: { schema_modifiers: [nullable] } },
     { name: quantity, type: UInt, args: { size: 32 } },
     { name: category, type: UInt, args: { size: 8 } },
-    { name: time, type: DateTime },
   ]
 
 required_time_column: timestamp
