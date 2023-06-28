@@ -77,8 +77,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
-    #[test]
-    fn test_commit_offsets() {
+    #[tokio::test]
+    async fn test_commit_offsets() {
         env_logger::init();
         let partition1 = Partition {
             topic: Topic {
@@ -126,7 +126,7 @@ mod tests {
             positions: Default::default(),
         };
         commit_req1.positions.insert(partition1, 1001);
-        noop.submit(m1).expect("Failed to submit");
+        noop.submit(m1).await.expect("Failed to submit");
         assert_eq!(
             <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
             None
@@ -142,7 +142,7 @@ mod tests {
             positions: Default::default(),
         };
         commit_req2.positions.insert(partition2, 2001);
-        noop.submit(m2).expect("Failed to submit");
+        noop.submit(m2).await.expect("Failed to submit");
         assert_eq!(
             <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
             None

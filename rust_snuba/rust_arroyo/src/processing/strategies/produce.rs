@@ -145,6 +145,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::Arc;
     use std::time::Duration;
+    use async_trait::async_trait;
 
     #[tokio::test]
     async fn test_produce() {
@@ -164,11 +165,13 @@ mod tests {
         };
 
         struct Noop {}
+
+        #[async_trait]
         impl ProcessingStrategy<KafkaPayload> for Noop {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+            async fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
                 Ok(())
             }
             fn close(&mut self) {}
@@ -203,6 +206,6 @@ mod tests {
             }),
         };
 
-        strategy.submit(message).unwrap();
+        strategy.submit(message).await.unwrap();
     }
 }

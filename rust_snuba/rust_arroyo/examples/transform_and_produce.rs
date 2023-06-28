@@ -17,6 +17,8 @@ use rust_arroyo::processing::strategies::{
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::time::Duration;
+use async_trait::async_trait;
+
 
 fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
     let payload = value.payload.unwrap();
@@ -32,11 +34,13 @@ fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
     Ok(result)
 }
 struct Noop {}
+
+#[async_trait]
 impl ProcessingStrategy<KafkaPayload> for Noop {
     fn poll(&mut self) -> Option<CommitRequest> {
         None
     }
-    fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         Ok(())
     }
     fn close(&mut self) {}
@@ -52,6 +56,8 @@ async fn main() {
         config: KafkaConfig,
         topic: Topic,
     }
+
+    #[async_trait]
     impl ProcessingStrategyFactory<KafkaPayload> for ReverseStringAndProduceStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let producer = KafkaProducer::new(self.config.clone());
@@ -86,5 +92,5 @@ async fn main() {
         name: "test_in".to_string(),
     });
     println!("running processor. transforming from test_in to test_out");
-    processor.run().unwrap();
+    processor.run().await.unwrap();
 }

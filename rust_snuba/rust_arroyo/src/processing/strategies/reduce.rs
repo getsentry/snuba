@@ -135,9 +135,10 @@ mod tests {
     use crate::processing::strategies::reduce::Reduce;
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
+    use async_trait::async_trait;
 
-    #[test]
-    fn test_reduce() {
+    #[tokio::test]
+    async fn test_reduce() {
         let submitted_messages = Arc::new(Mutex::new(Vec::new()));
         let submitted_messages_clone = submitted_messages.clone();
 
@@ -145,12 +146,13 @@ mod tests {
             pub submitted: Arc<Mutex<Vec<T>>>,
         }
 
+        #[async_trait]
         impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
 
-            fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+            async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
                 self.submitted.lock().unwrap().push(message.payload());
                 Ok(())
             }
@@ -193,7 +195,7 @@ mod tests {
 
         for i in 0..3 {
             let msg = Message {inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(i, partition1.clone(), i, chrono::Utc::now()))};
-            strategy.submit(msg).unwrap();
+            strategy.submit(msg).await.unwrap();
             strategy.poll();
         }
 

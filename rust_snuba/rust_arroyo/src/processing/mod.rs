@@ -250,10 +250,12 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
     use uuid::Uuid;
+    use async_trait::async_trait;
 
     struct TestStrategy {
         message: Option<Message<String>>,
     }
+    #[async_trait]
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
         fn poll(&mut self) -> Option<CommitRequest> {
@@ -265,7 +267,7 @@ mod tests {
             }
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
+        async fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
             self.message = Some(message);
             Ok(())
         }
@@ -299,8 +301,8 @@ mod tests {
         broker
     }
 
-    #[test]
-    fn test_processor() {
+    #[tokio::test]
+    async fn test_processor() {
         let mut broker = build_broker();
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -313,12 +315,12 @@ mod tests {
         processor.subscribe(Topic {
             name: "test1".to_string(),
         });
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok())
     }
 
-    #[test]
-    fn test_consume() {
+    #[tokio::test]
+    async fn test_consume() {
         let mut broker = build_broker();
         let topic1 = Topic {
             name: "test1".to_string(),
@@ -341,9 +343,9 @@ mod tests {
         processor.subscribe(Topic {
             name: "test1".to_string(),
         });
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok());
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok());
 
         let expected = HashMap::from([(partition, 2)]);

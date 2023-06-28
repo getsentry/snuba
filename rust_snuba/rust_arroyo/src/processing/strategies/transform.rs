@@ -48,19 +48,22 @@ mod tests {
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::Utc;
     use std::time::Duration;
+    use async_trait::async_trait;
 
-    #[test]
-    fn test_transform() {
+    #[tokio::test]
+    async fn test_transform() {
         fn identity(value: String) -> Result<String, InvalidMessage> {
             Ok(value)
         }
 
         struct Noop {}
+
+        #[async_trait]
         impl ProcessingStrategy<String> for Noop {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected> {
+            async fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected> {
                 Ok(())
             }
             fn close(&mut self) {}
@@ -90,7 +93,6 @@ mod tests {
                     0,
                     Utc::now(),
                 )),
-            })
-            .unwrap();
+            }).await.unwrap();
     }
 }
