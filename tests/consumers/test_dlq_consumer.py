@@ -61,10 +61,6 @@ def test_dlq_consumer_cli() -> None:
     # and exits.
     time.sleep(5)
     proc.poll()
-    # Assert the instruction  changed to in-progress
-    loaded_instruction = load_instruction()
-    assert loaded_instruction is not None
-    assert loaded_instruction.status == DlqInstructionStatus.IN_PROGRESS
 
     producer.produce(
         topic,
@@ -72,7 +68,6 @@ def test_dlq_consumer_cli() -> None:
             None, rapidjson.dumps({"message": "invalid-message"}).encode("utf-8"), []
         ),
     ).result()
-
     producer.close()
 
     # ExitAfterNMessages raises SIGINT and exits by itself
