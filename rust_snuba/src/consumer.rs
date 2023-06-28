@@ -53,8 +53,14 @@ impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
         for batch in message.payload() {
             for row in batch.rows {
                 let decoded_row = String::from_utf8_lossy(&row);
-                self.clickhouse_client.send( decoded_row.to_string()).await.unwrap();
-                log::debug!("insert: {:?}", decoded_row);
+                let res = self.clickhouse_client.send( decoded_row.to_string()).await;
+                match res {
+                    Ok(_) => {log::debug!("insert: {:?}", decoded_row);}
+                    Err(e) => {
+                        log::error!("Error sending to clickhouse: {}", e);
+                        return Err(MessageRejected);
+                    }
+                }
             }
         }
 
