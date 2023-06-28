@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use futures::executor::block_on;
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
@@ -32,7 +33,7 @@ impl ClickhouseWriterStep {
     where
         N: ProcessingStrategy<()> + 'static,
     {
-        let hostname = cluster_config.host.clone();
+        let hostname = cluster_config.host;
         let http_port = cluster_config.port;
 
         ClickhouseWriterStep {
@@ -42,6 +43,7 @@ impl ClickhouseWriterStep {
     }
 }
 
+#[async_trait]
 impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.next_step.poll()
@@ -51,14 +53,14 @@ impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
         for batch in message.payload() {
             for row in batch.rows {
                 let decoded_row = String::from_utf8_lossy(&row);
-                self.clickhouse_client.send( decoded_row.to_string()).await;
+                self.clickhouse_client.send( decoded_row.to_string()).await.unwrap();
                 log::debug!("insert: {:?}", decoded_row);
             }
         }
 
         log::info!("Insert {} rows", message.payload().len());
 
-        self.next_step.submit(message.replace(()))
+        self.next_step.submit(message.replace(())).await
     }
 
     fn close(&mut self) {
@@ -191,5 +193,6 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     })
     .expect("Error setting Ctrl-C handler");
 
-    processor.run().unwrap();
+    block_on(processor.run()).unwrap();
+
 }

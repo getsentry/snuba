@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
@@ -73,12 +74,13 @@ def _wrapped(message, offset, partition, timestamp):
     }
 }
 
+#[async_trait]
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         // TODO: add procspawn/parallelism
         log::debug!("processing message,  message={}", message);
 
@@ -109,7 +111,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         });
 
         match result {
-            Ok(data) => self.next_step.submit(message.replace(data)),
+            Ok(data) => self.next_step.submit(message.replace(data)).await,
             Err(_) => {
                 log::error!("Invalid message");
                 Ok(())

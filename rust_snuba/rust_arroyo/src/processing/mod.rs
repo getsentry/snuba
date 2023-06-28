@@ -4,7 +4,10 @@ use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use futures::executor::block_on;
+use futures::lock::Mutex;
+
 use std::time::Duration;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
@@ -52,11 +55,11 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     // initialization.  But we just provide a signal back to the
     // processor to do that.
     fn on_assign(&mut self, _: HashMap<Partition, u64>) {
-        let mut stg = self.strategies.lock().unwrap();
+        let mut stg = block_on(self.strategies.lock());
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
-        let mut stg = self.strategies.lock().unwrap();
+        let mut stg = block_on(self.strategies.lock());
         match stg.strategy.as_mut() {
             None => {}
             Some(s) => {
@@ -143,7 +146,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             }
         }
 
-        let mut trait_callbacks = self.strategies.lock().unwrap();
+        let mut trait_callbacks = self.strategies.lock().await;
         match trait_callbacks.strategy.as_mut() {
             None => match self.message.as_ref() {
                 None => {}
@@ -202,7 +205,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             match ret {
                 Ok(()) => {}
                 Err(e) => {
-                    let mut trait_callbacks = self.strategies.lock().unwrap();
+                    let mut trait_callbacks = self.strategies.lock().await;
 
                     match trait_callbacks.strategy.as_mut() {
                         None => {}
