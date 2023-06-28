@@ -26,6 +26,8 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # should fail on bad code
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
 
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
+
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 
@@ -55,5 +57,6 @@ REDIS_CLUSTERS = {
         (6, "config"),
         (7, "dlq"),
         (8, "optimize"),
+        (9, "admin_auth"),
     ]
 }

@@ -71,6 +71,7 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         slice_id: Optional[int],
         join_timeout: Optional[float],
+        enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
@@ -83,6 +84,7 @@ class ConsumerBuilder:
         self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
+        self.__enforce_schema = enforce_schema
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -213,6 +215,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -265,6 +268,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,

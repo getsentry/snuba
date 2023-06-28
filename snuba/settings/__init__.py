@@ -55,6 +55,8 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
+ADMIN_ROLES_REDIS_TTL = 600
+
 ######################
 # End Admin Settings #
 ######################
@@ -154,6 +156,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -164,6 +167,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
 
 # Query Recording Options
@@ -187,6 +191,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
+
 
 # Processor/Writer Options
 
@@ -244,6 +249,12 @@ TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
+
+# Capacity Management
+# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
+# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
+# available for single tenant since we can enable/disable policies at runtime there.
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation

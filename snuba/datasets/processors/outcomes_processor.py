@@ -33,6 +33,8 @@ CLIENT_DISCARD_REASONS = frozenset(
         "sample_rate",
         "send_error",
         "internal_sdk_error",
+        "insufficient_data",
+        "backpressure",
     ]
 )
 

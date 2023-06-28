@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Sequence
 
+import rapidjson
 import structlog
 from flask import request
 
@@ -11,8 +12,11 @@ from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.google import CloudIdentityAPI
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
+from snuba.redis import RedisClientKey, get_redis_client
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
+redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -41,7 +45,7 @@ def _is_member_of_group(user: AdminUser, group: str) -> bool:
     return google_api.check_group_membership(group_email=group, member=user.email)
 
 
-def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
+def get_iam_roles_from_user(user: AdminUser) -> Sequence[str]:
     iam_roles = []
     try:
         with open(settings.ADMIN_IAM_POLICY_FILE, "r") as policy_file:
@@ -65,10 +69,38 @@ def get_iam_roles_from_file(user: AdminUser) -> Sequence[str]:
     return iam_roles
 
 
+def get_cached_iam_roles(user: AdminUser) -> Sequence[str]:
+    iam_roles_str = redis_client.get(f"roles-{user.email}")
+    if not iam_roles_str:
+        return []
+
+    iam_roles = rapidjson.loads(iam_roles_str)
+    if isinstance(iam_roles, list):
+        return iam_roles
+
+    return []
+
+
 def _set_roles(user: AdminUser) -> AdminUser:
     # todo: depending on provider convert user email
     # to subset of DEFAULT_ROLES based on IAM roles
-    iam_roles = get_iam_roles_from_file(user)
+    iam_roles: Sequence[str] = []
+    try:
+        iam_roles = get_cached_iam_roles(user)
+    except Exception as e:
+        logger.exception("Failed to load roles from cache", exception=e)
+
+    if not iam_roles:
+        iam_roles = get_iam_roles_from_user(user)
+        try:
+            redis_client.set(
+                f"roles-{user.email}",
+                rapidjson.dumps(iam_roles),
+                ex=settings.ADMIN_ROLES_REDIS_TTL,
+            )
+        except Exception as e:
+            logger.exception(e)
+
     user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
     return user
 

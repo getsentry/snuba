@@ -32,12 +32,12 @@ from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
-    ParallelTransformStep,
     ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
+    RunTask,
     RunTaskInThreads,
-    TransformStep,
+    RunTaskWithMultiprocessing,
 )
 from arroyo.types import (
     BaseValue,
@@ -523,6 +523,7 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
+    enforce_schema: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     local_metrics = MetricsWrapper(
@@ -573,6 +574,8 @@ def process_message(
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
+                    if enforce_schema:
+                        raise
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -832,11 +835,11 @@ class MultistorageConsumerProcessingStrategyFactory(
         ]
 
         if self.__processes is None:
-            inner_strategy = TransformStep(transform_function, collect)
+            inner_strategy = RunTask(transform_function, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
-            inner_strategy = ParallelTransformStep(
+            inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
                 self.__processes,
@@ -847,7 +850,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 initializer=self.__initialize_parallel_transform,
             )
 
-        return TransformStep(
+        return RunTask(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,
