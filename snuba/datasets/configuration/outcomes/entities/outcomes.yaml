@@ -13,7 +13,6 @@ schema:
     { name: quantity, type: UInt, args: { size: 64 } },
     { name: category, type: UInt, args: { size: 8 } },
     { name: times_seen, type: UInt, args: { size: 64 } },
-    { name: time, type: DateTime },
   ]
 
 required_time_column: timestamp
