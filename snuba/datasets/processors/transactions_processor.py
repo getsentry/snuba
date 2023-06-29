@@ -472,4 +472,4 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # the following operation modifies the event_dict and is therefore *not* order-independent
         self._process_contexts_and_user(processed, event_dict)
 
-        return InsertBatch([processed], None)
+        return InsertBatch([processed], processed["received"])
