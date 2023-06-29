@@ -10,7 +10,7 @@ from arroyo.backends.kafka import (
     build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
-from arroyo.commit import IMMEDIATE, ONCE_PER_SECOND
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
