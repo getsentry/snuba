@@ -143,7 +143,7 @@ class EntityContainsColumnsValidator(QueryValidator):
                 and column.column_name not in self.mapped_columns
             ):
                 missing.add(column.column_name)
-        print(query.get_from_clause().key.value)  # type:ignore
+
         if missing:
             prefix = ""
             if isinstance(entity := query.get_from_clause(), SimpleEntity):
