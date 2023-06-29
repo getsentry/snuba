@@ -655,6 +655,8 @@ if application.debug or application.testing:
                     processes=None,
                     input_block_size=None,
                     output_block_size=None,
+                    max_insert_batch_size=None,
+                    max_insert_batch_time=None,
                 ).create_with_partitions(commit, {})
                 strategy.submit(message)
                 strategy.close()

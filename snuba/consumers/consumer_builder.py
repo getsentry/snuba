@@ -10,7 +10,7 @@ from arroyo.backends.kafka import (
     build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
-from arroyo.commit import IMMEDIATE
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
@@ -68,6 +68,8 @@ class ConsumerBuilder:
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time_ms: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int],
         join_timeout: Optional[float],
@@ -132,6 +134,8 @@ class ConsumerBuilder:
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
+        self.max_insert_batch_size = max_insert_batch_size
+        self.max_insert_batch_time_ms = max_insert_batch_time_ms
         self.group_id = kafka_params.group_id
         self.auto_offset_reset = kafka_params.auto_offset_reset
         self.strict_offset_reset = kafka_params.strict_offset_reset
@@ -184,7 +188,7 @@ class ConsumerBuilder:
             consumer,
             input_topic,
             strategy_factory,
-            IMMEDIATE,
+            ONCE_PER_SECOND,
             dlq_policy=dlq_policy,
             join_timeout=self.join_timeout,
         )
@@ -227,6 +231,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -280,6 +287,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
