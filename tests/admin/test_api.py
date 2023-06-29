@@ -503,3 +503,65 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         } not in response.json[0]["configs"]
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' does not exist"
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "sessions", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
+    )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 1
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 2
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"

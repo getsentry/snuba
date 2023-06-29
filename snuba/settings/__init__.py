@@ -55,6 +55,8 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
+
+ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
 ######################
