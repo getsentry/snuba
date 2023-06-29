@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
+from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
 from snuba.clickhouse.translators.snuba.mappers import ColumnToExpression
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
@@ -125,6 +126,8 @@ class EntityContainsColumnsValidator(QueryValidator):
             for colmapping in mapper.columns:
                 if isinstance(colmapping, ColumnToExpression):
                     self.mapped_columns.add(colmapping.from_col_name)
+                elif isinstance(colmapping, DefaultNoneColumnMapper):
+                    self.mapped_columns.update(colmapping.column_names)
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         if self.validation_mode == ColumnValidationMode.DO_NOTHING:
@@ -140,7 +143,7 @@ class EntityContainsColumnsValidator(QueryValidator):
                 and column.column_name not in self.mapped_columns
             ):
                 missing.add(column.column_name)
-
+        print(query.get_from_clause().key.value)  # type:ignore
         if missing:
             prefix = ""
             if isinstance(entity := query.get_from_clause(), SimpleEntity):
