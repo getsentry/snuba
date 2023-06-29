@@ -7,7 +7,14 @@ from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
 from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
-from snuba.clickhouse.translators.snuba.mappers import ColumnToExpression
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
+)
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToExpression,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
@@ -123,11 +130,20 @@ class EntityContainsColumnsValidator(QueryValidator):
         # Parse and store those mappings as well
         self.mapped_columns = set()
         for mapper in mappers:
-            for colmapping in mapper.columns:
-                if isinstance(colmapping, ColumnToExpression):
-                    self.mapped_columns.add(colmapping.from_col_name)
-                elif isinstance(colmapping, DefaultNoneColumnMapper):
-                    self.mapped_columns.update(colmapping.column_names)
+            for func_mapping in mapper.functions:
+                if isinstance(func_mapping, AggregateFunctionMapper):
+                    self.mapped_columns.add(func_mapping.column_to_map)
+            for curried_mapping in mapper.curried_functions:
+                if isinstance(curried_mapping, AggregateCurriedFunctionMapper):
+                    self.mapped_columns.add(curried_mapping.column_to_map)
+            for sub_mapping in mapper.subscriptables:
+                if isinstance(sub_mapping, SubscriptableMapper):
+                    self.mapped_columns.add(sub_mapping.from_column_name)
+            for col_mapping in mapper.columns:
+                if isinstance(col_mapping, ColumnToExpression):
+                    self.mapped_columns.add(col_mapping.from_col_name)
+                elif isinstance(col_mapping, DefaultNoneColumnMapper):
+                    self.mapped_columns.update(col_mapping.column_names)
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         if self.validation_mode == ColumnValidationMode.DO_NOTHING:
