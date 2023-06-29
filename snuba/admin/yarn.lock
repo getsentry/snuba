@@ -1452,13 +1452,6 @@
   dependencies:
     "@types/react" "*"
 
-"@types/react-syntax-highlighter@^15.5.7":
-  version "15.5.7"
-  resolved "https://registry.npmjs.org/@types/react-syntax-highlighter/-/react-syntax-highlighter-15.5.7.tgz"
-  integrity sha512-bo5fEO5toQeyCp0zVHBeggclqf5SQ/Z5blfFmjwO5dkMVGPgmiwZsJh9nu/Bo5L7IHTuGWrja6LxJVE2uB5ZrQ==
-  dependencies:
-    "@types/react" "*"
-
 "@types/react-transition-group@^4.4.5":
   version "4.4.5"
   resolved "https://registry.npmjs.org/@types/react-transition-group/-/react-transition-group-4.4.5.tgz"
