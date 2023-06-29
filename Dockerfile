@@ -86,6 +86,8 @@ RUN set -ex; \
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
 ARG SHOULD_BUILD_ADMIN_UI=true
+ARG ADMIN_SOURCEMAP_KEY=unknown
+ENV SENTRY_AUTH_TOKEN=$ADMIN_SOURCEMAP_KEY
 ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
