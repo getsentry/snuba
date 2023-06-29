@@ -141,6 +141,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             metrics.increment("group_ids_exceeded_limit")
 
         processed["group_ids"] = group_ids[:GROUP_IDS_LIMIT]
+
         return processed
 
     def _process_tags(
@@ -472,4 +473,4 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # the following operation modifies the event_dict and is therefore *not* order-independent
         self._process_contexts_and_user(processed, event_dict)
 
-        return InsertBatch([processed], processed["received"])
+        return InsertBatch([processed], event_dict["data"]["received"])
