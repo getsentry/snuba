@@ -24,7 +24,10 @@ client.getSettings().then((settings) => {
   if (settings.dsn != "") {
     Sentry.init({
       dsn: settings.dsn,
-      integrations: [new Sentry.BrowserTracing(), new Sentry.Replay()],
+      integrations: [
+        new Sentry.BrowserTracing(),
+        new Sentry.Replay({ maskAllText: false, blockAllMedia: false }),
+      ],
       // Performance Monitoring
       tracesSampleRate: settings.tracesSampleRate,
       // Session Replay
