@@ -15,7 +15,7 @@ jobs:
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
+        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc # v2.0.0
         continue-on-error: true
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
@@ -161,7 +161,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       matrix:
         snuba_settings:
@@ -205,7 +205,6 @@ jobs:
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
-
 
       - name: Upload to codecov
         run: |

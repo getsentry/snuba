@@ -7,6 +7,7 @@ type Settings = {
   tracesSampleRate: number;
   replaysSessionSampleRate: number;
   replaysOnErrorSampleRate: number;
+  userEmail: string;
 };
 
 export { AllowedTools, Settings };

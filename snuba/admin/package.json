@@ -7,12 +7,12 @@
     "test": "jest"
   },
   "dependencies": {
-    "@sentry/react": "^7.53.1",
     "@tiptap/extension-code-block-lowlight": "^2.0.3",
     "@tiptap/extension-placeholder": "^2.0.3",
     "@tiptap/pm": "^2.0.3",
+    "@sentry/react": "^7.56.0",
     "@types/react": "^18.0.20",
-    "@types/react-dom": "^18.0.6",
+    "@types/react-dom": "^18.2.6",
     "jest-dom": "^4.0.0",
     "lowlight": "^2.9.0",
     "react": "^18.2.0",
@@ -44,7 +44,7 @@
     "resize-observer-polyfill": "^1.5.1",
     "ts-jest": "^29.0.5",
     "use-resize-observer": "^9.1.0",
-    "webpack": "^5.74.0",
+    "webpack": "^5.88.0",
     "webpack-cli": "^4.10.0"
   },
   "volta": {

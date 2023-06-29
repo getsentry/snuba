@@ -8,10 +8,11 @@ from arroyo.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
+    RunTask,
     RunTaskInThreads,
+    RunTaskWithMultiprocessing,
 )
 from arroyo.processing.strategies.commit import CommitOffsets
-from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
@@ -63,6 +64,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time: Optional[float],
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
         max_messages_to_process: Optional[int] = None,
@@ -75,6 +78,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
+        self.__max_insert_batch_size = max_insert_batch_size or max_batch_size
+        self.__max_insert_batch_time = max_insert_batch_time or max_batch_time
 
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -118,8 +123,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit_strategy = CommitOffsets(commit)
 
         collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
-            self.__max_batch_size,
-            self.__max_batch_time,
+            self.__max_insert_batch_size,
+            self.__max_insert_batch_time,
             accumulator,
             self.__collector,
             RunTaskInThreads(
@@ -136,11 +141,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
         if self.__processes is None:
-            strategy = TransformStep(transform_function, collect)
+            strategy = RunTask(transform_function, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
+            strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
                 self.__processes,

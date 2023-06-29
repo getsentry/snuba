@@ -25,7 +25,10 @@ import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 import { KafkaTopicData } from "./kafka/types";
 import { QuerylogRequest, QuerylogResult } from "./querylog/types";
-import { CardinalityQueryRequest, CardinalityQueryResult } from "./cardinality_analyzer/types";
+import {
+  CardinalityQueryRequest,
+  CardinalityQueryResult,
+} from "./cardinality_analyzer/types";
 
 import { AllocationPolicy } from "./capacity_management/types";
 
@@ -57,7 +60,9 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
-  executeCardinalityQuery: (req: CardinalityQueryRequest) => Promise<CardinalityQueryResult>;
+  executeCardinalityQuery: (
+    req: CardinalityQueryRequest
+  ) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -183,7 +188,7 @@ function Client() {
     },
 
     convertSnQLQuery: (query: SnQLRequest) => {
-      const url = baseUrl + "snql_to_sql";
+      const url = baseUrl + "snuba_debug";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

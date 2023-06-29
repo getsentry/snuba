@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
+import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -64,6 +65,7 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
+from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
@@ -96,7 +98,9 @@ def authorize() -> None:
     if request.endpoint != "health":
         user = authorize_request()
         logger.info("authorize.finished", user=user)
-        g.user = user
+        with sentry_sdk.push_scope() as scope:
+            scope.user = {"email": user.email}
+            g.user = user
 
 
 @application.route("/")
@@ -123,6 +127,7 @@ def settings_endpoint() -> Response:
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+                "userEmail": g.user.email,
             }
         ),
         200,
@@ -721,15 +726,23 @@ def snuba_datasets() -> Response:
     )
 
 
-@application.route("/snql_to_sql", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL])
-def snql_to_sql() -> Response:
+@application.route("/snuba_debug", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL, AdminTools.SNUBA_EXPLAIN])
+def snuba_debug() -> Response:
     body = json.loads(request.data)
     body["debug"] = True
     body["dry_run"] = True
     try:
         dataset = get_dataset(body.pop("dataset"))
-        return dataset_query(dataset, body, Timer("admin"))
+        response = dataset_query(dataset, body, Timer("admin"))
+        data = response.get_json()
+        assert isinstance(data, dict)
+
+        meta = get_explain_meta()
+        if meta:
+            data["explain"] = asdict(meta)
+        response.data = json.dumps(data)
+        return response
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
@@ -742,6 +755,8 @@ def snql_to_sql() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+    finally:
+        explain_cleanup()
 
 
 @application.route("/storages_with_allocation_policies")

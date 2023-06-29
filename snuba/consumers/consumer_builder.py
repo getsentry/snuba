@@ -10,7 +10,7 @@ from arroyo.backends.kafka import (
     build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
-from arroyo.commit import IMMEDIATE
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
@@ -68,9 +68,12 @@ class ConsumerBuilder:
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time_ms: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int],
-        join_timeout: Optional[int],
+        join_timeout: Optional[float],
+        enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
@@ -83,6 +86,7 @@ class ConsumerBuilder:
         self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
+        self.__enforce_schema = enforce_schema
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -130,6 +134,8 @@ class ConsumerBuilder:
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
+        self.max_insert_batch_size = max_insert_batch_size
+        self.max_insert_batch_time_ms = max_insert_batch_time_ms
         self.group_id = kafka_params.group_id
         self.auto_offset_reset = kafka_params.auto_offset_reset
         self.strict_offset_reset = kafka_params.strict_offset_reset
@@ -146,6 +152,7 @@ class ConsumerBuilder:
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        input_topic: Topic,
         dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
 
@@ -179,9 +186,9 @@ class ConsumerBuilder:
 
         return StreamProcessor(
             consumer,
-            self.raw_topic,
+            input_topic,
             strategy_factory,
-            IMMEDIATE,
+            ONCE_PER_SECOND,
             dlq_policy=dlq_policy,
             join_timeout=self.join_timeout,
         )
@@ -212,6 +219,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -223,6 +231,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -264,6 +275,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -275,6 +287,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -299,7 +314,9 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.build_streaming_strategy_factory(), self.__build_default_dlq_policy()
+            self.build_streaming_strategy_factory(),
+            self.raw_topic,
+            self.__build_default_dlq_policy(),
         )
 
     def build_dlq_consumer(
@@ -325,8 +342,13 @@ class ConsumerBuilder:
         else:
             raise ValueError("Invalid DLQ policy")
 
+        dlq_topic = self.__consumer_config.dlq_topic
+        assert dlq_topic is not None
+
         return self.__build_consumer(
-            self.build_dlq_strategy_factory(instruction), dlq_policy
+            self.build_dlq_strategy_factory(instruction),
+            Topic(dlq_topic.physical_topic_name),
+            dlq_policy,
         )
 
     def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
