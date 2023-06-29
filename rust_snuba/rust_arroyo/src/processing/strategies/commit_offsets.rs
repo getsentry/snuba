@@ -1,6 +1,6 @@
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, Partition};
-use log::info;
+use log::{info};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use async_trait::async_trait;

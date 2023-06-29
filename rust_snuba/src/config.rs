@@ -45,6 +45,7 @@ pub struct StoragesConfig {
 pub struct ClickhouseConfig {
     pub host: String,
     pub port: u16,
+    pub http_port: u16,
     pub user: String,
     pub password: String,
     pub database: String,
