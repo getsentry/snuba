@@ -950,6 +950,15 @@ def dlq_replay() -> Response:
             slice_id,
             max_messages_to_process,
         )
+
+        user = request.headers.get(USER_HEADER_KEY)
+
+        audit_log.record(
+            user or "",
+            AuditLogAction.DLQ_REPLAY,
+            {"instruction": str(instruction)},
+            notify=True,
+        )
         store_instruction(instruction)
 
     if request.method == "DELETE":
