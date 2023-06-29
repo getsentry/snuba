@@ -24,6 +24,7 @@ from snuba.processor import (
     InsertBatch,
     ProcessedMessage,
     _as_dict_safe,
+    _collapse_uint32,
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
@@ -473,4 +474,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # the following operation modifies the event_dict and is therefore *not* order-independent
         self._process_contexts_and_user(processed, event_dict)
 
-        return InsertBatch([processed], event_dict["data"]["received"])
+        raw_received = _collapse_uint32(int(event_dict["data"]["received"]))
+        received = (
+            datetime.utcfromtimestamp(raw_received)
+            if raw_received is not None
+            else None
+        )
+
+        return InsertBatch([processed], received)
