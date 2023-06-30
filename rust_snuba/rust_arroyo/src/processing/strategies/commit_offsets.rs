@@ -128,13 +128,13 @@ mod tests {
         commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).await.expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).await,
             None
         );
 
         sleep(Duration::from_secs(2));
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).await,
             Some(commit_req1)
         );
 
@@ -144,14 +144,14 @@ mod tests {
         commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).await.expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).await,
             None
         );
         assert_eq!(
             <CommitOffsets as ProcessingStrategy<KafkaPayload>>::join(
                 &mut noop,
                 Some(Duration::from_secs(5))
-            ),
+            ).await,
             Some(commit_req2)
         );
     }

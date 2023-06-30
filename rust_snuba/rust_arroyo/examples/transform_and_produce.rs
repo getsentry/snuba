@@ -37,7 +37,7 @@ struct Noop {}
 
 #[async_trait]
 impl ProcessingStrategy<KafkaPayload> for Noop {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         None
     }
     async fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
@@ -45,7 +45,7 @@ impl ProcessingStrategy<KafkaPayload> for Noop {
     }
     fn close(&mut self) {}
     fn terminate(&mut self) {}
-    fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
         None
     }
 }

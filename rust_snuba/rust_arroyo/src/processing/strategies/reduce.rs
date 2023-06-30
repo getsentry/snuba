@@ -148,7 +148,7 @@ mod tests {
 
         #[async_trait]
         impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            async fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
 
@@ -161,7 +161,7 @@ mod tests {
 
             fn terminate(&mut self) {}
 
-            fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
+            async fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
                 None
             }
         }
@@ -196,11 +196,11 @@ mod tests {
         for i in 0..3 {
             let msg = Message {inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(i, partition1.clone(), i, chrono::Utc::now()))};
             strategy.submit(msg).await.unwrap();
-            strategy.poll();
+            strategy.poll().await;
         }
 
         strategy.close();
-        strategy.join(None);
+        strategy.join(None).await;
 
         // 2 batches were created
         assert_eq!(*submitted_messages_clone.lock().unwrap(), vec![vec![0, 1], vec![2]]);

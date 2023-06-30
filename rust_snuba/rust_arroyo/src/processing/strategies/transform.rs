@@ -60,7 +60,7 @@ mod tests {
 
         #[async_trait]
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            async fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
             async fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected> {
@@ -68,7 +68,7 @@ mod tests {
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+            async fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
                 None
             }
         }

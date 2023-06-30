@@ -263,7 +263,7 @@ mod tests {
     #[async_trait]
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Option<CommitRequest> {
+        async fn poll(&mut self) -> Option<CommitRequest> {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
@@ -281,7 +281,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
+        async fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
             None
         }
     }
