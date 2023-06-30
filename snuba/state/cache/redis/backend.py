@@ -303,4 +303,5 @@ class RedisCache(Cache[TValue]):
         except (ConnectionError, ReadOnlyError, RedisTimeoutError):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
+            metrics.increment("snuba.read_through_cache.fail_open")
             return function()
