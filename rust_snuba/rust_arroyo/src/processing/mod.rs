@@ -5,6 +5,7 @@ use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc};
+use std::thread;
 use futures::lock::Mutex;
 
 use std::time::Duration;
@@ -53,26 +54,45 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
+
+    // TODO: Because these callbacks are called synchronously, by kafka, we make our
+    // own threads and tokio runtimes to do the work.
     fn on_assign(&mut self, _: HashMap<Partition, u64>) {
         let strategies = self.strategies.clone();
-        tokio::spawn(async move {
-            let mut stg = strategies.lock().await;
-            stg.strategy = Some(stg.processing_factory.create());
+        let thread_handle = thread::spawn( move || {
+            let tokio_rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let assign_handle = tokio_rt.spawn(async move {
+                let mut stg = strategies.lock().await;
+                stg.strategy = Some(stg.processing_factory.create());
+            });
+            tokio_rt.block_on(assign_handle).unwrap();
         });
+        thread_handle.join().unwrap();
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
         let strategies = self.strategies.clone();
-        tokio::spawn(async move {
-            let mut stg = strategies.lock().await;
-            match stg.strategy.as_mut() {
-                None => {}
-                Some(s) => {
-                    s.close();
-                    s.join(None).await;
+        let thread_handle = thread::spawn( move || {
+            let tokio_rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let revoke_handle: tokio::task::JoinHandle<()> = tokio_rt.spawn(async move {
+                let mut stg = strategies.lock().await;
+                match stg.strategy.as_mut() {
+                    None => {}
+                    Some(s) => {
+                        s.close();
+                        s.join(None).await;
+                    }
                 }
-            }
-            stg.strategy = None;
+                stg.strategy = None;
+            });
+            tokio_rt.block_on(revoke_handle).unwrap();
         });
+        thread_handle.join().unwrap();
     }
 }
 
