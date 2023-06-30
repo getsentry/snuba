@@ -25,6 +25,7 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it
 # should fail on bad code
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
+RAISE_ON_READTHROUGH_CACHE_FAILURES = False
 
 ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 

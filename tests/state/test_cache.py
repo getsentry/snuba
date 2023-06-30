@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 import rapidjson
 
-from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
+from snuba.redis import FailoverRedis, RedisClientKey, RedisClientType, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
@@ -70,6 +70,27 @@ def backend() -> Cache[bytes]:
     return backend
 
 
+@pytest.fixture
+def bad_backend() -> Cache[bytes]:
+    codec = PassthroughCodec()
+
+    class BadClient(FailoverRedis):
+        def __init__(self, client: Any):
+            self._client = client
+
+        def _fail_everything(self, *args, **kwargs):
+            raise Exception("Failed")
+
+        def __getattr__(self, attr: str):
+            if callable(getattr(self._client, attr, None)):
+                return self._fail_everything
+
+    backend: Cache[bytes] = RedisCache(
+        BadClient(redis_client), "test", codec, ThreadPoolExecutor()
+    )
+    return backend
+
+
 def noop(value: int) -> None:
     return None
 
@@ -90,6 +111,15 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
     with assert_changes(lambda: function.call_count, 1, 2):
         backend.get_readthrough(key, function, noop, 5) == value
+
+
+@pytest.mark.redis_db
+def test_fail_open(bad_backend: Cache[bytes]):
+    key = "key"
+    value = b"value"
+    function = mock.MagicMock(return_value=value)
+    with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_FAILURES", False):
+        assert bad_backend.get_readthrough(key, function, noop, 5) == value
 
 
 @pytest.mark.redis_db
@@ -127,12 +157,17 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
 @pytest.mark.redis_db
 def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     key = "key"
+    count = 0
 
     class CustomException(SerializableException):
         pass
 
     def function() -> bytes:
-        raise CustomException("error")
+        nonlocal count
+        count += 1
+        if count == 1:
+            raise CustomException("error")
+        return b"should not be called twice"
 
     with pytest.raises(CustomException):
         backend.get_readthrough(key, function, noop, 1)
@@ -158,13 +193,18 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 @pytest.mark.redis_db
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
+    count = 0
 
     class ReadThroughCustomException(SerializableException):
         pass
 
     def function() -> bytes:
         time.sleep(1)
-        raise ReadThroughCustomException("error")
+        nonlocal count
+        count += 1
+        if count == 1:
+            raise ReadThroughCustomException("error")
+        return b"should not be called twice"
 
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop, 10)
