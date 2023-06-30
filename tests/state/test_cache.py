@@ -11,6 +11,7 @@ from unittest import mock
 import pytest
 import rapidjson
 
+from redis.exceptions import ReadOnlyError
 from snuba.redis import FailoverRedis, RedisClientKey, RedisClientType, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
@@ -39,6 +40,20 @@ def execute(function: Callable[[], Any]) -> Future[Any]:
     Thread(target=run).start()
 
     return future
+
+
+class SingleCallFunction:
+    def __init__(self, func):
+        self._func = func
+        self._count = 0
+
+    def __call__(self, *args, **kwargs) -> Any:
+        self._count += 1
+        if self._count > 1:
+            raise Exception(
+                "This function should only be called once, the cache is doing something wrong"
+            )
+        return self._func(*args, **kwargs)
 
 
 class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
@@ -78,12 +93,11 @@ def bad_backend() -> Cache[bytes]:
         def __init__(self, client: Any):
             self._client = client
 
-        def _fail_everything(self, *args, **kwargs):
-            raise Exception("Failed")
+        def evalsha(self, *args, **kwargs):
+            raise ReadOnlyError("Failed")
 
         def __getattr__(self, attr: str):
-            if callable(getattr(self._client, attr, None)):
-                return self._fail_everything
+            return getattr(self._client, attr)
 
     backend: Cache[bytes] = RedisCache(
         BadClient(redis_client), "test", codec, ThreadPoolExecutor()
@@ -118,7 +132,7 @@ def test_fail_open(bad_backend: Cache[bytes]):
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
-    with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_FAILURES", False):
+    with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES", False):
         assert bad_backend.get_readthrough(key, function, noop, 5) == value
 
 
@@ -157,20 +171,15 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
 @pytest.mark.redis_db
 def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     key = "key"
-    count = 0
 
     class CustomException(SerializableException):
         pass
 
     def function() -> bytes:
-        nonlocal count
-        count += 1
-        if count == 1:
-            raise CustomException("error")
-        return b"should not be called twice"
+        raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, function, noop, 1)
+        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
 
 
 @pytest.mark.redis_db
@@ -193,21 +202,15 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 @pytest.mark.redis_db
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
-    count = 0
 
     class ReadThroughCustomException(SerializableException):
         pass
 
     def function() -> bytes:
-        time.sleep(1)
-        nonlocal count
-        count += 1
-        if count == 1:
-            raise ReadThroughCustomException("error")
-        return b"should not be called twice"
+        raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.get_readthrough(key, SingleCallFunction(function), noop, 10)
 
     setter = execute(worker)
     time.sleep(0.5)
@@ -275,10 +278,14 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         return b"hello"
 
     def transient_error() -> bytes:
-        return backend.get_readthrough(key, error_function, noop, 10)
+        return backend.get_readthrough(
+            key, SingleCallFunction(error_function), noop, 10
+        )
 
     def functioning_query() -> bytes:
-        return backend.get_readthrough(key, normal_function, noop, 10)
+        return backend.get_readthrough(
+            key, SingleCallFunction(normal_function), noop, 10
+        )
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise

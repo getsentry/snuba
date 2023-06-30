@@ -6,7 +6,8 @@ from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
-from redis.exceptions import ResponseError
+from redis.exceptions import ConnectionError, ReadOnlyError, ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -299,12 +300,7 @@ class RedisCache(Cache[TValue]):
             return self.__get_readthrough(
                 key, function, record_cache_hit_type, timeout, timer
             )
-        except Exception as e:
-            import pdb
-
-            pdb.set_trace()
-            if settings.RAISE_ON_READTHROUGH_CACHE_FAILURES:
-                raise
-            if isinstance(e, (TimeoutError, ExecutionError, ExecutionTimeoutError)):
+        except (ConnectionError, ReadOnlyError, RedisTimeoutError):
+            if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
             return function()

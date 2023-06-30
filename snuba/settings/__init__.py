@@ -267,7 +267,7 @@ RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 # By default, the readthrough cache won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache
 # the request will still be able to go through as if the cache did not exist
-RAISE_ON_READTHROUGH_CACHE_FAILURES = False
+RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 
 
 # (logical topic name, # of partitions)
