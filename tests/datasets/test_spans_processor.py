@@ -1,9 +1,11 @@
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 import pytest
+from sentry_kafka_schemas import get_codec
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -14,6 +16,8 @@ from snuba.datasets.processors.spans_processor import (
 )
 from snuba.processor import InsertBatch
 from snuba.state import delete_config, set_config
+
+transaction_schema = get_codec("transactions", 1)
 
 
 @dataclass
@@ -98,7 +102,8 @@ class TransactionEvent:
                         "id": "legacy:2019-03-12",
                     },
                     "sdk": {
-                        "packages": [{"version": "0.9.0", "name": "pypi:sentry-sdk"}],
+                        "version": "0.9.0",
+                        "name": "pypi:sentry-sdk",
                     },
                     "breadcrumbs": {
                         "values": [
@@ -432,8 +437,11 @@ class TestSpansProcessor:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
+        serialized_message = message.serialize()
+        transaction_schema.decode(json.dumps(serialized_message).encode("utf-8"))
+
         actual_result = SpansMessageProcessor().process_message(
-            message.serialize(), meta
+            serialized_message, meta
         )
         assert isinstance(actual_result, InsertBatch)
         rows = actual_result.rows
@@ -455,8 +463,12 @@ class TestSpansProcessor:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
+
+        serialized_message = message.serialize()
+        transaction_schema.decode(json.dumps(serialized_message).encode("utf-8"))
+
         actual_result = SpansMessageProcessor().process_message(
-            message.serialize(), meta
+            serialized_message, meta
         )
 
         assert isinstance(actual_result, InsertBatch)
@@ -481,6 +493,8 @@ class TestSpansProcessor:
         actual_result = SpansMessageProcessor().process_message(
             message.serialize(), meta
         )
+        transaction_schema.decode(json.dumps(message.serialize()).encode("utf-8"))
+
         assert isinstance(actual_result, InsertBatch)
         assert actual_result.rows[0]["parent_span_id"] == 0
         expected_result = message.build_result(meta)
