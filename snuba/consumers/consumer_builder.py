@@ -10,7 +10,7 @@ from arroyo.backends.kafka import (
     build_kafka_configuration,
     build_kafka_consumer_configuration,
 )
-from arroyo.commit import ONCE_PER_SECOND
+from arroyo.commit import IMMEDIATE
 from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
@@ -188,7 +188,8 @@ class ConsumerBuilder:
             consumer,
             input_topic,
             strategy_factory,
-            ONCE_PER_SECOND,
+            # We already debounce commits by batch sizes, ONCE_PER_SECOND just adds more lag.
+            IMMEDIATE,
             dlq_policy=dlq_policy,
             join_timeout=self.join_timeout,
         )
