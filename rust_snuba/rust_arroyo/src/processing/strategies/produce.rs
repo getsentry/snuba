@@ -62,7 +62,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
             if handle.is_finished() {
                 let new_message = message.clone();
                 self.next_step.poll().await;
-                self.next_step.submit(new_message).await;
+                self.next_step.submit(new_message).await.unwrap();
             } else {
                 break;
             }
@@ -118,7 +118,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
                 let new_message = message.clone();
                 self.next_step.poll().await;
                 // TODO: Handle message rejected
-                self.next_step.submit(new_message).await;
+                self.next_step.submit(new_message).await.unwrap();
             } else {
                 break;
             }
