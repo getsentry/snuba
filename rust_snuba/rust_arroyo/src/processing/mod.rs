@@ -5,7 +5,6 @@ use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc};
-use futures::executor::block_on;
 use futures::lock::Mutex;
 
 use std::time::Duration;
@@ -55,19 +54,25 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     // initialization.  But we just provide a signal back to the
     // processor to do that.
     fn on_assign(&mut self, _: HashMap<Partition, u64>) {
-        let mut stg = block_on(self.strategies.lock());
-        stg.strategy = Some(stg.processing_factory.create());
+        let strategies = self.strategies.clone();
+        tokio::spawn(async move {
+            let mut stg = strategies.lock().await;
+            stg.strategy = Some(stg.processing_factory.create());
+        });
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
-        let mut stg = block_on(self.strategies.lock());
-        match stg.strategy.as_mut() {
-            None => {}
-            Some(s) => {
-                s.close();
-                s.join(None);
+        let strategies = self.strategies.clone();
+        tokio::spawn(async move {
+            let mut stg = strategies.lock().await;
+            match stg.strategy.as_mut() {
+                None => {}
+                Some(s) => {
+                    s.close();
+                    s.join(None).await;
+                }
             }
-        }
-        stg.strategy = None;
+            stg.strategy = None;
+        });
     }
 }
 
@@ -153,7 +158,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             },
             Some(strategy) => {
-                let commit_request = strategy.poll();
+                let commit_request = strategy.poll().await;
                 match commit_request {
                     None => {}
                     Some(request) => {

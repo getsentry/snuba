@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use futures::executor::block_on;
 
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
@@ -49,12 +48,14 @@ pub struct Reduce<T, TResult> {
 }
 #[async_trait]
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.flush(false);
-        self.next_step.poll()
+    async fn poll(&mut self) -> Option<CommitRequest> {
+        log::trace!("reduce polling");
+        self.flush(false).await;
+        self.next_step.poll().await
     }
 
     async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+        log::debug!("reduce submitting,  message={}", message);
         if self.batch_state.is_complete {
             return Err(MessageRejected);
         }
@@ -71,9 +72,9 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.flush(true);
-        self.next_step.join(timeout)
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+        self.flush(true).await;
+        self.next_step.join(timeout).await
     }
 }
 
@@ -96,7 +97,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
         }
     }
 
-    fn flush(&mut self, force: bool) {
+    async fn flush(&mut self, force: bool) {
         if self.batch_state.message_count == 0 {
             return;
         }
@@ -112,8 +113,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
                     self.batch_state.offsets.clone(),
                 )),
             };
-
-            match block_on(self.next_step.submit(next_message)) {
+            match self.next_step.submit(next_message).await {
                 Ok(_) => {
                     self.batch_state = BatchState::new(self.initial_value.clone(), self.accumulator.clone());
                 }

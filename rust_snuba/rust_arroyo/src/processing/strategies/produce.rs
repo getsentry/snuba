@@ -5,7 +5,6 @@ use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingSt
 use crate::types::{Message, TopicOrPartition};
 use async_trait::async_trait;
 use futures::Future;
-use futures::executor::block_on;
 use log::warn;
 use std::collections::VecDeque;
 use std::pin::Pin;
@@ -56,14 +55,14 @@ impl Produce<KafkaPayload> {
 
 #[async_trait]
 impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty() {
             let (message, handle) = self.queue.pop_front().unwrap();
 
             if handle.is_finished() {
                 let new_message = message.clone();
-                self.next_step.poll();
-                block_on(self.next_step.submit(new_message)).unwrap();
+                self.next_step.poll().await;
+                self.next_step.submit(new_message).await;
             } else {
                 break;
             }
@@ -102,7 +101,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = None;
 
@@ -117,16 +116,16 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
             let (message, handle) = self.queue.pop_front().unwrap();
             if handle.is_finished() {
                 let new_message = message.clone();
-                self.next_step.poll();
+                self.next_step.poll().await;
                 // TODO: Handle message rejected
-                block_on(self.next_step.submit(new_message)).unwrap();
+                self.next_step.submit(new_message).await;
             } else {
                 break;
             }
         }
 
         self.next_step.close();
-        self.next_step.join(remaining);
+        self.next_step.join(remaining).await;
         // TODO: Handle commit request
         None
     }

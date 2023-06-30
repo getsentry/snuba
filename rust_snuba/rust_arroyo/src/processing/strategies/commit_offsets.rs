@@ -12,7 +12,7 @@ pub struct CommitOffsets {
 }
 #[async_trait]
 impl<T: Clone + Send> ProcessingStrategy<T> for CommitOffsets where T: 'static{
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         self.commit(false)
     }
 
@@ -27,7 +27,7 @@ impl<T: Clone + Send> ProcessingStrategy<T> for CommitOffsets where T: 'static{
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
         self.commit(true)
     }
 }

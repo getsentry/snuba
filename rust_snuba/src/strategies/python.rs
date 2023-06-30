@@ -76,9 +76,9 @@ def _wrapped(message, offset, partition, timestamp):
 
 #[async_trait]
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         log::trace!("polling python transform step");
-        self.next_step.poll()
+        self.next_step.poll().await
     }
 
     async fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
@@ -132,10 +132,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         // TODO: we need to shut down the python module properly in order to avoid dataloss in
         // sentry sdk or similar things that run in python's atexit
         log::debug!("joining python transform step");
-        self.next_step.join(timeout)
+        self.next_step.join(timeout).await
     }
 }

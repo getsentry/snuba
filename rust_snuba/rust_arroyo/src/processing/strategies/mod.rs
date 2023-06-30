@@ -40,7 +40,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     ///
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
-    fn poll(&mut self) -> Option<CommitRequest>;
+    async fn poll(&mut self) -> Option<CommitRequest>;
 
     /// Submit a message for processing.
     ///
@@ -78,7 +78,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// until this function exits, allowing any work in progress to be
     /// completed and committed before the continuing the rebalancing
     /// process.
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
 }
 
 pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {

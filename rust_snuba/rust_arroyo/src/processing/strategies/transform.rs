@@ -15,8 +15,8 @@ pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send +
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
     for Transform<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.next_step.poll()
+    async fn poll(&mut self) -> Option<CommitRequest> {
+        self.next_step.poll().await
     }
 
     async fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected> {
@@ -34,8 +34,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+        self.next_step.join(timeout).await
     }
 }
 

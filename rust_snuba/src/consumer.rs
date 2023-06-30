@@ -45,9 +45,9 @@ impl ClickhouseWriterStep {
 
 #[async_trait]
 impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         log::trace!("polling clickhouse writer step");
-        self.next_step.poll()
+        self.next_step.poll().await
     }
 
     async fn submit(&mut self, message: Message<Vec<BytesInsertBatch>>) -> Result<(), MessageRejected> {
@@ -90,9 +90,9 @@ impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         log::debug!("joining clickhouse writer step");
-        self.next_step.join(timeout)
+        self.next_step.join(timeout).await
     }
 }
 
@@ -124,6 +124,7 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+            log::debug!("creating consumer strategy");
             let accumulator =
                 Arc::new(|mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
                     acc.push(value);
