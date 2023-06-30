@@ -972,15 +972,11 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        # TODO: when validation mode is ERROR this should be:
-        # assert response.status_code == 400
-        # assert (
-        #     json.loads(response.data)["error"]["message"]
-        #     == "validation failed for entity outcomes: query column(s) fake_column do not exist"
-        # )
-
-        # For now it's 500 since it's just a clickhouse error
-        assert response.status_code == 500
+        assert response.status_code == 400
+        assert (
+            json.loads(response.data)["error"]["message"]
+            == "validation failed for entity outcomes: Entity outcomes: Query column 'fake_column' does not exist"
+        )
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(
@@ -1013,8 +1009,18 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fsdfsd do not exist",
+            "validation failed for entity events: Query column 'fsdfsd' does not exist",
             id="Invalid first Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.fsdfsd, e.fake_col, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query columns (fake_col, fsdfsd) do not exist",
+            id="Invalid multiple Select columns",
         ),
         pytest.param(
             f"""{MATCH}
@@ -1023,7 +1029,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -1033,7 +1039,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid By column",
         ),
         pytest.param(
@@ -1044,7 +1050,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -1054,7 +1060,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) status do not exist",
+            "validation failed for entity events: Query column 'status' does not exist",
             id="Mismatched Select columns",
         ),
         pytest.param(
@@ -1064,7 +1070,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fdsdsf do not exist",
+            "validation failed for entity events: Query column 'fdsdsf' does not exist",
             id="Invalid nested column",
         ),
     ]
@@ -1077,11 +1083,8 @@ class TestSnQLApi(BaseApiTest):
     ) -> None:
         response = self.post("/events/snql", data=json.dumps({"query": query}))
 
-        # TODO: when validation mode for events and groupedmessage is ERROR this should be:
-        # assert response.status_code == response_code
-        # assert json.loads(response.data)["error"]["message"] == error_message
-
-        assert response.status_code == 500
+        assert response.status_code == response_code
+        assert json.loads(response.data)["error"]["message"] == error_message
 
     def test_wrap_log_fn_with_ifnotfinite(self) -> None:
         """
