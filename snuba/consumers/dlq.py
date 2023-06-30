@@ -111,7 +111,7 @@ TPayload = TypeVar("TPayload")
 
 class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     """
-    Commits offsets until N messages is reached, then forces the
+    Forwards messages until N messages is reached, then forces the
     consumer to close. This is used by the DLQ consumer
     which is expected to process a fixed number of messages requested
     by the user.
