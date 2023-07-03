@@ -33,7 +33,7 @@
     {
       "members": [
           "group:team-starfish@sentry.io",
-          "user:iker.barriocanal@sentry.io"
+          "group:team-ingestion-pipeline@sentry.io"
       ],
       "role": "roles/CardinalityAnalyzer"
     }
