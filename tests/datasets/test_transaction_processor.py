@@ -46,6 +46,7 @@ class TransactionEvent:
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
     replay_id: Optional[str] = None
+    received: Optional[float] = None
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -134,6 +135,7 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "received": self.received,
                     "measurements": {
                         "lcp": {"value": 32.129},
                         "lcp.elementSize": {"value": 4242},
