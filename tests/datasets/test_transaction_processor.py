@@ -308,6 +308,9 @@ class TestTransactionsProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
+            received=(
+                datetime.now(tz=timezone.utc) - timedelta(seconds=15)
+            ).timestamp(),
             platform="python",
             dist="",
             user_name="me",
