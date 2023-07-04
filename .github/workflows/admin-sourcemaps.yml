@@ -7,7 +7,7 @@ jobs:
     name: "build sourcemaps"
     runs-on: ubuntu-latest
     env:
-      ADMIN_SOURCEMAP_KEY: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
       NODE_VERSION: 19.x
     steps:
       - uses: actions/checkout@v3
