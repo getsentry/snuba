@@ -1,12 +1,7 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
-import { Editor } from "@tiptap/core";
 import { Prism } from "@mantine/prism";
-import { RichTextEditor } from "@mantine/tiptap";
-import { useEditor } from "@tiptap/react";
-import HardBreak from "@tiptap/extension-hard-break";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
+import { Textarea } from "@mantine/core";
 
 type PredefinedQuery = {
   name: string;
@@ -61,26 +56,6 @@ function QueryEditor(props: {
   >(undefined);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder:
-          "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
-      }),
-      HardBreak.extend({
-        addKeyboardShortcuts() {
-          return {
-            Enter: () => this.editor.commands.setHardBreak(),
-          };
-        },
-      }),
-    ],
-    content: `${queryTemplate}`,
-    onUpdate({ editor }) {
-      setQueryTemplate(editor.getText());
-    },
-  });
 
   useEffect(() => {
     const newQueryParams = new Set(
@@ -103,7 +78,7 @@ function QueryEditor(props: {
     setQueryParamValues((queryParams) => ({ ...queryParams, [name]: value }));
   }
 
-  function renderPredefinedQueriesSelectors(editor?: Editor | null) {
+  function renderPredefinedQueriesSelectors() {
     return (
       <div>
         <label>Predefined query: </label>
@@ -115,8 +90,6 @@ function QueryEditor(props: {
             );
             setSelectedPredefinedQuery(selectedPredefinedQuery);
             setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
-            editor?.commands.clearContent();
-            editor?.commands.insertContent(selectedPredefinedQuery?.sql ?? "");
           }}
           data-testid="select"
         >
@@ -164,14 +137,22 @@ function QueryEditor(props: {
 
   return (
     <form>
-      {renderPredefinedQueriesSelectors(editor)}
+      {renderPredefinedQueriesSelectors()}
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
-
-      <RichTextEditor editor={editor}>
-        <RichTextEditor.Content data-testid="text-editor-input" />
-      </RichTextEditor>
+      <Textarea
+        value={queryTemplate || ""}
+        onChange={(evt) => {
+          setSelectedPredefinedQuery(undefined);
+          setQueryTemplate(evt.target.value);
+        }}
+        placeholder="Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
+        autosize
+        minRows={2}
+        maxRows={8}
+        data-testid="text-area-input"
+      />
       {renderParameterSetters()}
       <Prism withLineNumbers language="sql">
         {query || ""}

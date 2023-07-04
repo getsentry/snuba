@@ -109,7 +109,7 @@ describe("Query editor", () => {
         }
       });
     });
-    describe("with text editor input", () => {
+    describe("with text area input", () => {
       it("should invoke call back with text area value when no labels are present", async () => {
         const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
@@ -117,11 +117,8 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        const field = getByTestId("text-editor-input").querySelector("input");
-        if (field) {
-          await act(async () => user.type(field, input));
-          expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
-        }
+        await act(async () => user.type(getByTestId("text-area-input"), input));
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });
   });
