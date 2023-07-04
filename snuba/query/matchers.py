@@ -317,9 +317,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, FunctionCallExpr):
             return None
-
         result = MatchResult()
-
         if self.function_name is not None:
             partial_result = self.function_name.match(node.function_name)
             if partial_result is None:

@@ -144,7 +144,7 @@ class TestMetricsApiCounters(BaseApiTest):
                     AND metric_id = {metric_id}
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
-                    GRANULARITY {granularity}
+                    AND granularity = 2
                     """
 
         return query_str
@@ -187,6 +187,7 @@ class TestMetricsApiCounters(BaseApiTest):
             .isoformat(),
             granularity=3600,
         )
+        print(query_str)
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
