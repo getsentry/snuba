@@ -1,0 +1,22 @@
+on:
+  pull_request:
+  push:
+    branches: [master]
+jobs:
+  build:
+    name: "build sourcemaps"
+    runs-on: ubuntu-latest
+    env:
+      ADMIN_SOURCEMAP_KEY: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
+      NODE_VERSION: 19.x
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout code
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{env.NODE_VERSION}}
+      - name: Build admin sourcemaps
+        run: make build-admin
