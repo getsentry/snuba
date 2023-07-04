@@ -35,7 +35,7 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
 
 
 def format_trace_output(raw_trace_logs: str) -> List[dict[str, Any]]:
-    # LOG STRUCTURE: '[ NODE ] [ THREAD_ID ] {SHA?} <LOG_TYPE> LOG_LINE'
+    # LOG STRUCTURE: '[ NODE ] [ THREAD_ID ] {QUERY_ID} <LOG_TYPE> LOG_LINE'
     formatted_logs = []
     for line in raw_trace_logs.splitlines():
         context = re.findall(r"\[.*?\]", line)
