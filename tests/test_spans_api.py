@@ -339,3 +339,23 @@ class TestSpansApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert data["sql"].startswith("SELECT (toStartOfHour(end_timestamp")
+
+    def test_hex_int_column_processor_gets_applied_to_group_raw(self) -> None:
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT group_raw,
+                count() AS aggregate
+                BY group_raw
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                GRANULARITY 60
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert data["sql"].startswith(
+            "SELECT (lower(hex(group_raw)) AS _snuba_group_raw)"
+        )
