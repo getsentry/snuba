@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-
-import { Prism } from "@mantine/prism";
-import { RichTextEditor } from "@mantine/tiptap";
-import { useEditor } from "@tiptap/react";
-import HardBreak from "@tiptap/extension-hard-break";
-import Placeholder from "@tiptap/extension-placeholder";
-import StarterKit from "@tiptap/starter-kit";
-
 import { Table } from "../table";
 import { LogLine, TracingRequest, TracingResult } from "./types";
 import { parseLogLine } from "./util";
@@ -307,26 +299,6 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: "Write your query here.",
-      }),
-      HardBreak.extend({
-        addKeyboardShortcuts() {
-          return {
-            Enter: () => this.editor.commands.setHardBreak(),
-          };
-        },
-      }),
-    ],
-    content: `${query.sql || ""}`,
-    onUpdate({ editor }) {
-      updateQuerySql(editor.getText());
-    },
-  });
-
   return (
     <div>
       <form>
@@ -334,12 +306,9 @@ function TracingQueries(props: { api: Client }) {
         <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
           🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
         </a>
-        <RichTextEditor editor={editor} role="textbox">
-          <RichTextEditor.Content />
-        </RichTextEditor>
-        <Prism withLineNumbers language="sql">
-          {query.sql || ""}
-        </Prism>
+        <div>
+          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
+        </div>
         <div style={executeActionsStyle}>
           <div>
             <select
@@ -407,5 +376,21 @@ const selectStyle = {
   marginRight: 8,
   height: 30,
 };
+
+function TextArea(props: {
+  value: string;
+  onChange: (nextValue: string) => void;
+}) {
+  const { value, onChange } = props;
+  return (
+    <textarea
+      spellCheck={false}
+      value={value}
+      onChange={(evt) => onChange(evt.target.value)}
+      style={{ width: "100%", height: 100 }}
+      placeholder={"Write your query here"}
+    />
+  );
+}
 
 export default TracingQueries;
