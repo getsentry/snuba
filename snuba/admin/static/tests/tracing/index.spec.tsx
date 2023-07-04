@@ -15,7 +15,6 @@ import { ClickhouseNodeData } from "../../clickhouse_queries/types";
 
 import default_response from "./fixture";
 
-global.ResizeObserver = require("resize-observer-polyfill");
 it("select executor rows should appear", async () => {
   let mockClient = {
     ...Client(),
@@ -46,12 +45,9 @@ it("select executor rows should appear", async () => {
 
   expect(queryByText("Copy to clipboard", { exact: false })).toBeNull();
 
-  const field = getByRole("textbox").querySelector("input");
-  if (field) {
-    fireEvent.change(field, {
-      target: { value: "Foo" },
-    });
-  }
+  fireEvent.change(getByRole("textbox"), {
+    target: { value: "Foo" },
+  });
 
   const submitButton = screen.getByText("Execute query");
   expect(submitButton.getAttribute("disabled")).toBeFalsy();
