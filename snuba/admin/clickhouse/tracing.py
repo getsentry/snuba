@@ -24,8 +24,15 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
     query_result = connection.execute(
         query=query, capture_trace=True, with_column_types=True
     )
+    format_trace_logs(query_result.trace_output)
     return TraceOutput(
         trace_output=query_result.trace_output,
         cols=query_result.meta,  # type: ignore
         num_rows_result=len(query_result.results),
     )
+
+
+def format_trace_logs(raw_trace_logs: str) -> None:
+    print("START")
+    print(raw_trace_logs)
+    print("END")
