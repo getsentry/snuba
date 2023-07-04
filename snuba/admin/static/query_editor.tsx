@@ -1,5 +1,13 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
+import { Editor } from "@tiptap/core";
+import { Prism } from "@mantine/prism";
+import { RichTextEditor } from "@mantine/tiptap";
+import { useEditor } from "@tiptap/react";
+import HardBreak from "@tiptap/extension-hard-break";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+
 type PredefinedQuery = {
   name: string;
   sql: string;
@@ -53,7 +61,26 @@ function QueryEditor(props: {
   >(undefined);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
-  const textAreaStyle = { width: "100%", height: 140 };
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder:
+          "Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}",
+      }),
+      HardBreak.extend({
+        addKeyboardShortcuts() {
+          return {
+            Enter: () => this.editor.commands.setHardBreak(),
+          };
+        },
+      }),
+    ],
+    content: `${queryTemplate}`,
+    onUpdate({ editor }) {
+      setQueryTemplate(editor.getText());
+    },
+  });
 
   useEffect(() => {
     const newQueryParams = new Set(
@@ -76,7 +103,7 @@ function QueryEditor(props: {
     setQueryParamValues((queryParams) => ({ ...queryParams, [name]: value }));
   }
 
-  function renderPredefinedQueriesSelectors() {
+  function renderPredefinedQueriesSelectors(editor?: Editor | null) {
     return (
       <div>
         <label>Predefined query: </label>
@@ -88,6 +115,8 @@ function QueryEditor(props: {
             );
             setSelectedPredefinedQuery(selectedPredefinedQuery);
             setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
+            editor?.commands.clearContent();
+            editor?.commands.insertContent(selectedPredefinedQuery?.sql ?? "");
           }}
           data-testid="select"
         >
@@ -135,30 +164,18 @@ function QueryEditor(props: {
 
   return (
     <form>
-      {renderPredefinedQueriesSelectors()}
+      {renderPredefinedQueriesSelectors(editor)}
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
-      <textarea
-        value={queryTemplate || ""}
-        placeholder={
-          "Edit your queries here, add '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
-        }
-        style={textAreaStyle}
-        onChange={(evt) => {
-          setSelectedPredefinedQuery(undefined);
-          setQueryTemplate(evt.target.value);
-        }}
-        data-testid="text-area-input"
-      />
+
+      <RichTextEditor editor={editor}>
+        <RichTextEditor.Content data-testid="text-editor-input" />
+      </RichTextEditor>
       {renderParameterSetters()}
-      <textarea
-        disabled={true}
-        placeholder={"The final query you send to snuba will be here"}
-        style={textAreaStyle}
-        value={query}
-        data-testid="text-area-output"
-      ></textarea>
+      <Prism withLineNumbers language="sql">
+        {query || ""}
+      </Prism>
     </form>
   );
 }

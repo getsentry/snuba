@@ -170,12 +170,12 @@ function TracingQueries(props: { api: Client }) {
             );
           } else if (title === "Trace") {
             return (
-                <div>
-                    <br />
-                    <b>Number of rows in result set:</b> {value.num_rows_result}
-                    <br />
-                    {heirarchicalTraceDisplay(title, value.trace_output)}
-                </div>
+              <div>
+                <br />
+                <b>Number of rows in result set:</b> {value.num_rows_result}
+                <br />
+                {heirarchicalTraceDisplay(title, value.trace_output)}
+              </div>
             );
           }
         })}

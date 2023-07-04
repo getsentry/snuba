@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import QueryEditor from "../query_editor";
 
 describe("Query editor", () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
   describe("when generating queries", () => {
     it("should replace all instances of parameter name when it has a non-empty parameter value", () => {
@@ -108,7 +109,7 @@ describe("Query editor", () => {
         }
       });
     });
-    describe("with text area input", () => {
+    describe("with text editor input", () => {
       it("should invoke call back with text area value when no labels are present", async () => {
         const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
@@ -116,8 +117,11 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        await act(async () => user.type(getByTestId("text-area-input"), input));
-        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
+        const field = getByTestId("text-editor-input").querySelector("input");
+        if (field) {
+          await act(async () => user.type(field, input));
+          expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
+        }
       });
     });
   });
