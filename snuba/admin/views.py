@@ -34,6 +34,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -961,3 +962,25 @@ def dlq_replay() -> Response:
         return make_response(jsonify(None), 200)
 
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
+
+
+@application.route("/production_snql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_snql_query() -> Response:
+    body = json.loads(request.data)
+    body["tenant_ids"] = {"referrer": request.referrer}
+    try:
+        ret = run_snql_query(body, g.user.email)
+        return ret
+    except InvalidQueryException as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )

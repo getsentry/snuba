@@ -53,6 +53,7 @@ interface Client {
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   convertSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
+  executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
@@ -199,6 +200,24 @@ function Client() {
         } else {
           return res.json().then((err) => {
             let errMsg = err?.error.message || "Could not convert SnQL";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+
+    executeSnQLQuery: (query: SnQLRequest) => {
+      const url = baseUrl + "production_snql_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error.message || "Could not execute SnQL";
             throw new Error(errMsg);
           });
         }

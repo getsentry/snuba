@@ -71,13 +71,31 @@ logger = logging.getLogger(__name__)
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
-    help="Max number of messages to batch in memory before writing to Kafka.",
+    help=(
+        "Max number of messages to batch in memory.\n\n"
+        "Batching parameters apply to three steps: Batching of messages for "
+        "processing them (=transforming them into ClickHouse rows), batching for"
+        "the INSERT statement, and batching of offset commits.\n\n"
+        "Commits are additionally debounced to happen at most once per second."
+    ),
 )
 @click.option(
     "--max-batch-time-ms",
     default=settings.DEFAULT_MAX_BATCH_TIME_MS,
     type=int,
-    help="Max length of time to buffer messages in memory before writing to Kafka.",
+    help="Max duration to buffer messages in memory for.",
+)
+@click.option(
+    "--max-insert-batch-size",
+    default=None,
+    type=int,
+    help="Max number of messages to batch in memory for inserts into ClickHouse. Defaults to --max-batch-size",
+)
+@click.option(
+    "--max-insert-batch-time-ms",
+    default=None,
+    type=int,
+    help="Max duration to batch in memory for inserts into ClickHouse. Defaults to --max-batch-time-ms",
 )
 @click.option(
     "--auto-offset-reset",
@@ -143,6 +161,8 @@ def consumer(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    max_insert_batch_size: Optional[int],
+    max_insert_batch_time_ms: Optional[int],
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
@@ -204,6 +224,8 @@ def consumer(
         ),
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        max_insert_batch_size=max_insert_batch_size,
+        max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
         slice_id=slice_id,

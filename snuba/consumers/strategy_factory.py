@@ -64,6 +64,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time: Optional[float],
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
         max_messages_to_process: Optional[int] = None,
@@ -76,6 +78,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
+        self.__max_insert_batch_size = max_insert_batch_size or max_batch_size
+        self.__max_insert_batch_time = max_insert_batch_time or max_batch_time
 
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -119,8 +123,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit_strategy = CommitOffsets(commit)
 
         collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
-            self.__max_batch_size,
-            self.__max_batch_time,
+            self.__max_insert_batch_size,
+            self.__max_insert_batch_time,
             accumulator,
             self.__collector,
             RunTaskInThreads(
