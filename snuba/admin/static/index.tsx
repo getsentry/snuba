@@ -7,6 +7,7 @@ import Nav from "./nav";
 import Body from "./body";
 import { NAV_ITEMS } from "./data";
 import Client from "./api_client";
+import { MantineProvider } from "@mantine/core";
 
 const containerStyle = {
   display: "flex",
@@ -62,13 +63,15 @@ function App() {
   }
 
   return (
-    <div style={containerStyle}>
-      <Header />
-      <div style={bodyStyle}>
-        <Nav active={activeTab} navigate={navigate} api={client} />
-        {activeTab && <Body active={activeTab} api={client} />}
+    <MantineProvider withGlobalStyles withNormalizeCSS>
+      <div style={containerStyle}>
+        <Header />
+        <div style={bodyStyle}>
+          <Nav active={activeTab} navigate={navigate} api={client} />
+          {activeTab && <Body active={activeTab} api={client} />}
+        </div>
       </div>
-    </div>
+    </MantineProvider>
   );
 }
 
