@@ -223,19 +223,36 @@ pipelines:
           jobs:
             migrate:
               elastic_profile_id: snuba
+              environment_variables:
+                SNUBA_SERVICE_NAME: snuba
               tasks:
                 - script: |
                     ##!/bin/bash
 
-                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                    ## At the time of writing (2023-06-28) the single tenant deployments
+                    ## have been using a different migration process compared to the
+                    ## US deployment of snuba.
+                    ## This script should be merged with migrate.sh if we can figure
+                    ## out a common migration script for all regions.
 
-                    /devinfra/scripts/k8s/k8stunnel \
-                    && /devinfra/scripts/k8s/k8s-spawn-job.py \
-                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                      --label-selector="service=snuba-admin" \
-                      --container-name="snuba-admin" \
-                      "snuba-migrate" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                      -- snuba migrations migrate -r complete -r partial
+                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                    /devinfra/scripts/k8s/k8stunnel
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-bootstrap" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba bootstrap --force --no-migrate
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-migrate" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba migrations migrate --force
                 - plugin:
                     configuration:
                       id: script-executor
@@ -245,14 +262,15 @@ pipelines:
                         ##!/bin/bash
 
                         eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                        /devinfra/scripts/k8s/k8stunnel
 
-                        /devinfra/scripts/k8s/k8stunnel \
-                        && /devinfra/scripts/k8s/k8s-spawn-job.py \
-                          --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                          --label-selector="service=snuba-admin" \
-                          --container-name="snuba-admin" \
-                          "snuba-migrate-reverse" "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                          -- snuba migrations reverse-in-progress
+                        /devinfra/scripts/k8s/k8s-spawn-job.py \
+                          --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                          --container-name="${SNUBA_SERVICE_NAME}" \
+                          "snuba-migrate-reverse" \
+                          "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                          -- \
+                          snuba migrations reverse-in-progress
                     run_if: failed
               timeout: 1200
       - pipeline-complete:

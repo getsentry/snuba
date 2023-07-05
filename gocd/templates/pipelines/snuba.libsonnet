@@ -103,8 +103,14 @@ function(region) {
           migrate: {
             timeout: 1200,
             elastic_profile_id: 'snuba',
+            environment_variables: {
+              SNUBA_SERVICE_NAME: if region == 'monitor' || std.startsWith(region, 'customer-') then 'snuba' else 'snuba-admin',
+            },
             tasks: [
-              gocdtasks.script(importstr '../bash/migrate.sh'),
+              if region == 'monitor' || std.startsWith(region, 'customer-') then
+                gocdtasks.script(importstr '../bash/migrate-st.sh')
+              else
+                gocdtasks.script(importstr '../bash/migrate.sh'),
               {
                 plugin: {
                   options: gocdtasks.script(importstr '../bash/migrate-reverse.sh'),
