@@ -315,7 +315,7 @@ def execute_query_with_rate_limits(
         # depending on the `stats` dict to be populated ahead of time
         # is not great style, but it is done in _format_storage_query_and_run.
         # This should be removed by 07-15-2023. Either the concurrent throttling becomes
-        # another allocation policy
+        # another allocation policy or we remove this mechanism entirely
 
         table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
         if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
