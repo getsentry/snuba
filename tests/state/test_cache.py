@@ -10,7 +10,9 @@ from unittest import mock
 
 import pytest
 import rapidjson
+from sentry_redis_tools.failover_redis import FailoverRedis
 
+from redis.exceptions import ReadOnlyError
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
@@ -39,6 +41,20 @@ def execute(function: Callable[[], Any]) -> Future[Any]:
     Thread(target=run).start()
 
     return future
+
+
+class SingleCallFunction:
+    def __init__(self, func: Callable[[], bytes]) -> None:
+        self._func = func
+        self._count = 0
+
+    def __call__(self, *args: str, **kwargs: str) -> Any:
+        self._count += 1
+        if self._count > 1:
+            raise Exception(
+                "This function should only be called once, the cache is doing something wrong"
+            )
+        return self._func(*args, **kwargs)
 
 
 class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
@@ -70,6 +86,26 @@ def backend() -> Cache[bytes]:
     return backend
 
 
+@pytest.fixture
+def bad_backend() -> Cache[bytes]:
+    codec = PassthroughCodec()
+
+    class BadClient(FailoverRedis):
+        def __init__(self, client: Any) -> None:
+            self._client = client
+
+        def evalsha(self, *args: str, **kwargs: str) -> None:
+            raise ReadOnlyError("Failed")
+
+        def __getattr__(self, attr: str) -> Any:
+            return getattr(self._client, attr)
+
+    backend: Cache[bytes] = RedisCache(
+        BadClient(redis_client), "test", codec, ThreadPoolExecutor()
+    )
+    return backend
+
+
 def noop(value: int) -> None:
     return None
 
@@ -90,6 +126,15 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
     with assert_changes(lambda: function.call_count, 1, 2):
         backend.get_readthrough(key, function, noop, 5) == value
+
+
+@pytest.mark.redis_db
+def test_fail_open(bad_backend: Cache[bytes]) -> None:
+    key = "key"
+    value = b"value"
+    function = mock.MagicMock(return_value=value)
+    with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES", False):
+        assert bad_backend.get_readthrough(key, function, noop, 5) == value
 
 
 @pytest.mark.redis_db
@@ -135,7 +180,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, function, noop, 1)
+        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
 
 
 @pytest.mark.redis_db
@@ -163,11 +208,10 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         pass
 
     def function() -> bytes:
-        time.sleep(1)
         raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.get_readthrough(key, SingleCallFunction(function), noop, 10)
 
     setter = execute(worker)
     time.sleep(0.5)
@@ -235,10 +279,14 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         return b"hello"
 
     def transient_error() -> bytes:
-        return backend.get_readthrough(key, error_function, noop, 10)
+        return backend.get_readthrough(
+            key, SingleCallFunction(error_function), noop, 10
+        )
 
     def functioning_query() -> bytes:
-        return backend.get_readthrough(key, normal_function, noop, 10)
+        return backend.get_readthrough(
+            key, SingleCallFunction(normal_function), noop, 10
+        )
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise
