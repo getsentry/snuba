@@ -997,6 +997,7 @@ def production_snql_query() -> Response:
 def production_sql_query() -> Response:
     req = json.loads(request.data)
     try:
+        storage = req["storage"]
         raw_sql = req["sql"]
     except KeyError as e:
         return make_response(
@@ -1011,7 +1012,7 @@ def production_sql_query() -> Response:
             400,
         )
     try:
-        result = run_sql_query(raw_sql, g.user)
+        result = run_sql_query(raw_sql, storage, g.user.email)
         rows, columns = result.results, result.meta
         if columns:
             return make_response(
