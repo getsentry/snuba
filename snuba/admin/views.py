@@ -34,7 +34,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_snql_query
+from snuba.admin.production_queries.prod_queries import run_snql_query, run_sql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -710,7 +710,13 @@ def config_changes() -> Response:
 
 
 @application.route("/clickhouse_nodes")
-@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
+@check_tool_perms(
+    tools=[
+        AdminTools.SYSTEM_QUERIES,
+        AdminTools.QUERY_TRACING,
+        AdminTools.PRODUCTION_QUERIES,
+    ]
+)
 def clickhouse_nodes() -> Response:
     return Response(
         json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
@@ -983,4 +989,54 @@ def production_snql_query() -> Response:
             json.dumps({"error": {"message": str(exception)}}, indent=4),
             400,
             {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/production_sql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_sql_query() -> Response:
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_sql_query(raw_sql, g.user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+            500,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
         )

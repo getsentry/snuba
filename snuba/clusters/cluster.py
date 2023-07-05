@@ -61,6 +61,7 @@ class ClickhouseClientSettings(Enum):
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
+    PROD_QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(

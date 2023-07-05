@@ -4,7 +4,13 @@ from flask import Response
 
 from snuba import settings
 from snuba.admin.audit_log.query import audit_log
+from snuba.admin.clickhouse.common import (
+    get_ro_query_node_connection,
+    validate_ro_query,
+)
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
@@ -33,6 +39,20 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
         return dataset_query(dataset, body, Timer("admin"))
 
     return run_query_with_audit(body["query"], user)
+
+
+def run_sql_query(query: str, storage_name: str, user: str) -> ClickhouseResult:
+    @audit_log
+    def run_query_with_audit(query: str, user: str) -> ClickhouseResult:
+        validate_ro_query(query)
+        connection = get_ro_query_node_connection(
+            storage_name, ClickhouseClientSettings.PROD_QUERY
+        )
+
+        query_result = connection.execute(query=query, with_column_types=True)
+        return query_result
+
+    return run_query_with_audit(query, user)
 
 
 def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:

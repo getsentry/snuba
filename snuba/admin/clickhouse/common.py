@@ -73,7 +73,8 @@ def get_ro_node_connection(
         ClickhouseClientSettings.QUERY,
         ClickhouseClientSettings.QUERYLOG,
         ClickhouseClientSettings.TRACING,
-    }, "admin can only use QUERY, QUERYLOG, or TRACING ClickhouseClientSettings"
+        ClickhouseClientSettings.PROD_QUERY,
+    }, "admin can only use QUERY, PROD_QUERY, QUERYLOG, or TRACING ClickhouseClientSettings"
 
     if (
         client_settings == ClickhouseClientSettings.QUERY
@@ -81,6 +82,9 @@ def get_ro_node_connection(
     ):
         username = settings.CLICKHOUSE_READONLY_USER
         password = settings.CLICKHOUSE_READONLY_PASSWORD
+    elif client_settings == ClickhouseClientSettings.PROD_QUERY:
+        username = settings.CLICKHOUSE_PROD_USER
+        password = settings.CLICKHOUSE_PROD_PASSWORD
     else:
         username = settings.CLICKHOUSE_TRACE_USER
         password = settings.CLICKHOUSE_TRACE_PASSWORD
