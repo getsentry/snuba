@@ -81,7 +81,7 @@ class RedisCache(Cache[TValue]):
         record_cache_hit_type: Callable[[int], None],
         timeout: int,
         timer: Optional[Timer] = None,
-    ):
+    ) -> TValue:
         # This method is designed with the following goals in mind:
         # 1. The value generation function is only executed when no value
         # already exists for the key.

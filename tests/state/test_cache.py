@@ -10,9 +10,10 @@ from unittest import mock
 
 import pytest
 import rapidjson
+from sentry_redis_tools.failover_redis import FailoverRedis
 
 from redis.exceptions import ReadOnlyError
-from snuba.redis import FailoverRedis, RedisClientKey, RedisClientType, get_redis_client
+from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
@@ -43,11 +44,11 @@ def execute(function: Callable[[], Any]) -> Future[Any]:
 
 
 class SingleCallFunction:
-    def __init__(self, func):
+    def __init__(self, func: Callable[[], bytes]) -> None:
         self._func = func
         self._count = 0
 
-    def __call__(self, *args, **kwargs) -> Any:
+    def __call__(self, *args: str, **kwargs: str) -> Any:
         self._count += 1
         if self._count > 1:
             raise Exception(
@@ -90,13 +91,13 @@ def bad_backend() -> Cache[bytes]:
     codec = PassthroughCodec()
 
     class BadClient(FailoverRedis):
-        def __init__(self, client: Any):
+        def __init__(self, client: Any) -> None:
             self._client = client
 
-        def evalsha(self, *args, **kwargs):
+        def evalsha(self, *args: str, **kwargs: str) -> None:
             raise ReadOnlyError("Failed")
 
-        def __getattr__(self, attr: str):
+        def __getattr__(self, attr: str) -> Any:
             return getattr(self._client, attr)
 
     backend: Cache[bytes] = RedisCache(
@@ -128,7 +129,7 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_fail_open(bad_backend: Cache[bytes]):
+def test_fail_open(bad_backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
