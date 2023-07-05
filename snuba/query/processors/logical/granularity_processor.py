@@ -107,7 +107,6 @@ class GranularityProcessor(LogicalQueryProcessor):
                 LiteralExp(None, granularity),
             )
         )
-        print(query.get_condition())
 
 
 class GranularityMapping(NamedTuple):
