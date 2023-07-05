@@ -25,9 +25,9 @@ PRETTY_FORMAT_EXPRESSIONS = True
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it
 # should fail on bad code
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
-RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
+RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = True
 
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = False
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
