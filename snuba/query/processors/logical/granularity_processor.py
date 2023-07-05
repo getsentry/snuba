@@ -32,8 +32,6 @@ DEFAULT_GRANULARITY_RAW = 60
 
 
 class BaseGranularityProcessor(LogicalQueryProcessor):
-    """"""
-
     @abstractmethod
     def get_granularity(self, query: Query) -> Tuple[int, Callable[[Query, int], None]]:
         raise NotImplementedError
@@ -120,7 +118,10 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
 
 
 class GranularityProcessor(BaseGranularityProcessor):
-    """Use the granularity set on the query to filter on the granularity column"""
+    """
+    A granularity processor which finds the granularity in the query,
+    validates/transforms its value according to GRANULARITIES_AVAILABLE, and
+    transforms the conditions appropriately to reflect this change."""
 
     def get_highest_common_available_granularity_multiple(
         self,
@@ -134,11 +135,6 @@ class GranularityProcessor(BaseGranularityProcessor):
         )
 
     def get_granularity(self, query: Query) -> Tuple[int, Callable[[Query, int], None]]:
-        """
-        Gets the granularity value from either the GRANULARITY clause or the WHERE clause. Raises an error if multiple granularities are provided.
-        Depending on where the granularity was found, return its value along with a callable method which alters the conditions appropriately.
-        """
-
         requested_granularity = query.get_granularity()
         expression = query.get_condition()
         granularity_in_condition = self.find_granularity_in_expression(expression)
@@ -200,9 +196,11 @@ DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 
 class MappedGranularityProcessor(BaseGranularityProcessor):
     """
-    Use the granularity set on the query to filter on the granularity column,
-    supporting generic-metrics style enum mapping (e.g. input granularity of 60s
-    is mapped to the enum granularity of 1)
+    A mapped granularity processor which finds the granularity in the query,
+    validates/transforms its value according to the generic-metrics style
+    enum mapping (e.g. input granularity of 60s is mapped to the enum
+    granularity of 1), and transforms the conditions appropriately to reflect
+    this change.
     """
 
     def __init__(
