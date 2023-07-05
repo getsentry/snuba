@@ -93,6 +93,148 @@ def test_granularity_added(
 @pytest.mark.parametrize(
     "entity_key,column",
     [
+        (EntityKey.METRICS_COUNTERS, "value"),
+        (EntityKey.METRICS_DISTRIBUTIONS, "percentiles"),
+        (EntityKey.METRICS_SETS, "value"),
+    ],
+)
+@pytest.mark.parametrize(
+    "requested_granularity, query_granularity",
+    [
+        (10, 10),
+        (60, 60),
+        (90, 10),
+        (120, 60),
+        (60 * 60, 3600),
+        (90 * 60, 60),
+        (120 * 60, 3600),
+        (24 * 60 * 60, 86400),
+        (32 * 60 * 60, 3600),
+        (48 * 60 * 60, 86400),
+        (13, None),
+        (0, None),
+    ],
+)
+def test_granularity_added_in_condition(
+    entity_key: EntityKey,
+    column: str,
+    requested_granularity: Optional[int],
+    query_granularity: int,
+) -> None:
+    query = Query(
+        QueryEntity(entity_key, ColumnSet([])),
+        selected_columns=[SelectedExpression(column, Column(None, None, column))],
+        condition=binary_condition(
+            BooleanFunctions.AND,
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "granularity"),
+                Literal(None, requested_granularity),
+            ),
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "metric_id"),
+                Literal(None, 123),
+            ),
+        ),
+    )
+    try:
+        GranularityProcessor().process_query(query, HTTPQuerySettings())
+    except InvalidGranularityException:
+        assert query_granularity is None
+    else:
+        assert query == Query(
+            QueryEntity(entity_key, ColumnSet([])),
+            selected_columns=[SelectedExpression(column, Column(None, None, column))],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "granularity"),
+                    Literal(None, query_granularity),
+                ),
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "metric_id"),
+                    Literal(None, 123),
+                ),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "entity_key,column",
+    [
+        (EntityKey.METRICS_COUNTERS, "value"),
+        (EntityKey.METRICS_DISTRIBUTIONS, "percentiles"),
+        (EntityKey.METRICS_SETS, "value"),
+    ],
+)
+def test_invalid_granularity_combinations(
+    entity_key: EntityKey,
+    column: str,
+) -> None:
+    granularity_one = 60
+    granularity_two = 3600
+    query_with_clause_and_condition = Query(
+        QueryEntity(entity_key, ColumnSet([])),
+        selected_columns=[SelectedExpression(column, Column(None, None, column))],
+        condition=binary_condition(
+            BooleanFunctions.AND,
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "granularity"),
+                Literal(None, granularity_one),
+            ),
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "metric_id"),
+                Literal(None, 123),
+            ),
+        ),
+        granularity=(granularity_two),
+    )
+
+    query_with_multiple_conditions = Query(
+        QueryEntity(entity_key, ColumnSet([])),
+        selected_columns=[SelectedExpression(column, Column(None, None, column))],
+        condition=binary_condition(
+            BooleanFunctions.AND,
+            binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "granularity"),
+                    Literal(None, granularity_one),
+                ),
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "granularity"),
+                    Literal(None, granularity_two),
+                ),
+            ),
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "metric_id"),
+                Literal(None, 123),
+            ),
+        ),
+    )
+
+    with pytest.raises(InvalidGranularityException):
+        GranularityProcessor().process_query(
+            query_with_clause_and_condition, HTTPQuerySettings()
+        )
+
+    with pytest.raises(InvalidGranularityException):
+        GranularityProcessor().process_query(
+            query_with_multiple_conditions, HTTPQuerySettings()
+        )
+
+
+@pytest.mark.parametrize(
+    "entity_key,column",
+    [
         (EntityKey.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
         (EntityKey.GENERIC_METRICS_SETS, "value"),
     ],
