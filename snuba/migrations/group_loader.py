@@ -295,6 +295,8 @@ class GenericMetricsLoader(DirectoryLoader):
             "0012_counters_mv",
             "0013_distributions_dist_tags_hash",
             "0014_distribution_add_options",
+            "0015_sets_add_options",
+            "0016_counters_add_options",
         ]
 
 
