@@ -32,6 +32,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.utils.metrics.gauge import ThreadSafeGauge
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse")
@@ -476,6 +477,7 @@ class NativeDriverReader(Reader):
 
         return new_result
 
+    @with_span(op="db")
     def execute(
         self,
         query: FormattedQuery,
