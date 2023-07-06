@@ -61,8 +61,8 @@ class Migration(migration.ClickhouseNodeMigration):
             )
             for column, after in self.columns
             for table_name, target in [
-                (self.dist_table_name, OperationTarget.DISTRIBUTED),
                 (self.local_table_name, OperationTarget.LOCAL),
+                (self.dist_table_name, OperationTarget.DISTRIBUTED),
             ]
         ]
 
