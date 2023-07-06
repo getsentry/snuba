@@ -157,7 +157,7 @@ pipelines:
                     sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
                     sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
               timeout: 300
-            deploy-canary:
+            deploy-primary:
               elastic_profile_id: snuba
               environment_variables:
                 LABEL_SELECTOR: service=snuba
