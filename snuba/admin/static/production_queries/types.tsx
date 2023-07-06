@@ -7,6 +7,7 @@ type QueryResult = {
   input_query?: string;
   columns: [string];
   rows: [[string]];
+  duration_ms: number;
 };
 
 type QueryResultColumnMeta = {
