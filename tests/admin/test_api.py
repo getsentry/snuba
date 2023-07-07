@@ -370,6 +370,7 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     assert {
         "category": "entity_processor",
         "name": "BasicFunctionsProcessor",
+        "type": "query_transform",
         "data": {},
     } in data["explain"]["steps"]
 
