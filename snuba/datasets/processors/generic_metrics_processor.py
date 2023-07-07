@@ -57,7 +57,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
             buffer.extend(field.to_bytes(length=8, byteorder="little"))
-        for (key, value) in sorted_tag_items:
+        for key, value in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
             if isinstance(value, int):
                 buffer.extend(value.to_bytes(length=8, byteorder="little"))
@@ -132,7 +132,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
             **self._process_values(message),
-            "materialization_version": 1,
+            "materialization_version": 2,
             "retention_days": retention_days,
             "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
             "granularities": [
