@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, NamedTuple, Optional, Tuple
+from typing import List, Mapping, NamedTuple, Optional
 
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -19,6 +19,7 @@ from snuba.query.matchers import (
     Column,
     FunctionCall,
     Literal,
+    MatchResult,
     Or,
     Param,
     String,
@@ -33,7 +34,7 @@ DEFAULT_GRANULARITY_RAW = 60
 
 class BaseGranularityProcessor(LogicalQueryProcessor):
     @abstractmethod
-    def get_granularity(self, query: Query) -> Tuple[int, Callable[[Query, int], None]]:
+    def get_and_process_granularities(self, query: Query) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -47,9 +48,10 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
     ) -> int:
         raise NotImplementedError
 
-    def find_granularity_in_expression(
+    def find_granularities_in_expression(
         self, expression: Optional[Expression]
-    ) -> Optional[int]:
+    ) -> List[MatchResult]:
+        matches: List[MatchResult] = []
         match = FunctionCall(
             String(ConditionFunctions.EQ),
             (
@@ -58,7 +60,7 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
             ),
         ).match(expression)
         if match is not None:
-            return match.integer("granularity")
+            matches.append(match)
 
         match = FunctionCall(
             Param(
@@ -69,22 +71,15 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
         ).match(expression)
 
         if match is not None:
-            lhs_granularity = self.find_granularity_in_expression(
+            lhs_granularity = self.find_granularities_in_expression(
                 match.expression("lhs")
             )
-            rhs_granularity = self.find_granularity_in_expression(
+            rhs_granularity = self.find_granularities_in_expression(
                 match.expression("rhs")
             )
-            if lhs_granularity is None:
-                return rhs_granularity
-            elif rhs_granularity is None:
-                return lhs_granularity
-            else:
-                raise InvalidGranularityException(
-                    "Multiple granularities is not supported."
-                )
-
-        return None
+            matches.extend(rhs_granularity)
+            matches.extend(lhs_granularity)
+        return matches
 
     def add_granularity_condition(
         self, query: Query, selected_granularity: int
@@ -98,20 +93,21 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
         )
 
     def replace_granularity_condition(
-        self, query: Query, selected_granularity: int
+        self, query: Query, match: MatchResult, selected_granularity: int
     ) -> None:
+        # TODO: fix this
         expression = query.get_condition()
         conditions = []
         if expression:
             for c in get_first_level_and_conditions(expression):
-                match = FunctionCall(
+                m = FunctionCall(
                     String(ConditionFunctions.EQ),
                     (
                         Column(column_name=String("granularity")),
                         Literal(value=Param("granularity", Any(int))),
                     ),
                 ).match(c)
-                if not match:
+                if m != match:
                     conditions.append(c)
         query.set_ast_condition(combine_and_conditions(conditions))
         self.add_granularity_condition(query, selected_granularity)
@@ -134,19 +130,19 @@ class GranularityProcessor(BaseGranularityProcessor):
             f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
         )
 
-    def get_granularity(self, query: Query) -> Tuple[int, Callable[[Query, int], None]]:
+    def get_and_process_granularities(self, query: Query) -> None:
         requested_granularity = query.get_granularity()
         expression = query.get_condition()
-        granularity_in_condition = self.find_granularity_in_expression(expression)
+        granularities_in_condition = self.find_granularities_in_expression(expression)
 
-        # If not granularity was provided in clause and condition, then provide a default
-        if requested_granularity is None and granularity_in_condition is None:
-            return DEFAULT_GRANULARITY_RAW, self.add_granularity_condition
+        # If not granularity was provided in clause and condition, then provide a single default
+        if requested_granularity is None and not granularities_in_condition:
+            self.add_granularity_condition(query, DEFAULT_GRANULARITY_RAW)
 
-        # If multiple granularities were provided within the clause and/or condition, then raise an error
-        if granularity_in_condition and requested_granularity:
+        # If granularities were provided within both the GRANULARITY clause and WHERE clause, then raise an error
+        if granularities_in_condition and requested_granularity:
             raise InvalidGranularityException(
-                "Multiple granularities is not supported."
+                "Granularities cannot be specified in both the GRANULARITY clause and WHERE clause."
             )
 
         # Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
@@ -157,28 +153,29 @@ class GranularityProcessor(BaseGranularityProcessor):
         if (
             requested_granularity
             and requested_granularity > 0
-            and granularity_in_condition is None
+            and not granularities_in_condition
         ):
             selected_granularity = (
                 self.get_highest_common_available_granularity_multiple(
                     requested_granularity
                 )
             )
-            return (selected_granularity, self.add_granularity_condition)
-        elif requested_granularity is None and granularity_in_condition:
-            selected_granularity = (
-                self.get_highest_common_available_granularity_multiple(
-                    granularity_in_condition
+            self.add_granularity_condition(query, selected_granularity)
+        elif requested_granularity is None and len(granularities_in_condition) > 0:
+            for match in granularities_in_condition:
+                self.replace_granularity_condition(
+                    query,
+                    match,
+                    self.get_highest_common_available_granularity_multiple(
+                        match.integer("granularity")
+                    ),
                 )
-            )
-            return selected_granularity, self.replace_granularity_condition
         raise InvalidGranularityException(
             "Could not select granularity from either clause or condition."
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        granularity, update_conditions_func = self.get_granularity(query)
-        update_conditions_func(query, granularity)
+        self.get_and_process_granularities(query)
 
 
 class GranularityMapping(NamedTuple):
@@ -241,20 +238,20 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
             f"Granularity must be multiple of one of {self._available_granularities_values}"
         )
 
-    def get_granularity(self, query: Query) -> Tuple[int, Callable[[Query, int], None]]:
+    def get_and_process_granularities(self, query: Query) -> None:
         """Find the best fitting granularity for this query"""
         requested_granularity = query.get_granularity()
         expression = query.get_condition()
-        granularity_in_condition = self.find_granularity_in_expression(expression)
+        granularities_in_condition = self.find_granularities_in_expression(expression)
 
         # If not granularity was provided in clause and condition, then provide a default
-        if requested_granularity is None and granularity_in_condition is None:
-            return self._default_granularity_enum, self.add_granularity_condition
+        if requested_granularity is None and not granularities_in_condition:
+            self.add_granularity_condition(query, self._default_granularity_enum)
 
         # If multiple granularities were provided within the clause and/or condition, then raise an error
-        if granularity_in_condition and requested_granularity:
+        if len(granularities_in_condition) > 0 and requested_granularity:
             raise InvalidGranularityException(
-                "Multiple granularities is not supported."
+                "Granularities cannot be specified in both the GRANULARITY clause and WHERE clause."
             )
 
         # Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
@@ -265,25 +262,26 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
         if (
             requested_granularity
             and requested_granularity > 0
-            and granularity_in_condition is None
+            and not granularities_in_condition
         ):
             selected_granularity = (
                 self.get_highest_common_available_granularity_multiple(
                     requested_granularity
                 )
             )
-            return selected_granularity, self.add_granularity_condition
-        elif requested_granularity is None and granularity_in_condition:
-            selected_granularity = (
-                self.get_highest_common_available_granularity_multiple(
-                    granularity_in_condition
+            self.add_granularity_condition(query, selected_granularity)
+        elif requested_granularity is None and len(granularities_in_condition) > 0:
+            for match in granularities_in_condition:
+                self.replace_granularity_condition(
+                    query,
+                    match,
+                    self.get_highest_common_available_granularity_multiple(
+                        match.integer("granularity")
+                    ),
                 )
-            )
-            return selected_granularity, self.replace_granularity_condition
         raise InvalidGranularityException(
             "Could not select granularity from either clause or condition."
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        granularity, update_conditions_func = self.get_granularity(query)
-        update_conditions_func(query, granularity)
+        self.get_and_process_granularities(query)
