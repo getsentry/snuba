@@ -17,9 +17,17 @@ const selectStyle = {
 
 let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
 
+const nonCollapsibleStyle = {
+  fontSize: 16,
+  lineHeight: 1,
+  height: 20,
+  display: "flex",
+};
+
 export {
   executeActionsStyle,
   executeButtonStyle,
   selectStyle,
   collapsibleStyle,
+  nonCollapsibleStyle,
 };

@@ -7,8 +7,9 @@ type SnQLRequest = {
 };
 
 type QueryTransformData = {
-  original_query: string;
-  new_query: string;
+  original: string;
+  transformed: string;
+  diff: string[];
 };
 
 type ExplainStep = {
