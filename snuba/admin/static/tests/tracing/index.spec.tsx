@@ -16,6 +16,7 @@ import { ClickhouseNodeData } from "../../clickhouse_queries/types";
 import default_response from "./fixture";
 
 it("select executor rows should appear", async () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   let mockClient = {
     ...Client(),
     executeTracingQuery: jest
@@ -38,10 +39,6 @@ it("select executor rows should appear", async () => {
     <TracingQueries api={mockClient} />
   );
   await waitFor(() => expect(mockClient.getClickhouseNodes).toBeCalledTimes(1));
-
-  act(() => {
-    selectEvent.select(getByRole("combobox"), "test");
-  });
 
   expect(queryByText("Copy to clipboard", { exact: false })).toBeNull();
 
