@@ -24,6 +24,7 @@ from typing import (
 )
 from uuid import UUID
 
+import sentry_sdk
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
@@ -32,7 +33,6 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.utils.metrics.gauge import ThreadSafeGauge
-from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse")
@@ -185,12 +185,13 @@ class ClickhousePool(object):
                     )
                     result_data: Sequence[Any]
                     trace_output = ""
-                    if capture_trace:
-                        with capture_logging() as buffer:
+                    with sentry_sdk.start_span(description=query, op="db"):
+                        if capture_trace:
+                            with capture_logging() as buffer:
+                                result_data = query_execute()
+                                trace_output = buffer.getvalue()
+                        else:
                             result_data = query_execute()
-                            trace_output = buffer.getvalue()
-                    else:
-                        result_data = query_execute()
 
                     profile_data = ClickhouseProfile(
                         bytes=conn.last_query.profile_info.bytes or 0,
@@ -477,7 +478,6 @@ class NativeDriverReader(Reader):
 
         return new_result
 
-    @with_span(op="db")
     def execute(
         self,
         query: FormattedQuery,
