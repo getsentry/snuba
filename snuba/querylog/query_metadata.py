@@ -179,7 +179,7 @@ class ClickhouseQueryMetadata:
             "start_timestamp": start,
             "end_timestamp": end,
             "stats": self.stats,
-            "status": "deprecated",  # TODO: Remove this from querylog schema
+            "status": self.request_status.status.value,  # TODO: Remove this from querylog schema
             "request_status": self.request_status.status.value,
             "slo": self.request_status.slo.value,
             "trace_id": self.trace_id,
@@ -221,7 +221,7 @@ class SnubaQueryMetadata:
             "start_timestamp": start,
             "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
-            "status": "deprecated",  # TODO: Remove this from querylog schema
+            "status": self.request_status.value,  # TODO: Remove this from querylog schema
             "request_status": self.request_status.value,
             "slo": self.slo.value,
             "timing": self.timer.for_json(),
