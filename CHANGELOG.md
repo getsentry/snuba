@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.6.2
+
+### Various fixes & improvements
+
+- add role to migrations stage (#4424) by @dbanda
+- experiment(capman,starfish): add ability to turn off concurrent throttling (#4464) by @volokluev
+- feat(dlq): If DLQ replay is kicked off, add it to audit log (#4439) by @lynnagara
+- Add script for customer deployments (#4438) by @mattgauntseo-sentry
+- feat(oncall): Make readthrough cache fail open on redis errors (#4449) by @volokluev
+- ref(admin) Allow colons in system queries so that datetimes are valid (#4462) by @evanh
+- perm(cardinality-analyzer): Add ingest team (#4458) by @jjbayer
+- use mantine text area instead of rich text editor (#4461) by @enochtangg
+- perm(prod-queries): Add production queries tool to product tools (#4460) by @davidtsuk
+- fix(spans): Add `group_raw` to HexIntColumnProcessor (#4459) by @shruthilayaj
+- feat(admin): Add syntax highlighting to snuba admin (#4430) by @enochtangg
+- feat(admin): Stop blocking text/images on Snuba Admin replays (#4443) by @rahul-kumar-saini
+- ref: Clean up print statements (#4447) by @lynnagara
+- fix: Revert debounced commits (#4446) by @untitaker
+- test(dlq): Add end to end DLQ consumer test (#4367) by @lynnagara
+- ref: bump sentry-redis-tools to 0.1.7 (#4445) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.17 (#4444) by @getsentry-bot
+- feat(prod-queries): Implement backend for prod queries (#4398) by @davidtsuk
+- ref: Decouple processing batches and clickhouse batches (#4251) by @untitaker
+- ref: bump sentry-kafka-schemas to 0.1.16 (#4436) by @getsentry-bot
+- build(deps): bump sentry-relay from 0.8.21 to 0.8.27 (#4427) by @dependabot
+- perm(cardinality-analyzer) Update cardinality analyzer member list (#4435) by @davidtsuk
+- feat(snubsplain): Use request context to capture query processors (#4381) by @evanh
+- ref(admin): Set the user email in Sentry (#4431) by @evanh
+
+_Plus 65 more_
+
 ## 23.6.1
 
 ### Various fixes & improvements
