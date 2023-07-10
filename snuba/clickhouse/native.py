@@ -172,14 +172,14 @@ class ClickhousePool(object):
                             else {"send_logs_level": "trace"}
                         )
 
-                    def query_execute() -> ClickhouseResult:
+                    def query_execute() -> Any:
                         with sentry_sdk.start_span(
                             description=query, op="db.clickhouse"
                         ) as span:
                             span.set_data(
                                 sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
                             )
-                            return conn.execute(
+                            return conn.execute(  # type: ignore
                                 query,
                                 params=params,
                                 with_column_types=with_column_types,
