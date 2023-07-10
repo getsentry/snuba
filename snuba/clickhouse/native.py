@@ -8,7 +8,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from functools import partial
 from io import StringIO
 from typing import (
     Any,
@@ -24,6 +23,7 @@ from typing import (
 )
 from uuid import UUID
 
+import sentry_sdk
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
@@ -172,16 +172,23 @@ class ClickhousePool(object):
                             else {"send_logs_level": "trace"}
                         )
 
-                    query_execute = partial(
-                        conn.execute,
-                        query,
-                        params=params,
-                        with_column_types=with_column_types,
-                        query_id=query_id,
-                        settings=settings,
-                        types_check=types_check,
-                        columnar=columnar,
-                    )
+                    def query_execute() -> Any:
+                        with sentry_sdk.start_span(
+                            description=query, op="db.clickhouse"
+                        ) as span:
+                            span.set_data(
+                                sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
+                            )
+                            return conn.execute(  # type: ignore
+                                query,
+                                params=params,
+                                with_column_types=with_column_types,
+                                query_id=query_id,
+                                settings=settings,
+                                types_check=types_check,
+                                columnar=columnar,
+                            )
+
                     result_data: Sequence[Any]
                     trace_output = ""
                     if capture_trace:

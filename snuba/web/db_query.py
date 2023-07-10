@@ -163,7 +163,7 @@ def update_query_metadata_and_stats(
     return stats
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query(
     # TODO: Passing the whole clickhouse query here is needed as long
     # as the execute method depends on it. Otherwise we can make this
@@ -285,7 +285,7 @@ def _apply_thread_quota_to_clickhouse_query_settings(
             clickhouse_query_settings["max_threads"] = maxt
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -367,7 +367,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
     ]
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_query_id(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -419,7 +419,7 @@ def execute_query_with_query_id(
         )
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
