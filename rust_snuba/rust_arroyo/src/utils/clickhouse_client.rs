@@ -8,7 +8,7 @@ pub struct ClickhouseClient {
     table: String,
 }
 impl ClickhouseClient {
-    pub fn new(hostname: &str, http_port: u16, table: &str) -> ClickhouseClient {
+    pub fn new(hostname: &str, http_port: u16, table: &str, database: &str) -> ClickhouseClient {
         let mut client = ClickhouseClient {
             client: Client::new(),
             url: format!("http://{}:{}", hostname, http_port),
@@ -24,7 +24,7 @@ impl ClickhouseClient {
             .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         client
             .headers
-            .insert("X-ClickHouse-Database", HeaderValue::from_static("default"));
+            .insert("X-ClickHouse-Database", HeaderValue::from_str(database).unwrap());
         client
     }
 

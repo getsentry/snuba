@@ -16,6 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.69"
+futures = "0.3.21"
 rust_arroyo = { path = "./rust_arroyo" }
 serde_yaml = "0.9.19"
 tokio = { version = "1.19.2", features = ["full"] }
