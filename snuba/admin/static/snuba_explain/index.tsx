@@ -38,7 +38,7 @@ function SnubaExplain(props: { api: Client }) {
     });
   }
 
-  function updateQuerySql(query: string) {
+  function updateQuerySnQL(query: string) {
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
@@ -98,7 +98,7 @@ function SnubaExplain(props: { api: Client }) {
       <h2>Construct a SnQL Query</h2>
       <QueryEditor
         onQueryUpdate={(sql) => {
-          updateQuerySql(sql);
+          updateQuerySnQL(sql);
         }}
       />
       <div style={executeActionsStyle}>
