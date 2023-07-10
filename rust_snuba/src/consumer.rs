@@ -174,3 +174,13 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
 
     processor.run().unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_querylog() {
+        let consumer_config_raw = r#"{"storages": [{"name": "querylog", "clickhouse_table_name": "querylog_local", "clickhouse_cluster": {"host": "127.0.0.1", "port": 9000, "user": "default", "password": "", "database": "default"}, "message_processor": {"python_class_name": "QuerylogProcessor", "python_module": "snuba.datasets.processors.querylog_processor"}}], "raw_topic": {"broker_config": {"bootstrap.servers": "127.0.0.1:9092", "security.protocol": "plaintext", "ssl.ca.location": "", "ssl.certificate.location": "", "ssl.key.location": "", "sasl.mechanism": null, "sasl.username": null, "sasl.password": null}, "logical_topic_name": "snuba-queries", "physical_topic_name": "snuba-queries"}, "commit_log_topic": null, "replacements_topic": null, "dlq_topic": {"broker_config": {"bootstrap.servers": "127.0.0.1:9092", "security.protocol": "plaintext", "ssl.ca.location": "", "ssl.certificate.location": "", "ssl.key.location": "", "sasl.mechanism": null, "sasl.username": null, "sasl.password": null}, "logical_topic_name": "snuba-dead-letter-querylog", "physical_topic_name": "snuba-dead-letter-querylog"}, "max_batch_size": 50000, "max_batch_time_ms": 2000, "env": {"sentry_dsn": null}}"#;
+        super::consumer_impl("test", "latest", consumer_config_raw);
+
+    }
+}
