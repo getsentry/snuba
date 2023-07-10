@@ -307,9 +307,23 @@ def execute_query_with_rate_limits(
         project_rate_limit_stats = rate_limit_stats_container.get_stats(
             PROJECT_RATE_LIMIT_NAME
         )
-        _apply_thread_quota_to_clickhouse_query_settings(
-            query_settings, clickhouse_query_settings, project_rate_limit_stats
-        )
+        # -----------------------------------------------------------------
+        # HACK (Volo): This is a hack experiment to see if we can
+        # stop doing  concurrent throttling in production on a specific table
+        # and still survive.
+
+        # depending on the `stats` dict to be populated ahead of time
+        # is not great style, but it is done in _format_storage_query_and_run.
+        # This should be removed by 07-15-2023. Either the concurrent throttling becomes
+        # another allocation policy or we remove this mechanism entirely
+
+        table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+        if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
+            if state.get_config(f"use_project_concurrent_throttling.{table_name}", 1):
+                _apply_thread_quota_to_clickhouse_query_settings(
+                    query_settings, clickhouse_query_settings, project_rate_limit_stats
+                )
+        # -----------------------------------------------------------------
 
         _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 

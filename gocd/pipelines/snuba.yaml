@@ -192,6 +192,9 @@ pipelines:
             - migrate:
                   approval:
                       type: manual
+                      allow_only_on_success: true
+                      roles:
+                        - role-deploy-snuba-operator
                   fetch_materials: true
                   jobs:
                       migrate:

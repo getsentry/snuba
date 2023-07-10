@@ -29,7 +29,7 @@ class AdminTools(Enum):
     CAPACITY_MANAGEMENT = "capacity-management"
     PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
-    SNUBA_EXPLAIN = "snuba_explain"
+    SNUBA_EXPLAIN = "snuba-explain"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
