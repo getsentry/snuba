@@ -366,16 +366,57 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
-    assert len(data["explain"]["steps"]) > 0
-    assert any(
-        step["category"] == "entity_processor"
-        and step["name"] == "BasicFunctionsProcessor"
-        and step["type"] == "query_transform"
-        and step["data"]["original"] != ""
-        and step["data"]["transformed"] != ""
-        and len(step["data"]["diff"]) > 0
-        for step in data["explain"]["steps"]
+    assert "timing" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (sessions)
+    SELECT sessions_crashed
+    WHERE org_id = 100
+    AND project_id IN tuple(100)
+    AND started >= toDateTime('2022-01-01 00:00:00')
+    AND started < toDateTime('2022-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
     )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["sql"] != ""
+    assert len(data["explain"]["steps"]) > 0
+    assert data["explain"]["original_ast"].startswith("SELECT")
+
+    expected_steps = [
+        {
+            "category": "entity_processor",
+            "name": "BasicFunctionsProcessor",
+            "type": "query_transform",
+        },
+        {
+            "category": "storage_planning",
+            "name": "mappers",
+            "type": "query_transform",
+        },
+        {
+            "category": "snql_parsing",
+            "name": "_parse_datetime_literals",
+            "type": "query_transform",
+        },
+    ]
+
+    for e in expected_steps:
+        assert any(
+            step["category"] == e["category"]
+            and step["name"] == e["name"]
+            and step["type"] == e["type"]
+            and step["data"]["original"] != ""
+            and step["data"]["transformed"] != ""
+            and len(step["data"]["diff"]) > 0
+            for step in data["explain"]["steps"]
+        )
 
 
 @pytest.mark.redis_db

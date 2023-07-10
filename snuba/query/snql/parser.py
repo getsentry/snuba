@@ -73,6 +73,7 @@ from snuba.query.parser import (
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
+from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.discover_entity_selection import select_discover_entity
@@ -99,6 +100,7 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
+from snuba.state import explain_meta
 from snuba.util import parse_datetime
 
 logger = logging.getLogger("snuba.snql.parser")
@@ -1425,6 +1427,7 @@ def _select_entity_for_dataset(
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
+    settings: QuerySettings | None = None,
 ) -> None:
     for func in funcs:
         # custom processors can be partials instead of functions but partials don't
@@ -1432,12 +1435,16 @@ def _post_process(
         description = getattr(func, "__name__", "custom")
 
         with sentry_sdk.start_span(op="processor", description=description):
-            func(query)
+            if settings and settings.get_dry_run():
+                with explain_meta.with_query_differ("snql_parsing", description, query):
+                    func(query)
+            else:
+                func(query)
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
         if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
-            _post_process(from_clause, funcs)
+            _post_process(from_clause, funcs, settings)
             query.set_from_clause(from_clause)
 
 
@@ -1469,9 +1476,13 @@ def parse_snql_query(
     body: str,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
+    settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+
+    if settings and settings.get_dry_run():
+        explain_meta.set_original_ast(str(query))
 
     with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
         snql_anonymized = format_snql_anonymized(query).get_sql()
@@ -1480,20 +1491,21 @@ def parse_snql_query(
         _post_process(
             query,
             POST_PROCESSORS,
+            settings,
         )
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):
         if custom_processing is not None:
-            _post_process(query, custom_processing)
+            _post_process(query, custom_processing, settings)
 
     # Time based processing
     with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-        _post_process(query, [_replace_time_condition])
+        _post_process(query, [_replace_time_condition], settings)
 
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually
     # entity selection will be moved to Sentry and specified for all SnQL queries.
-    _post_process(query, [_select_entity_for_dataset(dataset)])
+    _post_process(query, [_select_entity_for_dataset(dataset)], settings)
 
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
