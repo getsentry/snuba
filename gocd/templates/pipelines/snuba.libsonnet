@@ -83,7 +83,7 @@ function(region) {
               gocdtasks.script(importstr '../bash/sentry-release-primary.sh'),
             ],
           },
-          'deploy-canary': {
+          'deploy-primary': {
             timeout: 1200,
             elastic_profile_id: 'snuba',
             environment_variables: {

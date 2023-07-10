@@ -3,6 +3,7 @@ import Client from "../api_client";
 import { Table } from "../table";
 import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
 import { executeActionsStyle, executeButtonStyle, selectStyle } from "./styles";
+import { Button, Loader, Select, Textarea } from "@mantine/core";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -55,6 +56,7 @@ function ProductionQueries(props: { api: Client }) {
               (col_name: string) => obj[col_name as keyof typeof obj]
             )
           ),
+          duration_ms: result.timing.duration_ms,
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
       })
@@ -73,35 +75,28 @@ function ProductionQueries(props: { api: Client }) {
         <h2>Run a SnQL Query</h2>
         <p>Currently, we only support queries with project_id = 1</p>
         <div>
-          <textarea
-            spellCheck={false}
+          <Textarea
             value={snql_query.query || ""}
             onChange={(evt) => updateQuerySql(evt.target.value)}
-            style={{ width: "100%", height: 100 }}
-            placeholder={"Write your query here"}
+            placeholder="Write your query here"
+            autosize
+            minRows={2}
+            maxRows={8}
+            data-testid="text-area-input"
           />
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <select
+            <Select
+              placeholder="Select a dataset"
               value={snql_query.dataset || ""}
-              onChange={(evt) => selectDataset(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a dataset
-              </option>
-              {datasets.map((dataset) => (
-                <option key={dataset} value={dataset}>
-                  {dataset}
-                </option>
-              ))}
-            </select>
+              onChange={selectDataset}
+              data={datasets}
+            />
           </div>
           <div>
-            <button
-              onClick={(_) => executeQuery()}
-              style={executeButtonStyle}
+            <Button
+              onClick={executeQuery}
               disabled={
                 isExecuting ||
                 snql_query.dataset == undefined ||
@@ -109,25 +104,29 @@ function ProductionQueries(props: { api: Client }) {
               }
             >
               Execute Query
-            </button>
+            </Button>
           </div>
         </div>
       </form>
       <div>
         <h2>Query results</h2>
-        {queryResultHistory.map((queryResult, idx) => {
-          if (idx === 0) {
-            console.log(queryResult);
-            return (
-              <div>
-                <Table
-                  headerData={queryResult.columns}
-                  rowData={queryResult.rows}
-                />
-              </div>
-            );
-          }
-        })}
+        {isExecuting ? (
+          <Loader />
+        ) : (
+          queryResultHistory.map((queryResult, idx) => {
+            if (idx === 0) {
+              return (
+                <div>
+                  <p>Execution Duration (ms): {queryResult.duration_ms}</p>
+                  <Table
+                    headerData={queryResult.columns}
+                    rowData={queryResult.rows}
+                  />
+                </div>
+              );
+            }
+          })
+        )}
       </div>
     </div>
   );
