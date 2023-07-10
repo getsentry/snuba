@@ -160,11 +160,11 @@ class GranularityProcessor(BaseGranularityProcessor):
                 "Granularities cannot be specified in both the GRANULARITY clause and WHERE clause."
             )
 
-        # Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
-        # Gets the highest common multiple of GRANULARITIES_AVAILABLE
-        # Returns this granularity along with a method which alters the conditions.
-        # If granularity was found in GRANULARITY clause, simple just add a condition.
-        # If found in WHERE clause, replace the old condition and add a new one.
+        # 1. Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
+        # 2. Gets the highest common multiple of GRANULARITIES_AVAILABLE
+        # 3. Process the query
+        #   a. If granularity was found in GRANULARITY clause, simply just add a new condition.
+        #   b. If found in WHERE clause, replace the old condition with the new one.
         if (
             requested_granularity
             and requested_granularity > 0
@@ -250,7 +250,7 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
         self,
         requested_granularity: int,
     ) -> int:
-        # If the requested granularity is already mapped to the enum, then just return the value
+        # If the requested granularity is already mapped to the enum, then just return the value.
         min_enum_granularity = min(
             [mapping.enum_value for mapping in self._accepted_granularities]
         )
@@ -260,7 +260,7 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
         if min_enum_granularity <= requested_granularity <= max_enum_granularity:
             return requested_granularity
 
-        # If the requested granularity is not mapped, find it's corresponding mapping
+        # If the requested granularity is not mapped, find it's correct mapping
         for mapping in self._accepted_granularities:
             if requested_granularity > 0 and requested_granularity % mapping.raw == 0:
                 return mapping.enum_value
@@ -285,11 +285,11 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
                 "Granularities cannot be specified in both the GRANULARITY clause and WHERE clause."
             )
 
-        # Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
-        # Gets the highest common multiple of GRANULARITIES_AVAILABLE
-        # Returns this granularity along with a method which alters the conditions.
-        # If granularity was found in GRANULARITY clause, simple just add a condition.
-        # If found in WHERE clause, replace the old condition and add a new one.
+        # 1. Identifies where the granularity was provided (GRANULARITY clause vs WHERE clause)
+        # 2. Gets the highest common multiple of GRANULARITIES_AVAILABLE
+        # 3. Process the query
+        #   a. If granularity was found in GRANULARITY clause, simple just add a condition.
+        #   b. If found in WHERE clause, replace the old condition and add a new one.
         if (
             requested_granularity
             and requested_granularity > 0
