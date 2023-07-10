@@ -2,7 +2,7 @@ import React, { ReactNode } from "react";
 
 import { Prism } from "@mantine/prism";
 import { ExplainStep, QueryTransformData } from "./types";
-import { collapsibleStyle, nonCollapsibleStyle } from "./styles";
+import { nonCollapsibleStyle } from "./styles";
 
 import { Collapse } from "../collapse";
 
