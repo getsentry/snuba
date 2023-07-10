@@ -139,7 +139,7 @@ TENANT_ID_TESTS = [
 
 
 @pytest.mark.parametrize("request_payload, expected_tenant_ids", TENANT_ID_TESTS)
-def test_tenant_ids(request_payload, expected_tenant_ids):
+def test_tenant_ids(request_payload, expected_tenant_ids) -> None:
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
 
