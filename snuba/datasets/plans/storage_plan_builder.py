@@ -39,6 +39,7 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
+from snuba.state import explain_meta
 from snuba.utils.metrics.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
@@ -73,6 +74,10 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 with sentry_sdk.start_span(
                     description=type(processor).__name__, op="processor"
                 ):
+                    if query_settings.get_dry_run():
+                        explain_meta.add_step(
+                            "storage_processor", type(processor).__name__
+                        )
                     processor.process_query(query, query_settings)
             return runner(
                 clickhouse_query=query,

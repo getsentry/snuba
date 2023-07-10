@@ -31,6 +31,7 @@ from snuba.query.processors.physical import (
     CompositeQueryProcessor,
 )
 from snuba.query.query_settings import QuerySettings
+from snuba.state import explain_meta
 from snuba.web import QueryResult
 
 
@@ -438,6 +439,8 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         ).visit(query)
 
         for p in self.__composite_processors:
+            if query_settings.get_dry_run():
+                explain_meta.add_step("composite_storage_processor", type(p).__name__)
             p.process_query(query, query_settings)
 
         return runner(
