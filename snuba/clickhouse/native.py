@@ -8,7 +8,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from functools import partial
 from io import StringIO
 from typing import (
     Any,
@@ -173,30 +172,31 @@ class ClickhousePool(object):
                             else {"send_logs_level": "trace"}
                         )
 
-                    query_execute = partial(
-                        conn.execute,
-                        query,
-                        params=params,
-                        with_column_types=with_column_types,
-                        query_id=query_id,
-                        settings=settings,
-                        types_check=types_check,
-                        columnar=columnar,
-                    )
+                    def query_execute() -> ClickhouseResult:
+                        with sentry_sdk.start_span(
+                            description=query, op="db.clickhouse"
+                        ) as span:
+                            span.set_data(
+                                sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
+                            )
+                            return conn.execute(
+                                query,
+                                params=params,
+                                with_column_types=with_column_types,
+                                query_id=query_id,
+                                settings=settings,
+                                types_check=types_check,
+                                columnar=columnar,
+                            )
+
                     result_data: Sequence[Any]
                     trace_output = ""
-                    with sentry_sdk.start_span(
-                        description=query, op="db.clickhouse"
-                    ) as span:
-                        span.set_data(
-                            sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
-                        )
-                        if capture_trace:
-                            with capture_logging() as buffer:
-                                result_data = query_execute()
-                                trace_output = buffer.getvalue()
-                        else:
+                    if capture_trace:
+                        with capture_logging() as buffer:
                             result_data = query_execute()
+                            trace_output = buffer.getvalue()
+                    else:
+                        result_data = query_execute()
 
                     profile_data = ClickhouseProfile(
                         bytes=conn.last_query.profile_info.bytes or 0,
