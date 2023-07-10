@@ -185,8 +185,12 @@ class ClickhousePool(object):
                     )
                     result_data: Sequence[Any]
                     trace_output = ""
-                    with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-                        span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                    with sentry_sdk.start_span(
+                        description=query, op="db.clickhouse"
+                    ) as span:
+                        span.set_data(
+                            sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
+                        )
                         if capture_trace:
                             with capture_logging() as buffer:
                                 result_data = query_execute()
