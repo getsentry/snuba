@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -24,30 +24,33 @@ class FormattedTrace:
     storage_nodes: List[StorageNodeTraceResult]
 
 
-@dataclass
 class NodeTraceResult:
-    node_name: str
-    thread_ids: set[str] = set()
+    def __init__(self, node_name: str) -> None:
+        self.node_name: str = node_name
+        self.thread_ids: Set[str] = set()
 
 
-@dataclass
 class QueryNodeTraceResult(NodeTraceResult):
-    number_of_storage_nodes_accessed: int = 0
-    aggregation_performance: List[str] = []
-    read_performance: List[str] = []
-    memory_performance: List[str] = []
+    def __init__(self, node_name: str) -> None:
+        super(QueryNodeTraceResult, self).__init__(node_name)
+        self.number_of_storage_nodes_accessed: int = 0
+        self.aggregation_performance: List[str] = []
+        self.read_performance: List[str] = []
+        self.memory_performance: List[str] = []
 
 
 @dataclass
 class StorageNodeTraceResult(NodeTraceResult):
-    key_conditions: List[str] = []
-    skip_indexes: List[str] = []
-    filtering_algorithm: List[str] = []
-    selected_parts_and_marks: List[str] = []
-    aggregation_method: List[str] = []
-    aggregation_performance: List[str] = []
-    read_performance: List[str] = []
-    memory_performance: List[str] = []
+    def __init__(self, node_name: str) -> None:
+        super(StorageNodeTraceResult, self).__init__(node_name)
+        self.key_conditions: List[str] = []
+        self.skip_indexes: List[str] = []
+        self.filtering_algorithm: List[str] = []
+        self.selected_parts_and_marks: List[str] = []
+        self.aggregation_method: List[str] = []
+        self.aggregation_performance: List[str] = []
+        self.read_performance: List[str] = []
+        self.memory_performance: List[str] = []
 
 
 def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
@@ -124,13 +127,17 @@ LOG_MAPPINGS_FOR_STORAGE_NODES = [
 def format_trace_output(raw_trace_logs: str) -> None:
     formatted_logs = format_log_to_dict(raw_trace_logs)
     lookup: dict[str, NodeTraceResult] = {}  # node_name: NodeTraceResult
+
     query_node_name = formatted_logs[0]["node_name"]
     lookup[query_node_name] = QueryNodeTraceResult(query_node_name)
+    query_node_trace_result = lookup[query_node_name]
+    assert isinstance(query_node_trace_result, QueryNodeTraceResult)
 
     for log in formatted_logs:
         node_name = log["node_name"]
         if node_name not in lookup:
             lookup[node_name] = StorageNodeTraceResult(node_name)
+            query_node_trace_result.number_of_storage_nodes_accessed += 1
 
         trace_result = lookup[node_name]
         assert isinstance(trace_result, NodeTraceResult)
@@ -148,7 +155,11 @@ def format_trace_output(raw_trace_logs: str) -> None:
                 find_and_add_log_line(
                     log, getattr(trace_result, trace_attr), log_type, search_str
                 )
-    print(lookup)
+    print("")
+    print("HERE")
+    for key, val in lookup.items():
+        print(key)
+        print(val.__dict__)
 
 
 def find_and_add_log_line(
@@ -169,7 +180,7 @@ def format_log_to_dict(raw_trace_logs: str) -> List[dict[str, Any]]:
             log_type = log_type_regex.group()
 
         formatted_log = {
-            "node": context[0][2:-2],
+            "node_name": context[0][2:-2],
             "thread_id": context[1][2:-2],
             "log_type": log_type,
             "log_content": re.split(r"<.*?>", line)[1].strip(),
