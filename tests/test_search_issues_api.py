@@ -33,6 +33,7 @@ def base_insert_event(
             "data": {
                 "received": now.timestamp(),
             },
+            "occurrence_id": str(uuid.uuid4()),
             "occurrence_data": {
                 "id": str(uuid.uuid4()),
                 "type": 1,
