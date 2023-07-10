@@ -440,8 +440,12 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
 
         for p in self.__composite_processors:
             if query_settings.get_dry_run():
-                explain_meta.add_step("composite_storage_processor", type(p).__name__)
-            p.process_query(query, query_settings)
+                with explain_meta.with_query_differ(
+                    "composite_storage_processor", type(p).__name__, query
+                ):
+                    p.process_query(query, query_settings)
+            else:
+                p.process_query(query, query_settings)
 
         return runner(
             clickhouse_query=query,

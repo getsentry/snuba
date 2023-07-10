@@ -75,10 +75,13 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                     description=type(processor).__name__, op="processor"
                 ):
                     if query_settings.get_dry_run():
-                        explain_meta.add_step(
-                            "storage_processor", type(processor).__name__
-                        )
-                    processor.process_query(query, query_settings)
+                        with explain_meta.with_query_differ(
+                            "storage_processor", type(processor).__name__, query
+                        ):
+                            processor.process_query(query, query_settings)
+                    else:
+                        processor.process_query(query, query_settings)
+
             return runner(
                 clickhouse_query=query,
                 query_settings=query_settings,

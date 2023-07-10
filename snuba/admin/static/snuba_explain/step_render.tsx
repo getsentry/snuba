@@ -1,7 +1,8 @@
 import React, { ReactNode } from "react";
 
-import { COLORS } from "../theme";
+import { Prism } from "@mantine/prism";
 import { ExplainStep, QueryTransformData } from "./types";
+import { nonCollapsibleStyle } from "./styles";
 
 import { Collapse } from "../collapse";
 
@@ -12,13 +13,19 @@ type StepProps = {
 function QueryTransformStep(props: StepProps) {
   const { step } = props;
   const data = step.data as QueryTransformData;
+  if (data.original == data.transformed) {
+    return (
+      <div style={nonCollapsibleStyle}>
+        <span>{step.name} (no change)</span>
+      </div>
+    );
+  }
+  const code_diff = <Prism language="sql">{data.diff.join("\n")}</Prism>;
+
   return (
-    <div>
-      <Collapse key={step.name} text={step.name}>
-        <span>{data.original_query}</span>
-        <span>{data.new_query}</span>
-      </Collapse>
-    </div>
+    <Collapse key={step.name} text={step.name}>
+      {code_diff}
+    </Collapse>
   );
 }
 

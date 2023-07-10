@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { Prism } from "@mantine/prism";
+
 import Client from "../api_client";
 import QueryEditor from "../query_editor";
 import { Collapse } from "../collapse";
-
 import { SnQLRequest, SnQLResult, ExplainResult, ExplainStep } from "./types";
 import { Step } from "./step_render";
 
@@ -157,7 +158,9 @@ function SnubaExplain(props: { api: Client }) {
             ))}
           </ol>
           <Collapse key="final_sql" text="Final SQL">
-            <span>{currentRow.sql}</span>
+            <Prism withLineNumbers language="sql">
+              {currentRow.sql}
+            </Prism>
           </Collapse>
         </div>
       )}

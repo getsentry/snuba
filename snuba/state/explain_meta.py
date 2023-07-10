@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import difflib
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Literal, cast
+from typing import Any, Generator, Literal, cast
 
 from flask import g
 
@@ -9,12 +11,28 @@ ExplainType = Literal["query_transform"]
 
 
 @dataclass
+class StepData:
+    pass
+
+
+@dataclass
+class TransformStepData(StepData):
+    original: str
+    transformed: str
+    diff: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        diff = difflib.ndiff(self.original.split("\n"), self.transformed.split("\n"))
+        self.diff = [str(df) for df in diff]
+
+
+@dataclass
 class ExplainStep:
     category: str  # The class of step e.g. "processor"
     type: ExplainType  # A value that tells the frontend what data the step has
     name: str  # The specific name for the step e.g. "TimeSeriesProcessor"
-    data: dict[str, Any] = field(
-        default_factory=dict
+    data: StepData = field(
+        default_factory=StepData
     )  # Any extra information about the step
 
 
@@ -27,11 +45,30 @@ class ExplainMeta:
         self.steps.append(step)
 
 
-def add_step(category: str, name: str, data: dict[str, Any] | None = None) -> None:
+@contextmanager
+def with_query_differ(
+    category: str, name: str, query: Any
+) -> Generator[None, None, None]:
+    original = str(query)
+    yield
+    transformed = str(query)
+    diff = difflib.ndiff(original.split("\n"), transformed.split("\n"))
+    diff_data = [str(df) for df in diff]
+    step_data = TransformStepData(
+        original=original,
+        transformed=transformed,
+        diff=diff_data,
+    )
+    add_step("query_transform", category, name, step_data)
+
+
+def add_step(
+    step_type: ExplainType, category: str, name: str, data: StepData | None = None
+) -> None:
     try:
         if data is None:
-            data = {}
-        step = ExplainStep(category, "query_transform", name, data)
+            data = StepData()
+        step = ExplainStep(category, step_type, name, data)
 
         if not hasattr(g, "explain_meta"):
             g.explain_meta = ExplainMeta()
