@@ -33,20 +33,18 @@ impl ClickhouseWriterStep {
         }
     }
 }
-impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
+impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<Vec<BytesInsertBatch>>) -> Result<(), MessageRejected> {
-        for batch in message.payload() {
-            for row in batch.rows {
-                let decoded_row = String::from_utf8_lossy(&row);
-                log::debug!("insert: {:?}", decoded_row);
-            }
+    fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
+        for row in message.payload().rows {
+            let decoded_row = String::from_utf8_lossy(&row);
+            log::debug!("insert: {:?}", decoded_row);
         }
 
-        log::info!("Insert {} rows", message.payload().len());
+        log::info!("Insert {} rows", message.payload().rows.len());
 
         self.next_step.submit(message.replace(()))
     }
@@ -84,8 +82,10 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let accumulator =
-                Arc::new(|mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
-                    acc.push(value);
+                Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
+                    for row in value.rows {
+                        acc.rows.push(row);
+                    }
                     acc
                 });
 
@@ -96,7 +96,7 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
                         Duration::from_secs(1),
                     ))),
                     accumulator,
-                    Vec::new(),
+                    BytesInsertBatch{rows: vec![]},
                     self.max_batch_size,
                     self.max_batch_time,
                 ),
