@@ -239,7 +239,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         transaction_name = "/api/im/the/best"
         now = datetime.utcnow()
         insert_row = base_insert_event(now)
-        insert_row[2]["data"]["tags"] = {"transaction": transaction_name}
+        insert_row[2]["data"]["tags"] = [["transaction", transaction_name]]
 
         response = self.app.post(
             "/tests/search_issues/eventstream", data=json.dumps(insert_row)
