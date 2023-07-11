@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any, cast
@@ -26,33 +25,6 @@ CAPMAN_HASH = "capman"
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
-
-
-def get_quota_allowance(
-    allocation_policies: list["AllocationPolicy"], tenant_ids: dict[str, int | str]
-) -> QuotaAllowance:
-    quota_allowances: dict[str, QuotaAllowance] = {}
-    query_id = str(uuid.uuid4())
-    min_allowance = QuotaAllowance(True, 100, {})
-    for allocation_policy in allocation_policies:
-        allowance = allocation_policy.get_quota_allowance(tenant_ids, query_id)
-        min_allowance = min_allowance.merge(allowance)
-        quota_allowances[
-            allocation_policy.config_key()
-        ] = allocation_policy.get_quota_allowance(tenant_ids, query_id)
-    return min_allowance
-
-
-def update_quota_balance(
-    allocation_policies: list["AllocationPolicy"],
-    tenant_ids: dict[str, int | str],
-    query_id: str,
-    query_result_or_error: QueryResultOrError,
-) -> None:
-    for allocation_policy in allocation_policies:
-        allocation_policy.update_quota_balance(
-            tenant_ids, query_id, query_result_or_error
-        )
 
 
 @dataclass(frozen=True)
@@ -140,15 +112,6 @@ class QuotaAllowance:
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
-        )
-
-    def merge(self, other: QuotaAllowance):
-        return QuotaAllowance(
-            can_run=self.can_run and other.can_run,
-            max_threads=min(self.max_threads, other.max_threads),
-            # FIXME: this is not the right wayt to merge it
-            # one will clobber the other but we should be able to see both
-            explanation={**self.explanation, **other.explanation},
         )
 
 
