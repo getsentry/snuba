@@ -137,14 +137,18 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             )
             if self.is_enforced:
                 return QuotaAllowance(
-                    can_run=False, max_threads=0, explanation={"reason": why}
+                    policy_id=self.config_key(),
+                    can_run=False,
+                    max_threads=0,
+                    explanation={"reason": why},
                 )
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(self.config_key(), True, self.max_threads, {})
         if referrer in _SINGLE_THREAD_REFERRERS:
             return QuotaAllowance(
+                policy_id=self.config_key(),
                 can_run=True,
                 max_threads=1,
                 explanation={"reason": "low priority referrer"},
@@ -192,8 +196,8 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 if self.is_enforced:
                     num_threads = self.get_config_value("throttled_thread_number")
 
-            return QuotaAllowance(True, num_threads, explanation)
-        return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(self.config_key(), True, num_threads, explanation)
+        return QuotaAllowance(self.config_key(), True, self.max_threads, {})
 
     def _update_quota_balance(
         self,

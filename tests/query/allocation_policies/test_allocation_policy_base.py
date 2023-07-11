@@ -60,7 +60,12 @@ def test_raises_on_false_can_run() -> None:
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
-            return QuotaAllowance(can_run=False, max_threads=1, explanation={})
+            return QuotaAllowance(
+                policy_id=self.config_key(),
+                can_run=False,
+                max_threads=1,
+                explanation={},
+            )
 
     with pytest.raises(AllocationPolicyViolation):
         RejectingEverythingAllocationPolicy(
@@ -434,11 +439,25 @@ def test_is_not_active() -> None:
 def test_quota_allowance_merge():
     # Test the snuba.query.allocation_policies.QuotaAllowance merge function by making 2 allowances, merging them and checking the result
     allowance1 = QuotaAllowance(
-        max_threads=10, can_run=False, explanation={"reason": "something bad"}
+        policy_id="allowance1",
+        max_threads=10,
+        can_run=False,
+        explanation={"reason": "something bad"},
     )
     allowance2 = QuotaAllowance(
-        max_threads=10, can_run=True, explanation={"reason": "something else bad"}
+        policy_id="allowance2",
+        max_threads=10,
+        can_run=True,
+        explanation={"reason": "something else bad"},
     )
     # FIXME: make this test work and fix the conditions
     # the explanations should be merged in a sane way
-    assert allowance1.merge(allowance2) == allowance1
+    assert allowance1.merge(allowance2) == QuotaAllowance(
+        policy_id="merged_policy",
+        max_threads=10,
+        can_run=False,
+        explanation={
+            "allowance1": {"reason": "something bad"},
+            "allowance2": {"reason": "something else bad"},
+        },
+    )

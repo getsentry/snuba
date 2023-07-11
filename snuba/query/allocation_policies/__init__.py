@@ -31,15 +31,12 @@ MAX_THREADS = "max_threads"
 def get_quota_allowance(
     allocation_policies: list["AllocationPolicy"], tenant_ids: dict[str, int | str]
 ) -> QuotaAllowance:
-    quota_allowances: dict[str, QuotaAllowance] = {}
+    # FIXME: test this function
     query_id = str(uuid.uuid4())
-    min_allowance = QuotaAllowance(True, 100, {})
+    min_allowance = QuotaAllowance("merged_policy", True, 100, {})
     for allocation_policy in allocation_policies:
         allowance = allocation_policy.get_quota_allowance(tenant_ids, query_id)
         min_allowance = min_allowance.merge(allowance)
-        quota_allowances[
-            allocation_policy.config_key()
-        ] = allocation_policy.get_quota_allowance(tenant_ids, query_id)
     return min_allowance
 
 
@@ -49,6 +46,7 @@ def update_quota_balance(
     query_id: str,
     query_result_or_error: QueryResultOrError,
 ) -> None:
+    # FIXME: test this function
     for allocation_policy in allocation_policies:
         allocation_policy.update_quota_balance(
             tenant_ids, query_id, query_result_or_error
@@ -117,6 +115,9 @@ class InvalidPolicyConfig(Exception):
 
 @dataclass(frozen=True)
 class QuotaAllowance:
+    # The policy that was used to determine this allowance
+    # usually the `config_key` of the policy
+    policy_id: str
     can_run: bool
     max_threads: int
     # if any limiting action was taken by the allocation
@@ -143,12 +144,17 @@ class QuotaAllowance:
         )
 
     def merge(self, other: QuotaAllowance):
+        explanation = {}
+        explanation[self.policy_id] = self.explanation
+        explanation[other.policy_id] = other.explanation
+
         return QuotaAllowance(
+            policy_id="merged_policy",
             can_run=self.can_run and other.can_run,
             max_threads=min(self.max_threads, other.max_threads),
             # FIXME: this is not the right wayt to merge it
             # one will clobber the other but we should be able to see both
-            explanation={**self.explanation, **other.explanation},
+            explanation=explanation,
         )
 
 
@@ -733,7 +739,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> QuotaAllowance:
         try:
             if not self.is_active:
-                allowance = QuotaAllowance(True, self.max_threads, {})
+                allowance = QuotaAllowance(
+                    self.config_key(), True, self.max_threads, {}
+                )
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
         except Exception:
@@ -789,7 +797,10 @@ class PassthroughPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         return QuotaAllowance(
-            can_run=True, max_threads=self.max_threads, explanation={}
+            policy_id=self.config_key(),
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={},
         )
 
     def _update_quota_balance(
