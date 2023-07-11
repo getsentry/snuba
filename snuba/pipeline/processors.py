@@ -7,6 +7,7 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
+from snuba.state import explain_meta
 
 
 def _execute_clickhouse_processors(
@@ -74,4 +75,10 @@ def execute_entity_processors(query: LogicalQuery, settings: QuerySettings) -> N
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"
         ):
-            processor.process_query(query, settings)
+            if settings.get_dry_run():
+                with explain_meta.with_query_differ(
+                    "entity_processor", type(processor).__name__, query
+                ):
+                    processor.process_query(query, settings)
+            else:
+                processor.process_query(query, settings)

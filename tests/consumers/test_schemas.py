@@ -10,6 +10,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.factory import (
     get_writable_storage,
     get_writable_storage_keys,
+    get_writable_storages,
 )
 from snuba.processor import MessageProcessor, ReplacementBatch
 from snuba.replacers.replacer_processor import (
@@ -74,3 +75,28 @@ def test_all_schemas(case: Case) -> None:
                     action_type=action_type, data=data, metadata=replacement_metadata
                 )
             )
+
+
+TEMPORARILY_SKIPPED_TOPICS = [
+    "ingest-sessions",
+    "cdc",
+    "profiles-call-tree",
+    "processed-profiles",
+]
+
+
+def test_has_kafka_schema() -> None:
+    """
+    Source topics for a writable storage must have schema defined.
+    Temporarily skipped for a few topics where schemas are in progress.
+    """
+    for storage in get_writable_storages():
+        stream_loader = storage.get_table_writer().get_stream_loader()
+        topic_name = stream_loader.get_default_topic_spec().topic.value
+        try:
+            sentry_kafka_schemas.get_codec(topic_name)
+        except sentry_kafka_schemas.SchemaNotFound:
+            if topic_name in TEMPORARILY_SKIPPED_TOPICS:
+                print("Temporarily skipped validation for topic: %s" % topic_name)
+            else:
+                raise

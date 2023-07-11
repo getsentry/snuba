@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, MutableMapping
+from typing import Any, Mapping
 
 import pytest
 
@@ -100,7 +100,7 @@ class ReplayEvent:
             sdk_version="0.9.0",
         )
 
-    def serialize(self) -> MutableMapping[Any, Any]:
+    def serialize(self) -> Mapping[Any, Any]:
         replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
@@ -182,7 +182,7 @@ class ReplayEvent:
                 return f
         return None
 
-    def build_result(self, meta: KafkaMessageMetadata) -> MutableMapping[str, Any]:
+    def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         event_hash = segment_id_to_event_hash(self.segment_id)
 
         ret = {
@@ -220,7 +220,7 @@ class ReplayEvent:
             "device_model": self.device_model,
             "tags.key": ["customtag"],
             "tags.value": ["is_set"],
-            "title": self.title or "",
+            "title": self.title,
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
@@ -285,65 +285,6 @@ class TestReplaysProcessor:
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
-
-    def test_process_message_not_segment_0(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
-
-        message = ReplayEvent(
-            replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            replay_type="session",
-            event_hash=None,
-            error_sample_rate=0.5,
-            session_sample_rate=0.5,
-            title="/organizations/:orgId/issues/",
-            error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
-            trace_ids=[
-                "36e980a9c6024cde9f5d089f15b83b5f",
-                "8bea4461d8b944f393c15a3cb1c4169a",
-            ],
-            segment_id=1,
-            timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
-            replay_start_timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
-            platform="python",
-            dist="",
-            urls=["http://127.0.0.1:8001"],
-            is_archived=True,
-            user_name="me",
-            user_id="232",
-            user_email="test@test.com",
-            os_name="iOS",
-            os_version="16.2",
-            browser_name="Chrome",
-            browser_version="103.0.38",
-            device_name="iPhone 11",
-            device_brand="Apple",
-            device_family="iPhone",
-            device_model="iPhone",
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-        )
-
-        # Tags do not exist in the result object so they must be removed from
-        # the mock.
-        result = message.build_result(meta)
-        result.pop("tags.key", None)
-        result.pop("tags.value", None)
-
-        output = ReplaysProcessor().process_message(message.serialize(), meta)
-        expect = InsertBatch([result], None)
-        assert output == expect
-
-        # Assert the event_hash UUID contains dashes.
-        assert isinstance(output, InsertBatch)
-        generated_event_hash = output.rows[0]["event_hash"]
-        assert len(generated_event_hash) == 36
-        assert generated_event_hash == str(uuid.UUID(generated_event_hash))
 
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(
@@ -495,8 +436,6 @@ class TestReplaysProcessor:
         received_event_hash = received.pop("event_hash")
 
         expected = message.build_result(meta)
-        expected.pop("tags.key")
-        expected.pop("tags.value")
         assert isinstance(expected, dict)  # required for type checker
         expected_event_hash = expected.pop("event_hash")
 

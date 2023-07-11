@@ -107,7 +107,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SESSIONS: _MigrationGroup(
         loader=SessionsLoader(),
         storage_sets_keys={StorageSetKey.SESSIONS},
-        readiness_state=ReadinessState.COMPLETE,
+        readiness_state=ReadinessState.DEPRECATE,
     ),
     MigrationGroup.QUERYLOG: _MigrationGroup(
         loader=QuerylogLoader(),
@@ -146,7 +146,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         loader=SearchIssuesLoader(),
         storage_sets_keys={StorageSetKey.SEARCH_ISSUES},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),

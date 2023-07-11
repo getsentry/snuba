@@ -131,7 +131,7 @@ def test_storage_query_plan_builder(
         table_name = storage.get_schema().get_data_source().get_table_name()  # type: ignore
         if (
             table_name == ch_from_clause.table_name
-            and ch_from_clause.allocation_policy == storage.get_allocation_policy()
+            and ch_from_clause.allocation_policies == storage.get_allocation_policies()
         ):
             correct_policy_assigned = True
     assert correct_policy_assigned
@@ -165,6 +165,7 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
     query, _ = parse_snql_query(str(snql_query), dataset)
 
     temp_settings.SUPPORTED_STATES = {}  # remove all supported states
+    temp_settings.READINESS_STATE_FAIL_QUERIES = True
 
     assert isinstance(query, Query)
     with pytest.raises(

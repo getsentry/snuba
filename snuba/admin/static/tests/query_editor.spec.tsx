@@ -1,11 +1,12 @@
 import React from "react";
 import { it, expect, describe, jest, afterEach } from "@jest/globals";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
 import QueryEditor from "../query_editor";
 
 describe("Query editor", () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
   describe("when generating queries", () => {
     it("should replace all instances of parameter name when it has a non-empty parameter value", () => {
@@ -84,7 +85,9 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await user.selectOptions(getByTestId("select"), predefinedQuery.name);
+          await act(async () =>
+            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+          );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
         }
       });
@@ -98,7 +101,9 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await user.selectOptions(getByTestId("select"), predefinedQuery.name);
+          await act(async () =>
+            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+          );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
           expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
         }
@@ -112,7 +117,7 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        await user.type(getByTestId("text-area-input"), input);
+        await act(async () => user.type(getByTestId("text-area-input"), input));
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });

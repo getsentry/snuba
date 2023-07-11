@@ -11,7 +11,6 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.row_processors import CdcRowProcessor
-from snuba.datasets.configuration.utils import DlqConfig
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
@@ -90,7 +89,7 @@ class KafkaStreamLoader:
         subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
-        dlq_config: Optional[DlqConfig] = None,
+        dlq_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
         assert (
             (subscription_scheduler_mode is None)
@@ -106,7 +105,7 @@ class KafkaStreamLoader:
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
-        self.__dlq_config = dlq_config
+        self.__dlq_topic_spec = dlq_topic_spec
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -136,8 +135,8 @@ class KafkaStreamLoader:
     def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_result_topic_spec
 
-    def get_dlq_config(self) -> Optional[DlqConfig]:
-        return self.__dlq_config
+    def get_dlq_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__dlq_topic_spec
 
 
 def build_kafka_stream_loader_from_settings(
@@ -149,7 +148,7 @@ def build_kafka_stream_loader_from_settings(
     subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
-    dlq_config: Optional[DlqConfig] = None,
+    dlq_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
@@ -178,6 +177,11 @@ def build_kafka_stream_loader_from_settings(
     else:
         subscription_result_topic_spec = None
 
+    if dlq_topic is not None:
+        dlq_topic_spec = KafkaTopicSpec(dlq_topic)
+    else:
+        dlq_topic_spec = None
+
     return KafkaStreamLoader(
         processor,
         default_topic_spec,
@@ -187,7 +191,7 @@ def build_kafka_stream_loader_from_settings(
         subscription_scheduler_mode=subscription_scheduler_mode,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
-        dlq_config=dlq_config,
+        dlq_topic_spec=dlq_topic_spec,
     )
 
 

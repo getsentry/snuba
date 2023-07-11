@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generator, Iterable, Mapping, NewType, Optional, Sequence
+from typing import Any, Generator, Iterator, Mapping, NewType, Optional, Sequence
 
 SnapshotId = NewType("SnapshotId", str)
 SnapshotTableRow = Mapping[str, Any]
@@ -105,12 +105,12 @@ class BulkLoadSource(ABC):
     @contextmanager
     def get_parsed_table_file(
         self, table: str
-    ) -> Generator[Iterable[SnapshotTableRow], None, None]:
+    ) -> Generator[Iterator[SnapshotTableRow], None, None]:
         raise NotImplementedError
 
     @abstractmethod
     @contextmanager
     def get_preprocessed_table_file(
         self, table: str
-    ) -> Generator[Iterable[bytes], None, None]:
+    ) -> Generator[Iterator[bytes], None, None]:
         raise NotImplementedError

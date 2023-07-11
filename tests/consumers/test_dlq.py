@@ -7,36 +7,55 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.consumers.dlq import (
     DlqInstruction,
-    DlqPolicy,
+    DlqInstructionStatus,
+    DlqReplayPolicy,
     ExitAfterNMessages,
     clear_instruction,
     load_instruction,
+    mark_instruction_in_progress,
     store_instruction,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 
 
+@pytest.mark.redis_db
 def test_dlq_instruction() -> None:
-    instruction = DlqInstruction(DlqPolicy.STOP_ON_ERROR, StorageKey.QUERYLOG, None, 1)
+    instruction = DlqInstruction(
+        DlqReplayPolicy.STOP_ON_ERROR,
+        DlqInstructionStatus.NOT_STARTED,
+        StorageKey.QUERYLOG,
+        None,
+        1,
+    )
     encoded = instruction.to_bytes()
     assert DlqInstruction.from_bytes(encoded) == instruction
 
 
 @pytest.mark.redis_db
 def test_store_instruction() -> None:
-    instruction = DlqInstruction(DlqPolicy.STOP_ON_ERROR, StorageKey.QUERYLOG, None, 1)
+    instruction = DlqInstruction(
+        DlqReplayPolicy.STOP_ON_ERROR,
+        DlqInstructionStatus.NOT_STARTED,
+        StorageKey.QUERYLOG,
+        None,
+        1,
+    )
     store_instruction(instruction)
     assert load_instruction() == instruction
+    mark_instruction_in_progress()
+    loaded_instruction = load_instruction()
+    assert loaded_instruction is not None
+    assert loaded_instruction.status == DlqInstructionStatus.IN_PROGRESS
     clear_instruction()
     assert load_instruction() is None
 
 
 def test_exit_after_n_messages() -> None:
-    commit = Mock()
+    next_step = Mock()
     num_messages_to_process = 10
     max_message_timeout = 1.0
     strategy: ProcessingStrategy[int] = ExitAfterNMessages(
-        commit, num_messages_to_process, max_message_timeout
+        next_step, num_messages_to_process, max_message_timeout
     )
 
     topic = Topic("topic")

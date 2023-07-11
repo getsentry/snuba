@@ -157,7 +157,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -194,7 +200,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -231,7 +243,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -330,7 +348,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -355,7 +379,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -381,7 +411,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -394,6 +430,35 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         )
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
+
+    def test_tags_hash_map(self) -> None:
+        shared_key = 65546  # pick a key from shared_values
+        value_index = SHARED_TAGS[str(shared_key)]
+        expected_value = SHARED_MAPPING_META["c"][str(value_index)]
+        query_str = f"""MATCH (generic_metrics_distributions)
+                        SELECT count() AS thecount
+                        WHERE tags_raw[{shared_key}] = '{expected_value}'
+                        AND project_id = {self.project_id}
+                        AND org_id = {self.org_id}
+                        AND timestamp >= toDateTime('{self.start_time}')
+                        AND timestamp < toDateTime('{self.end_time}')
+                        """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                    "debug": True,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+        assert "_raw_tags_hash" in data["sql"]
 
 
 @pytest.mark.clickhouse_db
@@ -472,7 +537,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -492,7 +563,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                 """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -590,7 +667,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
@@ -624,7 +706,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
@@ -632,29 +719,3 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         data = json.loads(response.data)
         first_row = data["data"][0]
         assert first_row["tag_string"] == expected_value
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
-    def test_arbitrary_granularity(self) -> None:
-        super().test_arbitrary_granularity()
-
-    def test_retrieval_percentiles(self) -> None:
-        super().test_retrieval_percentiles()
-
-    def test_retrieval_basic(self) -> None:
-        pass
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
-    def test_indexed_tags(self) -> None:
-        super().test_indexed_tags()
-
-    def test_raw_tags(self) -> None:
-        super().test_raw_tags()
-
-    def test_retrieval_basic(self) -> None:
-        pass

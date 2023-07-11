@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 from flask import Response, g, jsonify, make_response
 
-from snuba import settings
 from snuba.admin.auth_roles import InteractToolAction
 from snuba.admin.user import AdminUser
 
@@ -28,6 +27,9 @@ class AdminTools(Enum):
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
     CAPACITY_MANAGEMENT = "capacity-management"
+    PRODUCTION_QUERIES = "production-queries"
+    CARDINALITY_ANALYZER = "cardinality-analyzer"
+    SNUBA_EXPLAIN = "snuba-explain"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
@@ -64,15 +66,6 @@ def check_tool_perms(
     def decorator(f: Callable[..., Response]) -> Callable[..., Response]:
         @wraps(f)
         def check_perms(*args: Any, **kwargs: Any) -> Response:
-            if settings.ADMIN_DEVELOPER_MODE:
-                for tool in tools:
-                    if tool in DEVELOPER_TOOLS:
-                        return f(*args, **kwargs)
-
-                return make_response(jsonify({"error": error_message}), 403)
-
-            # TODO: This functionality can be deprecated in favour of the developer setting after
-            # that is properly configured and deployed
             allowed_tools = get_user_allowed_tools(g.user)
             if AdminTools.ALL in allowed_tools:
                 return f(*args, **kwargs)

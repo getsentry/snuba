@@ -18,7 +18,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from tests.fixtures import get_raw_event
+from tests.fixtures import get_raw_error_message
 from tests.test_consumer import get_row_count
 
 test_storage_key = StorageKey("errors")
@@ -39,7 +39,6 @@ consumer_config = resolve_consumer_config(
 
 # Below, a ConsumerBuilder with only required args
 consumer_builder = ConsumerBuilder(
-    storage_key=test_storage_key,
     consumer_config=consumer_config,
     kafka_params=KafkaParameters(
         group_id=consumer_group_name,
@@ -55,6 +54,8 @@ consumer_builder = ConsumerBuilder(
     ),
     max_batch_size=3,
     max_batch_time_ms=4,
+    max_insert_batch_size=None,
+    max_insert_batch_time_ms=None,
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
@@ -62,6 +63,7 @@ consumer_builder = ConsumerBuilder(
     ),
     slice_id=None,
     join_timeout=5,
+    enforce_schema=True,
 )
 
 optional_consumer_config = resolve_consumer_config(
@@ -89,7 +91,6 @@ optional_kafka_params = KafkaParameters(
 # and optional args, but only those with
 # no default values
 consumer_builder_with_opt = ConsumerBuilder(
-    storage_key=test_storage_key,
     consumer_config=optional_consumer_config,
     kafka_params=optional_kafka_params,
     processing_params=ProcessingParameters(
@@ -99,6 +100,8 @@ consumer_builder_with_opt = ConsumerBuilder(
     ),
     max_batch_size=3,
     max_batch_time_ms=4,
+    max_insert_batch_size=None,
+    max_insert_batch_time_ms=None,
     metrics=MetricsWrapper(
         environment.metrics,
         "test_consumer",
@@ -106,6 +109,7 @@ consumer_builder_with_opt = ConsumerBuilder(
     ),
     slice_id=None,
     join_timeout=5,
+    enforce_schema=True,
 )
 
 
@@ -162,8 +166,7 @@ def test_run_processing_strategy() -> None:
     strategy_factory = consumer_builder.build_streaming_strategy_factory()
     strategy = strategy_factory.create_with_partitions(commit, partitions)
 
-    raw_message = get_raw_event()
-    json_string = json.dumps([2, "insert", raw_message, []])
+    json_string = json.dumps(get_raw_error_message())
 
     message = Message(
         BrokerValue(
@@ -183,7 +186,7 @@ def test_run_processing_strategy() -> None:
         if commit.call_count == 1:
             break
 
-    assert commit.call_count == 1
+    assert commit.call_count == 2
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 1
 
     strategy.close()

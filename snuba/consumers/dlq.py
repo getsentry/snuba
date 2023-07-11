@@ -8,8 +8,9 @@ from enum import Enum
 from typing import Optional, TypeVar
 
 import rapidjson
+from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies.abstract import ProcessingStrategy
-from arroyo.types import Commit, Message
+from arroyo.types import Message
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
@@ -21,13 +22,18 @@ DLQ_REDIS_KEY = "dlq_instruction"
 logger = logging.getLogger(__name__)
 
 
-class DlqPolicy(Enum):
+class DlqReplayPolicy(Enum):
     STOP_ON_ERROR = "stop-on-error"
     REINSERT_DLQ = "reinsert-dlq"
     DROP_INVALID_MESSAGES = "drop-invalid-messages"
 
 
-@dataclass(frozen=True)
+class DlqInstructionStatus(Enum):
+    NOT_STARTED = "not-started"
+    IN_PROGRESS = "in-progress"
+
+
+@dataclass
 class DlqInstruction:
     """
     The DlqInstruction is a mechanism to notify the DLQ consumer to begin processing
@@ -35,7 +41,8 @@ class DlqInstruction:
     Snuba admin and periodically checked for updates by the DLQ consumer.
     """
 
-    policy: DlqPolicy
+    policy: DlqReplayPolicy
+    status: DlqInstructionStatus
     storage_key: StorageKey
     slice_id: Optional[int]
     max_messages_to_process: int
@@ -44,6 +51,7 @@ class DlqInstruction:
         encoded: str = rapidjson.dumps(
             {
                 "policy": self.policy.value,
+                "status": self.status.value,
                 "storage_key": self.storage_key.value,
                 "slice_id": self.slice_id,
                 "max_messages_to_process": self.max_messages_to_process,
@@ -56,7 +64,8 @@ class DlqInstruction:
         decoded = rapidjson.loads(raw.decode("utf-8"))
 
         return cls(
-            policy=DlqPolicy(decoded["policy"]),
+            policy=DlqReplayPolicy(decoded["policy"]),
+            status=DlqInstructionStatus(decoded["status"]),
             storage_key=StorageKey(decoded["storage_key"]),
             slice_id=decoded["slice_id"],
             max_messages_to_process=decoded["max_messages_to_process"],
@@ -79,6 +88,16 @@ def load_instruction() -> Optional[DlqInstruction]:
     return DlqInstruction.from_bytes(value)
 
 
+def mark_instruction_in_progress() -> None:
+    """
+    Mark the current instruction as in progress. Not atomic.
+    """
+    instruction = load_instruction()
+    if instruction:
+        instruction.status = DlqInstructionStatus.IN_PROGRESS
+        store_instruction(instruction)
+
+
 def clear_instruction() -> None:
     redis_client.delete(DLQ_REDIS_KEY)
 
@@ -92,8 +111,8 @@ TPayload = TypeVar("TPayload")
 
 class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     """
-    Commits offsets until N messages is reached, then forces the
-    consumer to terminate. This is used by the DLQ consumer
+    Forwards messages until N messages is reached, then forces the
+    consumer to close. This is used by the DLQ consumer
     which is expected to process a fixed number of messages requested
     by the user.
 
@@ -102,13 +121,13 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
 
     def __init__(
         self,
-        commit: Commit,
+        next_step: ProcessingStrategy[TPayload],
         num_messages_to_process: int,
         max_message_timeout: float,
     ) -> None:
         self.__num_messages_to_process = num_messages_to_process
         self.__processed_messages = 0
-        self.__commit = commit
+        self.__next_step = next_step
         self.__last_message_time = time.time()
         self.__max_message_timeout = max_message_timeout
         self.__exiting = False
@@ -118,11 +137,11 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
             return
 
         self.__exiting = True
-        self.__commit({}, force=True)
         logger.info("Processed %d messages", self.__processed_messages)
         signal.raise_signal(signal.SIGINT)
 
     def poll(self) -> None:
+        self.__next_step.poll()
         if self.__last_message_time + self.__max_message_timeout < time.time():
             self.__exit()
 
@@ -132,14 +151,27 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
     def submit(self, message: Message[TPayload]) -> None:
         if self.__processed_messages < self.__num_messages_to_process:
             self.__last_message_time = time.time()
-            self.__commit(message.committable)
+
+            try:
+                self.__next_step.submit(message)
+            except InvalidMessage:
+                self.__processed_messages += 1
+                raise
             self.__processed_messages += 1
 
     def close(self) -> None:
-        pass
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.close()
 
     def terminate(self) -> None:
-        pass
+        if self.__processed_messages < self.__num_messages_to_process:
+            logger.warning(
+                "Closing DLQ consumer after %d messages", self.__processed_messages
+            )
+        self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
-        self.__commit({}, force=True)
+        self.__next_step.join(timeout)

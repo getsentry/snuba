@@ -73,7 +73,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], None)
+            return InsertBatch([row], row["received"])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
@@ -142,6 +142,12 @@ class ErrorsProcessor(DatasetMessageProcessor):
         threads = threadChain.get("values", None) or []
 
         self.extract_stacktraces(processed, stacks, threads)
+
+        processing_errors = data.get("errors", None)
+        if processing_errors is None:
+            processed["num_processing_errors"] = 0
+        elif processing_errors is not None and isinstance(processing_errors, list):
+            processed["num_processing_errors"] = len(processing_errors)
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
@@ -262,6 +268,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         transaction_ctx = contexts.get("trace") or {}
         trace_id = transaction_ctx.get("trace_id", None)
         span_id = transaction_ctx.get("span_id", None)
+        trace_sampled = transaction_ctx.get("sampled", None)
 
         replay_ctx = contexts.get("replay") or {}
         replay_id = replay_ctx.get("replay_id", None)
@@ -277,6 +284,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
             output["trace_id"] = str(uuid.UUID(trace_id))
         if span_id:
             output["span_id"] = int(span_id, 16)
+        if trace_sampled:
+            output["trace_sampled"] = bool(trace_sampled)
 
     def extract_common(
         self,

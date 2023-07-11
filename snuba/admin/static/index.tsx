@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
+import * as Sentry from "@sentry/react";
 import Header from "./header";
 import Nav from "./nav";
 import Body from "./body";
 import { NAV_ITEMS } from "./data";
 import Client from "./api_client";
+import { MantineProvider } from "@mantine/core";
 
 const containerStyle = {
   display: "flex",
@@ -19,6 +21,23 @@ const bodyStyle = {
 };
 
 let client = Client();
+client.getSettings().then((settings) => {
+  if (settings.dsn != "") {
+    Sentry.init({
+      dsn: settings.dsn,
+      integrations: [
+        new Sentry.BrowserTracing(),
+        new Sentry.Replay({ maskAllText: false, blockAllMedia: false }),
+      ],
+      // Performance Monitoring
+      tracesSampleRate: settings.tracesSampleRate,
+      // Session Replay
+      replaysSessionSampleRate: settings.replaysSessionSampleRate,
+      replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
+    });
+    Sentry.setUser({ email: settings.userEmail });
+  }
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 
@@ -44,13 +63,15 @@ function App() {
   }
 
   return (
-    <div style={containerStyle}>
-      <Header />
-      <div style={bodyStyle}>
-        <Nav active={activeTab} navigate={navigate} api={client} />
-        {activeTab && <Body active={activeTab} api={client} />}
+    <MantineProvider withGlobalStyles withNormalizeCSS>
+      <div style={containerStyle}>
+        <Header />
+        <div style={bodyStyle}>
+          <Nav active={activeTab} navigate={navigate} api={client} />
+          {activeTab && <Body active={activeTab} api={client} />}
+        </div>
       </div>
-    </div>
+    </MantineProvider>
   );
 }
 

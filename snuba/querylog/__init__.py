@@ -11,7 +11,7 @@ from snuba.attribution.log import (
 )
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.exceptions import QueryPlanException
-from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
+from snuba.querylog.query_metadata import SnubaQueryMetadata, Status
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -32,7 +32,6 @@ def _record_timer_metrics(
     app_id = request.attribution_info.app_id.key or "none"
     parent_api = request.attribution_info.parent_api or "none"
     tags = {
-        "status": query_metadata.status.value,
         "request_status": query_metadata.request_status.value,
         "slo": query_metadata.slo.value,
         "referrer": referrer,
@@ -52,7 +51,6 @@ def _record_timer_metrics(
         # As a result, its status and SLO values are not based on its query_list
         status = get_request_status(result)
         tags = {
-            "status": QueryStatus.ERROR.value,
             "request_status": status.status.value,
             "slo": status.slo.value,
             "referrer": referrer,
@@ -155,9 +153,7 @@ def record_invalid_request(
     it records failures during parsing/validation.
     This is for client errors.
     """
-    _record_failure_building_request(
-        QueryStatus.INVALID_REQUEST, request_status, timer, referrer
-    )
+    _record_failure_building_request(request_status, timer, referrer)
 
 
 def record_error_building_request(
@@ -168,11 +164,10 @@ def record_error_building_request(
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(QueryStatus.ERROR, request_status, timer, referrer)
+    _record_failure_building_request(request_status, timer, referrer)
 
 
 def _record_failure_building_request(
-    status: QueryStatus,
     request_status: Status,
     timer: Timer,
     referrer: Optional[str],
@@ -183,7 +178,6 @@ def _record_failure_building_request(
         timer.send_metrics_to(
             metrics,
             tags={
-                "status": status.value,
                 "referrer": referrer or "none",
                 "request_status": request_status.status.value,
                 "slo": request_status.slo.value,

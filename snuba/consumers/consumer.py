@@ -32,12 +32,12 @@ from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import (
     CommitOffsets,
     FilterStep,
-    ParallelTransformStep,
     ProcessingStrategy,
     ProcessingStrategyFactory,
     Reduce,
+    RunTask,
     RunTaskInThreads,
-    TransformStep,
+    RunTaskWithMultiprocessing,
 )
 from arroyo.types import (
     BaseValue,
@@ -55,7 +55,7 @@ from confluent_kafka import Producer as ConfluentProducer
 
 from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
-from snuba.consumers.schemas import get_json_codec
+from snuba.consumers.schemas import _NOOP_CODEC, get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -313,7 +313,7 @@ class ProcessedMessageBatchWriter:
 
         assert isinstance(message.value, BrokerValue)
         self.__offsets_to_produce[message.value.partition] = (
-            message.value.offset,
+            message.value.next_offset,
             message.value.timestamp,
         )
 
@@ -523,6 +523,7 @@ def process_message(
     processor: MessageProcessor,
     consumer_group: str,
     snuba_logical_topic: SnubaTopic,
+    enforce_schema: bool,
     message: Message[KafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     local_metrics = MetricsWrapper(
@@ -553,6 +554,10 @@ def process_message(
                 scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
 
                 try:
+                    # Occasionally log errors if no validator is configured
+                    if codec == _NOOP_CODEC:
+                        raise Exception("No validator configured for topic")
+
                     codec.validate(decoded)
                 except Exception as err:
                     local_metrics.increment(
@@ -569,6 +574,8 @@ def process_message(
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
+                    if enforce_schema:
+                        raise
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -587,14 +594,18 @@ def process_message(
             ),
         )
     except Exception as err:
+        local_metrics.increment(
+            "invalid_message",
+            tags={
+                "topic": snuba_logical_topic.name,
+                "processor": type(processor).__name__,
+            },
+        )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value
-            if state.get_config(f"enable_new_dlq_{snuba_logical_topic.name}", 1):
-                raise InvalidMessage(value.partition, value.offset) from err
-
-            return None
+            raise InvalidMessage(value.partition, value.offset) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
@@ -824,11 +835,11 @@ class MultistorageConsumerProcessingStrategyFactory(
         ]
 
         if self.__processes is None:
-            inner_strategy = TransformStep(transform_function, collect)
+            inner_strategy = RunTask(transform_function, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
-            inner_strategy = ParallelTransformStep(
+            inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
                 self.__processes,
@@ -839,7 +850,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 initializer=self.__initialize_parallel_transform,
             )
 
-        return TransformStep(
+        return RunTask(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,

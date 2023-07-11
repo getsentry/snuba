@@ -23,6 +23,7 @@ schema:
 
 
       { name: resource_id, type: String, args: { schema_modifiers: [ nullable ] } },
+      { name: message, type: String },
       { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: culprit, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: level, type: String, args: { schema_modifiers: [ nullable ] } },
@@ -62,6 +63,17 @@ schema:
   local_table_name: search_issues_local_v2
   dist_table_name: search_issues_dist_v2
 
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+
 query_processors:
   - processor: TableRateLimit
   - processor: MappingOptimizer
@@ -75,7 +87,7 @@ query_processors:
       column_name: tags
   - processor: UUIDColumnProcessor
     args:
-      columns: [occurrence_id, event_id, trace_id]
+      columns: [occurrence_id, event_id, trace_id, profile_id, replay_id]
   - processor: MappingColumnPromoter
     args:
       mapping_specs:
@@ -95,6 +107,4 @@ stream_loader:
     name: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
-  dlq_policy:
-    type: produce
-    args: [ snuba-dead-letter-generic-events ]
+  dlq_topic: snuba-dead-letter-generic-events

@@ -51,6 +51,7 @@ class TestReplaysApi(BaseApiTest):
                     LIMIT 10 OFFSET 0
                     """,
                     "debug": True,
+                    "tenant_ids": {"referrer": "replays", "organization_id": 1},
                 }
             ),
         )
@@ -95,6 +96,7 @@ class TestReplaysApi(BaseApiTest):
                     LIMIT 10 OFFSET 0
                     """,
                     "debug": True,
+                    "tenant_ids": {"referrer": "replays", "organization_id": 1},
                 }
             ),
         )
@@ -104,7 +106,7 @@ class TestReplaysApi(BaseApiTest):
 
         assert data["data"] == [
             {
-                "title": "",
+                "title": None,
                 "user": None,
                 "sdk_name": None,
                 "sdk_version": None,

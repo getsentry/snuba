@@ -37,7 +37,9 @@ from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyViolation,
+    AllocationPolicyViolations,
     QueryResultOrError,
+    QuotaAllowance,
 )
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
@@ -46,14 +48,12 @@ from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     SLO,
     ClickhouseQueryMetadata,
-    QueryStatus,
     Status,
-    get_query_status_from_error_codes,
     get_request_status,
 )
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
+from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
@@ -125,7 +125,6 @@ def update_query_metadata_and_stats(
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
-    status: QueryStatus,
     request_status: Status,
     profile_data: Optional[Dict[str, Any]] = None,
     error_code: Optional[int] = None,
@@ -151,7 +150,6 @@ def update_query_metadata_and_stats(
             start_timestamp=start,
             end_timestamp=end,
             stats=dict(stats),
-            status=status,
             request_status=request_status,
             profile=generate_profile(query),
             trace_id=trace_id,
@@ -161,7 +159,7 @@ def update_query_metadata_and_stats(
     return stats
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query(
     # TODO: Passing the whole clickhouse query here is needed as long
     # as the execute method depends on it. Otherwise we can make this
@@ -283,7 +281,7 @@ def _apply_thread_quota_to_clickhouse_query_settings(
             clickhouse_query_settings["max_threads"] = maxt
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -305,9 +303,23 @@ def execute_query_with_rate_limits(
         project_rate_limit_stats = rate_limit_stats_container.get_stats(
             PROJECT_RATE_LIMIT_NAME
         )
-        _apply_thread_quota_to_clickhouse_query_settings(
-            query_settings, clickhouse_query_settings, project_rate_limit_stats
-        )
+        # -----------------------------------------------------------------
+        # HACK (Volo): This is a hack experiment to see if we can
+        # stop doing  concurrent throttling in production on a specific table
+        # and still survive.
+
+        # depending on the `stats` dict to be populated ahead of time
+        # is not great style, but it is done in _format_storage_query_and_run.
+        # This should be removed by 07-15-2023. Either the concurrent throttling becomes
+        # another allocation policy or we remove this mechanism entirely
+
+        table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+        if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
+            if state.get_config(f"use_project_concurrent_throttling.{table_name}", 1):
+                _apply_thread_quota_to_clickhouse_query_settings(
+                    query_settings, clickhouse_query_settings, project_rate_limit_stats
+                )
+        # -----------------------------------------------------------------
 
         _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 
@@ -351,7 +363,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
     ]
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_query_id(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -403,7 +415,7 @@ def execute_query_with_query_id(
         )
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -582,24 +594,16 @@ def _raw_query(
     except Exception as cause:
         error_code = None
         trigger_rate_limiter = None
-        status = None
         request_status = get_request_status(cause)
         if isinstance(cause, RateLimitExceeded):
-            status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
-            status = get_query_status_from_error_codes(error_code)
-
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
                 scope.fingerprint = fingerprint
-        elif isinstance(cause, TimeoutError):
-            status = QueryStatus.TIMEOUT
-        elif isinstance(cause, ExecutionTimeoutError):
-            status = QueryStatus.TIMEOUT
 
         if request_status.slo == SLO.AGAINST:
             logger.exception("Error running query: %s\n%s", sql, cause)
@@ -609,7 +613,6 @@ def _raw_query(
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
         stats = update_with_status(
-            status=status or QueryStatus.ERROR,
             request_status=request_status,
             error_code=error_code,
             triggered_rate_limiter=str(trigger_rate_limiter),
@@ -627,7 +630,6 @@ def _raw_query(
         ) from cause
     else:
         stats = update_with_status(
-            status=QueryStatus.SUCCESS,
             request_status=get_request_status(),
             profile_data=result["profile"],
         )
@@ -641,34 +643,34 @@ def _raw_query(
         )
 
 
-def _get_allocation_policy(
+def _get_allocation_policies(
     clickhouse_query: Union[Query, CompositeQuery[Table]]
-) -> AllocationPolicy:
-    """given a query, find the allocation policy in its from clause, in the case
+) -> list[AllocationPolicy]:
+    """given a query, find the allocation policies in its from clause, in the case
     of CompositeQuery, follow the from clause until something is querying from a table
-    and use that table's allocation policy.
+    and use that table's allocation policies.
 
     **GOTCHAS**
-        - Does not handle joins, will return PassthroughPolicy
-        - In case of error, returns PassthroughPolicy, fails quietly (but logs to sentry)
+        - Does not handle joins, will return [PassthroughPolicy]
+        - In case of error, returns [PassthroughPolicy], fails quietly (but logs to sentry)
     """
     from_clause = clickhouse_query.get_from_clause()
     if isinstance(from_clause, Table):
-        return from_clause.allocation_policy
+        return from_clause.allocation_policies
     elif isinstance(from_clause, ProcessableQuery):
-        return _get_allocation_policy(cast(Query, from_clause))
+        return _get_allocation_policies(cast(Query, from_clause))
     elif isinstance(from_clause, CompositeQuery):
-        return _get_allocation_policy(from_clause)
+        return _get_allocation_policies(from_clause)
     elif isinstance(from_clause, JoinClause):
         # HACK (Volo): Joins are a weird case for allocation policies and we don't
         # actually use them anywhere so I'm purposefully just kicking this can down the
         # road
-        return DEFAULT_PASSTHROUGH_POLICY
+        return [DEFAULT_PASSTHROUGH_POLICY]
     else:
         logger.exception(
-            f"Could not determine allocation policy for {clickhouse_query}"
+            f"Could not determine allocation policies for {clickhouse_query}"
         )
-        return DEFAULT_PASSTHROUGH_POLICY
+        return [DEFAULT_PASSTHROUGH_POLICY]
 
 
 def db_query(
@@ -722,34 +724,19 @@ def db_query(
         evolves it can be changed. The inconsistency was consciously chosen for expediency and to have
         allocation policy be applied at the top level of the db_query process
     """
+
+    allocation_policies = _get_allocation_policies(clickhouse_query)
+
+    _apply_allocation_policies_quota(
+        query_settings,
+        attribution_info,
+        formatted_query,
+        stats,
+        allocation_policies,
+    )
+
     result = None
     error = None
-    allocation_policy = _get_allocation_policy(clickhouse_query)
-    try:
-        quota_allowance = allocation_policy.get_quota_allowance(
-            attribution_info.tenant_ids
-        )
-        stats["quota_allowance"] = quota_allowance.to_dict()
-    except AllocationPolicyViolation as e:
-        stats["quota_allowance"] = e.quota_allowance
-        raise QueryException.from_args(
-            AllocationPolicyViolation.__name__,
-            "Query cannot be run due to allocation policy",
-            extra={"stats": stats, "sql": formatted_query.get_sql(), "experiments": {}},
-        ) from e
-
-    # Before allocation policies were a thing, the query pipeline would apply
-    # thread limits in a query processor. That is not necessary if there
-    # is an allocation_policy in place but nobody has removed that code yet.
-    # Therefore, the least permissive thread limit is taken
-    query_settings.set_resource_quota(
-        ResourceQuota(
-            max_threads=min(
-                quota_allowance.max_threads,
-                getattr(query_settings.get_resource_quota(), "max_threads", 10),
-            )
-        )
-    )
     try:
         result = _raw_query(
             clickhouse_query,
@@ -771,12 +758,64 @@ def db_query(
         # if it didn't do that, something is very wrong so we just panic out here
         raise e
     finally:
-        allocation_policy.update_quota_balance(
-            tenant_ids=attribution_info.tenant_ids,
-            result_or_error=QueryResultOrError(query_result=result, error=error),
-        )
+        for allocation_policy in allocation_policies:
+            allocation_policy.update_quota_balance(
+                tenant_ids=attribution_info.tenant_ids,
+                result_or_error=QueryResultOrError(query_result=result, error=error),
+            )
         if result:
             return result
         raise error or Exception(
             "No error or result when running query, this should never happen"
         )
+
+
+def _apply_allocation_policies_quota(
+    query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    formatted_query: FormattedQuery,
+    stats: MutableMapping[str, Any],
+    allocation_policies: list[AllocationPolicy],
+) -> None:
+    """
+    Sets the resource quota in the query_settings object to the minimum of all available
+    quota allowances from the given allocation policies.
+    """
+    quota_allowances: dict[str, QuotaAllowance] = {}
+    violations: dict[str, AllocationPolicyViolation] = {}
+    for allocation_policy in allocation_policies:
+        try:
+            quota_allowances[
+                allocation_policy.config_key()
+            ] = allocation_policy.get_quota_allowance(attribution_info.tenant_ids)
+
+        except AllocationPolicyViolation as e:
+            violations[allocation_policy.config_key()] = e
+    if violations:
+        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
+        raise QueryException.from_args(
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
+            extra={
+                "stats": stats,
+                "sql": formatted_query.get_sql(),
+                "experiments": {},
+            },
+        ) from AllocationPolicyViolations(
+            "Query cannot be run due to allocation policies", violations
+        )
+
+    stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
+
+    # Before allocation policies were a thing, the query pipeline would apply
+    # thread limits in a query processor. That is not necessary if there
+    # is an allocation_policy in place but nobody has removed that code yet.
+    # Therefore, the least permissive thread limit is taken
+    query_settings.set_resource_quota(
+        ResourceQuota(
+            max_threads=min(
+                min(quota_allowances.values()).max_threads,
+                getattr(query_settings.get_resource_quota(), "max_threads", 10),
+            )
+        )
+    )

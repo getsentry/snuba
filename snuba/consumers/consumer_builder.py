@@ -1,7 +1,7 @@
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
 
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -11,13 +11,12 @@ from arroyo.backends.kafka import (
     build_kafka_consumer_configuration,
 )
 from arroyo.commit import IMMEDIATE
-from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer
+from arroyo.dlq import DlqLimit, DlqPolicy, KafkaDlqProducer, NoopDlqProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
-from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
-from confluent_kafka import KafkaError, KafkaException, Producer
+from confluent_kafka import KafkaError, Producer
 from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
@@ -26,12 +25,11 @@ from snuba.consumers.consumer import (
     process_message,
 )
 from snuba.consumers.consumer_config import ConsumerConfig
-from snuba.consumers.dlq import DlqInstruction
+from snuba.consumers.dlq import DlqInstruction, DlqReplayPolicy
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
-from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
@@ -58,30 +56,37 @@ class ConsumerBuilder:
     Simplifies the initialization of a consumer by merging parameters that
     generally come from the command line with defaults that come from the
     dataset class and defaults that come from the settings file.
+
+    Multiple storage consumer is not currently supported via consumer builder,
+    supports building a single storage consumer only.
     """
 
     def __init__(
         self,
-        storage_key: StorageKey,
         consumer_config: ConsumerConfig,
         kafka_params: KafkaParameters,
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time_ms: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int],
-        join_timeout: int,
-        stats_callback: Optional[Callable[[str], None]] = None,
-        commit_retry_policy: Optional[RetryPolicy] = None,
+        join_timeout: Optional[float],
+        enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
     ) -> None:
+        assert len(consumer_config.storages) == 1, "Only one storage supported"
+        storage_key = StorageKey(consumer_config.storages[0].name)
+
         self.join_timeout = join_timeout
         self.slice_id = slice_id
         self.storage = get_writable_storage(storage_key)
         self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
+        self.__enforce_schema = enforce_schema
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -126,10 +131,11 @@ class ConsumerBuilder:
         else:
             self.commit_log_producer = None
 
-        self.stats_callback = stats_callback
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
+        self.max_insert_batch_size = max_insert_batch_size
+        self.max_insert_batch_time_ms = max_insert_batch_time_ms
         self.group_id = kafka_params.group_id
         self.auto_offset_reset = kafka_params.auto_offset_reset
         self.strict_offset_reset = kafka_params.strict_offset_reset
@@ -141,24 +147,13 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
 
-        if commit_retry_policy is None:
-            commit_retry_policy = BasicRetryPolicy(
-                3,
-                1,
-                lambda e: isinstance(e, KafkaException)
-                and e.args[0].code()
-                in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR,
-                    KafkaError._WAIT_COORD,
-                ),
-            )
-
-        self.__commit_retry_policy = commit_retry_policy
+        self.dlq_producer: Optional[KafkaProducer] = None
 
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        input_topic: Topic,
+        dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
 
         configuration = build_kafka_consumer_configuration(
@@ -169,19 +164,6 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
-
-        stats_collection_frequency_ms = get_config(
-            f"stats_collection_freq_ms_{self.group_id}",
-            get_config("stats_collection_freq_ms", 0),
-        )
-
-        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
-            configuration.update(
-                {
-                    "statistics.interval.ms": stats_collection_frequency_ms,
-                    "stats_cb": self.stats_callback,
-                }
-            )
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
@@ -200,31 +182,13 @@ class ConsumerBuilder:
 
         consumer = KafkaConsumer(
             configuration,
-            commit_retry_policy=self.__commit_retry_policy,
         )
-
-        if self.__consumer_config.dlq_topic is not None:
-            dlq_producer = KafkaProducer(
-                build_kafka_configuration(
-                    self.__consumer_config.dlq_topic.broker_config
-                )
-            )
-
-            dlq_policy = DlqPolicy(
-                KafkaDlqProducer(
-                    dlq_producer,
-                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
-                ),
-                DlqLimit(),
-                None,
-            )
-        else:
-            dlq_policy = None
 
         return StreamProcessor(
             consumer,
-            self.raw_topic,
+            input_topic,
             strategy_factory,
+            # We already debounce commits by batch sizes, ONCE_PER_SECOND just adds more lag.
             IMMEDIATE,
             dlq_policy=dlq_policy,
             join_timeout=self.join_timeout,
@@ -256,6 +220,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -267,6 +232,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -308,6 +276,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -319,6 +288,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -335,17 +307,72 @@ class ConsumerBuilder:
         if self.commit_log_producer:
             self.commit_log_producer.flush()
 
+        if self.dlq_producer:
+            self.dlq_producer.close()
+
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(self.build_streaming_strategy_factory())
+        return self.__build_consumer(
+            self.build_streaming_strategy_factory(),
+            self.raw_topic,
+            self.__build_default_dlq_policy(),
+        )
 
     def build_dlq_consumer(
         self, instruction: DlqInstruction
     ) -> StreamProcessor[KafkaPayload]:
         """
         Dlq consumer. Same as the base consumer but exits after `max_messages_to_process`
+        and applies the user defined DLQ policy.
         """
+        if not instruction.is_valid():
+            raise ValueError("Invalid DLQ instruction")
 
-        return self.__build_consumer(self.build_streaming_strategy_factory())
+        if instruction.policy == DlqReplayPolicy.REINSERT_DLQ:
+            dlq_policy = self.__build_default_dlq_policy()
+        elif instruction.policy == DlqReplayPolicy.DROP_INVALID_MESSAGES:
+            dlq_policy = DlqPolicy(
+                NoopDlqProducer(),
+                None,
+                None,
+            )
+        elif instruction.policy == DlqReplayPolicy.STOP_ON_ERROR:
+            dlq_policy = None
+        else:
+            raise ValueError("Invalid DLQ policy")
+
+        dlq_topic = self.__consumer_config.dlq_topic
+        assert dlq_topic is not None
+
+        return self.__build_consumer(
+            self.build_dlq_strategy_factory(instruction),
+            Topic(dlq_topic.physical_topic_name),
+            dlq_policy,
+        )
+
+    def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
+        """
+        Default DLQ policy applies to the base consumer or the DLQ consumer when
+        the selected policy is re-insert to DLQ.
+        """
+        if self.__consumer_config.dlq_topic is not None:
+            self.dlq_producer = KafkaProducer(
+                build_kafka_configuration(
+                    self.__consumer_config.dlq_topic.broker_config
+                )
+            )
+
+            dlq_policy = DlqPolicy(
+                KafkaDlqProducer(
+                    self.dlq_producer,
+                    Topic(self.__consumer_config.dlq_topic.physical_topic_name),
+                ),
+                DlqLimit(),
+                None,
+            )
+        else:
+            dlq_policy = None
+
+        return dlq_policy

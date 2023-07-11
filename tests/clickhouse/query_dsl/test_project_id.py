@@ -1,4 +1,4 @@
-from typing import Any, MutableMapping, Optional, Set
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -6,10 +6,11 @@ from snuba_sdk.legacy import json_to_snql
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
+from snuba.query.logical import Query
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import parse_snql_query
 
-test_cases = [
+test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
     (
         {
             "selected_columns": ["column1"],
@@ -181,11 +182,13 @@ def test_find_projects(
             request = json_to_snql(query_body, "events")
             request.validate()
             query, _ = parse_snql_query(str(request.query), events)
+            assert isinstance(query, Query)
             identity_translate(query)
     else:
         request = json_to_snql(query_body, "events")
         request.validate()
         query, _ = parse_snql_query(str(request.query), events)
-        query = identity_translate(query)
-        project_ids_ast = get_object_ids_in_query_ast(query, "project_id")
+        assert isinstance(query, Query)
+        translated_query = identity_translate(query)
+        project_ids_ast = get_object_ids_in_query_ast(translated_query, "project_id")
         assert project_ids_ast == expected_projects

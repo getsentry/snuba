@@ -33,6 +33,8 @@ CLIENT_DISCARD_REASONS = frozenset(
         "sample_rate",
         "send_error",
         "internal_sdk_error",
+        "insufficient_data",
+        "backpressure",
     ]
 )
 
@@ -72,20 +74,16 @@ class OutcomesProcessor(DatasetMessageProcessor):
             metrics.increment("bad_outcome_timestamp")
             timestamp = _ensure_valid_date(datetime.utcnow())
 
-        try:
-            message = {
-                "org_id": outcome.get("org_id", 0),
-                "project_id": outcome.get("project_id", 0),
-                "key_id": outcome.get("key_id"),
-                "timestamp": timestamp,
-                "outcome": outcome["outcome"],
-                "category": outcome.get("category", DataCategory.ERROR),
-                "quantity": outcome.get("quantity", 1),
-                "reason": _unicodify(reason),
-                "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
-            }
-        except Exception:
-            metrics.increment("bad_outcome")
-            return None
+        message = {
+            "org_id": outcome.get("org_id", 0),
+            "project_id": outcome.get("project_id", 0),
+            "key_id": outcome.get("key_id"),
+            "timestamp": timestamp,
+            "outcome": outcome["outcome"],
+            "category": outcome.get("category", DataCategory.ERROR),
+            "quantity": outcome.get("quantity", 1),
+            "reason": _unicodify(reason),
+            "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
+        }
 
         return InsertBatch([message], None)

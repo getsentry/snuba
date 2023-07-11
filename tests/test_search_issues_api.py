@@ -29,9 +29,11 @@ def base_insert_event(
             "primary_hash": str(uuid.uuid4()),
             "datetime": datetime.utcnow().isoformat() + "Z",
             "platform": "other",
+            "message": "message",
             "data": {
                 "received": now.timestamp(),
             },
+            "occurrence_id": str(uuid.uuid4()),
             "occurrence_data": {
                 "id": str(uuid.uuid4()),
                 "type": 1,
@@ -77,6 +79,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
             headers={"referer": "test"},
@@ -93,6 +96,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             primary_hash=str(uuid.uuid4().hex),
             datetime=datetime.utcnow().isoformat() + "Z",
             platform="other",
+            message="message",
             data={"received": now.timestamp()},
             occurrence_data=dict(
                 id=str(uuid.uuid4().hex),
@@ -235,7 +239,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         transaction_name = "/api/im/the/best"
         now = datetime.utcnow()
         insert_row = base_insert_event(now)
-        insert_row[2]["data"]["tags"] = {"transaction": transaction_name}
+        insert_row[2]["data"]["tags"] = [["transaction", transaction_name]]
 
         response = self.app.post(
             "/tests/search_issues/eventstream", data=json.dumps(insert_row)
@@ -291,5 +295,9 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert response.status_code == 200, data
         assert data["stats"]["consistent"]
         assert data["data"] == [
-            {"project_id": 1, "profile_id": profile_id, "replay_id": replay_id}
+            {
+                "project_id": 1,
+                "profile_id": profile_id.replace("-", ""),
+                "replay_id": replay_id.replace("-", ""),
+            }
         ]

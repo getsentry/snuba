@@ -48,7 +48,16 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
-ADMIN_DEVELOPER_MODE = int(os.environ.get("ADMIN_DEVELOPER_MODE", "0")) == 1
+ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
+
+ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ROLES_REDIS_TTL = 600
 
 ######################
 # End Admin Settings #
@@ -122,6 +131,7 @@ class RedisClusterConfig(TypedDict):
     port: int
     password: str | None
     db: int
+    ssl: bool
     reinitialize_steps: int
 
 
@@ -135,6 +145,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
+REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
 
@@ -147,6 +158,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -157,6 +169,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
 
 # Query Recording Options
@@ -180,6 +193,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
+
 
 # Processor/Writer Options
 
@@ -238,11 +252,23 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# Capacity Management
+# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
+# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
+# available for single tenant since we can enable/disable policies at runtime there.
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
+
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation
 # policy code, the request will still be able to go through (but it will create a dangerous
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
+# By default, the readthrough cache won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache
+# the request will still be able to go through as if the cache did not exist
+RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
+
 
 # (logical topic name, # of partitions)
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
@@ -253,12 +279,7 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "spans",
-}
-
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SPANS", False):
-    SKIPPED_MIGRATION_GROUPS.remove("spans")
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}

@@ -1,5 +1,107 @@
 # Changelog
 
+## 23.6.2
+
+### Various fixes & improvements
+
+- add role to migrations stage (#4424) by @dbanda
+- experiment(capman,starfish): add ability to turn off concurrent throttling (#4464) by @volokluev
+- feat(dlq): If DLQ replay is kicked off, add it to audit log (#4439) by @lynnagara
+- Add script for customer deployments (#4438) by @mattgauntseo-sentry
+- feat(oncall): Make readthrough cache fail open on redis errors (#4449) by @volokluev
+- ref(admin) Allow colons in system queries so that datetimes are valid (#4462) by @evanh
+- perm(cardinality-analyzer): Add ingest team (#4458) by @jjbayer
+- use mantine text area instead of rich text editor (#4461) by @enochtangg
+- perm(prod-queries): Add production queries tool to product tools (#4460) by @davidtsuk
+- fix(spans): Add `group_raw` to HexIntColumnProcessor (#4459) by @shruthilayaj
+- feat(admin): Add syntax highlighting to snuba admin (#4430) by @enochtangg
+- feat(admin): Stop blocking text/images on Snuba Admin replays (#4443) by @rahul-kumar-saini
+- ref: Clean up print statements (#4447) by @lynnagara
+- fix: Revert debounced commits (#4446) by @untitaker
+- test(dlq): Add end to end DLQ consumer test (#4367) by @lynnagara
+- ref: bump sentry-redis-tools to 0.1.7 (#4445) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.17 (#4444) by @getsentry-bot
+- feat(prod-queries): Implement backend for prod queries (#4398) by @davidtsuk
+- ref: Decouple processing batches and clickhouse batches (#4251) by @untitaker
+- ref: bump sentry-kafka-schemas to 0.1.16 (#4436) by @getsentry-bot
+- build(deps): bump sentry-relay from 0.8.21 to 0.8.27 (#4427) by @dependabot
+- perm(cardinality-analyzer) Update cardinality analyzer member list (#4435) by @davidtsuk
+- feat(snubsplain): Use request context to capture query processors (#4381) by @evanh
+- ref(admin): Set the user email in Sentry (#4431) by @evanh
+
+_Plus 65 more_
+
+## 23.6.1
+
+### Various fixes & improvements
+
+- fix: Accidentally checked in useless text (#4355) by @lynnagara
+- fix(admin): Pin yarn and node using volta (#4349) by @untitaker
+- meta: Bump new development version (c2c6e3c3)
+- feat(dlq): Redesign admin UI, add API endpoints for replaying (#4347) by @lynnagara
+
+## 23.6.0
+
+### Various fixes & improvements
+
+- ref(DRS): Deprecate dataset experimental flag (#4321) by @enochtangg
+- Revert "fix: Temporarily revert dlq topic changes" (#4339) by @lynnagara
+- fix(iam-policy): Don't build google cloud API client in debug and test environments (#4344) by @davidtsuk
+- feat(prod-queries): Add preliminary UI for the production queries tool (#4345) by @davidtsuk
+- ref(iam-policy): Replace user emails with groups in iam_policy (#4346) by @davidtsuk
+- feat(spans): Add processors to extract millisecond granularity data (#4313) by @nikhars
+- ref(gen_met): Add mapping optimizer to generic metrics (#4336) by @evanh
+- Add optional Redis SSL support (#4343) by @frank-m
+- feat(spans): Add migration to create start_ms and end_ms columns (#4308) by @nikhars
+- ref(admin): Give team-sns google group full access to snuba admin (#4337) by @davidtsuk
+- feat(CapMan): Multiple Allocation Policies on a Storage [backend] (#4294) by @rahul-kumar-saini
+- chore(spans): Allow spans ingestion based on project sampling (#4214) by @nikhars
+- fix: Temporarily revert dlq topic changes (#4338) by @lynnagara
+- fix(tests): Skip flaky optimize tests (#4315) by @nikhars
+- ref(dlq): Simplify the way DLQ topic is configured (#4333) by @lynnagara
+- fix: All consumers have unique DLQ topics (#4335) by @lynnagara
+- feat(dlq): DLQ topics API for admin (#4334) by @lynnagara
+- Use Google Groups API for authorization (#4306) by @davidtsuk
+- fix(dlq): Pass for to configure_metrics (#4329) by @lynnagara
+- ref: Upgrade arroyo, and remove now-duplicated rdkafka.total_queue_size metric (#4330) by @untitaker
+- fix(gen-metrics): Add tags hash column to the generic metrics dist ta… (#4324) by @nikhars
+- ref: Set compression in `build_kafka_producer_configuration()` function (#4220) by @lynnagara
+- fix(dlq): ExitAfterNMessages strategy should be first step not last (#4318) by @lynnagara
+- feat(spans): Allow spans migrations to run locally (#4323) by @enochtangg
+
+_Plus 40 more_
+
+## 23.5.2
+
+### Various fixes & improvements
+
+- feat(CapMan): Spans Allocation Policy (#4261) by @rahul-kumar-saini
+- feat(CapMan): Allocation Policy UI tests (#4200) by @rahul-kumar-saini
+- fix(CapMan): organzation_id -> organization_id (#4267) by @rahul-kumar-saini
+- fix(DC): Outcomes Raw Entity was under wrong Dataset (#4263) by @rahul-kumar-saini
+- reject search issues bad column (#4260) by @volokluev
+- Final bypass for subscriptions (#4253) by @fpacifici
+- feat(search-issues): expose and process profile_id and replay_id columns (#4164) by @barkbarkimashark
+- fix: Fix flaky optimize test (#4252) by @untitaker
+- fix(spans): use system instead of platform (#4244) by @dbanda
+- promote profiles and functions to complete (#4238) by @enochtangg
+- ref: bump sentry-kafka-schemas to 0.1.10 (#4250) by @getsentry-bot
+- feat(CapMan): Most throttled Orgs visibility (#4248) by @rahul-kumar-saini
+- feat(DRS): Enable readiness state for storages (#4240) by @enochtangg
+- ref(dashboard): Add a setting that restricts the tools visible in the dashboard (#4174) by @evanh
+- fix: Add querylog `max.message.bytes` to topic configuration (#4221) by @lynnagara
+- fix(logs) : use structlog in migrations (#4236) by @dbanda
+- feat(dlq): Consumer builder can build a DLQ strategy (#4235) by @lynnagara
+- ref: bump sentry-arroyo to 2.11.4 (#4243) by @getsentry-bot
+- ref: bump sentry-arroyo to 2.11.3 (#4241) by @getsentry-bot
+- fix(parsing): Update error message for missing datetime column comparison condition (#4189) by @davidtsuk
+- fix: Querylog producer (#4219) by @lynnagara
+- fix: Fix attribution producer (#4218) by @lynnagara
+- test(dlq): Add a small test for ExitAfterNMessages strategy (#4234) by @lynnagara
+- feat(dlq): Add is_valid() method to DlqInstruction class (#4233) by @lynnagara
+
+_Plus 12 more_
+
 ## 23.5.1
 
 ### Various fixes & improvements

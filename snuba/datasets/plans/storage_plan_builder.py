@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Sequence
 
 import sentry_sdk
@@ -37,6 +39,7 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
+from snuba.state import explain_meta
 from snuba.utils.metrics.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
@@ -71,7 +74,14 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 with sentry_sdk.start_span(
                     description=type(processor).__name__, op="processor"
                 ):
-                    processor.process_query(query, query_settings)
+                    if query_settings.get_dry_run():
+                        with explain_meta.with_query_differ(
+                            "storage_processor", type(processor).__name__, query
+                        ):
+                            processor.process_query(query, query_settings)
+                    else:
+                        processor.process_query(query, query_settings)
+
             return runner(
                 clickhouse_query=query,
                 query_settings=query_settings,
@@ -95,7 +105,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
 
 def get_query_data_source(
     relational_source: RelationalSource,
-    allocation_policy: AllocationPolicy,
+    allocation_policies: list[AllocationPolicy],
     final: bool,
     sampling_rate: Optional[float],
 ) -> Table:
@@ -103,7 +113,7 @@ def get_query_data_source(
     return Table(
         table_name=relational_source.get_table_name(),
         schema=relational_source.get_columns(),
-        allocation_policy=allocation_policy,
+        allocation_policies=allocation_policies,
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
@@ -176,7 +186,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storage_connection = self.get_storage(query, settings)
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
-        cluster = self.get_cluster(storage, query, settings)
 
         # Return failure if storage readiness state is not supported in current environment
         if snuba_settings.READINESS_STATE_FAIL_QUERIES:
@@ -187,6 +196,9 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     StorageNotAvailable.__name__,
                     f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
                 )
+
+        # If storage is supported in this environment, we can safely check get the existing cluster.
+        cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="translate"
@@ -201,7 +213,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             clickhouse_query.set_from_clause(
                 get_query_data_source(
                     storage.get_schema().get_data_source(),
-                    allocation_policy=storage.get_allocation_policy(),
+                    allocation_policies=storage.get_allocation_policies(),
                     final=query.get_final(),
                     sampling_rate=query.get_sample(),
                 )
