@@ -23,6 +23,8 @@ columns: List[Column[Modifiers]] = [
     Column("owner_ownership_rule_team_id", UInt(64, Modifiers(nullable=True))),
     Column("owner_codeowners_user_id", UInt(64, Modifiers(nullable=True))),
     Column("owner_codeowners_team_id", UInt(64, Modifiers(nullable=True))),
+    # meta
+    Column("deleted", UInt(8)),
     Column("message_timestamp", DateTime()),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
@@ -40,6 +42,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(project_id, group_id)",
+                    version_column="deleted",
                     settings={"index_granularity": "8192"},
                     storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 ),

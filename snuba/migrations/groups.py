@@ -39,6 +39,7 @@ class MigrationGroup(Enum):
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
     SPANS = "spans"
+    GROUP_ATTRIBUTES = "group_attributes"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -54,6 +55,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.SPANS,
+    MigrationGroup.GROUP_ATTRIBUTES,
 }
 
 
