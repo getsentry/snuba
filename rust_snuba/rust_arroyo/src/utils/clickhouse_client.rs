@@ -48,7 +48,7 @@ mod tests {
     #[ignore = "clickhouse not running in rust ci"]
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
-        let client: ClickhouseClient = ClickhouseClient::new("localhost", 8123, "querylog_local");
+        let client: ClickhouseClient = ClickhouseClient::new("localhost", 8123, "querylog_local", "default");
 
         println!("{}", "running test");
         let res = client.send("[]".to_string()).await;
