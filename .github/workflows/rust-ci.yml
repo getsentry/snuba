@@ -48,6 +48,16 @@ jobs:
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
             confluentinc/cp-kafka:6.2.0
 
+      - name: Build snuba docker image for CI
+        run: |
+          docker build . \
+            -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --target testing
+
       - name: Docker set up
         run: |
           docker network create --attachable cloudbuild
