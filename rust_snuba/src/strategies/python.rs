@@ -101,7 +101,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     );
                     let result = self.py_process_message.call1(py, args)?;
                     let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-
                     Ok(BytesInsertBatch {
                         rows: result_decoded,
                     })
@@ -111,8 +110,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         match result {
             Ok(data) => self.next_step.submit(message.replace(data)),
-            Err(e) => {
-                log::error!("{:?}", e);
+            Err(_) => {
                 log::error!("Invalid message");
                 Ok(())
             },
