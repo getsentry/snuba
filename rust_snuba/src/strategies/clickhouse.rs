@@ -44,9 +44,17 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         }
 
         if !self.skip_write {
-            let data = decoded_rows.join("\n").to_string();
-            // TODO: Handle error
-            let _result = self.runtime.block_on(self.clickhouse_client.send(data)).unwrap();
+            let data = decoded_rows.join("\n");
+
+            // TODO: Handle error properly
+            match self.runtime.block_on(self.clickhouse_client.send(data)) {
+                Ok(res) => {
+                    log::info!("Clickhouse response: {:?}", res);
+                }
+                Err(e) => {
+                    log::error!("Error writing to clickhouse: {}", e);
+                }
+            }
         }
 
         log::info!("Insert {} rows", message.payload().rows.len());
