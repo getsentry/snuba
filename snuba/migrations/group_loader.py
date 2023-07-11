@@ -330,7 +330,7 @@ class SpansLoader(DirectoryLoader):
 
 class GroupAttributes(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.search_issues")
+        super().__init__("snuba.snuba_migrations.group_attributes")
 
     def get_migrations(self) -> Sequence[str]:
         return [
