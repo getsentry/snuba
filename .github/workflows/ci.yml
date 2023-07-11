@@ -224,10 +224,10 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-  sentry:
+  rust-tests-2:
     needs: [snuba-image]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
 
     strategy:
       matrix:
@@ -305,10 +305,10 @@ jobs:
             snuba-test
           docker exec sentry_snuba snuba migrations migrate --force
 
-      - name: Run snuba tests
-        working-directory: sentry
+      - name: Run tests
         run: |
-          make test-snuba
+          make test-rust
+
   self-hosted-end-to-end:
     needs: [snuba-image]
     runs-on: ubuntu-latest
