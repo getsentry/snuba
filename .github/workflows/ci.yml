@@ -316,6 +316,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    strategy:
+      matrix:
+        instance: [0, 1]
+
+    env:
+      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
+      MATRIX_INSTANCE_TOTAL: 2
+      MIGRATIONS_TEST_MIGRATE: 1
+
     steps:
       # Checkout codebase
       - name: Checkout snuba
