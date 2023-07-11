@@ -17,7 +17,6 @@ from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     ClickhouseQueryProfile,
     FilterProfile,
-    QueryStatus,
     RequestStatus,
     SnubaQueryMetadata,
     Status,
@@ -79,7 +78,6 @@ def test_simple() -> None:
                     "error_code": 386,
                     "triggered_rate_limiter": "test_rate_limiter",
                 },
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
@@ -202,7 +200,6 @@ def test_missing_fields() -> None:
                 start_timestamp=None,
                 end_timestamp=None,
                 stats={"sample": 10},
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,
@@ -225,14 +222,15 @@ def test_missing_fields() -> None:
     ).to_dict()
 
     messages = []
-    first = deepcopy(orig_message)
+    first = dict(deepcopy(orig_message))
     del first["timing"]
     del first["status"]
     messages.append(first)
 
-    second = deepcopy(orig_message)
+    second = dict(deepcopy(orig_message))
     second["timing"] = None
     second["status"] = None
+    messages.append(second)
 
     for message in messages:
         processor = (
@@ -330,7 +328,6 @@ def test_negative_project_id_fields() -> None:
                 start_timestamp=None,
                 end_timestamp=None,
                 stats={"sample": 10},
-                status=QueryStatus.SUCCESS,
                 request_status=Status(RequestStatus.SUCCESS),
                 profile=ClickhouseQueryProfile(
                     time_range=10,

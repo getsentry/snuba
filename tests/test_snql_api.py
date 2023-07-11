@@ -861,7 +861,7 @@ class TestSnQLApi(BaseApiTest):
         metric_calls = get_recorded_metric_calls("timing", "api.query")
         assert metric_calls is not None
         assert len(metric_calls) == 1
-        assert metric_calls[0].tags["status"] == "success"
+        assert metric_calls[0].tags["request_status"] == "success"
         assert metric_calls[0].tags["referrer"] == "test"
         assert metric_calls[0].tags["parent_api"] == "some/endpoint"
         assert metric_calls[0].tags["final"] == "False"
