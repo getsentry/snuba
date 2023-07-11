@@ -20,7 +20,67 @@ jobs:
       - name: Run linter
         run: |
           make lint-rust
+
+  snuba-image:
+    name: Build snuba CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      branch: ${{ steps.branch.outputs.branch }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get branch name
+        id: branch
+        # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
+        # it can be used as a docker tag
+        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
+
+      # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
+      # Should revisit this when we move off of google cloud build (we may want to move these to GCR)
+      - name: Registry login
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      # These are pulled in order to be able to use docker layer caching
+      - name: Pull snuba CI images
+        if: github.repository_owner == 'getsentry'
+        run: |
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+
+      - name: Build snuba docker image for CI
+        if: github.repository_owner == 'getsentry'
+        run: |
+          docker build . \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg SHOULD_BUILD_RUST=false \
+            -t ghcr.io/getsentry/snuba-ci:latest \
+            -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --target testing
+
+      - name: Publish images for cache
+        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: |
+          # Useful to speed up CI
+          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
+            # The latest tag should only be published on `master`
+            docker push ghcr.io/getsentry/snuba-ci:latest
+          fi
+
   rust-tests:
+    needs: [rust-linting, snuba-image]
     name: "Tests - Rust"
     runs-on: ubuntu-latest
     timeout-minutes: 20
