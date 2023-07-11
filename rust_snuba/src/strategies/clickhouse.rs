@@ -66,15 +66,3 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.next_step.join(timeout)
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::ClickhouseWriterStep;
-
-//     fn test_clickhouse_writer() {
-//         let strategy = ClickhouseWriterStep();
-
-
-//     }
-
-// }
