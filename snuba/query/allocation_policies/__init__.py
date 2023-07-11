@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any, cast
@@ -29,10 +28,11 @@ MAX_THREADS = "max_threads"
 
 
 def get_quota_allowance(
-    allocation_policies: list["AllocationPolicy"], tenant_ids: dict[str, int | str]
+    allocation_policies: list["AllocationPolicy"],
+    tenant_ids: dict[str, int | str],
+    query_id: str,
 ) -> QuotaAllowance:
     # FIXME: test this function
-    query_id = str(uuid.uuid4())
     min_allowance = QuotaAllowance("merged_policy", True, 100, {})
     for allocation_policy in allocation_policies:
         allowance = allocation_policy.get_quota_allowance(tenant_ids, query_id)
@@ -181,31 +181,6 @@ class AllocationPolicyViolation(SerializableException):
 
     def __str__(self) -> str:
         return f"{self.message}, explanation: {self.explanation}"
-
-
-class AllocationPolicyViolations(SerializableException):
-    """
-    An exception class which is used to collect multiple AllocationPolicyViolation
-    exceptions and raise them at once, useful for storages with multiple policies
-    defined on them.
-
-    Do not manually raise this exception! Use AllocationPolicyViolation instead within
-    your Allocation Policies for when a violation occurs and this exception will be
-    raised containing your raised exceptions at the end.
-    """
-
-    def __init__(
-        self,
-        message: str | None = None,
-        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
-        should_report: bool = True,
-        **extra_data: JsonSerializable,
-    ) -> None:
-        self.violations = violations
-        super().__init__(message, should_report, **extra_data)
-
-    def __str__(self) -> str:
-        return str({k: str(v) for k, v in self.violations.items()})
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
@@ -385,9 +360,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     * At time of writing (29-03-2023), not all allocation policy decisions are made in the allocation policy,
         rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
         are also policy decisions
-    * get_quota_allowance will throw an AllocationPolicyViolation if _get_quota_allowance().can_run is false.
-        this is to keep with the pattern in `db_query.py` which communicates error states with exceptions. There is no other
-        reason. For more information see snuba.web.db_query.db_query
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
@@ -751,8 +723,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                 raise
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
-        if not allowance.can_run:
-            raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
         return allowance
 
     @abstractmethod
