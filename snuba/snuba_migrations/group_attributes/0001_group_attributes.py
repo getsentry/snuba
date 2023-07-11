@@ -39,7 +39,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="group_attributes_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, group_id",
+                    order_by="(project_id, group_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 ),
