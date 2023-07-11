@@ -42,7 +42,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 "day_retention_days",
                 UInt(8, MigrationModifiers(default=str("retention_days"))),
             ),
-            "min_retention_days",
+            "hr_retention_days",
         ),
     ]
 
