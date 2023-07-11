@@ -389,12 +389,15 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             ]
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(True, 1, {})
 
         def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
         ) -> None:
             pass
 

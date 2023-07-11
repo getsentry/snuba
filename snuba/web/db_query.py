@@ -740,6 +740,7 @@ def db_query(
     """
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
+    query_id = uuid.uuid4().hex
 
     _apply_allocation_policies_quota(
         query_settings,
@@ -747,6 +748,7 @@ def db_query(
         formatted_query,
         stats,
         allocation_policies,
+        query_id,
     )
 
     result = None
@@ -775,6 +777,7 @@ def db_query(
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
+                query_id=query_id,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
         if result:
@@ -790,6 +793,7 @@ def _apply_allocation_policies_quota(
     formatted_query: FormattedQuery,
     stats: MutableMapping[str, Any],
     allocation_policies: list[AllocationPolicy],
+    query_id: str,
 ) -> None:
     """
     Sets the resource quota in the query_settings object to the minimum of all available
@@ -801,7 +805,9 @@ def _apply_allocation_policies_quota(
         try:
             quota_allowances[
                 allocation_policy.config_key()
-            ] = allocation_policy.get_quota_allowance(attribution_info.tenant_ids)
+            ] = allocation_policy.get_quota_allowance(
+                attribution_info.tenant_ids, query_id
+            )
 
         except AllocationPolicyViolation as e:
             violations[allocation_policy.config_key()] = e
