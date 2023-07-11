@@ -33,7 +33,7 @@ def rate_limit(
                                   ^
                                  now
     """
-    (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
+    (rate_history_s, rate_limit_shard_factor,) = state.get_configs(
         [
             # bool (0/1) flag to disable rate limits altogether
             ("bypass_rate_limit", 0),
@@ -247,12 +247,26 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                     value_type=str,
                     default="default",
                 ),
+                AllocationPolicyConfig(
+                    name="rate_history_sec",
+                    description="the amount of seconds timestamps are kept in redis",
+                    value_type=int,
+                    default=3600
+                ),
+                AllocationPolicyConfig(
+                    name="rate_limit_shard_factor",
+                    description="""number of shards that each redis set is supposed to have.
+                     increasing this value multiplies the number of redis keys by that
+                     factor, and (on average) reduces the size of each redis set""",
+                    value_type=int,
+                    default=1
+                )
+
+
             ]
 
-
-
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             # before a query is run on clickhouse, make a decision whether it can be run and with
             # how many threads
@@ -265,6 +279,7 @@ class RateLimitAllocationPolicy(AllocationPolicy):
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             # after the query has been run, update whatever this allocation policy
