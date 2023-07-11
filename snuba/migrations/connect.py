@@ -20,7 +20,7 @@ from snuba.migrations.clickhouse import (
     CLICKHOUSE_SERVER_MIN_VERSION,
 )
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
-from snuba.settings import ENABLE_DEV_FEATURES
+from snuba.settings import CLICKHOUSE_STARTUP_CHECK_RETRIES, ENABLE_DEV_FEATURES
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -54,7 +54,7 @@ def check_clickhouse_connections() -> None:
                     exc_info=e,
                 )
                 attempts += 1
-                if attempts == 60:
+                if attempts == CLICKHOUSE_STARTUP_CHECK_RETRIES:
                     raise
                 time.sleep(1)
 
