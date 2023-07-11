@@ -326,3 +326,13 @@ class SpansLoader(DirectoryLoader):
             "0003_spans_add_ms_columns",
             "0004_spans_group_raw_col",
         ]
+
+
+class GroupAttributes(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.search_issues")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_group_attributes",
+        ]
