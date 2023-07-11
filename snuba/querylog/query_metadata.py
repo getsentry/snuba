@@ -16,9 +16,31 @@ from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
 
 
+class QueryStatus(Enum):
+    SUCCESS = "success"
+    ERROR = "error"  # A system error
+    RATE_LIMITED = "rate-limited"
+    INVALID_REQUEST = "invalid-request"
+    TIMEOUT = "timeout"
+
+
+CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS = {
+    ErrorCodes.TOO_SLOW: QueryStatus.TIMEOUT,
+    ErrorCodes.TIMEOUT_EXCEEDED: QueryStatus.TIMEOUT,
+    ErrorCodes.SOCKET_TIMEOUT: QueryStatus.TIMEOUT,
+    ErrorCodes.NETWORK_ERROR: QueryStatus.TIMEOUT,
+}
+
+
+def get_query_status_from_error_codes(code: ErrorCodes) -> QueryStatus | None:
+    return CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS.get(code)
+
+
 class RequestStatus(Enum):
     """
     The different statuses we return for a request.
+
+    TODO: This will replace QueryStatus, but both exist as we cut over.
     """
 
     # Successfully returned a response
@@ -165,6 +187,7 @@ class ClickhouseQueryMetadata:
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
     stats: Dict[str, Any]
+    status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
@@ -179,7 +202,7 @@ class ClickhouseQueryMetadata:
             "start_timestamp": start,
             "end_timestamp": end,
             "stats": self.stats,
-            "status": self.request_status.status.value,  # TODO: Remove this from querylog schema
+            "status": self.status.value,
             "request_status": self.request_status.status.value,
             "slo": self.request_status.slo.value,
             "trace_id": self.trace_id,
@@ -221,7 +244,7 @@ class SnubaQueryMetadata:
             "start_timestamp": start,
             "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
-            "status": self.request_status.value,  # TODO: Remove this from querylog schema
+            "status": self.status.value,
             "request_status": self.request_status.value,
             "slo": self.slo.value,
             "timing": self.timer.for_json(),
@@ -233,6 +256,12 @@ class SnubaQueryMetadata:
             if isinstance(org_id, int):
                 request_dict["organization"] = org_id
         return request_dict
+
+    @property
+    def status(self) -> QueryStatus:
+        # If we do not have any recorded query and we did not specifically log
+        # invalid_query, we assume there was an error somewhere.
+        return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
 
     @property
     def request_status(self) -> RequestStatus:

@@ -48,12 +48,14 @@ from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     SLO,
     ClickhouseQueryMetadata,
+    QueryStatus,
     Status,
+    get_query_status_from_error_codes,
     get_request_status,
 )
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state.cache.abstract import Cache
+from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
@@ -125,6 +127,7 @@ def update_query_metadata_and_stats(
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
+    status: QueryStatus,
     request_status: Status,
     profile_data: Optional[Dict[str, Any]] = None,
     error_code: Optional[int] = None,
@@ -150,6 +153,7 @@ def update_query_metadata_and_stats(
             start_timestamp=start,
             end_timestamp=end,
             stats=dict(stats),
+            status=status,
             request_status=request_status,
             profile=generate_profile(query),
             trace_id=trace_id,
@@ -594,16 +598,24 @@ def _raw_query(
     except Exception as cause:
         error_code = None
         trigger_rate_limiter = None
+        status = None
         request_status = get_request_status(cause)
         if isinstance(cause, RateLimitExceeded):
+            status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
+            status = get_query_status_from_error_codes(error_code)
+
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
                 scope.fingerprint = fingerprint
+        elif isinstance(cause, TimeoutError):
+            status = QueryStatus.TIMEOUT
+        elif isinstance(cause, ExecutionTimeoutError):
+            status = QueryStatus.TIMEOUT
 
         if request_status.slo == SLO.AGAINST:
             logger.exception("Error running query: %s\n%s", sql, cause)
@@ -613,6 +625,7 @@ def _raw_query(
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
         stats = update_with_status(
+            status=status or QueryStatus.ERROR,
             request_status=request_status,
             error_code=error_code,
             triggered_rate_limiter=str(trigger_rate_limiter),
@@ -630,6 +643,7 @@ def _raw_query(
         ) from cause
     else:
         stats = update_with_status(
+            status=QueryStatus.SUCCESS,
             request_status=get_request_status(),
             profile_data=result["profile"],
         )

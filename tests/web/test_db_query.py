@@ -265,7 +265,7 @@ def test_db_query_fail() -> None:
         )
 
     assert len(query_metadata_list) == 1
-    assert query_metadata_list[0].request_status.status.value == "error"
+    assert query_metadata_list[0].status.value == "error"
     assert excinfo.value.extra["stats"] == stats
     assert excinfo.value.extra["sql"] is not None
 
