@@ -56,13 +56,11 @@ jobs:
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --target testing
 
       - name: Docker set up
         run: |
           docker network create --attachable cloudbuild
-      - name: Run ClickHouse
-        run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run snuba-test
 
       - name: Run tests
         run: |
