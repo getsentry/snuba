@@ -392,11 +392,10 @@ jobs:
             snuba-test
           docker exec sentry_snuba snuba migrations migrate --force
 
-      - name: Run Snuba tests
+      - name: Run snuba tests
         working-directory: sentry
         run: |
           make test-snuba
-
   self-hosted-end-to-end:
     needs: [snuba-image]
     runs-on: ubuntu-latest
