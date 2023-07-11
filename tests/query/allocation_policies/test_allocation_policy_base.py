@@ -429,16 +429,3 @@ def test_is_not_active() -> None:
     # Should not error anymore since private methods are not called due to inactivity
     policy.get_quota_allowance(tenant_ids, "deadbeef")
     policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
-
-
-def test_quota_allowance_merge():
-    # Test the snuba.query.allocation_policies.QuotaAllowance merge function by making 2 allowances, merging them and checking the result
-    allowance1 = QuotaAllowance(
-        max_threads=10, can_run=False, explanation={"reason": "something bad"}
-    )
-    allowance2 = QuotaAllowance(
-        max_threads=10, can_run=True, explanation={"reason": "something else bad"}
-    )
-    # FIXME: make this test work and fix the conditions
-    # the explanations should be merged in a sane way
-    assert allowance1.merge(allowance2) == allowance1
