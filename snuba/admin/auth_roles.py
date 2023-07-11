@@ -80,6 +80,7 @@ TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
+    "production-queries": ToolResource("production-queries"),
     "all": ToolResource("all"),
 }
 
@@ -150,7 +151,11 @@ ROLES = {
         name="product-tools",
         actions={
             InteractToolAction(
-                [TOOL_RESOURCES["snql-to-sql"], TOOL_RESOURCES["tracing"]]
+                [
+                    TOOL_RESOURCES["snql-to-sql"],
+                    TOOL_RESOURCES["tracing"],
+                    TOOL_RESOURCES["production-queries"],
+                ]
             )
         },
     ),

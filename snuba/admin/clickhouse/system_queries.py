@@ -36,12 +36,12 @@ SYSTEM_QUERY_RE = re.compile(
         ^ # Start
         (SELECT|select)
         \s
-        (?P<select_statement>[\w\s\',()*+\-\/]+|\*)
+        (?P<select_statement>[\w\s\',()*+\-\/:]+|\*)
         \s
         (FROM|from)
         \s
         system.[a-z_]+
-        (?P<extra>\s[\w\s,=()*+<>'%"\-\/]+)?
+        (?P<extra>\s[\w\s,=()*+<>'%"\-\/:]+)?
         ;? # Optional semicolon
         $ # End
     """,
