@@ -1,4 +1,4 @@
-local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/v1.0.0/gocd-tasks.libsonnet';
+local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
 // The return value of this function is the body of a GoCD pipeline.
 // More information on gocd-flavor YAML this is producing can be found here:
