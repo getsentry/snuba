@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Switch } from "@mantine/core";
 import Client from "../api_client";
 import QueryDisplay from "./query_display";
 import {
@@ -85,7 +84,6 @@ function TracingQueries(props: { api: Client }) {
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [showFormatted, setShowFormatted] = useState<boolean>(false);
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
   >([]);
@@ -135,17 +133,17 @@ function TracingQueries(props: { api: Client }) {
     window.navigator.clipboard.writeText(text);
   }
 
-  function tablePopulator(queryResult: TracingResult) {
+  function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
     if (queryResult.error) {
       elements = { Error: [queryResult.error, 200] };
     } else {
       elements = { Trace: [queryResult, 400] };
     }
-    return tracingOutput(elements);
+    return tracingOutput(elements, showFormatted);
   }
 
-  function tracingOutput(elements: Object) {
+  function tracingOutput(elements: Object, showFormatted: boolean) {
     return (
       <>
         <br />
@@ -179,7 +177,11 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {console.log(value.formatted_trace_output)}
+                  <pre>
+                    <code>
+                      {JSON.stringify(value.formatted_trace_output, null, 2)}
+                    </code>
+                  </pre>
                 </div>
               );
             }

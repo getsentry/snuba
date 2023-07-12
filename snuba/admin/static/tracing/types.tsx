@@ -7,7 +7,7 @@ type TracingResult = {
   input_query?: string;
   timestamp: number;
   trace_output?: string;
-  formatted_trace_output?: string;
+  formatted_trace_output?: Object;
   cols?: Array<Array<string>>;
   num_rows_result?: number;
   error?: string;

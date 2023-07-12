@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Switch } from "@mantine/core";
 import Client from "../api_client";
 import QueryEditor from "../query_editor";
 import { Table } from "../table";
@@ -14,7 +15,10 @@ type QueryState = Partial<TracingRequest>;
 
 function QueryDisplay(props: {
   api: Client;
-  resultDataPopulator: (queryResult: TracingResult) => JSX.Element;
+  resultDataPopulator: (
+    queryResult: TracingResult,
+    showFormatted: boolean
+  ) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
@@ -23,6 +27,7 @@ function QueryDisplay(props: {
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [showFormatted, setShowFormatted] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -53,6 +58,7 @@ function QueryDisplay(props: {
           num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
+          formatted_trace_output: result.formatted_trace_output,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [
@@ -124,6 +130,15 @@ function QueryDisplay(props: {
       </div>
       <div>
         <h2>Query results</h2>
+        <Switch
+          checked={showFormatted}
+          onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+            setShowFormatted(evt.currentTarget.checked)
+          }
+          onLabel="FORMATTED"
+          offLabel="RAW"
+          size="xl"
+        />
         <Table
           headerData={["Query", "Response"]}
           rowData={queryResultHistory.map((queryResult) => [
@@ -135,7 +150,7 @@ function QueryDisplay(props: {
               >
                 Copy to clipboard
               </button>
-              {props.resultDataPopulator(queryResult)}
+              {props.resultDataPopulator(queryResult, showFormatted)}
             </div>,
           ])}
           columnWidths={[1, 5]}
