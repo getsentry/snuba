@@ -72,12 +72,12 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         None
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
         if self.queue.len() >= self.max_queue_size {
-            return Err(MessageRejected);
+            return Err(MessageRejected {message});
         }
 
         let produce_fut = ProduceFuture {
@@ -168,7 +168,7 @@ mod tests {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}

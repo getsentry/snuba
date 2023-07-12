@@ -9,6 +9,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     CLUSTERS,
     ClickhouseClientSettings,
+    ClickhouseCluster,
     ClickhouseNode,
     UndefinedClickhouseCluster,
 )
@@ -25,13 +26,15 @@ from snuba.settings import ENABLE_DEV_FEATURES
 logger = structlog.get_logger().bind(module=__name__)
 
 
-def check_clickhouse_connections() -> None:
+def check_clickhouse_connections(
+    clusters: Sequence[ClickhouseCluster] = CLUSTERS,
+) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
     attempts = 0
 
-    for cluster in CLUSTERS:
+    for cluster in clusters:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         while True:

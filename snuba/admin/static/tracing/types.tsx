@@ -21,4 +21,10 @@ type LogLine = {
   message: string;
 };
 
-export { TracingRequest, TracingResult, LogLine };
+type PredefinedQuery = {
+  name: string;
+  sql: string;
+  description: string;
+};
+
+export { TracingRequest, TracingResult, LogLine, PredefinedQuery };

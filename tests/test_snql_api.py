@@ -31,7 +31,9 @@ class RejectAllocationPolicy123(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=False,
             max_threads=0,
@@ -41,6 +43,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         return

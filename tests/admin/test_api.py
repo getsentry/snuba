@@ -367,12 +367,15 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     data = json.loads(response.data)
     assert data["sql"] != ""
     assert len(data["explain"]["steps"]) > 0
-    assert {
-        "category": "entity_processor",
-        "name": "BasicFunctionsProcessor",
-        "type": "query_transform",
-        "data": {},
-    } in data["explain"]["steps"]
+    assert any(
+        step["category"] == "entity_processor"
+        and step["name"] == "BasicFunctionsProcessor"
+        and step["type"] == "query_transform"
+        and step["data"]["original"] != ""
+        and step["data"]["transformed"] != ""
+        and len(step["data"]["diff"]) > 0
+        for step in data["explain"]["steps"]
+    )
 
 
 @pytest.mark.redis_db
@@ -386,12 +389,15 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             ]
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(True, 1, {})
 
         def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
         ) -> None:
             pass
 
