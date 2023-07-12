@@ -1,6 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Error, Response};
 
+#[derive(Clone)]
 pub struct ClickhouseClient {
     client: Client,
     url: String,

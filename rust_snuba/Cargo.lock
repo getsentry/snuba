@@ -1360,6 +1360,7 @@ dependencies = [
  "glob",
  "log",
  "pyo3",
+ "reqwest",
  "rust_arroyo",
  "sentry",
  "serde",

@@ -4,6 +4,7 @@ use rust_arroyo::types::{Message};
 use rust_arroyo::utils::clickhouse_client::ClickhouseClient;
 use crate::types::BytesInsertBatch;
 use crate::config::ClickhouseConfig;
+use tokio::task::JoinHandle;
 
 
 pub struct ClickhouseWriterStep {
@@ -11,6 +12,7 @@ pub struct ClickhouseWriterStep {
     clickhouse_client: ClickhouseClient,
     runtime: tokio::runtime::Runtime,
     skip_write: bool,
+    handle: Option<JoinHandle<()>>
 }
 
 impl ClickhouseWriterStep {
@@ -27,16 +29,31 @@ impl ClickhouseWriterStep {
             clickhouse_client: ClickhouseClient::new(&hostname, http_port, &table, &database),
             runtime: tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap(),
             skip_write,
+            handle: None,
         }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
+        // if self.handle.is_some() && self.handle.as_ref().unwrap().is_finished() {
+        //     let result = self.handle.take().unwrap();
+        //     match self.runtime.block_on(result) {
+        //         Ok(res) => {
+        //             log::info!("Clickhouse response: {:?}", res);
+        //         }
+        //         Err(e) => {
+        //             log::error!("Error writing to clickhouse: {}", e);
+        //         }
+        //     }
+        // }
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
+        if self.handle.is_some() {
+            return Err(MessageRejected);
+        }
         let mut decoded_rows = vec![];
         for row in message.payload().rows {
             let decoded_row = String::from_utf8_lossy(&row);
@@ -46,15 +63,8 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         if !self.skip_write {
             let data = decoded_rows.join("\n");
 
-            // TODO: Handle error properly
-            match self.runtime.block_on(self.clickhouse_client.send(data)) {
-                Ok(res) => {
-                    log::info!("Clickhouse response: {:?}", res);
-                }
-                Err(e) => {
-                    log::error!("Error writing to clickhouse: {}", e);
-                }
-            }
+            self.handle = Some(self.runtime.spawn(make_request(self.clickhouse_client.clone(), data)));
+
         }
 
         log::info!("Insert {} rows", message.payload().rows.len());
@@ -73,4 +83,9 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         self.next_step.join(timeout)
     }
+}
+
+async fn make_request(client: ClickhouseClient, data: String) {
+    let res = client.send(data).await;
+    println!("Response: {:?}", res);
 }
