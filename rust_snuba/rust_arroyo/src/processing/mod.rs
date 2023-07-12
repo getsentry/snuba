@@ -4,7 +4,10 @@ use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use std::thread;
+use futures::lock::Mutex;
+
 use std::time::Duration;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
@@ -51,20 +54,45 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
+
+    // TODO: Because these callbacks are called synchronously, by kafka, we make our
+    // own threads and tokio runtimes to do the work.
     fn on_assign(&mut self, _: HashMap<Partition, u64>) {
-        let mut stg = self.strategies.lock().unwrap();
-        stg.strategy = Some(stg.processing_factory.create());
+        let strategies = self.strategies.clone();
+        let thread_handle = thread::spawn( move || {
+            let tokio_rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let assign_handle = tokio_rt.spawn(async move {
+                let mut stg = strategies.lock().await;
+                stg.strategy = Some(stg.processing_factory.create());
+            });
+            tokio_rt.block_on(assign_handle).unwrap();
+        });
+        thread_handle.join().unwrap();
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
-        let mut stg = self.strategies.lock().unwrap();
-        match stg.strategy.as_mut() {
-            None => {}
-            Some(s) => {
-                s.close();
-                s.join(None);
-            }
-        }
-        stg.strategy = None;
+        let strategies = self.strategies.clone();
+        let thread_handle = thread::spawn( move || {
+            let tokio_rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let revoke_handle: tokio::task::JoinHandle<()> = tokio_rt.spawn(async move {
+                let mut stg = strategies.lock().await;
+                match stg.strategy.as_mut() {
+                    None => {}
+                    Some(s) => {
+                        s.close();
+                        s.join(None).await;
+                    }
+                }
+                stg.strategy = None;
+            });
+            tokio_rt.block_on(revoke_handle).unwrap();
+        });
+        thread_handle.join().unwrap();
     }
 }
 
@@ -111,7 +139,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
-    pub fn run_once(&mut self) -> Result<(), RunError> {
+    pub async fn run_once(&mut self) -> Result<(), RunError> {
         let message_carried_over = self.message.is_some();
 
         if message_carried_over {
@@ -143,14 +171,14 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             }
         }
 
-        let mut trait_callbacks = self.strategies.lock().unwrap();
+        let mut trait_callbacks = self.strategies.lock().await;
         match trait_callbacks.strategy.as_mut() {
             None => match self.message.as_ref() {
                 None => {}
                 Some(_) => return Err(RunError::InvalidState),
             },
             Some(strategy) => {
-                let commit_request = strategy.poll();
+                let commit_request = strategy.poll().await;
                 match commit_request {
                     None => {}
                     Some(request) => {
@@ -161,7 +189,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
                 let msg = self.message.take();
                 if let Some(msg_s) = msg {
-                    let ret = strategy.submit(msg_s);
+                    let ret = strategy.submit(msg_s).await;
                     match ret {
                         Ok(()) => {}
                         Err(_) => {
@@ -192,17 +220,17 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     }
 
     /// The main run loop, see class docstring for more information.
-    pub fn run(&mut self) -> Result<(), RunError> {
+    pub async fn run(&mut self) -> Result<(), RunError> {
         while !self
             .processor_handle
             .shutdown_requested
             .load(Ordering::Relaxed)
         {
-            let ret = self.run_once();
+            let ret = self.run_once().await;
             match ret {
                 Ok(()) => {}
                 Err(e) => {
-                    let mut trait_callbacks = self.strategies.lock().unwrap();
+                    let mut trait_callbacks = self.strategies.lock().await;
 
                     match trait_callbacks.strategy.as_mut() {
                         None => {}
@@ -247,13 +275,15 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
     use uuid::Uuid;
+    use async_trait::async_trait;
 
     struct TestStrategy {
         message: Option<Message<String>>,
     }
+    #[async_trait]
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Option<CommitRequest> {
+        async fn poll(&mut self) -> Option<CommitRequest> {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
@@ -262,7 +292,7 @@ mod tests {
             }
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
+        async fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
             self.message = Some(message);
             Ok(())
         }
@@ -271,7 +301,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
+        async fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
             None
         }
     }
@@ -296,8 +326,8 @@ mod tests {
         broker
     }
 
-    #[test]
-    fn test_processor() {
+    #[tokio::test]
+    async fn test_processor() {
         let mut broker = build_broker();
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -310,12 +340,12 @@ mod tests {
         processor.subscribe(Topic {
             name: "test1".to_string(),
         });
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok())
     }
 
-    #[test]
-    fn test_consume() {
+    #[tokio::test]
+    async fn test_consume() {
         let mut broker = build_broker();
         let topic1 = Topic {
             name: "test1".to_string(),
@@ -338,9 +368,9 @@ mod tests {
         processor.subscribe(Topic {
             name: "test1".to_string(),
         });
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok());
-        let res = processor.run_once();
+        let res = processor.run_once().await;
         assert!(res.is_ok());
 
         let expected = HashMap::from([(partition, 2)]);

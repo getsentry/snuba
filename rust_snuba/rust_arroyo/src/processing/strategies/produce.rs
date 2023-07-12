@@ -3,6 +3,7 @@ use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, TopicOrPartition};
+use async_trait::async_trait;
 use futures::Future;
 use log::warn;
 use std::collections::VecDeque;
@@ -52,18 +53,16 @@ impl Produce<KafkaPayload> {
     }
 }
 
+#[async_trait]
 impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    async fn poll(&mut self) -> Option<CommitRequest> {
         while !self.queue.is_empty() {
             let (message, handle) = self.queue.pop_front().unwrap();
 
             if handle.is_finished() {
                 let new_message = message.clone();
-                // block_on(async{
-                //     handle.await.unwrap();
-                // });
-                self.next_step.poll();
-                self.next_step.submit(new_message).unwrap()
+                self.next_step.poll().await;
+                self.next_step.submit(new_message).await.unwrap();
             } else {
                 break;
             }
@@ -72,7 +71,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         None
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
@@ -102,7 +101,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = None;
 
@@ -117,16 +116,16 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
             let (message, handle) = self.queue.pop_front().unwrap();
             if handle.is_finished() {
                 let new_message = message.clone();
-                self.next_step.poll();
+                self.next_step.poll().await;
                 // TODO: Handle message rejected
-                self.next_step.submit(new_message).unwrap()
+                self.next_step.submit(new_message).await.unwrap();
             } else {
                 break;
             }
         }
 
         self.next_step.close();
-        self.next_step.join(remaining);
+        self.next_step.join(remaining).await;
         // TODO: Handle commit request
         None
     }
@@ -145,6 +144,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::Arc;
     use std::time::Duration;
+    use async_trait::async_trait;
 
     #[tokio::test]
     async fn test_produce() {
@@ -164,16 +164,18 @@ mod tests {
         };
 
         struct Noop {}
+
+        #[async_trait]
         impl ProcessingStrategy<KafkaPayload> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            async fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+            async fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+            async fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
                 None
             }
         }
@@ -203,6 +205,6 @@ mod tests {
             }),
         };
 
-        strategy.submit(message).unwrap();
+        strategy.submit(message).await.unwrap();
     }
 }

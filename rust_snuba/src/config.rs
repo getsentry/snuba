@@ -40,11 +40,12 @@ pub struct StoragesConfig {
     pub message_processor: MessageProcessorConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ClickhouseConfig {
     pub host: String,
     pub port: u16,
+    pub http_port: u16,
     pub user: String,
     pub password: String,
     pub database: String,

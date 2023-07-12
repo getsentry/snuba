@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
@@ -73,12 +74,14 @@ def _wrapped(message, offset, partition, timestamp):
     }
 }
 
+#[async_trait]
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.next_step.poll()
+    async fn poll(&mut self) -> Option<CommitRequest> {
+        log::trace!("polling python transform step");
+        self.next_step.poll().await
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
         // TODO: add procspawn/parallelism
         log::debug!("processing message,  message={}", message);
 
@@ -109,7 +112,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         });
 
         match result {
-            Ok(data) => self.next_step.submit(message.replace(data)),
+            Ok(data) => self.next_step.submit(message.replace(data)).await,
             Err(_) => {
                 log::error!("Invalid message");
                 Ok(())
@@ -120,16 +123,19 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn close(&mut self) {
+        log::debug!("closing python transform step");
         self.next_step.close();
     }
 
     fn terminate(&mut self) {
+        log::debug!("terminating python transform step");
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         // TODO: we need to shut down the python module properly in order to avoid dataloss in
         // sentry sdk or similar things that run in python's atexit
-        self.next_step.join(timeout)
+        log::debug!("joining python transform step");
+        self.next_step.join(timeout).await
     }
 }

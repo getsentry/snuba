@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
@@ -44,13 +46,16 @@ pub struct Reduce<T, TResult> {
     max_batch_time: Duration,
     batch_state: BatchState<T, TResult>,
 }
+#[async_trait]
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.flush(false);
-        self.next_step.poll()
+    async fn poll(&mut self) -> Option<CommitRequest> {
+        log::trace!("reduce polling");
+        self.flush(false).await;
+        self.next_step.poll().await
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+    async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+        log::debug!("reduce submitting,  message={}", message);
         if self.batch_state.is_complete {
             return Err(MessageRejected);
         }
@@ -67,9 +72,9 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.flush(true);
-        self.next_step.join(timeout)
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+        self.flush(true).await;
+        self.next_step.join(timeout).await
     }
 }
 
@@ -92,7 +97,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
         }
     }
 
-    fn flush(&mut self, force: bool) {
+    async fn flush(&mut self, force: bool) {
         if self.batch_state.message_count == 0 {
             return;
         }
@@ -108,8 +113,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
                     self.batch_state.offsets.clone(),
                 )),
             };
-
-            match self.next_step.submit(next_message) {
+            match self.next_step.submit(next_message).await {
                 Ok(_) => {
                     self.batch_state = BatchState::new(self.initial_value.clone(), self.accumulator.clone());
                 }
@@ -131,9 +135,10 @@ mod tests {
     use crate::processing::strategies::reduce::Reduce;
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
+    use async_trait::async_trait;
 
-    #[test]
-    fn test_reduce() {
+    #[tokio::test]
+    async fn test_reduce() {
         let submitted_messages = Arc::new(Mutex::new(Vec::new()));
         let submitted_messages_clone = submitted_messages.clone();
 
@@ -141,12 +146,13 @@ mod tests {
             pub submitted: Arc<Mutex<Vec<T>>>,
         }
 
+        #[async_trait]
         impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            async fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
 
-            fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+            async fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
                 self.submitted.lock().unwrap().push(message.payload());
                 Ok(())
             }
@@ -155,7 +161,7 @@ mod tests {
 
             fn terminate(&mut self) {}
 
-            fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
+            async fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
                 None
             }
         }
@@ -189,12 +195,12 @@ mod tests {
 
         for i in 0..3 {
             let msg = Message {inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(i, partition1.clone(), i, chrono::Utc::now()))};
-            strategy.submit(msg).unwrap();
-            strategy.poll();
+            strategy.submit(msg).await.unwrap();
+            strategy.poll().await;
         }
 
         strategy.close();
-        strategy.join(None);
+        strategy.join(None).await;
 
         // 2 batches were created
         assert_eq!(*submitted_messages_clone.lock().unwrap(), vec![vec![0, 1], vec![2]]);

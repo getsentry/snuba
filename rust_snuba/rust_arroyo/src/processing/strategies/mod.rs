@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -26,6 +28,7 @@ pub struct CommitRequest {
 ///
 /// This interface is intentionally not prescriptive, and affords a
 /// significant degree of flexibility for the various implementations.
+#[async_trait]
 pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// Poll the processor to check on the status of asynchronous tasks or
     /// perform other scheduled work.
@@ -37,7 +40,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     ///
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
-    fn poll(&mut self) -> Option<CommitRequest>;
+    async fn poll(&mut self) -> Option<CommitRequest>;
 
     /// Submit a message for processing.
     ///
@@ -49,7 +52,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// If the processing strategy is unable to accept a message (due to it
     /// being at or over capacity, for example), this method will raise a
     /// ``MessageRejected`` exception.
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected>;
+    async fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected>;
 
     /// Close this instance. No more messages should be accepted by the
     /// instance after this method has been called.
@@ -75,7 +78,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// until this function exits, allowing any work in progress to be
     /// completed and committed before the continuing the rebalancing
     /// process.
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
+    async fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
 }
 
 pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {
