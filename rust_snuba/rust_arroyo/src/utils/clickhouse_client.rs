@@ -29,7 +29,7 @@ impl ClickhouseClient {
         client
     }
 
-    pub async fn send(&self, body: String) -> Result<Response, Error> {
+    pub async fn send(&self, body: Vec<u8>) -> Result<Response, Error> {
         self.client
             .post(self.url.clone())
             .headers(self.headers.clone())
@@ -46,13 +46,13 @@ impl ClickhouseClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[ignore = "clickhouse not running in rust ci"]
+    // #[ignore = "clickhouse not running in rust ci"]
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let client: ClickhouseClient = ClickhouseClient::new("localhost", 8123, "querylog_local", "default");
 
         println!("{}", "running test");
-        let res = client.send("[]".to_string()).await;
+        let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }

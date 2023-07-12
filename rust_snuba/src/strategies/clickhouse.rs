@@ -68,16 +68,14 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
             log::warn!("clickhouse writer is still busy, rejecting message");
             return Err(MessageRejected{message});
         }
-        let mut decoded_rows = vec![];
+        let mut data = vec![];
         for row in message.payload().rows {
-            // HACK: Fix this
-            let decoded_row = String::from_utf8_lossy(&row);
-            decoded_rows.push(decoded_row.to_string());
+            data.extend(row);
+            data.extend(b"\n");
         }
 
         if !self.skip_write {
             log::debug!("performing write");
-            let data = decoded_rows.join("\n");
 
             let client = self.clickhouse_client.clone();
             self.handle = Some(self.runtime.spawn(async move {
