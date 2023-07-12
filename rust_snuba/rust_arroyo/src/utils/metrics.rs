@@ -8,7 +8,12 @@ use std::collections::HashMap;
 use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
 
-pub trait Metrics {
+pub trait MetricsClientTrait: Send + Sync  {
+
+    fn should_sample(&self, sample_rate: Option<f64>) -> bool {
+        rand::thread_rng().gen_range(0.0..=1.0) < sample_rate.unwrap_or(1.0)
+    }
+
     fn counter(
         &self,
         key: &str,
@@ -39,7 +44,7 @@ pub struct MetricsClient {
     prefix: String,
 }
 
-impl Metrics for MetricsClient {
+impl MetricsClientTrait for MetricsClient {
     fn counter(
         &self,
         key: &str,
@@ -61,7 +66,7 @@ impl Metrics for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -86,7 +91,7 @@ impl Metrics for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -111,7 +116,7 @@ impl Metrics for MetricsClient {
             match result {
                 Ok(_) => {}
                 Err(_err) => {
-                    println!("Failed to send metric {}: {}", key, _err)
+                    println!("Failed to send metric {key}: {_err}")
                 }
             }
         }
@@ -119,9 +124,6 @@ impl Metrics for MetricsClient {
 }
 
 impl MetricsClient {
-    fn should_sample(&self, sample_rate: Option<f64>) -> bool {
-        rand::thread_rng().gen_range(0.0..=1.0) < sample_rate.unwrap_or(1.0)
-    }
 
     fn send_with_tags<'t, T: cadence::Metric + From<String>>(
         &self,
@@ -135,14 +137,14 @@ impl MetricsClient {
         match result {
             Ok(_) => {}
             Err(_err) => {
-                println!("Failed to send metric with tags: {}", _err)
+                println!("Failed to send metric with tags: {_err}")
             }
         }
     }
 }
 
 lazy_static! {
-    static ref METRICS_CLIENT: RwLock<Option<Arc<MetricsClient>>> = RwLock::new(None);
+    static ref METRICS_CLIENT: RwLock<Option<Arc<dyn MetricsClientTrait>>> = RwLock::new(None);
 }
 
 const METRICS_MAX_QUEUE_SIZE: usize = 1024;
@@ -162,6 +164,9 @@ pub fn init<A: ToSocketAddrs>(prefix: &str, host: A) {
         prefix: String::from(prefix),
     };
     println!("Emitting metrics with prefix {}", metrics_client.prefix);
+    *METRICS_CLIENT.write() = Some(Arc::new(metrics_client));
+}
+pub fn configure_metrics(metrics_client: impl MetricsClientTrait + 'static){
     *METRICS_CLIENT.write() = Some(Arc::new(metrics_client));
 }
 
@@ -211,6 +216,7 @@ mod tests {
             .clone()
             .unwrap()
             .should_sample(Some(0.0)),);
+
         assert!(METRICS_CLIENT
             .read()
             .clone()
