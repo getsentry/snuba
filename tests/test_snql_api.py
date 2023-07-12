@@ -75,6 +75,9 @@ class TestSnQLApi(BaseApiTest):
         )
 
     def test_simple_query(self) -> None:
+        from snuba import state
+        state.set_config("project_referrer_concurrent_limit_myreferrer", 1)
+        state.set_config("project_concurrent_limit", 0)
         response = self.post(
             "/discover/snql",
             data=json.dumps(
@@ -86,6 +89,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     ORDER BY count ASC
                     LIMIT 1000""",
+                    "referrer": "myreferrer",
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
