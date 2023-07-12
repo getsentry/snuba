@@ -262,7 +262,7 @@ mod tests {
             }
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
+        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected<String>> {
             self.message = Some(message);
             Ok(())
         }

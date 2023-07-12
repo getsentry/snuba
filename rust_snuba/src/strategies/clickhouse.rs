@@ -8,17 +8,18 @@ use tokio::task::JoinHandle;
 
 
 pub struct ClickhouseWriterStep {
-    next_step: Box<dyn ProcessingStrategy<()>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     clickhouse_client: ClickhouseClient,
     runtime: tokio::runtime::Runtime,
     skip_write: bool,
-    handle: Option<JoinHandle<()>>
+    handle: Option<JoinHandle<Result<Message<BytesInsertBatch>, reqwest::Error>>>,
+    carried_over_message: Option<Message<BytesInsertBatch>>,
 }
 
 impl ClickhouseWriterStep {
     pub fn new<N>(next_step: N, cluster_config: ClickhouseConfig, table: String, skip_write: bool) -> Self
     where
-        N: ProcessingStrategy<()> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let hostname = cluster_config.host;
         let http_port = cluster_config.http_port;
@@ -30,29 +31,41 @@ impl ClickhouseWriterStep {
             runtime: tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap(),
             skip_write,
             handle: None,
+            carried_over_message: None,
         }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
-        // if self.handle.is_some() && self.handle.as_ref().unwrap().is_finished() {
-        //     let result = self.handle.take().unwrap();
-        //     match self.runtime.block_on(result) {
-        //         Ok(res) => {
-        //             log::info!("Clickhouse response: {:?}", res);
-        //         }
-        //         Err(e) => {
-        //             log::error!("Error writing to clickhouse: {}", e);
-        //         }
-        //     }
-        // }
+        if let Some(handle) = self.handle.take() {
+            if handle.is_finished() {
+                match self.runtime.block_on(handle) {
+                    Ok(Ok(message)) => {
+                        if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
+                            self.carried_over_message = Some(transformed_message);
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        log::error!("clickhouse error {}", e);
+                    }
+                    Err(e) => {
+                        log::error!("the thread crashed {}", e);
+                    }
+                }
+            } else {
+                self.handle = Some(handle);
+            }
+        }
+
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected<BytesInsertBatch>> {
+        let len = message.payload().rows.len();
+
         if self.handle.is_some() {
-            return Err(MessageRejected);
+            return Err(MessageRejected{message});
         }
         let mut decoded_rows = vec![];
         for row in message.payload().rows {
@@ -63,13 +76,15 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         if !self.skip_write {
             let data = decoded_rows.join("\n");
 
-            self.handle = Some(self.runtime.spawn(make_request(self.clickhouse_client.clone(), data)));
-
+            let client = self.clickhouse_client.clone();
+            self.handle = Some(self.runtime.spawn(async move {
+                client.send(data).await?;
+                Ok(message)
+            }));
         }
 
-        log::info!("Insert {} rows", message.payload().rows.len());
-
-        self.next_step.submit(message.replace(()))
+        log::info!("Insert {} rows", len);
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -83,9 +98,4 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         self.next_step.join(timeout)
     }
-}
-
-async fn make_request(client: ClickhouseClient, data: String) {
-    let res = client.send(data).await;
-    println!("Response: {:?}", res);
 }

@@ -50,9 +50,9 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
         if self.batch_state.is_complete {
-            return Err(MessageRejected);
+            return Err(MessageRejected{ message });
         }
         self.batch_state.add(message);
 
@@ -113,7 +113,7 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
                 Ok(_) => {
                     self.batch_state = BatchState::new(self.initial_value.clone(), self.accumulator.clone());
                 }
-                Err(MessageRejected) => {
+                Err(MessageRejected{..}) => {
                     // The batch is marked is_complete, and we stop accepting
                     // messages until the batch can be sucessfully submitted to the next step.
                     self.batch_state.is_complete = true;
@@ -146,7 +146,7 @@ mod tests {
                 None
             }
 
-            fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+            fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
                 self.submitted.lock().unwrap().push(message.payload());
                 Ok(())
             }
