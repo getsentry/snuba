@@ -9,8 +9,8 @@ pipelines:
     group: snuba-next
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-next-us-pipeline-complete:
-        pipeline: deploy-snuba-next-us
+      deploy-snuba-next-pipeline-complete:
+        pipeline: deploy-snuba-next
         stage: pipeline-complete
       snuba_repo:
         branch: master
