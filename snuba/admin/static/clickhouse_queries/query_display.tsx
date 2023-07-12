@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
+import QueryEditor from "../query_editor";
 
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
@@ -21,7 +22,7 @@ type QueryState = Partial<QueryRequest>;
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
-  predefinedQuery: PredefinedQuery | null;
+  predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [query, setQuery] = useState<QueryState>({});
@@ -34,12 +35,6 @@ function QueryDisplay(props: {
       setNodeData(res);
     });
   }, []);
-
-  useEffect(() => {
-    if (props.predefinedQuery) {
-      setQuery({ sql: props.predefinedQuery.sql });
-    }
-  }, [props.predefinedQuery]);
 
   function selectStorage(storage: string) {
     setQuery((prevQuery) => {
@@ -135,10 +130,12 @@ function QueryDisplay(props: {
     <div>
       <form>
         <h2>Construct a ClickHouse System Query</h2>
-        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
-        <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
-        </div>
+        <QueryEditor
+          onQueryUpdate={(sql) => {
+            updateQuerySql(sql);
+          }}
+          predefinedQueryOptions={props.predefinedQueryOptions}
+        />
         <div style={executeActionsStyle}>
           <div>
             <select
