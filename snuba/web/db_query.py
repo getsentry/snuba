@@ -117,6 +117,65 @@ CACHE_PARTITIONS: MutableMapping[str, Cache[Result]] = {
 }
 
 
+def new_db_query(
+    reader: Reader, timeout: int, stats: MutableMapping[str, Any], timer: Timer
+) -> Result:
+    span = Hub.current.scope.span
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        span_tag = "cache_miss"
+        if hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+            span_tag = "cache_wait"
+        sentry_sdk.set_tag("cache_status", span_tag)
+        if span:
+            span.set_data("cache_status", span_tag)
+
+    key = ""
+    return _get_cache_partition(CACHE_PARTITIONS, reader).get_readthrough(
+        key, db_query, record_cache_hit_type, timeout, timer
+    )
+
+
+def _get_cache_partition(
+    cache_partitions: MutableMapping[str, Cache[Result]], reader: Reader
+) -> Cache[Result]:
+    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    if not enable_cache_partitioning:
+        return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
+
+    partition_id = reader.cache_partition_id
+    if partition_id is not None and partition_id not in cache_partitions:
+        with cache_partitions_lock:
+            # This condition was checked before as this lock should be acquired only
+            # during the first query. So, for the vast majority of queries, the overhead
+            # of acquiring the lock is not needed.
+            if partition_id not in cache_partitions:
+                cache_partitions[partition_id] = RedisCache(
+                    redis_cache_client,
+                    f"snuba-query-cache:{partition_id}:",
+                    ResultCacheCodec(),
+                    ThreadPoolExecutor(),
+                )
+
+    partition = cache_partitions[
+        partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
+    ]
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+    return partition
+
+
+def db_query() -> Result:
+    """
+    The main entrypoint of executing a ClickHouse Query.
+    """
+
+    return
+
+
 class DBQuery:
     """
     A class responsible for managing a variety of states when executing a ClickHouse Query.

@@ -31,18 +31,7 @@ class Cache(Generic[TValue], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cached_result_and_record_timer(
-        self,
-        key: str,
-        timer: Optional[Timer] = None,
-    ) -> Optional[TValue]:
-        """
-        Gets a value from the cache and records timer metric.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def queue_and_cache_query(
+    def get_readthrough(
         self,
         key: str,
         function: Callable[[], TValue],
@@ -51,17 +40,16 @@ class Cache(Generic[TValue], ABC):
         timer: Optional[Timer] = None,
     ) -> TValue:
         """
-        This method should only be used if `self.get` or
-        `self.get_cached_result_and_record_metrics` results in a cache miss.
-
-        The return value of the provided function is used to populate the
-        cache for subsequent callers of the getters and is used as the return
-        value for this method.
+        Implements a read-through caching pattern for the value at the given
+        key. This method first attempts to fetch and return a preexisting
+        value from the cache. On a cache miss, the return value of the
+        provided function is used to populate the cache for subsequent
+        callers and is used as the return value for this method.
 
         This function also acts as an exclusive lock on the cache key to
         other callers of this method while the function is executing. Callers
         will be blocked until the client that holds the lock (the first
-        client to run this method) has completed executing the function and
+        client to get a cache miss) has completed executing the function and
         placed its result in cache.
 
         If the client holding the lock does not successfully execute the

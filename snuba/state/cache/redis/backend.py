@@ -6,8 +6,9 @@ from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
-from redis.exceptions import ResponseError
-from snuba import environment
+from redis.exceptions import ConnectionError, ReadOnlyError, ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+from snuba import environment, settings
 from snuba.redis import RedisClientType
 from snuba.state import get_config
 from snuba.state.cache.abstract import (
@@ -73,25 +74,7 @@ class RedisCache(Cache[TValue]):
             ex=get_config("cache_expiry_sec", 1),
         )
 
-    def get_cached_result_and_record_timer(
-        self,
-        key: str,
-        timer: Optional[Timer] = None,
-    ) -> Optional[TValue]:
-        if get_config("read_through_cache.short_circuit", 0):
-            return None
-
-        if timer is not None:
-            timer.mark("cache_get")
-
-        result = self.get(key)
-        if result is None:
-            return None
-
-        logger.debug("Immediately returning result from cache hit.")
-        return result
-
-    def queue_and_cache_query(
+    def __get_readthrough(
         self,
         key: str,
         function: Callable[[], TValue],
@@ -99,18 +82,15 @@ class RedisCache(Cache[TValue]):
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
-        # in case something is wrong with redis, we want to be able to
-        # disable the read_through_cache but still serve traffic.
-        if get_config("read_through_cache.short_circuit", 0):
-            return function()
-
         # This method is designed with the following goals in mind:
-        # 1. Only one client can execute the value generation function at a
+        # 1. The value generation function is only executed when no value
+        # already exists for the key.
+        # 2. Only one client can execute the value generation function at a
         # time (up to a deadline, at which point the client is assumed to be
         # dead and its results are no longer valid.)
-        # 2. The other clients waiting for the result of the value generation
+        # 3. The other clients waiting for the result of the value generation
         # function receive a result as soon as it is available.
-        # 3. This remains compatible with the existing get/set API (at least
+        # 4. This remains compatible with the existing get/set API (at least
         # for the time being.)
 
         # This method shares the same keyspace as the conventional get and set
@@ -155,15 +135,21 @@ class RedisCache(Cache[TValue]):
         # task creation parameters -- the timeout (execution deadline) and a
         # new task identity just in case we are the first in line.
         result = self.__script_get(
-            [wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
+            [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
+        if timer is not None:
+            timer.mark("cache_get")
         metric_tags = timer.tags if timer is not None else {}
 
         # This updates the stats object and querylog
         record_cache_hit_type(result[0])
 
-        if result[0] == RESULT_EXECUTE:
+        if result[0] == RESULT_VALUE:
+            # If we got a cache hit, this is easy -- we just return it.
+            logger.debug("Immediately returning result from cache hit.")
+            return self.__codec.decode(result[1])
+        elif result[0] == RESULT_EXECUTE:
 
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
@@ -296,3 +282,26 @@ class RedisCache(Cache[TValue]):
                     raise TimeoutError("timed out waiting for result")
         else:
             raise ValueError("unexpected result from script")
+
+    def get_readthrough(
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        record_cache_hit_type: Callable[[int], None],
+        timeout: int,
+        timer: Optional[Timer] = None,
+    ) -> TValue:
+        # in case something is wrong with redis, we want to be able to
+        # disable the read_through_cache but still serve traffic.
+        if get_config("read_through_cache.short_circuit", 0):
+            return function()
+
+        try:
+            return self.__get_readthrough(
+                key, function, record_cache_hit_type, timeout, timer
+            )
+        except (ConnectionError, ReadOnlyError, RedisTimeoutError):
+            if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
+                raise
+            metrics.increment("snuba.read_through_cache.fail_open")
+            return function()
