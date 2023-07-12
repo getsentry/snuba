@@ -28,7 +28,7 @@ impl ClickhouseWriterStep {
         ClickhouseWriterStep {
             next_step: Box::new(next_step),
             clickhouse_client: ClickhouseClient::new(&hostname, http_port, &table, &database),
-            runtime: tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap(),
+            runtime: tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap(),
             skip_write,
             handle: None,
             carried_over_message: None,
@@ -65,25 +65,29 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         let len = message.payload().rows.len();
 
         if self.handle.is_some() {
+            log::warn!("clickhouse writer is still busy, rejecting message");
             return Err(MessageRejected{message});
         }
         let mut decoded_rows = vec![];
         for row in message.payload().rows {
+            // HACK: Fix this
             let decoded_row = String::from_utf8_lossy(&row);
             decoded_rows.push(decoded_row.to_string());
         }
 
         if !self.skip_write {
+            log::debug!("performing write");
             let data = decoded_rows.join("\n");
 
             let client = self.clickhouse_client.clone();
             self.handle = Some(self.runtime.spawn(async move {
-                client.send(data).await?;
+                let response = client.send(data).await.unwrap();
+                log::debug!("response: {:?}", response);
+                log::info!("Inserted {} rows", len);
                 Ok(message)
             }));
         }
 
-        log::info!("Insert {} rows", len);
         Ok(())
     }
 
