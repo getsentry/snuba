@@ -8,7 +8,9 @@ pub mod reduce;
 pub mod transform;
 
 #[derive(Debug, Clone)]
-pub struct MessageRejected;
+pub struct MessageRejected<T: Clone> {
+    pub message: Message<T>,
+}
 
 #[derive(Debug, Clone)]
 pub struct InvalidMessage;
@@ -49,7 +51,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// If the processing strategy is unable to accept a message (due to it
     /// being at or over capacity, for example), this method will raise a
     /// ``MessageRejected`` exception.
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected>;
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>>;
 
     /// Close this instance. No more messages should be accepted by the
     /// instance after this method has been called.
