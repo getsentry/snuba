@@ -63,9 +63,9 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
         query=query, capture_trace=True, with_column_types=True
     )
     formatted_trace_output = format_trace_output(query_result.trace_output)
-    import json
+    # import json
 
-    print(json.dumps(formatted_trace_output, indent=4))
+    # print(json.dumps(formatted_trace_output, indent=4))
     return TraceOutput(
         trace_output=query_result.trace_output,
         formatted_trace_output=formatted_trace_output,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Switch } from "@mantine/core";
 import Client from "../api_client";
 import { Table } from "../table";
 import { LogLine, TracingRequest, TracingResult } from "./types";
@@ -80,6 +81,7 @@ function TracingQueries(props: { api: Client }) {
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [showFormatted, setShowFormatted] = useState<boolean>(false);
   const endpoint = "clickhouse_trace_query";
 
   useEffect(() => {
@@ -120,6 +122,7 @@ function TracingQueries(props: { api: Client }) {
           num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
+          formatted_trace_output: result.formatted_trace_output,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [
@@ -169,14 +172,25 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            return (
+            if (!showFormatted) {
+              return (
                 <div>
-                    <br />
-                    <b>Number of rows in result set:</b> {value.num_rows_result}
-                    <br />
-                    {heirarchicalTraceDisplay(title, value.trace_output)}
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {heirarchicalTraceDisplay(title, value.trace_output)}
                 </div>
-            );
+              );
+            } else {
+              return (
+                <div>
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {console.log(value.formatted_trace_output)}
+                </div>
+              );
+            }
           }
         })}
       </>
@@ -339,6 +353,14 @@ function TracingQueries(props: { api: Client }) {
       </form>
       <div>
         <h2>Query results</h2>
+        <Switch
+          checked={showFormatted}
+          onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+            setShowFormatted(evt.currentTarget.checked)
+          }
+          label="Switch raw and formatted trace logs"
+        />
+        ;
         <Table
           headerData={["Query", "Response"]}
           rowData={queryResultHistory.map((queryResult) => [
