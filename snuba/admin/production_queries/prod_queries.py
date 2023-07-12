@@ -8,6 +8,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
+from snuba.admin.production_queries.validator import validate_sql_query
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -45,6 +46,7 @@ def run_sql_query(query: str, storage_name: str, user: str) -> ClickhouseResult:
     @audit_log
     def run_query_with_audit(query: str, user: str) -> ClickhouseResult:
         validate_ro_query(query)
+        validate_sql_query(query)
         connection = get_ro_query_node_connection(
             storage_name, ClickhouseClientSettings.PROD_QUERY
         )
