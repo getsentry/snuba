@@ -94,6 +94,8 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                                       ^
                                      now
         """
+
+        rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
         rate_history_s = self.get_config_value("rate_history_sec")
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
@@ -105,10 +107,11 @@ class RateLimitAllocationPolicy(AllocationPolicy):
         # Compute the set shard to which we should add and remove the query_id
         bucket_shard = hash(query_id) % rate_limit_shard_factor
         query_bucket = _get_bucket_key(
-            f"{self.runtime_config_prefix}.rate_limit",
+            rate_limit_prefix,
             rate_limit_params.bucket,
             bucket_shard,
         )
+        print("BUCKET: ", query_bucket)
 
         pipe = rds.pipeline(transaction=False)
         # cleanup old query timestamps past our retention window
@@ -173,7 +176,7 @@ class RateLimitAllocationPolicy(AllocationPolicy):
             # count queries that have finished for the per-second rate
             for shard_i in range(rate_limit_shard_factor):
                 bucket = _get_bucket_key(
-                    state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                    rate_limit_prefix, rate_limit_params.bucket, shard_i
                 )
                 pipe.zcount(bucket, now - state.rate_lookback_s, now)
 
@@ -182,12 +185,13 @@ class RateLimitAllocationPolicy(AllocationPolicy):
             # of concurrent queries
             for shard_i in range(rate_limit_shard_factor):
                 bucket = _get_bucket_key(
-                    state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                    rate_limit_prefix, rate_limit_params.bucket, shard_i
                 )
                 pipe.zcount(bucket, "({:f}".format(now), "+inf")
         try:
-            pipe_results = iter(pipe.execute())
+            all_pipe_results = pipe.execute()
 
+            pipe_results = iter(all_pipe_results)
             # skip zremrangebyscore, zadd and expire
             next(pipe_results)
             next(pipe_results)
@@ -228,6 +232,8 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                 rate_limit_params.per_second_limit,
             ),
         ]
+        print("PARAMS: ", rate_limit_params)
+        print("REASONS: ", reasons)
         reason = next(
             (r for r in reasons if r.limit is not None and r.val > r.limit), None
         )
