@@ -1341,7 +1341,6 @@ dependencies = [
  "parking_lot 0.10.2",
  "rand",
  "rdkafka",
- "reqwest",
  "serde",
  "serde_json",
  "thiserror",
