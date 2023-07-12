@@ -86,7 +86,9 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
             }));
         } else {
             log::info!("skipping write of {} rows", len);
-            self.next_step.submit(message);
+            if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
+                self.carried_over_message = Some(transformed_message);
+            }
         }
 
         Ok(())
