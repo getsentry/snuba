@@ -13,7 +13,7 @@ pub struct ClickhouseWriterStep {
     runtime: tokio::runtime::Runtime,
     skip_write: bool,
     handle: Option<JoinHandle<Result<Message<BytesInsertBatch>, reqwest::Error>>>,
-    carried_over_message: Option<Message<BytesInsertBatch>>,
+    message_carried_over: Option<Message<BytesInsertBatch>>,
 }
 
 impl ClickhouseWriterStep {
@@ -31,19 +31,25 @@ impl ClickhouseWriterStep {
             runtime: tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap(),
             skip_write,
             handle: None,
-            carried_over_message: None,
+            message_carried_over: None,
         }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
+        if let Some(message) = self.message_carried_over.take() {
+            if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
+                self.message_carried_over = Some(transformed_message);
+            }
+        }
+
         if let Some(handle) = self.handle.take() {
             if handle.is_finished() {
                 match self.runtime.block_on(handle) {
                     Ok(Ok(message)) => {
                         if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
-                            self.carried_over_message = Some(transformed_message);
+                            self.message_carried_over = Some(transformed_message);
                         }
                     }
                     Ok(Err(e)) => {
@@ -62,12 +68,16 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     }
 
     fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected<BytesInsertBatch>> {
-        let len = message.payload().rows.len();
-
+        if self.message_carried_over.is_some() {
+            log::warn!("carried over message, rejecting subsequent messages");
+            return Err(MessageRejected{message});
+        }
         if self.handle.is_some() {
             log::warn!("clickhouse writer is still busy, rejecting message");
             return Err(MessageRejected{message});
         }
+
+        let len = message.payload().rows.len();
         let mut data = vec![];
         for row in message.payload().rows {
             data.extend(row);
