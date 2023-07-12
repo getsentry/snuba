@@ -13,7 +13,7 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.datasets.storages.factory import get_writable_storage_keys
+from snuba.datasets.storages.factory import get_storage, get_writable_storage_keys
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.migrations.connect import check_clickhouse_connections
@@ -181,13 +181,15 @@ def consumer(
     setup_logging(log_level)
     setup_sentry()
 
-    logger.info("Checking Clickhouse connections")
-    check_clickhouse_connections()
-
     logger.info("Consumer Starting")
 
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
+
+    logger.info("Checking Clickhouse connections")
+    storage = get_storage(storage_key)
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
 
     metrics_tags = {
         "consumer_group": consumer_group,
