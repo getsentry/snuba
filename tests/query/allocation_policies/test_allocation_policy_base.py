@@ -48,29 +48,37 @@ def test_eq() -> None:
 @pytest.mark.redis_db
 def test_passthrough_allows_queries() -> None:
     DEFAULT_PASSTHROUGH_POLICY.set_config_value("max_threads", 420)
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}).can_run
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}).max_threads == 420
+    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").can_run
+    assert (
+        DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads
+        == 420
+    )
 
 
 def test_raises_on_false_can_run() -> None:
     class RejectingEverythingAllocationPolicy(PassthroughPolicy):
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(can_run=False, max_threads=1, explanation={})
 
     with pytest.raises(AllocationPolicyViolation):
         RejectingEverythingAllocationPolicy(
             StorageKey("something"), [], default_config_overrides={}
-        ).get_quota_allowance({})
+        ).get_quota_allowance({}, query_id="deadbeef")
 
 
 class BadlyWrittenAllocationPolicy(PassthroughPolicy):
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         raise AttributeError("You messed up!")
 
     def _update_quota_balance(
-        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
     ) -> None:
         raise ValueError("you messed up AGAIN")
 
@@ -79,23 +87,23 @@ def test_passes_through_on_error() -> None:
     with pytest.raises(AttributeError):
         BadlyWrittenAllocationPolicy(
             StorageKey("something"), [], {}
-        ).get_quota_allowance({})
+        ).get_quota_allowance({}, query_id="deadbeef")
 
     with pytest.raises(ValueError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None)  # type: ignore
+        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None, None)  # type: ignore
 
     # should not raise even though the implementation is buggy (this is the production setting)
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
         assert (
             BadlyWrittenAllocationPolicy(StorageKey("something"), [], {})
-            .get_quota_allowance({})
+            .get_quota_allowance({}, query_id="deadbeef")
             .can_run
         )
 
         BadlyWrittenAllocationPolicy(
             StorageKey("something"), [], {}
         ).update_quota_balance(
-            None, None  # type: ignore
+            None, None, None  # type: ignore
         )
 
 
@@ -147,7 +155,9 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
             ),
         ]
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         raise
 
     def _update_quota_balance(
@@ -410,12 +420,12 @@ def test_is_not_active() -> None:
 
     # Should error since private methods _get_quota_allowance and _update_quota_balance are called
     with pytest.raises(AttributeError):
-        policy.get_quota_allowance(tenant_ids)
+        policy.get_quota_allowance(tenant_ids, "deadbeef")
     with pytest.raises(ValueError):
-        policy.update_quota_balance(tenant_ids, result_or_error)
+        policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
 
     policy.set_config_value(config_key="is_active", value=0)  # make policy inactive
 
     # Should not error anymore since private methods are not called due to inactivity
-    policy.get_quota_allowance(tenant_ids)
-    policy.update_quota_balance(tenant_ids, result_or_error)
+    policy.get_quota_allowance(tenant_ids, "deadbeef")
+    policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)

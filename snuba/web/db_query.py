@@ -163,7 +163,7 @@ def update_query_metadata_and_stats(
     return stats
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query(
     # TODO: Passing the whole clickhouse query here is needed as long
     # as the execute method depends on it. Otherwise we can make this
@@ -285,7 +285,7 @@ def _apply_thread_quota_to_clickhouse_query_settings(
             clickhouse_query_settings["max_threads"] = maxt
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -307,9 +307,23 @@ def execute_query_with_rate_limits(
         project_rate_limit_stats = rate_limit_stats_container.get_stats(
             PROJECT_RATE_LIMIT_NAME
         )
-        _apply_thread_quota_to_clickhouse_query_settings(
-            query_settings, clickhouse_query_settings, project_rate_limit_stats
-        )
+        # -----------------------------------------------------------------
+        # HACK (Volo): This is a hack experiment to see if we can
+        # stop doing  concurrent throttling in production on a specific table
+        # and still survive.
+
+        # depending on the `stats` dict to be populated ahead of time
+        # is not great style, but it is done in _format_storage_query_and_run.
+        # This should be removed by 07-15-2023. Either the concurrent throttling becomes
+        # another allocation policy or we remove this mechanism entirely
+
+        table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+        if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
+            if state.get_config(f"use_project_concurrent_throttling.{table_name}", 1):
+                _apply_thread_quota_to_clickhouse_query_settings(
+                    query_settings, clickhouse_query_settings, project_rate_limit_stats
+                )
+        # -----------------------------------------------------------------
 
         _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 
@@ -353,7 +367,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
     ]
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_query_id(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -405,7 +419,7 @@ def execute_query_with_query_id(
         )
 
 
-@with_span(op="db")
+@with_span(op="function")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -726,6 +740,7 @@ def db_query(
     """
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
+    query_id = uuid.uuid4().hex
 
     _apply_allocation_policies_quota(
         query_settings,
@@ -733,6 +748,7 @@ def db_query(
         formatted_query,
         stats,
         allocation_policies,
+        query_id,
     )
 
     result = None
@@ -761,6 +777,7 @@ def db_query(
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
+                query_id=query_id,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
         if result:
@@ -776,6 +793,7 @@ def _apply_allocation_policies_quota(
     formatted_query: FormattedQuery,
     stats: MutableMapping[str, Any],
     allocation_policies: list[AllocationPolicy],
+    query_id: str,
 ) -> None:
     """
     Sets the resource quota in the query_settings object to the minimum of all available
@@ -787,7 +805,9 @@ def _apply_allocation_policies_quota(
         try:
             quota_allowances[
                 allocation_policy.config_key()
-            ] = allocation_policy.get_quota_allowance(attribution_info.tenant_ids)
+            ] = allocation_policy.get_quota_allowance(
+                attribution_info.tenant_ids, query_id
+            )
 
         except AllocationPolicyViolation as e:
             violations[allocation_policy.config_key()] = e

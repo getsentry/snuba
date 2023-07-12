@@ -619,9 +619,7 @@ if application.debug or application.testing:
 
         storage = entity.get_writable_storage()
         assert storage is not None
-        storage_name = storage.get_storage_key().value
-        # TODO: A few storages are currently excluded from schema validation
-        should_validate_schema = storage_name not in ["search_issues", "replays"]
+        should_validate_schema = True
 
         try:
             if type_ == "insert":

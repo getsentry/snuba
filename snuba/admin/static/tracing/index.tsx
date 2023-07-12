@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Switch } from "@mantine/core";
 import Client from "../api_client";
-import { Table } from "../table";
-import { LogLine, TracingRequest, TracingResult } from "./types";
+import QueryDisplay from "./query_display";
+import {
+  LogLine,
+  TracingRequest,
+  TracingResult,
+  PredefinedQuery,
+} from "./types";
 import { parseLogLine } from "./util";
 
 type QueryState = Partial<TracingRequest>;
@@ -16,6 +21,8 @@ enum MessageCategory {
   memory_tracker,
   unknown,
 }
+
+let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -39,8 +46,6 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
     return MessageCategory.unknown;
   }
 }
-
-let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
 
 function NodalDisplay(props: {
   host: string;
@@ -75,37 +80,24 @@ function NodalDisplay(props: {
 }
 
 function TracingQueries(props: { api: Client }) {
-  const [storages, setStorages] = useState<string[]>([]);
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [showFormatted, setShowFormatted] = useState<boolean>(false);
+  const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
+    PredefinedQuery[]
+  >([]);
+
   const endpoint = "clickhouse_trace_query";
 
-  useEffect(() => {
-    props.api.getClickhouseNodes().then((res) => {
-      setStorages(res.map((n) => n.storage_name));
-    });
-  }, []);
-
-  function selectStorage(storage: string) {
-    setQuery((prevQuery) => {
-      return {
-        ...prevQuery,
-        storage: storage,
-      };
-    });
-  }
-
-  function updateQuerySql(sql: string) {
-    setQuery((prevQuery) => {
-      return {
-        ...prevQuery,
-        sql,
-      };
-    });
+  function formatSQL(sql: string) {
+    const formatted = sql
+      .split("\n")
+      .map((line) => line.substring(4, line.length))
+      .join("\n");
+    return formatted.trim();
   }
 
   function executeQuery() {
@@ -315,69 +307,11 @@ function TracingQueries(props: { api: Client }) {
 
   return (
     <div>
-      <form>
-        <h2>Construct a ClickHouse Query</h2>
-        <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
-          🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
-        </a>
-        <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
-        </div>
-        <div style={executeActionsStyle}>
-          <div>
-            <select
-              value={query.storage || ""}
-              onChange={(evt) => selectStorage(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a storage
-              </option>
-              {storages.map((storage) => (
-                <option key={storage} value={storage}>
-                  {storage}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <button
-              onClick={(_) => executeQuery()}
-              style={executeButtonStyle}
-              disabled={isExecuting || !query.storage || !query.sql}
-            >
-              Execute query
-            </button>
-          </div>
-        </div>
-      </form>
-      <div>
-        <h2>Query results</h2>
-        <Switch
-          checked={showFormatted}
-          onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-            setShowFormatted(evt.currentTarget.checked)
-          }
-          label="Switch raw and formatted trace logs"
-        />
-        ;
-        <Table
-          headerData={["Query", "Response"]}
-          rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
-              {tablePopulator(queryResult)}
-            </div>,
-          ])}
-          columnWidths={[1, 5]}
-        />
-      </div>
+      {QueryDisplay({
+        api: props.api,
+        resultDataPopulator: tablePopulator,
+        predefinedQueryOptions: [],
+      })}
     </div>
   );
 }
