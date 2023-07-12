@@ -73,7 +73,6 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
-CLICKHOUSE_STARTUP_CHECK_RETRIES = 60
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
