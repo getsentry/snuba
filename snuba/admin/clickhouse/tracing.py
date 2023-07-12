@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -14,6 +14,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 @dataclass
 class TraceOutput:
     trace_output: str
+    formatted_trace_output: Dict[str, Any]
     cols: list[tuple[str, str]]
     num_rows_result: int
 
@@ -27,7 +28,7 @@ class FormattedTrace:
 class NodeTraceResult:
     def __init__(self, node_name: str) -> None:
         self.node_name: str = node_name
-        self.thread_ids: Set[str] = set()
+        self.thread_ids: List[str] = []
 
 
 class QueryNodeTraceResult(NodeTraceResult):
@@ -61,16 +62,20 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
     query_result = connection.execute(
         query=query, capture_trace=True, with_column_types=True
     )
-    format_trace_output(query_result.trace_output)
+    formatted_trace_output = format_trace_output(query_result.trace_output)
+    import json
+
+    print(json.dumps(formatted_trace_output, indent=4))
     return TraceOutput(
         trace_output=query_result.trace_output,
+        formatted_trace_output=formatted_trace_output,
         cols=query_result.meta,  # type: ignore
         num_rows_result=len(query_result.results),
     )
 
 
 LOG_MAPPINGS_FOR_QUERY_NODES = [
-    ("<Trace>", ["Aggregator"], "aggregation_performance"),
+    ("<Trace>", ["Aggregator: Merging"], "aggregation_performance"),
     ("<Debug>", ["Aggregator"], "aggregation_performance"),
     ("<Information>", ["executeQuery"], "read_performance"),
     ("<Debug>", ["MemoryTracker"], "memory_performance"),
@@ -94,27 +99,28 @@ LOG_MAPPINGS_FOR_STORAGE_NODES = [
 ]
 
 
-def format_trace_output(raw_trace_logs: str) -> None:
+def format_trace_output(raw_trace_logs: str) -> Dict[str, Any]:
     with open("/Users/enochtang/code/snuba/test.txt", "r") as reader:
         raw_logs = reader.read()
         formatted_logs = format_log_to_dict(raw_logs)
 
-        lookup: dict[str, NodeTraceResult] = {}  # node_name: NodeTraceResult
+        result: dict[str, Any] = {}  # node_name: NodeTraceResult
 
         query_node_name = formatted_logs[0]["node_name"]
-        lookup[query_node_name] = QueryNodeTraceResult(query_node_name)
-        query_node_trace_result = lookup[query_node_name]
+        result[query_node_name] = QueryNodeTraceResult(query_node_name)
+        query_node_trace_result = result[query_node_name]
         assert isinstance(query_node_trace_result, QueryNodeTraceResult)
 
         for log in formatted_logs:
             node_name = log["node_name"]
-            if node_name not in lookup:
-                lookup[node_name] = StorageNodeTraceResult(node_name)
+            if node_name not in result:
+                result[node_name] = StorageNodeTraceResult(node_name)
                 query_node_trace_result.number_of_storage_nodes_accessed += 1
 
-            trace_result = lookup[node_name]
+            trace_result = result[node_name]
             assert isinstance(trace_result, NodeTraceResult)
-            trace_result.thread_ids.add(log["thread_id"])
+            if log["thread_id"] not in trace_result.thread_ids:
+                trace_result.thread_ids.append(log["thread_id"])
 
             if node_name == query_node_name:
                 assert isinstance(trace_result, QueryNodeTraceResult)
@@ -132,11 +138,9 @@ def format_trace_output(raw_trace_logs: str) -> None:
                     find_and_add_log_line(
                         log, getattr(trace_result, trace_attr), log_type, search_strs
                     )
-        print("")
-        print("HERE")
-        for key, val in lookup.items():
-            print(key)
-            print(val.__dict__)
+        for key, value in result.items():
+            result[key] = vars(value)
+        return result
 
 
 def find_and_add_log_line(
