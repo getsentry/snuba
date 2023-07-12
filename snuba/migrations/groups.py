@@ -8,6 +8,7 @@ from snuba.migrations.group_loader import (
     EventsLoader,
     FunctionsLoader,
     GenericMetricsLoader,
+    GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
     OutcomesLoader,
@@ -153,6 +154,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
+        readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
+        loader=GroupAttributesLoader(),
+        storage_sets_keys={StorageSetKey.Group_ATTRIBUTES},
         readiness_state=ReadinessState.PARTIAL,
     ),
 }
