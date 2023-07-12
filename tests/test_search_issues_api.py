@@ -33,6 +33,7 @@ def base_insert_event(
             "data": {
                 "received": now.timestamp(),
             },
+            "occurrence_id": str(uuid.uuid4()),
             "occurrence_data": {
                 "id": str(uuid.uuid4()),
                 "type": 1,
@@ -238,7 +239,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         transaction_name = "/api/im/the/best"
         now = datetime.utcnow()
         insert_row = base_insert_event(now)
-        insert_row[2]["data"]["tags"] = {"transaction": transaction_name}
+        insert_row[2]["data"]["tags"] = [["transaction", transaction_name]]
 
         response = self.app.post(
             "/tests/search_issues/eventstream", data=json.dumps(insert_row)

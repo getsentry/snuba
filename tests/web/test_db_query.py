@@ -278,7 +278,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=False,
@@ -289,6 +289,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             return
@@ -344,7 +345,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=True,
@@ -355,13 +356,14 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             return
 
     class ThreadLimitPolicyDuplicate(ThreadLimitPolicy):
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=True,
@@ -412,7 +414,7 @@ def test_allocation_policy_updates_quota() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
             if queries_run + 1 > MAX_QUERIES_TO_RUN:
@@ -426,6 +428,7 @@ def test_allocation_policy_updates_quota() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run
@@ -438,7 +441,7 @@ def test_allocation_policy_updates_quota() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
             if queries_run_duplicate + 1 > MAX_QUERIES_TO_RUN:
@@ -454,6 +457,7 @@ def test_allocation_policy_updates_quota() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run_duplicate

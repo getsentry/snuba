@@ -124,7 +124,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
         return True, ""
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             self.metrics.increment(
@@ -196,6 +198,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         if result_or_error.error:
