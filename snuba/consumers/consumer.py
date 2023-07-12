@@ -458,7 +458,7 @@ class MultistorageCollector:
             self.__messages[storage_key].append(other_message)
             assert isinstance(message.value, BrokerValue)
             self.__offsets_to_produce[message.value.partition] = (
-                message.value.offset,
+                message.value.next_offset,
                 message.value.timestamp,
             )
 
