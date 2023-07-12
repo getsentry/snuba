@@ -84,6 +84,9 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
                 log::info!("Inserted {} rows", len);
                 Ok(message)
             }));
+        } else {
+            log::info!("skipping write of {} rows", len);
+            self.next_step.submit(message);
         }
 
         Ok(())
