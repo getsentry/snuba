@@ -23,14 +23,14 @@ class Migration(migration.ClickhouseNodeMigration):
         (
             Column(
                 "decasecond_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default=str("7"))),
             ),
             "enable_histogram",
         ),
         (
             Column(
                 "min_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default=str("30"))),
             ),
             "decasecond_retention_days",
         ),
