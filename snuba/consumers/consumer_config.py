@@ -14,6 +14,7 @@ from snuba.utils.streams.configuration_builder import _get_default_topic_configu
 class ClickhouseClusterConfig:
     host: str
     port: int
+    http_port: int
     user: str
     password: str
     database: str
@@ -172,6 +173,7 @@ def resolve_storage_config(
     clickhouse_cluster = ClickhouseClusterConfig(
         host=cluster.get_host(),
         port=cluster.get_port(),
+        http_port=cluster.get_http_port(),
         user=user,
         password=password,
         database=cluster.get_database(),

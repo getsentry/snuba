@@ -137,7 +137,8 @@ function QueryEditor(props: {
 
   return (
     <form>
-      {renderPredefinedQueriesSelectors()}
+      {props.predefinedQueryOptions != null &&
+        renderPredefinedQueriesSelectors()}
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}

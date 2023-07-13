@@ -1,7 +1,7 @@
 format_version: 10
 pipelines:
   deploy-snuba-next-us:
-    display_order: 1
+    display_order: 3
     environment_variables:
       GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
@@ -9,8 +9,8 @@ pipelines:
     group: snuba-next
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-next-pipeline-complete:
-        pipeline: deploy-snuba-next
+      deploy-snuba-next-monitor-pipeline-complete:
+        pipeline: deploy-snuba-next-monitor
         stage: pipeline-complete
       snuba_repo:
         branch: master
@@ -157,7 +157,7 @@ pipelines:
                     sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
                     sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
               timeout: 300
-            deploy-canary:
+            deploy-primary:
               elastic_profile_id: snuba
               environment_variables:
                 LABEL_SELECTOR: service=snuba

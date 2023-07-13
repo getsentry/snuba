@@ -80,10 +80,8 @@ def test_all_schemas(case: Case) -> None:
 TEMPORARILY_SKIPPED_TOPICS = [
     "ingest-sessions",
     "cdc",
-    "ingest-replay-events",
     "profiles-call-tree",
     "processed-profiles",
-    "generic-events",
 ]
 
 

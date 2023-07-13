@@ -171,6 +171,7 @@ class ReplaysLoader(DirectoryLoader):
             "0008_add_sample_rate",
             "0009_add_dom_index_columns",
             "0010_add_nullable_columns",
+            "0011_add_is_dead_rage",
         ]
 
 
@@ -294,6 +295,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0011_counters_raw_table",
             "0012_counters_mv",
             "0013_distributions_dist_tags_hash",
+            "0014_distribution_add_options",
+            "0015_sets_add_options",
+            "0016_counters_add_options",
         ]
 
 

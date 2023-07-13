@@ -85,7 +85,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
         # we have to set title to empty string as it is non-nullable,
         # and on clickhouse 20 this throws an error.
-        processed["title"] = tags.transaction or ""
+        processed["title"] = tags.transaction
         processed["tags.key"] = tags.keys
         processed["tags.value"] = tags.values
 

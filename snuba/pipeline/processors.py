@@ -76,6 +76,9 @@ def execute_entity_processors(query: LogicalQuery, settings: QuerySettings) -> N
             description=type(processor).__name__, op="processor"
         ):
             if settings.get_dry_run():
-                explain_meta.add_step("entity_processor", type(processor).__name__)
-
-            processor.process_query(query, settings)
+                with explain_meta.with_query_differ(
+                    "entity_processor", type(processor).__name__, query
+                ):
+                    processor.process_query(query, settings)
+            else:
+                processor.process_query(query, settings)

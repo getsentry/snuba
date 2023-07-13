@@ -230,7 +230,9 @@ def _dry_run_query_runner(
     # you will only see the sql reported that the first of the split queries ran. Since this returns
     # no results, you won't see any others
 
-    with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
+    with sentry_sdk.start_span(
+        description="dryrun_create_query", op="function"
+    ) as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
@@ -313,7 +315,7 @@ def _format_storage_query_and_run(
     visitor = TablesCollector()
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
-    with sentry_sdk.start_span(description="create_query", op="db") as span:
+    with sentry_sdk.start_span(description="create_query", op="function") as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
@@ -352,7 +354,7 @@ def _format_storage_query_and_run(
                 experiments=clickhouse_query.get_experiments(),
             ),
         ) from cause
-    with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
+    with sentry_sdk.start_span(description=formatted_sql, op="function") as span:
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:

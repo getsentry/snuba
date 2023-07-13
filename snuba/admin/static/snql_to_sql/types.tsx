@@ -9,6 +9,7 @@ type SnQLRequest = {
 type SnQLResult = {
   input_query?: string;
   sql: string;
+  explain?: object;
 };
 
 export { SnubaDatasetName, SnQLRequest, SnQLResult, SnQLQueryState };
