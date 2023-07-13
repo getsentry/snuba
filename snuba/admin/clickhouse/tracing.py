@@ -29,12 +29,14 @@ class NodeTraceResult:
     def __init__(self, node_name: str) -> None:
         self.node_name: str = node_name
         self.thread_ids: List[str] = []
+        self.threads_used: int = 0
 
 
 class QueryNodeTraceResult(NodeTraceResult):
     def __init__(self, node_name: str) -> None:
         super(QueryNodeTraceResult, self).__init__(node_name)
         self.node_type = "query"
+        self.number_of_storage_nodes_accessed: int = 0
         self.storage_nodes_accessed: List[str] = []
         self.aggregation_performance: List[str] = []
         self.read_performance: List[str] = []
@@ -118,11 +120,13 @@ def format_trace_output(raw_trace_logs: str) -> Dict[str, Any]:
             if node_name not in result:
                 result[node_name] = StorageNodeTraceResult(node_name)
                 query_node_trace_result.storage_nodes_accessed.append(node_name)
+                query_node_trace_result.number_of_storage_nodes_accessed += 1
 
             trace_result = result[node_name]
             assert isinstance(trace_result, NodeTraceResult)
             if log["thread_id"] not in trace_result.thread_ids:
                 trace_result.thread_ids.append(log["thread_id"])
+                trace_result.threads_used = len(trace_result.thread_ids)
 
             if node_name == query_node_name:
                 assert isinstance(trace_result, QueryNodeTraceResult)

@@ -24,7 +24,6 @@ enum MessageCategory {
 let collapsibleStyle = {
   listStyleType: "none",
   fontFamily: "Monaco",
-  width: "80%",
 };
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
@@ -93,6 +92,12 @@ function TracingQueries(props: { api: Client }) {
   >([]);
 
   const endpoint = "clickhouse_trace_query";
+  const hidden_formatted_trace_fields = new Set<string>([
+    "thread_ids",
+    "node_name",
+    "node_type",
+    "storage_nodes_accessed",
+  ]);
 
   function formatSQL(sql: string) {
     const formatted = sql
@@ -334,29 +339,34 @@ function TracingQueries(props: { api: Client }) {
           <ol style={collapsibleStyle}>
             {Object.keys(value[query_node_name]).map(
               (header: string, idx: number) => {
-                const data = value[query_node_name][header];
-                if (Array.isArray(data)) {
-                  return (
-                    <li>
-                      {header}
-                      {data.map((log: string, log_idx: number) => {
-                        return (
-                          <ol style={collapsibleStyle}>
-                            <li>{log}</li>
-                          </ol>
-                        );
-                      })}
-                    </li>
-                  );
-                } else if (typeof data === "string") {
-                  return (
-                    <li>
-                      {header}
-                      <ol style={collapsibleStyle}>
-                        <li>{data}</li>
-                      </ol>
-                    </li>
-                  );
+                if (!hidden_formatted_trace_fields.has(header)) {
+                  const data = value[query_node_name][header];
+                  if (Array.isArray(data)) {
+                    return (
+                      <li>
+                        {header}
+                        {data.map((log: string, log_idx: number) => {
+                          return (
+                            <ol style={collapsibleStyle}>
+                              <li>{log}</li>
+                            </ol>
+                          );
+                        })}
+                      </li>
+                    );
+                  } else if (
+                    typeof data === "string" ||
+                    typeof data === "number"
+                  ) {
+                    return (
+                      <li>
+                        {header}
+                        <ol style={collapsibleStyle}>
+                          <li>{data}</li>
+                        </ol>
+                      </li>
+                    );
+                  }
                 }
               }
             )}
@@ -369,29 +379,34 @@ function TracingQueries(props: { api: Client }) {
                   <ol style={collapsibleStyle}>
                     {Object.keys(value[node_name]).map(
                       (header: string, idx: number) => {
-                        const data = value[node_name][header];
-                        if (Array.isArray(data)) {
-                          return (
-                            <li>
-                              {header}
-                              {data.map((log: string, log_idx: number) => {
-                                return (
-                                  <ol style={collapsibleStyle}>
-                                    <li>{log}</li>
-                                  </ol>
-                                );
-                              })}
-                            </li>
-                          );
-                        } else if (typeof data === "string") {
-                          return (
-                            <li>
-                              {header}
-                              <ol style={collapsibleStyle}>
-                                <li>{data}</li>
-                              </ol>
-                            </li>
-                          );
+                        if (!hidden_formatted_trace_fields.has(header)) {
+                          const data = value[node_name][header];
+                          if (Array.isArray(data)) {
+                            return (
+                              <li>
+                                {header}
+                                {data.map((log: string, log_idx: number) => {
+                                  return (
+                                    <ol style={collapsibleStyle}>
+                                      <li>{log}</li>
+                                    </ol>
+                                  );
+                                })}
+                              </li>
+                            );
+                          } else if (
+                            typeof data === "string" ||
+                            typeof data === "number"
+                          ) {
+                            return (
+                              <li>
+                                {header}
+                                <ol style={collapsibleStyle}>
+                                  <li>{data}</li>
+                                </ol>
+                              </li>
+                            );
+                          }
                         }
                       }
                     )}
