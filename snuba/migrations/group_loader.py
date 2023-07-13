@@ -297,6 +297,8 @@ class GenericMetricsLoader(DirectoryLoader):
             "0014_distribution_add_options",
             "0015_sets_add_options",
             "0016_counters_add_options",
+            "0017_sets_fix_default",
+            "0018_counters_fix_default",
         ]
 
 
