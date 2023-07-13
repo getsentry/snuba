@@ -5,6 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
+# Columns to be added to the table.
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (Column("click_is_dead", UInt(8)), "click_title"),
     (Column("click_is_rage", UInt(8)), "click_is_dead"),
