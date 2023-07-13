@@ -34,7 +34,8 @@ class NodeTraceResult:
 class QueryNodeTraceResult(NodeTraceResult):
     def __init__(self, node_name: str) -> None:
         super(QueryNodeTraceResult, self).__init__(node_name)
-        self.number_of_storage_nodes_accessed: int = 0
+        self.node_type = "query"
+        self.storage_nodes_accessed: List[str] = []
         self.aggregation_performance: List[str] = []
         self.read_performance: List[str] = []
         self.memory_performance: List[str] = []
@@ -44,6 +45,7 @@ class QueryNodeTraceResult(NodeTraceResult):
 class StorageNodeTraceResult(NodeTraceResult):
     def __init__(self, node_name: str) -> None:
         super(StorageNodeTraceResult, self).__init__(node_name)
+        self.node_type = "storage"
         self.key_conditions: List[str] = []
         self.skip_indexes: List[str] = []
         self.filtering_algorithm: List[str] = []
@@ -115,7 +117,7 @@ def format_trace_output(raw_trace_logs: str) -> Dict[str, Any]:
             node_name = log["node_name"]
             if node_name not in result:
                 result[node_name] = StorageNodeTraceResult(node_name)
-                query_node_trace_result.number_of_storage_nodes_accessed += 1
+                query_node_trace_result.storage_nodes_accessed.append(node_name)
 
             trace_result = result[node_name]
             assert isinstance(trace_result, NodeTraceResult)

@@ -21,7 +21,11 @@ enum MessageCategory {
   unknown,
 }
 
-let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
+let collapsibleStyle = {
+  listStyleType: "none",
+  fontFamily: "Monaco",
+  width: "80%",
+};
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -168,7 +172,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {heirarchicalTraceDisplay(title, value.trace_output)}
+                  {heirarchicalRawTraceDisplay(title, value.trace_output)}
                 </div>
               );
             } else {
@@ -179,7 +183,10 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <pre>
                     <code>
-                      {JSON.stringify(value.formatted_trace_output, null, 2)}
+                      {formattedTraceDisplay(
+                        title,
+                        value.formatted_trace_output
+                      )}
                     </code>
                   </pre>
                 </div>
@@ -191,21 +198,23 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  // query execution flow:
-  // [high-level query node]
-  //    [housekeeping] (access control, parsing)
-  //    [propagation step]
-  //       [for each storage node]
-  //          [housekeeping]
-  //          [select executor + MergeTreeSelectProcessor]
-  //          [aggregating transform]
-  //          [memory tracker]
-  //    [aggregating transform]
-  //    [memory tracker]
-  function heirarchicalTraceDisplay(
+  function heirarchicalRawTraceDisplay(
     title: string,
     value: any
   ): JSX.Element | undefined {
+    /*
+    query execution flow:
+    [high-level query node]
+      [housekeeping] (access control, parsing)
+      [propagation step]
+      [for each storage node]
+        [housekeeping]
+        [select executor + MergeTreeSelectProcessor]
+        [aggregating transform]
+        [memory tracker]
+      [aggregating transform]
+      [memory tracker]
+    */
     const parsedLines: Array<LogLine> = value
       .split(/\n/)
       .map(parseLogLine)
@@ -304,6 +313,95 @@ function TracingQueries(props: { api: Client }) {
           </ol>
         </li>
       </ol>
+    );
+  }
+
+  function formattedTraceDisplay(
+    title: string,
+    value: any
+  ): JSX.Element | undefined {
+    let node_names = Object.keys(value);
+    let query_node_name = "";
+    for (const node_name of node_names) {
+      if (value[node_name]["node_type"] == "query") {
+        query_node_name = node_name;
+      }
+    }
+    return (
+      <div>
+        <ol style={collapsibleStyle}>
+          <li>Query node - {query_node_name}</li>
+          <ol style={collapsibleStyle}>
+            {Object.keys(value[query_node_name]).map(
+              (header: string, idx: number) => {
+                const data = value[query_node_name][header];
+                if (Array.isArray(data)) {
+                  return (
+                    <li>
+                      {header}
+                      {data.map((log: string, log_idx: number) => {
+                        return (
+                          <ol style={collapsibleStyle}>
+                            <li>{log}</li>
+                          </ol>
+                        );
+                      })}
+                    </li>
+                  );
+                } else if (typeof data === "string") {
+                  return (
+                    <li>
+                      {header}
+                      <ol style={collapsibleStyle}>
+                        <li>{data}</li>
+                      </ol>
+                    </li>
+                  );
+                }
+              }
+            )}
+          </ol>
+          {node_names.map((node_name, idx) => {
+            if (node_name != query_node_name) {
+              return (
+                <ol style={collapsibleStyle}>
+                  <li>Storage node - {node_name}</li>
+                  <ol style={collapsibleStyle}>
+                    {Object.keys(value[node_name]).map(
+                      (header: string, idx: number) => {
+                        const data = value[node_name][header];
+                        if (Array.isArray(data)) {
+                          return (
+                            <li>
+                              {header}
+                              {data.map((log: string, log_idx: number) => {
+                                return (
+                                  <ol style={collapsibleStyle}>
+                                    <li>{log}</li>
+                                  </ol>
+                                );
+                              })}
+                            </li>
+                          );
+                        } else if (typeof data === "string") {
+                          return (
+                            <li>
+                              {header}
+                              <ol style={collapsibleStyle}>
+                                <li>{data}</li>
+                              </ol>
+                            </li>
+                          );
+                        }
+                      }
+                    )}
+                  </ol>
+                </ol>
+              );
+            }
+          })}
+        </ol>
+      </div>
     );
   }
 
