@@ -26,6 +26,10 @@ let collapsibleStyle = {
   fontFamily: "Monaco",
 };
 
+let testStyle = {
+  width: "80&%",
+};
+
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
   if (
@@ -76,6 +80,32 @@ function NodalDisplay(props: {
                 </li>
               );
             })}
+      </ol>
+    </li>
+  );
+}
+
+function FormattedNodalDisplay(props: {
+  header: string;
+  data: string[] | string | number;
+}) {
+  const [visible, setVisible] = useState<boolean>(false);
+
+  return (
+    <li>
+      <span onClick={() => setVisible(!visible)}>
+        {visible ? "[-]" : "[+]"} {props.header.split("_").join(" ")}
+      </span>
+
+      <ol style={collapsibleStyle}>
+        {visible &&
+          Array.isArray(props.data) &&
+          props.data.map((log: string, log_idx: number) => {
+            return <li>{log}</li>;
+          })}
+        {visible &&
+          (typeof props.data === "string" ||
+            typeof props.data === "number") && <li>{props.data}</li>}
       </ol>
     </li>
   );
@@ -333,90 +363,41 @@ function TracingQueries(props: { api: Client }) {
       }
     }
     return (
-      <div>
+      <ol style={collapsibleStyle}>
+        <li>Query node - {query_node_name}</li>
         <ol style={collapsibleStyle}>
-          <li>Query node - {query_node_name}</li>
-          <ol style={collapsibleStyle}>
-            {Object.keys(value[query_node_name]).map(
-              (header: string, idx: number) => {
-                if (!hidden_formatted_trace_fields.has(header)) {
-                  const data = value[query_node_name][header];
-                  if (Array.isArray(data)) {
-                    return (
-                      <li>
-                        {header}
-                        {data.map((log: string, log_idx: number) => {
-                          return (
-                            <ol style={collapsibleStyle}>
-                              <li>{log}</li>
-                            </ol>
-                          );
-                        })}
-                      </li>
-                    );
-                  } else if (
-                    typeof data === "string" ||
-                    typeof data === "number"
-                  ) {
-                    return (
-                      <li>
-                        {header}
-                        <ol style={collapsibleStyle}>
-                          <li>{data}</li>
-                        </ol>
-                      </li>
-                    );
-                  }
-                }
+          {Object.keys(value[query_node_name]).map(
+            (header: string, idx: number) => {
+              if (!hidden_formatted_trace_fields.has(header)) {
+                const data = value[query_node_name][header];
+                return <FormattedNodalDisplay header={header} data={data} />;
               }
-            )}
-          </ol>
-          {node_names.map((node_name, idx) => {
-            if (node_name != query_node_name) {
-              return (
-                <ol style={collapsibleStyle}>
-                  <li>Storage node - {node_name}</li>
-                  <ol style={collapsibleStyle}>
-                    {Object.keys(value[node_name]).map(
-                      (header: string, idx: number) => {
-                        if (!hidden_formatted_trace_fields.has(header)) {
-                          const data = value[node_name][header];
-                          if (Array.isArray(data)) {
-                            return (
-                              <li>
-                                {header}
-                                {data.map((log: string, log_idx: number) => {
-                                  return (
-                                    <ol style={collapsibleStyle}>
-                                      <li>{log}</li>
-                                    </ol>
-                                  );
-                                })}
-                              </li>
-                            );
-                          } else if (
-                            typeof data === "string" ||
-                            typeof data === "number"
-                          ) {
-                            return (
-                              <li>
-                                {header}
-                                <ol style={collapsibleStyle}>
-                                  <li>{data}</li>
-                                </ol>
-                              </li>
-                            );
-                          }
-                        }
-                      }
-                    )}
-                  </ol>
-                </ol>
-              );
             }
-          })}
+          )}
         </ol>
-      </div>
+        {node_names.map((node_name, idx) => {
+          if (node_name != query_node_name) {
+            return (
+              <ol style={collapsibleStyle}>
+                <br />
+                <li>Storage node - {node_name}</li>
+                <ol style={collapsibleStyle}>
+                  {Object.keys(value[node_name]).map(
+                    (header: string, idx: number) => {
+                      if (!hidden_formatted_trace_fields.has(header)) {
+                        const data = value[node_name][header];
+                        return (
+                          <FormattedNodalDisplay header={header} data={data} />
+                        );
+                      }
+                    }
+                  )}
+                </ol>
+              </ol>
+            );
+          }
+        })}
+      </ol>
     );
   }
 
