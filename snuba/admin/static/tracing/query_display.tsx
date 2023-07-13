@@ -139,6 +139,7 @@ function QueryDisplay(props: {
           offLabel="RAW"
           size="xl"
         />
+        <br />
         <Table
           headerData={["Query", "Response"]}
           rowData={queryResultHistory.map((queryResult) => [

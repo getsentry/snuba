@@ -24,10 +24,7 @@ enum MessageCategory {
 let collapsibleStyle = {
   listStyleType: "none",
   fontFamily: "Monaco",
-};
-
-let testStyle = {
-  width: "80&%",
+  width: "fit-content",
 };
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
