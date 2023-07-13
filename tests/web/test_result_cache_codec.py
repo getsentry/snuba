@@ -2,17 +2,26 @@ import pytest
 
 from snuba.reader import Result
 from snuba.utils.serializable_exception import SerializableException
+from snuba.web import QueryResult
 from snuba.web.db_query import ResultCacheCodec
 
 
 def test_encode_decode() -> None:
-    payload: Result = {
+    result: Result = {
         "meta": [{"name": "foo", "type": "bar"}],
         "data": [{"foo": "bar"}],
         "totals": {"foo": 1},
     }
+    payload = QueryResult(
+        result=result,
+        extra={"stats": {}, "sql": "fizz", "experiments": {}},
+    )
     codec = ResultCacheCodec()
-    assert codec.decode(codec.encode(payload)) == payload
+    expected_decoded = QueryResult(
+        result=result,
+        extra={"stats": {"cache_hit": 1}, "sql": "fizz", "experiments": {}},
+    )
+    assert codec.decode(codec.encode(payload)) == expected_decoded
 
 
 def test_encode_decode_exception() -> None:

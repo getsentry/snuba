@@ -84,12 +84,7 @@ redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
     def encode(self, value: QueryResult) -> bytes:
-        encoded = cast(str, rapidjson.dumps(value, default=str)).encode("utf-8")
-        print("=" * 40)
-        print("encoded result:")
-        print(encoded)
-        print("=" * 40)
-        return encoded
+        return cast(str, rapidjson.dumps(value.to_dict(), default=str)).encode("utf-8")
 
     def decode(self, value: bytes) -> QueryResult:
         ret = rapidjson.loads(value)
@@ -98,16 +93,13 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
         if (
             not isinstance(ret, Mapping)
             or "result" not in ret
+            or "extra" not in ret
             or "meta" not in ret["result"]
             or "data" not in ret["result"]
         ):
             raise ValueError("Invalid value type in result cache")
-        result = cast(QueryResult, ret)
-        print("=" * 40)
-        print("decoded query result:")
-        print(result)
-        print("=" * 40)
-        return result
+        ret["extra"]["stats"]["cache_hit"] = 1
+        return QueryResult(ret["result"], ret["extra"])
 
     def encode_exception(self, value: SerializableException) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
