@@ -743,12 +743,8 @@ def old_db_query(
             trace_id,
             robust,
         )
-    except QueryException as e:
-        error = e
     except Exception as e:
-        # We count on _raw_query capturing all exceptions in a QueryException
-        # if it didn't do that, something is very wrong so we just panic out here
-        raise e
+        error = e
     finally:
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
