@@ -5,7 +5,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -83,17 +82,32 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 
-class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
-    def encode(self, value: Result) -> bytes:
-        return cast(str, rapidjson.dumps(value, default=str)).encode("utf-8")
+class ResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
+    def encode(self, value: QueryResult) -> bytes:
+        encoded = cast(str, rapidjson.dumps(value, default=str)).encode("utf-8")
+        print("=" * 40)
+        print("encoded result:")
+        print(encoded)
+        print("=" * 40)
+        return encoded
 
-    def decode(self, value: bytes) -> Result:
+    def decode(self, value: bytes) -> QueryResult:
         ret = rapidjson.loads(value)
         if ret.get("__type__", "DNE") == "SerializableException":
             raise SerializableException.from_dict(cast(SerializableExceptionDict, ret))
-        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
+        if (
+            not isinstance(ret, Mapping)
+            or "result" not in ret
+            or "meta" not in ret["result"]
+            or "data" not in ret["result"]
+        ):
             raise ValueError("Invalid value type in result cache")
-        return cast(Result, ret)
+        result = cast(QueryResult, ret)
+        print("=" * 40)
+        print("decoded query result:")
+        print(result)
+        print("=" * 40)
+        return result
 
     def encode_exception(self, value: SerializableException) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
@@ -104,7 +118,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # We are not initializing all the cache partitions here and instead relying on lazy
 # initialization because this module only learn of cache partitions ids from the
 # reader when running a query.
-cache_partitions: MutableMapping[str, Cache[Result]] = {
+cache_partitions: MutableMapping[str, Cache[QueryResult]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_cache_client,
         "snuba-query-cache:",
@@ -121,7 +135,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Query,
+    query: Query | CompositeQuery[Table],
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -144,7 +158,7 @@ def update_query_metadata_and_stats(
     if triggered_rate_limiter is not None:
         stats["triggered_rate_limiter"] = triggered_rate_limiter
     sql_anonymized = format_query_anonymized(query).get_sql()
-    start, end = get_time_range_estimate(query)
+    start, end = get_time_range_estimate(query)  # type: ignore
 
     query_metadata_list.append(
         ClickhouseQueryMetadata(
@@ -343,7 +357,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
-def _get_cache_partition(reader: Reader) -> Cache[Result]:
+def _get_cache_partition(reader: Reader) -> Cache[QueryResult]:
     enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
@@ -365,136 +379,6 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
     return cache_partitions[
         partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
     ]
-
-
-@with_span(op="function")
-def execute_query_with_query_id(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    robust: bool,
-) -> Result:
-    query_id = get_query_cache_key(formatted_query)
-
-    try:
-        return execute_query_with_readthrough_caching(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust,
-            query_id,
-        )
-    except ClickhouseError as e:
-        if (
-            e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
-            or not state.get_config("retry_duplicate_query_id", False)
-        ):
-            raise
-
-        logger.error(
-            "Query cache for query ID %s lost, retrying query with random ID", query_id
-        )
-        metrics.increment("query_cache_lost")
-
-        query_id = f"randomized-{uuid.uuid4().hex}"
-
-        return execute_query_with_readthrough_caching(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust,
-            query_id,
-        )
-
-
-@with_span(op="function")
-def execute_query_with_readthrough_caching(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    robust: bool,
-    query_id: str,
-) -> Result:
-    clickhouse_query_settings["query_id"] = query_id
-
-    span = Hub.current.scope.span
-    if span:
-        span.set_data("query_id", query_id)
-
-    def record_cache_hit_type(hit_type: int) -> None:
-        span_tag = "cache_miss"
-        if hit_type == RESULT_VALUE:
-            stats["cache_hit"] = 1
-            span_tag = "cache_hit"
-        elif hit_type == RESULT_WAIT:
-            stats["is_duplicate"] = 1
-            span_tag = "cache_wait"
-        sentry_sdk.set_tag("cache_status", span_tag)
-        if span:
-            span.set_data("cache_status", span_tag)
-
-    cache_partition = _get_cache_partition(reader)
-    metrics.increment(
-        "cache_partition_loaded",
-        tags={"partition_id": reader.cache_partition_id or "default"},
-    )
-
-    # -----------------------------------------------------------------
-    # HACK (Volo): This is a hack experiment to see if we can
-    # turn off the cache (but not all of it for everything at once).
-    # and still survive.
-
-    # depending on the `stats` dict to be populated ahead of time
-    # is not great style, but it is done in _format_storage_query_and_run.
-    # This should be removed by 07-05-2023
-    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
-        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
-        return execute_query_with_rate_limits(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust,
-        )
-    # -----------------------------------------------------------------
-    else:
-        return cache_partition.get_readthrough(
-            query_id,
-            partial(
-                execute_query_with_rate_limits,
-                clickhouse_query,
-                query_settings,
-                formatted_query,
-                reader,
-                timer,
-                stats,
-                clickhouse_query_settings,
-                robust,
-            ),
-            record_cache_hit_type=record_cache_hit_type,
-            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
-            timer=timer,
-        )
 
 
 def _get_cache_wait_timeout(
@@ -549,6 +433,7 @@ def _get_query_settings_from_config(
 
 def _raw_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query_settings: MutableMapping[str, Any],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -566,95 +451,39 @@ def _raw_query(
     this function is responsible for running the clickhouse query and if there is any error, constructing the
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
-    clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix()
-    )
-
-    timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
 
-    update_with_status = partial(
-        update_query_metadata_and_stats,
+    result = execute_query_with_rate_limits(
+        clickhouse_query,
+        query_settings,
+        formatted_query,
+        reader,
+        timer,
+        stats,
+        clickhouse_query_settings,
+        robust,
+    )
+
+    stats = update_query_metadata_and_stats(
         query=clickhouse_query,
         query_metadata_list=query_metadata_list,
         sql=sql,
         stats=stats,
         query_settings=clickhouse_query_settings,
         trace_id=trace_id,
+        status=QueryStatus.SUCCESS,
+        request_status=get_request_status(),
+        profile_data=result["profile"],
     )
-
-    try:
-        result = execute_query_with_query_id(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust=robust,
-        )
-    except Exception as cause:
-        error_code = None
-        trigger_rate_limiter = None
-        status = None
-        request_status = get_request_status(cause)
-        if isinstance(cause, RateLimitExceeded):
-            status = QueryStatus.RATE_LIMITED
-            trigger_rate_limiter = cause.extra_data.get("scope", "")
-        elif isinstance(cause, ClickhouseError):
-            error_code = cause.code
-            status = get_query_status_from_error_codes(error_code)
-
-            with configure_scope() as scope:
-                fingerprint = ["{{default}}", str(cause.code), dataset_name]
-                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
-                    fingerprint.append(attribution_info.referrer)
-                scope.fingerprint = fingerprint
-        elif isinstance(cause, TimeoutError):
-            status = QueryStatus.TIMEOUT
-        elif isinstance(cause, ExecutionTimeoutError):
-            status = QueryStatus.TIMEOUT
-
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
-
-        with configure_scope() as scope:
-            if scope.span:
-                sentry_sdk.set_tag("slo_status", request_status.status.value)
-
-        stats = update_with_status(
-            status=status or QueryStatus.ERROR,
-            request_status=request_status,
-            error_code=error_code,
-            triggered_rate_limiter=str(trigger_rate_limiter),
-        )
-        raise QueryException.from_args(
-            # This exception needs to have the message of the cause in it for sentry
-            # to pick it up properly
-            cause.__class__.__name__,
-            str(cause),
-            {
-                "stats": stats,
-                "sql": sql,
-                "experiments": clickhouse_query.get_experiments(),
-            },
-        ) from cause
-    else:
-        stats = update_with_status(
-            status=QueryStatus.SUCCESS,
-            request_status=get_request_status(),
-            profile_data=result["profile"],
-        )
-        return QueryResult(
-            result,
-            {
-                "stats": stats,
-                "sql": sql,
-                "experiments": clickhouse_query.get_experiments(),
-            },
-        )
+    return QueryResult(
+        result,
+        {
+            "stats": stats,
+            "sql": sql,
+            "experiments": clickhouse_query.get_experiments(),
+        },
+    )
 
 
 def _get_allocation_policies(
@@ -689,6 +518,160 @@ def _get_allocation_policies(
 
 def db_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    stats: MutableMapping[str, Any],
+    trace_id: Optional[str] = None,
+    robust: bool = False,
+    query_id: Optional[str] = None,
+) -> QueryResult:
+    cache_partition = _get_cache_partition(reader)
+    query_id = query_id or get_query_cache_key(formatted_query)
+
+    clickhouse_query_settings = _get_query_settings_from_config(
+        reader.get_query_settings_prefix()
+    )
+    timer.mark("get_configs")
+
+    clickhouse_query_settings["query_id"] = query_id
+
+    span = Hub.current.scope.span
+    if span:
+        span.set_data("query_id", query_id)
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        span_tag = "cache_miss"
+        if hit_type == RESULT_VALUE:
+            stats["cache_hit"] = 1
+            span_tag = "cache_hit"
+        elif hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+            span_tag = "cache_wait"
+        sentry_sdk.set_tag("cache_status", span_tag)
+        if span:
+            span.set_data("cache_status", span_tag)
+
+    cache_partition = _get_cache_partition(reader)
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+
+    try:
+        return cache_partition.get_readthrough(
+            query_id,
+            partial(
+                old_db_query,
+                clickhouse_query,
+                clickhouse_query_settings,
+                query_settings,
+                attribution_info,
+                dataset_name,
+                query_metadata_list,
+                formatted_query,
+                reader,
+                timer,
+                stats,
+                trace_id,
+                robust,
+            ),
+            record_cache_hit_type=record_cache_hit_type,
+            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+            timer=timer,
+        )
+    except Exception as cause:
+        error_code = None
+        trigger_rate_limiter = None
+        status = None
+        request_status = get_request_status(cause)
+        if isinstance(cause, RateLimitExceeded):
+            status = QueryStatus.RATE_LIMITED
+            trigger_rate_limiter = cause.extra_data.get("scope", "")
+        elif isinstance(cause, ClickhouseError):
+            if (
+                cause.code == ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+                and state.get_config("retry_duplicate_query_id", False)
+            ):
+                logger.error(
+                    "Query cache for query ID %s lost, retrying query with random ID",
+                    query_id,
+                )
+                metrics.increment("query_cache_lost")
+
+                query_id = f"randomized-{uuid.uuid4().hex}"
+
+                return db_query(
+                    clickhouse_query,
+                    query_settings,
+                    attribution_info,
+                    dataset_name,
+                    query_metadata_list,
+                    formatted_query,
+                    reader,
+                    timer,
+                    stats,
+                    trace_id,
+                    robust,
+                    query_id,
+                )
+
+            error_code = cause.code
+            status = get_query_status_from_error_codes(error_code)
+
+            with configure_scope() as scope:
+                fingerprint = ["{{default}}", str(cause.code), dataset_name]
+                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                    fingerprint.append(attribution_info.referrer)
+                scope.fingerprint = fingerprint
+        elif isinstance(cause, TimeoutError):
+            status = QueryStatus.TIMEOUT
+        elif isinstance(cause, ExecutionTimeoutError):
+            status = QueryStatus.TIMEOUT
+
+        sql = formatted_query.get_sql()
+
+        if request_status.slo == SLO.AGAINST:
+            logger.exception("Error running query: %s\n%s", sql, cause)
+
+        with configure_scope() as scope:
+            if scope.span:
+                sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+        stats = update_query_metadata_and_stats(
+            query=clickhouse_query,
+            query_metadata_list=query_metadata_list,
+            sql=sql,
+            stats=stats,
+            query_settings=clickhouse_query_settings,
+            trace_id=trace_id,
+            status=status or QueryStatus.ERROR,
+            request_status=request_status,
+            error_code=error_code,
+            triggered_rate_limiter=str(trigger_rate_limiter),
+        )
+        raise QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            cause.__class__.__name__,
+            str(cause),
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        ) from cause
+
+
+def old_db_query(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query_settings: MutableMapping[str, Any],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -756,6 +739,7 @@ def db_query(
     try:
         result = _raw_query(
             clickhouse_query,
+            clickhouse_query_settings,
             query_settings,
             attribution_info,
             dataset_name,
