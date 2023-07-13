@@ -19,25 +19,23 @@ from snuba.query.allocation_policies import (
 )
 
 prod_invalid_query_test_data = [
-    pytest.param("SELECT count() FROM errors_ro WHERE project_id < 5"),
+    pytest.param("SELECT count() FROM {} WHERE project_id < 5"),
     pytest.param(
-        "SELECT count() FROM errors_ro WHERE (project_id > 1 OR (project_id = 1 AND project_id = 2))"
+        "SELECT count() FROM {} WHERE (project_id > 1 OR (project_id = 1 AND project_id = 2))"
     ),
-    pytest.param("SELECT count() FROM errors_ro WHERE project_id = 5"),
-    pytest.param(
-        "SELECT count() FROM errors_ro WHERE in((project_id AS a), [1, 2, 3])"
-    ),
-    pytest.param("SELECT count() FROM errors_ro WHERE in(project_id, [2])"),
-    pytest.param("SELECT count() FROM errors_ro WHERE equals(project_id, 2)"),
-    pytest.param("SELECT count() FROM errors_ro WHERE equals((project_id AS a), 2)"),
+    pytest.param("SELECT count() FROM {} WHERE project_id = 5"),
+    pytest.param("SELECT count() FROM {} WHERE in((project_id AS a), [1, 2, 3])"),
+    pytest.param("SELECT count() FROM {} WHERE in(project_id, [2])"),
+    pytest.param("SELECT count() FROM {} WHERE equals(project_id, 2)"),
+    pytest.param("SELECT count() FROM {} WHERE equals((project_id AS a), 2)"),
 ]
 
 prod_valid_query_test_data = [
-    pytest.param("SELECT count() FROM errors_ro WHERE project_id = 1"),
-    pytest.param("SELECT count() FROM errors_ro WHERE in((project_id AS a), [1])"),
-    pytest.param("SELECT count() FROM errors_ro WHERE in(project_id, [1])"),
-    pytest.param("SELECT count() FROM errors_ro WHERE equals(project_id, 1)"),
-    pytest.param("SELECT count() FROM errors_ro WHERE equals((project_id AS a), 1)"),
+    pytest.param("SELECT count() FROM {} WHERE project_id = 1"),
+    pytest.param("SELECT count() FROM {} WHERE in((project_id AS a), [1])"),
+    pytest.param("SELECT count() FROM {} WHERE in(project_id, [1])"),
+    pytest.param("SELECT count() FROM {} WHERE equals(project_id, 1)"),
+    pytest.param("SELECT count() FROM {} WHERE equals((project_id AS a), 1)"),
 ]
 
 
@@ -597,8 +595,9 @@ def test_prod_sql_query(admin_api: FlaskClient, query: str) -> None:
     response = admin_api.post(
         "/production_sql_query",
         headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
-        data=json.dumps({"sql": query}),
+        data=json.dumps({"sql": query.format(table), "storage": "errors_ro"}),
     )
+    print(json.loads(response.data))
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "column_names" in data and data["column_names"] == ["count()"]
@@ -611,7 +610,9 @@ def test_prod_sql_query_missing_project(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_sql_query",
         headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
-        data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
+        data=json.dumps(
+            {"sql": f"SELECT count() FROM {table}", "storage": "errors_ro"}
+        ),
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -626,6 +627,6 @@ def test_prod_sql_query_invalid_query(admin_api: FlaskClient, query: str) -> Non
     response = admin_api.post(
         "/production_sql_query",
         headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
-        data=json.dumps({"sql": query}),
+        data=json.dumps({"sql": query.format(table), "storage": "errors_ro"}),
     )
     assert response.status_code == 400

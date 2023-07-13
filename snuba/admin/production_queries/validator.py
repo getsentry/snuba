@@ -5,14 +5,14 @@ from snuba.admin.clickhouse.common import InvalidCustomQuery
 
 PROJECT_PATTERNS = {
     "equal": [
-        "^(?:project_id\s*=\s*(?P<project_id>\d+))$",
+        "^project_id\s*=\s*(?P<project_id>\d+)$",
         "^equals\(\(project_id\s+as\s+\w+\),\s*(?P<project_id>\d+)\)$",
         "^equals\(project_id,\s*(?P<project_id>\d+)\)$",
     ],
     "in": [
-        "^(?:project_id\s*in\s*\[(?P<project_list>(?:\s*\d+\s*,)*\s*\d+\)])$",
-        "^in\(\(project_id\s+as\s+\w+\),\s*\[(?P<project_list>(?:\s*\d+\s*,)*\s*\d+)\]\)$",
-        "^in\(project_id,\s*\[(?P<project_list>(?:\s*\d+\s*,)*\s*\d+)\]\)$",
+        "^project_id\s*in\s*[\(\[](?P<project_list>(?:\s*\d+\s*,)*\s*\d+)[\)\]]$",
+        "^in\(\(project_id\s+as\s+\w+\),\s*[\(\[](?P<project_list>(?:\s*\d+\s*,)*\s*\d+)[\)\]]\)$",
+        "^in\(project_id,\s*[\(\[](?P<project_list>(?:\s*\d+\s*,)*\s*\d+)[\)\]]\)$",
     ],
 }
 
