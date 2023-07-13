@@ -19,23 +19,25 @@ from snuba.query.allocation_policies import (
 )
 
 prod_invalid_query_test_data = [
-    pytest.param("SELECT count FROM errors_ro WHERE project_id < 5"),
+    pytest.param("SELECT count() FROM errors_ro WHERE project_id < 5"),
     pytest.param(
-        "SELECT count FROM errors_ro WHERE (project_id > 1 OR (project_id = 1 AND project_id = 2))"
+        "SELECT count() FROM errors_ro WHERE (project_id > 1 OR (project_id = 1 AND project_id = 2))"
     ),
-    pytest.param("SELECT count FROM errors_ro WHERE project_id = 5"),
-    pytest.param("SELECT count FROM errors_ro WHERE in((project_id AS a), [1, 2, 3])"),
-    pytest.param("SELECT count FROM errors_ro WHERE in(project_id, [2])"),
-    pytest.param("SELECT count FROM errors_ro WHERE equals(project_id, 2)"),
-    pytest.param("SELECT count FROM errors_ro WHERE equals((project_id AS a), 2)"),
+    pytest.param("SELECT count() FROM errors_ro WHERE project_id = 5"),
+    pytest.param(
+        "SELECT count() FROM errors_ro WHERE in((project_id AS a), [1, 2, 3])"
+    ),
+    pytest.param("SELECT count() FROM errors_ro WHERE in(project_id, [2])"),
+    pytest.param("SELECT count() FROM errors_ro WHERE equals(project_id, 2)"),
+    pytest.param("SELECT count() FROM errors_ro WHERE equals((project_id AS a), 2)"),
 ]
 
 prod_valid_query_test_data = [
-    pytest.param("SELECT count FROM errors_ro WHERE project_id = 1"),
-    pytest.param("SELECT count FROM errors_ro WHERE in((project_id AS a), [1])"),
-    pytest.param("SELECT count FROM errors_ro WHERE in(project_id, [1])"),
-    pytest.param("SELECT count FROM errors_ro WHERE equals(project_id, 1)"),
-    pytest.param("SELECT count FROM errors_ro WHERE equals((project_id AS a), 1)"),
+    pytest.param("SELECT count() FROM errors_ro WHERE project_id = 1"),
+    pytest.param("SELECT count() FROM errors_ro WHERE in((project_id AS a), [1])"),
+    pytest.param("SELECT count() FROM errors_ro WHERE in(project_id, [1])"),
+    pytest.param("SELECT count() FROM errors_ro WHERE equals(project_id, 1)"),
+    pytest.param("SELECT count() FROM errors_ro WHERE equals((project_id AS a), 1)"),
 ]
 
 
