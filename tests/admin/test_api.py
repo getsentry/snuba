@@ -18,6 +18,26 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 
+prod_invalid_query_test_data = [
+    pytest.param("SELECT count FROM errors_ro WHERE project_id < 5"),
+    pytest.param(
+        "SELECT count FROM errors_ro WHERE (project_id > 1 OR (project_id = 1 AND project_id = 2))"
+    ),
+    pytest.param("SELECT count FROM errors_ro WHERE project_id = 5"),
+    pytest.param("SELECT count FROM errors_ro WHERE in((project_id AS a), [1, 2, 3])"),
+    pytest.param("SELECT count FROM errors_ro WHERE in(project_id, [2])"),
+    pytest.param("SELECT count FROM errors_ro WHERE equals(project_id, 2)"),
+    pytest.param("SELECT count FROM errors_ro WHERE equals((project_id AS a), 2)"),
+]
+
+prod_valid_query_test_data = [
+    pytest.param("SELECT count FROM errors_ro WHERE project_id = 1"),
+    pytest.param("SELECT count FROM errors_ro WHERE in((project_id AS a), [1])"),
+    pytest.param("SELECT count FROM errors_ro WHERE in(project_id, [1])"),
+    pytest.param("SELECT count FROM errors_ro WHERE equals(project_id, 1)"),
+    pytest.param("SELECT count FROM errors_ro WHERE equals((project_id AS a), 1)"),
+]
+
 
 @pytest.fixture
 def admin_api() -> FlaskClient:
@@ -565,3 +585,45 @@ def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "Cannot access the following project ids: {2}"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+@pytest.mark.parametrize("query", prod_valid_query_test_data)
+def test_prod_sql_query(admin_api: FlaskClient, query: str) -> None:
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
+    response = admin_api.post(
+        "/production_sql_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps({"sql": query}),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "column_names" in data and data["column_names"] == ["count()"]
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_sql_query_missing_project(admin_api: FlaskClient) -> None:
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
+    response = admin_api.post(
+        "/production_sql_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Missing condition on project_id"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+@pytest.mark.parametrize("query", prod_invalid_query_test_data)
+def test_prod_sql_query_invalid_query(admin_api: FlaskClient, query: str) -> None:
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
+    response = admin_api.post(
+        "/production_sql_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps({"sql": query}),
+    )
+    assert response.status_code == 400
