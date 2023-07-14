@@ -157,6 +157,9 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "dataset": message["dataset"],
             "projects": message.get("projects") or [],
             "organization": message.get("organization"),
+            "status": message["status"],
+            "timestamp": message["timing"]["timestamp"],
+            "duration_ms": message["timing"]["duration_ms"],
             **self.__extract_query_list(message["query_list"]),
         }
         self._remove_invalid_data(processed)
