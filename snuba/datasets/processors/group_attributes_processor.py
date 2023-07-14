@@ -1,10 +1,11 @@
+from datetime import datetime
 from typing import Optional
 
 from sentry_kafka_schemas.schema_types.group_attributes_v1 import (
     GroupAttributesSnapshot,
 )
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage
@@ -24,7 +25,9 @@ class GroupAttributesMessageProcessor(DatasetMessageProcessor):
                     "group_id": message["group_id"],
                     "group_status": message["status"],
                     "group_substatus": message["substatus"],
-                    "group_first_seen": message["first_seen"],
+                    "group_first_seen": datetime.strptime(
+                        message["first_seen"], settings.PAYLOAD_DATETIME_FORMAT
+                    ),
                     "group_num_comments": message["num_comments"],
                     "assignee_user_id": message["assignee_user_id"],
                     "assignee_team_id": message["assignee_team_id"],

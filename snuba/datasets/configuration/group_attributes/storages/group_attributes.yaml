@@ -38,6 +38,9 @@ schema:
 
 allocation_policies:
   - name: PassthroughPolicy
+    args:
+      required_tenant_types:
+        - blank
 
 query_processors:
   - processor: TableRateLimit
