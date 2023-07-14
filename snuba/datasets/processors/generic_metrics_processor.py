@@ -17,6 +17,9 @@ from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMe
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
+    aggregation_options_for_counter_message,
+    aggregation_options_for_distribution_message,
+    aggregation_options_for_set_message,
     is_counter_message,
     is_distribution_message,
     is_set_message,
@@ -27,11 +30,6 @@ from snuba.datasets.metrics_messages import (
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
-# These are the hardcoded values from the materialized view
-GRANULARITY_ONE_MINUTE = 1
-GRANULARITY_ONE_HOUR = 2
-GRANULARITY_ONE_DAY = 3
-
 
 class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
     @abstractmethod
@@ -40,6 +38,10 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
 
     @abstractmethod
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
     #
@@ -132,14 +134,9 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
             **self._process_values(message),
-            "materialization_version": 2,
+            **self._aggregation_options(message),
             "retention_days": retention_days,
             "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
-            "granularities": [
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
         }
         sentry_received_timestamp = None
         if message.get("sentry_received_timestamp"):
@@ -159,6 +156,9 @@ class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_set_message(message)
 
+    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        return aggregation_options_for_set_message(message)
+
 
 class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -167,6 +167,9 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_distribution_message(message)
 
+    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        return aggregation_options_for_distribution_message(message)
+
 
 class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -174,3 +177,6 @@ class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return value_for_counter_message(message)
+
+    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        return aggregation_options_for_counter_message(message)
