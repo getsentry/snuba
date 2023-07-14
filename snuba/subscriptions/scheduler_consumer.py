@@ -364,7 +364,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__slice_id,
         )
 
-        strategy = TickBuffer(
+        strategy: ProcessingStrategy[Tick] = TickBuffer(
             self.__mode,
             self.__partitions,
             self.__buffer_size,
@@ -373,6 +373,6 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         )
 
         if self.__health_check_file:
-            strategy = Healthcheck(self.__health_check_file, self.__metrics)
+            strategy = Healthcheck(self.__health_check_file, strategy)
 
         return strategy
