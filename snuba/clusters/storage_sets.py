@@ -17,7 +17,6 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "FUNCTIONS": "functions",
     "SEARCH_ISSUES": "search_issues",
     "SPANS": "spans",
-    "GROUP_ATTRIBUTES": "group_attributes",
 }
 
 
