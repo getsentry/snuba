@@ -53,7 +53,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="group_attributes_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="group_attributes_dist",
+                    local_table_name="group_attributes_local",
                     sharding_key="cityHash64(group_id)",
                 ),
                 target=OperationTarget.DISTRIBUTED,
