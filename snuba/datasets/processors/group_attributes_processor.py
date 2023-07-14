@@ -39,7 +39,7 @@ class GroupAttributesMessageProcessor(DatasetMessageProcessor):
                     ],
                     "owner_codeowners_user_id": message["owner_codeowners_user_id"],
                     "owner_codeowners_team_id": message["owner_codeowners_team_id"],
-                    "deleted": message["group_deleted"],
+                    "deleted": 1 if message["group_deleted"] else 0,
                     "message_timestamp": metadata.timestamp,
                     "partition": metadata.partition,
                     "offset": metadata.offset,
