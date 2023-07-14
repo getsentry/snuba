@@ -4,6 +4,7 @@ from contextlib import closing
 from typing import Any, Optional, Sequence
 
 import click
+import structlog
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
@@ -11,6 +12,7 @@ from snuba import environment
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -127,6 +129,8 @@ def subscriptions_scheduler(
     setup_logging(log_level)
     setup_sentry()
 
+    logger = structlog.get_logger().bind(module=__name__)
+
     metrics_tags = {"entity": entity_name}
 
     if slice_id:
@@ -145,6 +149,10 @@ def subscriptions_scheduler(
     assert (
         storage is not None
     ), f"Entity {entity_name} does not have a writable storage by default."
+
+    logger.info("Checking Clickhouse connections")
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
 
     if stale_threshold_seconds is not None and delay_seconds is not None:
         assert (
