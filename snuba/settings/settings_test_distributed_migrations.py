@@ -55,6 +55,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "group_attributes",
         },
         "single_node": False,
         "cluster_name": "storage_cluster",
