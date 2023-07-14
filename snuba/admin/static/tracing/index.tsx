@@ -213,14 +213,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  <pre>
-                    <code>
-                      {formattedTraceDisplay(
-                        title,
-                        value.formatted_trace_output
-                      )}
-                    </code>
-                  </pre>
+                  {formattedTraceDisplay(title, value.formatted_trace_output)}
                 </div>
               );
             }

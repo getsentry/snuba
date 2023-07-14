@@ -67,9 +67,6 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
         query=query, capture_trace=True, with_column_types=True
     )
     formatted_trace_output = format_trace_output(query_result.trace_output)
-    # import json
-
-    # print(json.dumps(formatted_trace_output, indent=4))
     return TraceOutput(
         trace_output=query_result.trace_output,
         formatted_trace_output=formatted_trace_output,
@@ -104,49 +101,47 @@ LOG_MAPPINGS_FOR_STORAGE_NODES = [
 
 
 def format_trace_output(raw_trace_logs: str) -> Dict[str, Any]:
-    with open("/Users/enochtang/code/snuba/test.txt", "r") as reader:
-        raw_logs = reader.read()
-        formatted_logs = format_log_to_dict(raw_logs)
+    formatted_logs = format_log_to_dict(raw_trace_logs)
 
-        result: dict[str, Any] = {}  # node_name: NodeTraceResult
+    result: dict[str, Any] = {}  # node_name: NodeTraceResult
 
-        query_node_name = formatted_logs[0]["node_name"]
-        result[query_node_name] = QueryNodeTraceResult(query_node_name)
-        query_node_trace_result = result[query_node_name]
-        assert isinstance(query_node_trace_result, QueryNodeTraceResult)
+    query_node_name = formatted_logs[0]["node_name"]
+    result[query_node_name] = QueryNodeTraceResult(query_node_name)
+    query_node_trace_result = result[query_node_name]
+    assert isinstance(query_node_trace_result, QueryNodeTraceResult)
 
-        for log in formatted_logs:
-            node_name = log["node_name"]
-            if node_name not in result:
-                result[node_name] = StorageNodeTraceResult(node_name)
-                query_node_trace_result.storage_nodes_accessed.append(node_name)
-                query_node_trace_result.number_of_storage_nodes_accessed += 1
+    for log in formatted_logs:
+        node_name = log["node_name"]
+        if node_name not in result:
+            result[node_name] = StorageNodeTraceResult(node_name)
+            query_node_trace_result.storage_nodes_accessed.append(node_name)
+            query_node_trace_result.number_of_storage_nodes_accessed += 1
 
-            trace_result = result[node_name]
-            assert isinstance(trace_result, NodeTraceResult)
-            if log["thread_id"] not in trace_result.thread_ids:
-                trace_result.thread_ids.append(log["thread_id"])
-                trace_result.threads_used = len(trace_result.thread_ids)
+        trace_result = result[node_name]
+        assert isinstance(trace_result, NodeTraceResult)
+        if log["thread_id"] not in trace_result.thread_ids:
+            trace_result.thread_ids.append(log["thread_id"])
+            trace_result.threads_used = len(trace_result.thread_ids)
 
-            if node_name == query_node_name:
-                assert isinstance(trace_result, QueryNodeTraceResult)
-                for log_type, search_strs, trace_attr in LOG_MAPPINGS_FOR_QUERY_NODES:
-                    find_and_add_log_line(
-                        log, getattr(trace_result, trace_attr), log_type, search_strs
-                    )
-            else:
-                assert isinstance(trace_result, StorageNodeTraceResult)
-                for (
-                    log_type,
-                    search_strs,
-                    trace_attr,
-                ) in LOG_MAPPINGS_FOR_STORAGE_NODES:
-                    find_and_add_log_line(
-                        log, getattr(trace_result, trace_attr), log_type, search_strs
-                    )
-        for key, value in result.items():
-            result[key] = vars(value)
-        return result
+        if node_name == query_node_name:
+            assert isinstance(trace_result, QueryNodeTraceResult)
+            for log_type, search_strs, trace_attr in LOG_MAPPINGS_FOR_QUERY_NODES:
+                find_and_add_log_line(
+                    log, getattr(trace_result, trace_attr), log_type, search_strs
+                )
+        else:
+            assert isinstance(trace_result, StorageNodeTraceResult)
+            for (
+                log_type,
+                search_strs,
+                trace_attr,
+            ) in LOG_MAPPINGS_FOR_STORAGE_NODES:
+                find_and_add_log_line(
+                    log, getattr(trace_result, trace_attr), log_type, search_strs
+                )
+    for key, value in result.items():
+        result[key] = vars(value)
+    return result
 
 
 def find_and_add_log_line(
