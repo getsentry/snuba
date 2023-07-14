@@ -109,11 +109,6 @@ def subscriptions_scheduler_executor(
 
     storage = get_entity(entity_key).get_writable_storage()
     assert storage is not None
-
-    logger.info("Checking Clickhouse connections")
-    cluster = storage.get_cluster()
-    check_clickhouse_connections([cluster])
-
     stream_loader = storage.get_table_writer().get_stream_loader()
     result_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert result_topic_spec is not None
@@ -124,6 +119,10 @@ def subscriptions_scheduler_executor(
             override_params={"partitioner": "consistent"},
         )
     )
+
+    logger.info("Checking Clickhouse connections")
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
 
     processor = build_scheduler_executor_consumer(
         dataset_name,
