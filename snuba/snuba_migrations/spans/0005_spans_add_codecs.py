@@ -15,38 +15,21 @@ dist_table_name = "spans_dist"
 
 
 unmodified_columns: List[Column[Modifiers]] = [
-    # Column("project_id", UInt(64)),
-    # Column("transaction_id", UUID(Modifiers(nullable=True))),
-    # Column("transaction_op", String(Modifiers(nullable=True))),
-    # Column("trace_id", UUID()),
-    # Column("span_id", UInt(64)),
-    # Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
-    # Column("segment_id", UInt(64)),
-    # Column("end_timestamp", DateTime(Modifiers(codecs=["DoubleDelta"]))),
-    # Column("exclusive_time", Float(64)),
-    # Column("span_kind", String(Modifiers(low_cardinality=True))),
-    # Column("status", UInt(32, Modifiers(nullable=True))),
-    # Column("module", String(Modifiers(low_cardinality=True))),
-    # Column("action", String(Modifiers(low_cardinality=True, nullable=True))),
-    # Column("domain", String(Modifiers(nullable=True))),
-    # Column("platform", String(Modifiers(low_cardinality=True, nullable=True))),
-    # Column("user", String(Modifiers(nullable=True))),
-    # Column("tags", Nested([("key", String()), ("value", String())])),
-    Column("deleted", UInt(8)),
-    Column("retention_days", UInt(16)),
-    Column("is_segment", UInt(8)),
-    Column("span_status", UInt(8)),
-    Column("op", String(Modifiers(low_cardinality=True))),
-    Column("start_timestamp", DateTime()),
-    Column("segment_name", String(Modifiers(default="''"))),
-    Column("partition", UInt(16)),
-    Column("duration", UInt(32)),
-    Column("end_ms", UInt(16)),
-    Column("start_ms", UInt(16)),
-    Column("group", UInt(64)),
-    Column("group_raw", UInt(64)),
-    Column("offset", UInt(64)),
-    Column("description", String()),
+    Column("deleted", UInt(8, Modifiers(codecs=["Default"]))),
+    Column("retention_days", UInt(16, Modifiers(codecs=["Default"]))),
+    Column("is_segment", UInt(8, Modifiers(codecs=["Default"]))),
+    Column("span_status", UInt(8, Modifiers(codecs=["Default"]))),
+    Column("op", String(Modifiers(low_cardinality=True, codecs=["Default"]))),
+    Column("start_timestamp", DateTime(Modifiers(codecs=["Default"]))),
+    Column("segment_name", String(Modifiers(default="''", codecs=["Default"]))),
+    Column("partition", UInt(16, Modifiers(codecs=["Default"]))),
+    Column("duration", UInt(32, Modifiers(codecs=["Default"]))),
+    Column("end_ms", UInt(16, Modifiers(codecs=["Default"]))),
+    Column("start_ms", UInt(16, Modifiers(codecs=["Default"]))),
+    Column("group", UInt(64, Modifiers(codecs=["Default"]))),
+    Column("group_raw", UInt(64, Modifiers(codecs=["Default"]))),
+    Column("offset", UInt(64, Modifiers(codecs=["Default"]))),
+    Column("description", String(Modifiers(codecs=["Default"]))),
 ]
 
 # ┌─name───────────────┬─best_codec─────────┬─compressed_size─┬─uncompressed_size─┬─min(data_compressed_bytes)─┐
@@ -93,8 +76,8 @@ codec_columns = [
     Column("is_segment", UInt(8, Modifiers(codecs=["DoubleDelta"]))),
     Column("span_status", UInt(8, Modifiers(codecs=["T64", "Delta"]))),
     Column("op", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))),
-    Column("start_timestamp", DateTime(Modifiers(codecs=["Delta"]))),
-    Column("segment_name", String(Modifiers(codecs=["Delta", "ZSTD(1)"]))),
+    Column("start_timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
+    Column("segment_name", String(Modifiers(codecs=["ZSTD(1)"]))),
     Column("partition", UInt(16, Modifiers(codecs=["T64", "Delta", "ZSTD(1)"]))),
     Column("duration", UInt(32, Modifiers(codecs=["Delta", "ZSTD(1)"]))),
     Column("end_ms", UInt(16, Modifiers(codecs=["Delta", "ZSTD(1)"]))),
@@ -105,8 +88,8 @@ codec_columns = [
     Column("description", String(Modifiers(codecs=["ZSTD(1)"]))),
 ]
 
-for cc in codec_columns:
-    assert [cc.name == uc.name for uc in unmodified_columns]
+# check we have all the columns in both lists
+assert [a.name == b.name for (a, b) in zip(codec_columns, unmodified_columns)]
 
 
 class Migration(migration.ClickhouseNodeMigration):
