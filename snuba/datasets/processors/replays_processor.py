@@ -251,8 +251,6 @@ def process_replay_actions(
             "click_testid": to_string(click["testid"])[:64],
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
-            "click_is_dead": to_uint1(click["is_dead"]),
-            "click_is_rage": to_uint1(click["is_rage"]),
         }
         for click in payload["clicks"][:MAX_CLICK_EVENTS]
     ]
@@ -294,14 +292,6 @@ def to_datetime(value: Any) -> datetime:
     Datetimes for the replays schema standardize on 32 bit dates.
     """
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
-
-
-def to_uint1(value: Any) -> int:
-    int_value = int(value)
-    if int_value == 0 or int_value == 1:
-        return int_value
-    else:
-        raise ValueError("Value must be 0 or 1")
 
 
 def to_uint16(value: Any) -> int:
