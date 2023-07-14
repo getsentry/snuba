@@ -7,18 +7,16 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::{
-    ProcessingStrategy, ProcessingStrategyFactory,
-};
+use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Topic};
+use rust_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 
+use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 use crate::{config, setup_sentry};
-use crate::strategies::clickhouse::ClickhouseWriterStep;
 
 #[pyfunction]
 pub fn consumer(
@@ -28,10 +26,22 @@ pub fn consumer(
     consumer_config_raw: &str,
     skip_write: bool,
 ) {
-    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw, skip_write));
+    py.allow_threads(|| {
+        consumer_impl(
+            consumer_group,
+            auto_offset_reset,
+            consumer_config_raw,
+            skip_write,
+        )
+    });
 }
 
-pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str, skip_write: bool) {
+pub fn consumer_impl(
+    consumer_group: &str,
+    auto_offset_reset: &str,
+    consumer_config_raw: &str,
+    skip_write: bool,
+) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
         max_batch_size: usize,
@@ -43,28 +53,25 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let accumulator =
-                Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
-                    for row in value.rows {
-                        acc.rows.push(row);
-                    }
-                    acc
-                });
+            let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
+                for row in value.rows {
+                    acc.rows.push(row);
+                }
+                acc
+            });
 
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
                 Reduce::new(
                     Box::new(ClickhouseWriterStep::new(
-                        CommitOffsets::new(
-                            Duration::from_secs(1),
-                        ),
+                        CommitOffsets::new(Duration::from_secs(1)),
                         self.clickhouse_cluster_config.clone(),
                         self.clickhouse_table_name.clone(),
                         self.skip_write,
-                    ),
-                    ),
+                        2,
+                    )),
                     accumulator,
-                    BytesInsertBatch{rows: vec![]},
+                    BytesInsertBatch { rows: vec![] },
                     self.max_batch_size,
                     self.max_batch_time,
                 ),
