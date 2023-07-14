@@ -129,10 +129,9 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             self.__collector,
             RunTaskInThreads(
                 flush_batch,
-                # The threadpool has 1 worker since we want to ensure batches are processed
-                # sequentially and passed to the next step in order.
-                1,
-                1,
+                # We process up to 2 insert batches in parallel
+                2,
+                3,
                 commit_strategy,
             ),
         )
