@@ -9,6 +9,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit, Partition, Topic
 
 from snuba import settings
@@ -222,6 +223,7 @@ class SchedulerBuilder:
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -259,6 +261,7 @@ class SchedulerBuilder:
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__slice_id = slice_id
+        self.__health_check_file = health_check_file
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -281,6 +284,7 @@ class SchedulerBuilder:
             self.__scheduled_topic_spec,
             self.__metrics,
             self.__slice_id,
+            self.__health_check_file,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -316,6 +320,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -324,6 +329,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
         self.__slice_id = slice_id
+        self.__health_check_file = health_check_file
 
         self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
             entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
@@ -358,10 +364,15 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__slice_id,
         )
 
-        return TickBuffer(
+        strategy = TickBuffer(
             self.__mode,
             self.__partitions,
             self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
             self.__metrics,
         )
+
+        if self.__health_check_file:
+            strategy = Healthcheck(self.__health_check_file, self.__metrics)
+
+        return strategy

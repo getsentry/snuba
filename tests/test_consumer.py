@@ -1,7 +1,9 @@
 import functools
 import itertools
 import json
+import os
 import pickle
+import tempfile
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import MutableSequence, Optional
@@ -72,6 +74,7 @@ def test_streaming_consumer_strategy() -> None:
             ),
         )
 
+    health_check_file = tempfile.mktemp()
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
@@ -85,6 +88,7 @@ def test_streaming_consumer_strategy() -> None:
         processes=None,
         input_block_size=None,
         output_block_size=None,
+        health_check_file=health_check_file,
     )
 
     commit_function = Mock()
@@ -123,6 +127,8 @@ def test_streaming_consumer_strategy() -> None:
     ):
         strategy.close()
         strategy.join()
+
+    os.remove(health_check_file)
 
 
 def test_json_row_batch_pickle_simple() -> None:
