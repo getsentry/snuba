@@ -328,4 +328,5 @@ class SpansLoader(DirectoryLoader):
             "0002_spans_add_tags_hashmap",
             "0003_spans_add_ms_columns",
             "0004_spans_group_raw_col",
+            "0005_spans_add_codecs",
         ]

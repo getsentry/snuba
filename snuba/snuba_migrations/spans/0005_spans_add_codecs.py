@@ -5,7 +5,9 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
-from snuba.utils.schemas import UUID, DateTime, Float, Nested, String
+
+# from snuba.utils.schemas import UUID, DateTime, Float, Nested, String
+from snuba.utils.schemas import DateTime, String
 
 storage_set_name = StorageSetKey.SPANS
 local_table_name = "spans_local"
@@ -13,41 +15,38 @@ dist_table_name = "spans_dist"
 
 
 unmodified_columns: List[Column[Modifiers]] = [
-    Column("project_id", UInt(64)),
-    Column("transaction_id", UUID(Modifiers(nullable=True))),
-    Column("transaction_op", String(Modifiers(nullable=True))),
-    Column("trace_id", UUID()),
-    Column("span_id", UInt(64)),
-    Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
-    Column("segment_id", UInt(64)),
-    Column("is_segment", UInt(8)),
-    Column("segment_name", String(Modifiers(default="''"))),
-    Column("start_timestamp", DateTime()),
-    Column("end_timestamp", DateTime(Modifiers(codecs=["DoubleDelta"]))),
-    Column("duration", UInt(32)),
-    Column("exclusive_time", Float(64)),
-    Column("op", String(Modifiers(low_cardinality=True))),
-    Column("group", UInt(64)),
-    Column("span_status", UInt(8)),
-    Column("span_kind", String(Modifiers(low_cardinality=True))),
-    Column("description", String()),
-    Column("status", UInt(32, Modifiers(nullable=True))),
-    Column("module", String(Modifiers(low_cardinality=True))),
-    Column("action", String(Modifiers(low_cardinality=True, nullable=True))),
-    Column("domain", String(Modifiers(nullable=True))),
-    Column("platform", String(Modifiers(low_cardinality=True, nullable=True))),
-    Column("user", String(Modifiers(nullable=True))),
-    Column("tags", Nested([("key", String()), ("value", String())])),
-    Column(
-        "measurements",
-        Nested(
-            [("key", String(Modifiers(low_cardinality=True))), ("value", Float(64))]
-        ),
-    ),
-    Column("partition", UInt(16)),
-    Column("offset", UInt(64)),
-    Column("retention_days", UInt(16)),
+    # Column("project_id", UInt(64)),
+    # Column("transaction_id", UUID(Modifiers(nullable=True))),
+    # Column("transaction_op", String(Modifiers(nullable=True))),
+    # Column("trace_id", UUID()),
+    # Column("span_id", UInt(64)),
+    # Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
+    # Column("segment_id", UInt(64)),
+    # Column("end_timestamp", DateTime(Modifiers(codecs=["DoubleDelta"]))),
+    # Column("exclusive_time", Float(64)),
+    # Column("span_kind", String(Modifiers(low_cardinality=True))),
+    # Column("status", UInt(32, Modifiers(nullable=True))),
+    # Column("module", String(Modifiers(low_cardinality=True))),
+    # Column("action", String(Modifiers(low_cardinality=True, nullable=True))),
+    # Column("domain", String(Modifiers(nullable=True))),
+    # Column("platform", String(Modifiers(low_cardinality=True, nullable=True))),
+    # Column("user", String(Modifiers(nullable=True))),
+    # Column("tags", Nested([("key", String()), ("value", String())])),
     Column("deleted", UInt(8)),
+    Column("retention_days", UInt(16)),
+    Column("is_segment", UInt(8)),
+    Column("span_status", UInt(8)),
+    Column("op", String(Modifiers(low_cardinality=True))),
+    Column("start_timestamp", DateTime()),
+    Column("segment_name", String(Modifiers(default="''"))),
+    Column("partition", UInt(16)),
+    Column("duration", UInt(32)),
+    Column("end_ms", UInt(16)),
+    Column("start_ms", UInt(16)),
+    Column("group", UInt(64)),
+    Column("group_raw", UInt(64)),
+    Column("offset", UInt(64)),
+    Column("description", String()),
 ]
 
 # ┌─name───────────────┬─best_codec─────────┬─compressed_size─┬─uncompressed_size─┬─min(data_compressed_bytes)─┐
@@ -106,6 +105,9 @@ codec_columns = [
     Column("description", String(Modifiers(codecs=["ZSTD(1)"]))),
 ]
 
+for cc in codec_columns:
+    assert [cc.name == uc.name for uc in unmodified_columns]
+
 
 class Migration(migration.ClickhouseNodeMigration):
     """
@@ -123,7 +125,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     column=col,
                     target=OperationTarget.LOCAL,
                 )
-                for col in self.column_codecs
+                for col in codec_columns
             ],
             *[
                 operations.ModifyColumn(
@@ -132,22 +134,28 @@ class Migration(migration.ClickhouseNodeMigration):
                     column=col,
                     target=OperationTarget.DISTRIBUTED,
                 )
-                for col in self.column_codecs
+                for col in codec_columns
             ],
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.DropColumn(
-                storage_set=storage_set_name,
-                table_name=dist_table_name,
-                column_name="group_raw",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            operations.DropColumn(
-                storage_set=storage_set_name,
-                table_name=local_table_name,
-                column_name="group_raw",
-                target=OperationTarget.LOCAL,
-            ),
+            *[
+                operations.ModifyColumn(
+                    storage_set=storage_set_name,
+                    table_name=dist_table_name,
+                    column=col,
+                    target=OperationTarget.DISTRIBUTED,
+                )
+                for col in unmodified_columns
+            ],
+            *[
+                operations.ModifyColumn(
+                    storage_set=storage_set_name,
+                    table_name=local_table_name,
+                    column=col,
+                    target=OperationTarget.LOCAL,
+                )
+                for col in unmodified_columns
+            ],
         ]
