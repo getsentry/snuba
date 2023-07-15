@@ -77,5 +77,6 @@ def test_all_names() -> None:
             "replays",
             "search_issues",
             "spans",
+            "group_attributes",
         ]
     )
