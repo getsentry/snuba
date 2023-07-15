@@ -57,19 +57,22 @@ class TestGroupAttributesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
         initialize_snuba()
-        self.writable_storage = get_entity(
+        maybe_writable_storage = get_entity(
             EntityKey.GROUP_ATTRIBUTES
         ).get_writable_storage()
-        assert self.writable_storage is not None
+        assert maybe_writable_storage is not None
+
+        self.writable_storage = maybe_writable_storage
 
     def insert_row(self, message: GroupAttributesSnapshot) -> None:
-        rows = [
+        processed = (
             self.writable_storage.get_table_writer()
             .get_stream_loader()
             .get_processor()
             .process_message(message, kafka_metadata())
-        ]
-        write_processed_messages(self.writable_storage, rows)
+        )
+        assert processed is not None
+        write_processed_messages(self.writable_storage, [processed])
 
     def post_query(
         self,
