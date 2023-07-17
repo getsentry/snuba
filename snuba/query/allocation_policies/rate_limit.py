@@ -9,6 +9,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
     AllocationPolicyViolation,
+    AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -44,18 +45,6 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                 description="maximum amount of concurrent queries per tenant",
                 value_type=int,
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
-            ),
-            AllocationPolicyConfig(
-                name="per_second_limit",
-                description="maximum amount of concurrent queries per tenant",
-                value_type=int,
-                default=DEFAULT_PER_SECOND_QUERIES_LIMIT,
-            ),
-            AllocationPolicyConfig(
-                name="rate_history_sec",
-                description="the amount of seconds timestamps are kept in redis",
-                value_type=int,
-                default=3600,
             ),
             AllocationPolicyConfig(
                 name="rate_limit_shard_factor",
@@ -96,7 +85,10 @@ class RateLimitAllocationPolicy(AllocationPolicy):
         """
 
         rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
-        rate_history_s = self.get_config_value("rate_history_sec")
+        # HACK: this is a harcoded value because this rate_history_s is not a useful
+        # configuration parameter. It's used for the per-second caclulation but that calculation
+        # is fundamentally flawed
+        rate_history_s = 1
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
         assert isinstance(rate_limit_shard_factor, int)
@@ -111,7 +103,6 @@ class RateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_params.bucket,
             bucket_shard,
         )
-        print("BUCKET: ", query_bucket)
 
         pipe = rds.pipeline(transaction=False)
         # cleanup old query timestamps past our retention window
@@ -232,8 +223,6 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                 rate_limit_params.per_second_limit,
             ),
         ]
-        print("PARAMS: ", rate_limit_params)
-        print("REASONS: ", reasons)
         reason = next(
             (r for r in reasons if r.limit is not None and r.val > r.limit), None
         )
@@ -269,7 +258,10 @@ class RateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_params.bucket,
             bucket_shard,
         )
-        if isinstance(result_or_error.error, AllocationPolicyViolation):
+        if result_or_error.error is not None and isinstance(
+            result_or_error.error.__cause__,
+            (AllocationPolicyViolation, AllocationPolicyViolations),
+        ):
             # This query did not run because we rate limited it, so we remove it from the rate limit bookkeeping
             rds.zrem(query_bucket, query_id)
         else:
@@ -297,7 +289,7 @@ class RateLimitAllocationPolicy(AllocationPolicy):
             RateLimitParameters(
                 tenant_key,
                 bucket=str(tenant_value),
-                per_second_limit=self.get_config_value("per_second_limit"),
+                per_second_limit=None,
                 concurrent_limit=self.get_config_value("concurrent_limit"),
             ),
         )
@@ -313,7 +305,7 @@ class RateLimitAllocationPolicy(AllocationPolicy):
         rate_limit_params = RateLimitParameters(
             tenant_key,
             bucket=str(tenant_value),
-            per_second_limit=self.get_config_value("per_second_limit"),
+            per_second_limit=None,
             concurrent_limit=self.get_config_value("concurrent_limit"),
         )
         self._end_query(query_id, rate_limit_params, result_or_error)
