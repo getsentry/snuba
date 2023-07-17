@@ -49,7 +49,7 @@ pipelines:
                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"`
                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
               timeout: 1800
-      - migrate:
+      - st_migrate:
           fetch_materials: true
           jobs:
             migrate:
@@ -221,6 +221,61 @@ pipelines:
                       --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                       --type="cronjob" \
                       --container-name="cleanup"
+              timeout: 1200
+      - migrate:
+          fetch_materials: true
+          jobs:
+            migrate:
+              elastic_profile_id: snuba
+              environment_variables:
+                SNUBA_SERVICE_NAME: snuba
+              tasks:
+                - script: |
+                    ##!/bin/bash
+
+                    ## At the time of writing (2023-06-28) the single tenant deployments
+                    ## have been using a different migration process compared to the
+                    ## US deployment of snuba.
+                    ## This script should be merged with migrate.sh if we can figure
+                    ## out a common migration script for all regions.
+
+                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                    /devinfra/scripts/k8s/k8stunnel
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-bootstrap" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba bootstrap --force --no-migrate
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-migrate" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba migrations migrate --force
+                - plugin:
+                    configuration:
+                      id: script-executor
+                      version: 1
+                    options:
+                      script: |
+                        ##!/bin/bash
+
+                        eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                        /devinfra/scripts/k8s/k8stunnel
+
+                        /devinfra/scripts/k8s/k8s-spawn-job.py \
+                          --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                          --container-name="${SNUBA_SERVICE_NAME}" \
+                          "snuba-migrate-reverse" \
+                          "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                          -- \
+                          snuba migrations reverse-in-progress
+                    run_if: failed
               timeout: 1200
       - pipeline-complete:
           approval:
