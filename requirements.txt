@@ -24,7 +24,7 @@ python-rapidjson==1.8
 pytz==2022.2.1
 redis==4.3.4
 sentry-arroyo==2.14.1
-sentry-kafka-schemas==0.1.20
+sentry-kafka-schemas==0.1.19
 sentry-redis-tools==0.1.7
 sentry-relay==0.8.27
 sentry-sdk==1.28.0
