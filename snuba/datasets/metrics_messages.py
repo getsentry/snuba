@@ -83,7 +83,8 @@ def aggregation_options_for_distribution_message(
     _: Mapping[str, Any]
 ) -> Mapping[str, Any]:
     return {
-        "materialization_version": 1,
+        "materialization_version": 2,
+        "enable_histogram": 1,
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
