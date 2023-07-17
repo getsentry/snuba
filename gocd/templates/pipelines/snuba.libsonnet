@@ -7,42 +7,6 @@ local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libs
 
 local is_st(region) = (region == 'monitor' || std.startsWith(region, 'customer-'));
 
-local deploy_canary_stages(region) =
-  if region != 'us' then
-    []
-  else
-    [
-      {
-        'deploy-canary': {
-          fetch_materials: true,
-          jobs: {
-            'create-sentry-release': {
-              environment_variables: {
-                SENTRY_ORG: 'sentry',
-                SENTRY_PROJECT: 'snuba',
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
-              },
-              timeout: 300,
-              elastic_profile_id: 'snuba',
-              tasks: [
-                gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
-              ],
-            },
-            'deploy-canary': {
-              timeout: 1200,
-              elastic_profile_id: 'snuba',
-              environment_variables: {
-                LABEL_SELECTOR: 'service=snuba,is_canary=true',
-              },
-              tasks: [
-                gocdtasks.script(importstr '../bash/deploy.sh'),
-              ],
-            },
-          },
-        },
-      },
-    ];
-
 function(region) {
   environment_variables: {
     SENTRY_REGION: region,
@@ -77,7 +41,35 @@ function(region) {
       },
     },
 
-  ] + deploy_canary_stages(region) + [
+    {
+      'deploy-canary': {
+        fetch_materials: true,
+        jobs: {
+          'create-sentry-release': {
+            environment_variables: {
+              SENTRY_ORG: 'sentry',
+              SENTRY_PROJECT: 'snuba',
+              SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+            },
+            timeout: 300,
+            elastic_profile_id: 'snuba',
+            tasks: [
+              gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
+            ],
+          },
+          'deploy-canary': {
+            timeout: 1200,
+            elastic_profile_id: 'snuba',
+            environment_variables: {
+              LABEL_SELECTOR: 'service=snuba,is_canary=true',
+            },
+            tasks: [
+              gocdtasks.script(importstr '../bash/deploy.sh'),
+            ],
+          },
+        },
+      },
+    },
 
     {
       'deploy-primary': {
