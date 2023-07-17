@@ -58,6 +58,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "profiles-call-tree",
         "ingest-replay-events",
         "generic-events",
+        "group-attributes",
         "snuba-generic-events-commit-log",
         "snuba-dead-letter-replays",
         "snuba-generic-metrics",
@@ -72,6 +73,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-metrics-counters",
         "snuba-dead-letter-generic-events",
         "snuba-dead-letter-querylog",
+        "snuba-dead-letter-group-attributes",
         "snuba-generic-events-commit-log",
     }
 
