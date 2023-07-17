@@ -49,6 +49,48 @@ pipelines:
                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"`
                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
               timeout: 1800
+      - migrate:
+          fetch_materials: true
+          jobs:
+            migrate:
+              elastic_profile_id: snuba
+              environment_variables:
+                SNUBA_SERVICE_NAME: snuba-admin
+              tasks:
+                - script: |
+                    ##!/bin/bash
+
+                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                    /devinfra/scripts/k8s/k8stunnel
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-migrate" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba migrations migrate -r complete -r partial
+                - plugin:
+                    configuration:
+                      id: script-executor
+                      version: 1
+                    options:
+                      script: |
+                        ##!/bin/bash
+
+                        eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                        /devinfra/scripts/k8s/k8stunnel
+
+                        /devinfra/scripts/k8s/k8s-spawn-job.py \
+                          --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                          --container-name="${SNUBA_SERVICE_NAME}" \
+                          "snuba-migrate-reverse" \
+                          "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                          -- \
+                          snuba migrations reverse-in-progress
+                    run_if: failed
+              timeout: 1200
       - deploy-canary:
           fetch_materials: true
           jobs:
@@ -203,48 +245,6 @@ pipelines:
                       --type="cronjob" \
                       --container-name="cleanup" \
                       --container-name="optimize"
-              timeout: 1200
-      - migrate:
-          fetch_materials: true
-          jobs:
-            migrate:
-              elastic_profile_id: snuba
-              environment_variables:
-                SNUBA_SERVICE_NAME: snuba-admin
-              tasks:
-                - script: |
-                    ##!/bin/bash
-
-                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
-                    /devinfra/scripts/k8s/k8stunnel
-
-                    /devinfra/scripts/k8s/k8s-spawn-job.py \
-                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
-                      --container-name="${SNUBA_SERVICE_NAME}" \
-                      "snuba-migrate" \
-                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                      -- \
-                      snuba migrations migrate -r complete -r partial
-                - plugin:
-                    configuration:
-                      id: script-executor
-                      version: 1
-                    options:
-                      script: |
-                        ##!/bin/bash
-
-                        eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
-                        /devinfra/scripts/k8s/k8stunnel
-
-                        /devinfra/scripts/k8s/k8s-spawn-job.py \
-                          --label-selector="service=${SNUBA_SERVICE_NAME}" \
-                          --container-name="${SNUBA_SERVICE_NAME}" \
-                          "snuba-migrate-reverse" \
-                          "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                          -- \
-                          snuba migrations reverse-in-progress
-                    run_if: failed
               timeout: 1200
       - pipeline-complete:
           approval:

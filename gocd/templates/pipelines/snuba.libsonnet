@@ -42,6 +42,39 @@ function(region) {
     },
 
     {
+      migrate: {
+        fetch_materials: true,
+        jobs: {
+          migrate: {
+            timeout: 1200,
+            elastic_profile_id: 'snuba',
+            environment_variables: {
+              // ST deployments use 'snuba' for container and label selectors
+              // in migrations, whereas the US region deployment uses snuba-admin.
+              SNUBA_SERVICE_NAME: if is_st(region) then 'snuba' else 'snuba-admin',
+            },
+            tasks: [
+              if is_st(region) then
+                gocdtasks.script(importstr '../bash/migrate-st.sh')
+              else
+                gocdtasks.script(importstr '../bash/migrate.sh'),
+              {
+                plugin: {
+                  options: gocdtasks.script(importstr '../bash/migrate-reverse.sh'),
+                  run_if: 'failed',
+                  configuration: {
+                    id: 'script-executor',
+                    version: 1,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+
+    {
       'deploy-canary': {
         fetch_materials: true,
         jobs: {
@@ -98,38 +131,6 @@ function(region) {
                 gocdtasks.script(importstr '../bash/deploy-st.sh')
               else
                 gocdtasks.script(importstr '../bash/deploy.sh'),
-            ],
-          },
-        },
-      },
-    },
-    {
-      migrate: {
-        fetch_materials: true,
-        jobs: {
-          migrate: {
-            timeout: 1200,
-            elastic_profile_id: 'snuba',
-            environment_variables: {
-              // ST deployments use 'snuba' for container and label selectors
-              // in migrations, whereas the US region deployment uses snuba-admin.
-              SNUBA_SERVICE_NAME: if is_st(region) then 'snuba' else 'snuba-admin',
-            },
-            tasks: [
-              if is_st(region) then
-                gocdtasks.script(importstr '../bash/migrate-st.sh')
-              else
-                gocdtasks.script(importstr '../bash/migrate.sh'),
-              {
-                plugin: {
-                  options: gocdtasks.script(importstr '../bash/migrate-reverse.sh'),
-                  run_if: 'failed',
-                  configuration: {
-                    id: 'script-executor',
-                    version: 1,
-                  },
-                },
-              },
             ],
           },
         },
