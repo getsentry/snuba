@@ -1,16 +1,16 @@
 format_version: 10
 pipelines:
-  deploy-snuba-next-us:
+  deploy-snuba-us:
     display_order: 3
     environment_variables:
       GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
       SENTRY_REGION: us
-    group: snuba-next
+    group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-next-monitor-pipeline-complete:
-        pipeline: deploy-snuba-next-monitor
+      deploy-snuba-monitor-pipeline-complete:
+        pipeline: deploy-snuba-monitor
         stage: pipeline-complete
       snuba_repo:
         branch: master
@@ -18,20 +18,6 @@ pipelines:
         git: git@github.com:getsentry/snuba.git
         shallow_clone: false
     stages:
-      - ready:
-          jobs:
-            ready:
-              tasks:
-                - exec:
-                    command: true
-      - wait:
-          approval:
-            type: manual
-          jobs:
-            wait:
-              tasks:
-                - exec:
-                    command: true
       - checks:
           jobs:
             checks:
