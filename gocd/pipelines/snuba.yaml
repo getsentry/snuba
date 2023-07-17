@@ -3,7 +3,7 @@
 # - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 format_version: 10
 pipelines:
-    deploy-snuba:
+    deploy-snuba-old:
         environment_variables:
             GCP_PROJECT: internal-sentry
             GKE_CLUSTER: zdpwkxst
@@ -13,7 +13,7 @@ pipelines:
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
             GOCD_ACCESS_TOKEN: "{{SECRET:[devinfra][gocd_access_token]}}"
-        group: snuba
+        group: snuba-old
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
