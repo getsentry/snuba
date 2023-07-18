@@ -255,7 +255,8 @@ def rate_limit_start_request(
             pipe.zcount(bucket, "({:f}".format(now), "+inf")
 
     try:
-        pipe_results = iter(pipe.execute())
+        results = pipe.execute()
+        pipe_results = iter(results)
 
         # skip zremrangebyscore, zadd and expire
         next(pipe_results)
@@ -272,9 +273,10 @@ def rate_limit_start_request(
         else:
             concurrent = 0
     except Exception as ex:
+        # if something goes wrong, we don't want to block the request,
+        # set the values such that they pass under any limit
         logger.exception(ex)
         return RateLimitStats(rate=-1, concurrent=-1)
-        return
 
     per_second = historical / float(state.rate_lookback_s)
 
