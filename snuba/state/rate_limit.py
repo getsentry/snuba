@@ -334,6 +334,7 @@ def rate_limit_finish_request(
     rate_limit_shard_factor: int,
     was_rate_limited: bool,
 ) -> None:
+    """Second half of rate limiting, called after the request is finished. See rate_limit_start_request for details"""
     bucket_shard = hash(query_id) % rate_limit_shard_factor
     query_bucket = _get_bucket_key(
         state.ratelimit_prefix, rate_limit_params.bucket, bucket_shard
