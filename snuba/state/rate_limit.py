@@ -185,7 +185,7 @@ def rate_limit_start_request(
     #
     # it is fine to only perform this cleanup for the shard of the current
     # query, because on average there will be many other queries that hit other
-    # shards and perform cleanup therea
+    # shards and perform cleanup there
     pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_sec))
 
     # Now for the tricky bit:
