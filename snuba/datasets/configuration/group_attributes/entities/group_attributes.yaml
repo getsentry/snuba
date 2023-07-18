@@ -48,9 +48,9 @@ query_processors:
   - processor: BasicFunctionsProcessor
 
 validate_data_model: error
-validators: []
-#  - validator: EntityRequiredColumnValidator
-#    args:
-#      required_filter_columns: ["project_id"]
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["project_id"]
 
 required_time_column: null
