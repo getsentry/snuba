@@ -246,7 +246,7 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   admin-tests:
-    needs: [linting, tests]
+    needs: [linting]
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
@@ -356,6 +356,9 @@ jobs:
       - name: Checkout snuba
         uses: actions/checkout@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Pull snuba CI images
         run: |
           set +e # skip missing images
@@ -365,14 +368,26 @@ jobs:
           set -e
 
       - name: Build snuba docker image for CI
-        run: |
-          docker build . \
-            -t snuba-test \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --cache-from type=registry,ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from type=registry,ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from type=registry,ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --target testing
+        uses: docker/build-push-action@v4
+        if: github.repository_owner == 'getsentry'
+        with:
+          context: .
+          load: true
+          build-args: |
+            SHOULD_BUILD_RUST=false
+          target: testing
+          tags: |
+            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            ghcr.io/getsentry/snuba-ci:latest
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
+          cache-to: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
 
       # Checkout Sentry and run integration tests against latest snuba
       # Make sure this is after `docker build`, otherwise we'll break docker cache
