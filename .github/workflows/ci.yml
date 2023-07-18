@@ -369,25 +369,18 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
+          push: false
+          tags: snuba-test
           load: true
           build-args: |
             SHOULD_BUILD_RUST=false
           target: testing
-          tags: |
-            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            ghcr.io/getsentry/snuba-ci:latest
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
-          cache-to: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
 
       # Checkout Sentry and run integration tests against latest snuba
       # Make sure this is after `docker build`, otherwise we'll break docker cache
