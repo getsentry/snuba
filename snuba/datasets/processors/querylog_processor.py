@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import logging
-import random
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
 from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
@@ -12,7 +11,7 @@ from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
     QueryMetadata,
 )
 
-from snuba import environment, state
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage
@@ -151,12 +150,6 @@ class QuerylogProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Querylog, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        # XXX: Temporary code for the DLQ test.
-        reject_rate = state.get_config("querylog_reject_rate", 0.0)
-        assert isinstance(reject_rate, float)
-        if random.random() < reject_rate:
-            raise ValueError("This message is rejected on purpose.")
-
         processed = {
             "request_id": str(uuid.UUID(message["request"]["id"])),
             "request_body": self.__to_json_string(message["request"]["body"]),
@@ -164,32 +157,11 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "dataset": message["dataset"],
             "projects": message.get("projects") or [],
             "organization": message.get("organization"),
+            "status": message["status"],
+            "timestamp": message["timing"]["timestamp"],
+            "duration_ms": message["timing"]["duration_ms"],
             **self.__extract_query_list(message["query_list"]),
         }
         self._remove_invalid_data(processed)
 
-        # These fields are sometimes missing from the payload. If they are missing, don't
-        # add them to processed so Clickhouse sets a default value for them.
-        missing_fields: MutableMapping[str, Any] = {}
-        timing = message.get("timing") or {}
-        if timing.get("timestamp") is not None:
-            missing_fields["timestamp"] = timing["timestamp"]
-        if timing.get("duration_ms") is not None:
-            missing_fields["duration_ms"] = timing["duration_ms"]
-        if message.get("status") is not None:
-            missing_fields["status"] = message["status"]
-
-        missing_keys = set(["timestamp", "duration_ms", "status"])
-        for key, val in missing_fields.items():
-            if key in processed:
-                missing_keys.remove(key)
-            elif val is not None:
-                processed[key] = val
-                missing_keys.remove(key)
-
-        if missing_keys:
-            metrics.increment(
-                "process.missing_fields",
-                tags={"fields": ",".join(sorted(missing_keys))},
-            )
         return InsertBatch([processed], None)
