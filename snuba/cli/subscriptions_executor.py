@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
 import click
+import structlog
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
@@ -12,6 +13,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -98,6 +100,8 @@ def subscriptions_executor(
     setup_logging(log_level)
     setup_sentry()
 
+    logger = structlog.get_logger().bind(module=__name__)
+
     metrics_tags = {
         "dataset": dataset_name,
     }
@@ -128,6 +132,10 @@ def subscriptions_executor(
             override_params={"partitioner": "consistent"},
         )
     )
+
+    logger.info("Checking Clickhouse connections")
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
 
     processor = build_executor_consumer(
         dataset_name,

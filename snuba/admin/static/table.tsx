@@ -77,6 +77,7 @@ const tdStyle = {
   ...border,
   padding: 10,
   position: "relative" as const,
+  wordBreak: "break-all" as const,
 };
 
 function EditableTableCell(props: {

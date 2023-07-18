@@ -1,23 +1,31 @@
-use std::time::Duration;
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-use rust_arroyo::types::{Message};
-use crate::types::BytesInsertBatch;
 use crate::config::ClickhouseConfig;
-use tokio::task::JoinHandle;
+use crate::types::BytesInsertBatch;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Error, Response};
+use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::types::Message;
+use std::collections::VecDeque;
+use std::time::Duration;
+use tokio::task::JoinHandle;
 
 pub struct ClickhouseWriterStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     clickhouse_client: ClickhouseClient,
     runtime: tokio::runtime::Runtime,
     skip_write: bool,
-    handle: Option<JoinHandle<Result<Message<BytesInsertBatch>, reqwest::Error>>>,
-    carried_over_message: Option<Message<BytesInsertBatch>>,
+    concurrency: usize,
+    handles: VecDeque<JoinHandle<Result<Message<BytesInsertBatch>, Error>>>,
+    message_carried_over: Option<Message<BytesInsertBatch>>,
 }
 
 impl ClickhouseWriterStep {
-    pub fn new<N>(next_step: N, cluster_config: ClickhouseConfig, table: String, skip_write: bool) -> Self
+    pub fn new<N>(
+        next_step: N,
+        cluster_config: ClickhouseConfig,
+        table: String,
+        skip_write: bool,
+        concurrency: usize,
+    ) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
@@ -28,46 +36,74 @@ impl ClickhouseWriterStep {
         ClickhouseWriterStep {
             next_step: Box::new(next_step),
             clickhouse_client: ClickhouseClient::new(&hostname, http_port, &table, &database),
-            runtime: tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap(),
+            runtime: tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
             skip_write,
-            handle: None,
-            carried_over_message: None,
+            concurrency,
+            handles: VecDeque::new(),
+            message_carried_over: None,
         }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
-        if let Some(handle) = self.handle.take() {
-            if handle.is_finished() {
-                match self.runtime.block_on(handle) {
-                    Ok(Ok(message)) => {
-                        if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
-                            self.carried_over_message = Some(transformed_message);
+        if let Some(message) = self.message_carried_over.take() {
+            if let Err(MessageRejected {
+                message: transformed_message,
+            }) = self.next_step.submit(message)
+            {
+                self.message_carried_over = Some(transformed_message);
+                return None;
+            }
+        }
+
+        while !self.handles.is_empty() {
+            if let Some(front) = self.handles.front() {
+                if front.is_finished() {
+                    let handle = self.handles.pop_front().unwrap();
+                    match self.runtime.block_on(handle) {
+                        Ok(Ok(message)) => {
+                            if let Err(MessageRejected {
+                                message: transformed_message,
+                            }) = self.next_step.submit(message)
+                            {
+                                self.message_carried_over = Some(transformed_message);
+                            }
+                        }
+                        Ok(Err(e)) => {
+                            log::error!("clickhouse error {}", e);
+                        }
+                        Err(e) => {
+                            log::error!("the thread crashed {}", e);
                         }
                     }
-                    Ok(Err(e)) => {
-                        log::error!("clickhouse error {}", e);
-                    }
-                    Err(e) => {
-                        log::error!("the thread crashed {}", e);
-                    }
+                } else {
+                    break;
                 }
-            } else {
-                self.handle = Some(handle);
             }
         }
 
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<BytesInsertBatch>) -> Result<(), MessageRejected<BytesInsertBatch>> {
-        let len = message.payload().rows.len();
-
-        if self.handle.is_some() {
-            log::warn!("clickhouse writer is still busy, rejecting message");
-            return Err(MessageRejected{message});
+    fn submit(
+        &mut self,
+        message: Message<BytesInsertBatch>,
+    ) -> Result<(), MessageRejected<BytesInsertBatch>> {
+        if self.message_carried_over.is_some() {
+            log::warn!("carried over message, rejecting subsequent messages");
+            return Err(MessageRejected { message });
         }
+
+        if self.handles.len() > self.concurrency {
+            log::warn!("Reached max concurrency, rejecting message");
+            return Err(MessageRejected { message });
+        }
+
+        let len = message.payload().rows.len();
         let mut data = vec![];
         for row in message.payload().rows {
             data.extend(row);
@@ -77,17 +113,22 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         if !self.skip_write {
             log::debug!("performing write");
 
-            let client = self.clickhouse_client.clone();
-            self.handle = Some(self.runtime.spawn(async move {
+            let client: ClickhouseClient = self.clickhouse_client.clone();
+            let handle = self.runtime.spawn(async move {
                 let response = client.send(data).await.unwrap();
                 log::debug!("response: {:?}", response);
                 log::info!("Inserted {} rows", len);
                 Ok(message)
-            }));
+            });
+
+            self.handles.push_back(handle);
         } else {
             log::info!("skipping write of {} rows", len);
-            if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
-                self.carried_over_message = Some(transformed_message);
+            if let Err(MessageRejected {
+                message: transformed_message,
+            }) = self.next_step.submit(message)
+            {
+                self.message_carried_over = Some(transformed_message);
             }
         }
 
@@ -129,9 +170,10 @@ impl ClickhouseClient {
         client
             .headers
             .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
-        client
-            .headers
-            .insert("X-ClickHouse-Database", HeaderValue::from_str(database).unwrap());
+        client.headers.insert(
+            "X-ClickHouse-Database",
+            HeaderValue::from_str(database).unwrap(),
+        );
         client
     }
 
@@ -154,7 +196,8 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
-        let client: ClickhouseClient = ClickhouseClient::new("localhost", 8123, "querylog_local", "default");
+        let client: ClickhouseClient =
+            ClickhouseClient::new("localhost", 8123, "querylog_local", "default");
 
         println!("{}", "running test");
         let res = client.send(b"[]".to_vec()).await;

@@ -21,7 +21,11 @@ enum MessageCategory {
   unknown,
 }
 
-let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
+let collapsibleStyle = {
+  listStyleType: "none",
+  fontFamily: "Monaco",
+  width: "fit-content",
+};
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -78,6 +82,32 @@ function NodalDisplay(props: {
   );
 }
 
+function FormattedNodalDisplay(props: {
+  header: string;
+  data: string[] | string | number;
+}) {
+  const [visible, setVisible] = useState<boolean>(false);
+
+  return (
+    <li>
+      <span onClick={() => setVisible(!visible)}>
+        {visible ? "[-]" : "[+]"} {props.header.split("_").join(" ")}
+      </span>
+
+      <ol style={collapsibleStyle}>
+        {visible &&
+          Array.isArray(props.data) &&
+          props.data.map((log: string, log_idx: number) => {
+            return <li>{log}</li>;
+          })}
+        {visible &&
+          (typeof props.data === "string" ||
+            typeof props.data === "number") && <li>{props.data}</li>}
+      </ol>
+    </li>
+  );
+}
+
 function TracingQueries(props: { api: Client }) {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
@@ -89,6 +119,12 @@ function TracingQueries(props: { api: Client }) {
   >([]);
 
   const endpoint = "clickhouse_trace_query";
+  const hidden_formatted_trace_fields = new Set<string>([
+    "thread_ids",
+    "node_name",
+    "node_type",
+    "storage_nodes_accessed",
+  ]);
 
   function formatSQL(sql: string) {
     const formatted = sql
@@ -112,6 +148,7 @@ function TracingQueries(props: { api: Client }) {
           num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
+          formatted_trace_output: result.formatted_trace_output,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [
@@ -132,17 +169,17 @@ function TracingQueries(props: { api: Client }) {
     window.navigator.clipboard.writeText(text);
   }
 
-  function tablePopulator(queryResult: TracingResult) {
+  function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
     if (queryResult.error) {
       elements = { Error: [queryResult.error, 200] };
     } else {
       elements = { Trace: [queryResult, 400] };
     }
-    return tracingOutput(elements);
+    return tracingOutput(elements, showFormatted);
   }
 
-  function tracingOutput(elements: Object) {
+  function tracingOutput(elements: Object, showFormatted: boolean) {
     return (
       <>
         <br />
@@ -161,35 +198,48 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            return (
-              <div>
-                <br />
-                <b>Number of rows in result set:</b> {value.num_rows_result}
-                <br />
-                {heirarchicalTraceDisplay(title, value.trace_output)}
-              </div>
-            );
+            if (!showFormatted) {
+              return (
+                <div>
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {heirarchicalRawTraceDisplay(title, value.trace_output)}
+                </div>
+              );
+            } else {
+              return (
+                <div>
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {formattedTraceDisplay(title, value.formatted_trace_output)}
+                </div>
+              );
+            }
           }
         })}
       </>
     );
   }
 
-  // query execution flow:
-  // [high-level query node]
-  //    [housekeeping] (access control, parsing)
-  //    [propagation step]
-  //       [for each storage node]
-  //          [housekeeping]
-  //          [select executor + MergeTreeSelectProcessor]
-  //          [aggregating transform]
-  //          [memory tracker]
-  //    [aggregating transform]
-  //    [memory tracker]
-  function heirarchicalTraceDisplay(
+  function heirarchicalRawTraceDisplay(
     title: string,
     value: any
   ): JSX.Element | undefined {
+    /*
+    query execution flow:
+    [high-level query node]
+      [housekeeping] (access control, parsing)
+      [propagation step]
+      [for each storage node]
+        [housekeeping]
+        [select executor + MergeTreeSelectProcessor]
+        [aggregating transform]
+        [memory tracker]
+      [aggregating transform]
+      [memory tracker]
+    */
     const parsedLines: Array<LogLine> = value
       .split(/\n/)
       .map(parseLogLine)
@@ -287,6 +337,56 @@ function TracingQueries(props: { api: Client }) {
             />
           </ol>
         </li>
+      </ol>
+    );
+  }
+
+  function formattedTraceDisplay(
+    title: string,
+    value: any
+  ): JSX.Element | undefined {
+    let node_names = Object.keys(value);
+    let query_node_name = "";
+    for (const node_name of node_names) {
+      if (value[node_name]["node_type"] == "query") {
+        query_node_name = node_name;
+      }
+    }
+    return (
+      <ol style={collapsibleStyle}>
+        <li>Query node - {query_node_name}</li>
+        <ol style={collapsibleStyle}>
+          {Object.keys(value[query_node_name]).map(
+            (header: string, idx: number) => {
+              if (!hidden_formatted_trace_fields.has(header)) {
+                const data = value[query_node_name][header];
+                return <FormattedNodalDisplay header={header} data={data} />;
+              }
+            }
+          )}
+        </ol>
+        {node_names.map((node_name, idx) => {
+          if (node_name != query_node_name) {
+            return (
+              <ol style={collapsibleStyle}>
+                <br />
+                <li>Storage node - {node_name}</li>
+                <ol style={collapsibleStyle}>
+                  {Object.keys(value[node_name]).map(
+                    (header: string, idx: number) => {
+                      if (!hidden_formatted_trace_fields.has(header)) {
+                        const data = value[node_name][header];
+                        return (
+                          <FormattedNodalDisplay header={header} data={data} />
+                        );
+                      }
+                    }
+                  )}
+                </ol>
+              </ol>
+            );
+          }
+        })}
       </ol>
     );
   }
