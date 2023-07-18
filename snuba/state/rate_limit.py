@@ -169,9 +169,53 @@ def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
 def rate_limit_start_request(
     rate_limit_params: RateLimitParameters,
     query_id: str,
-    rate_history_sec,
-    rate_limit_shard_factor,
+    rate_history_sec: int,
+    rate_limit_shard_factor: int,
 ) -> RateLimitStats:
+    """
+    The first half of the rate limiting algorithm. This function is called before the thing
+    you want to rate limit is run. Depends on rate_limit_finish_request to be called afterwards
+    in order for rate limiting to work
+
+    params:
+        rate_limit_params: RateLimitParameters(rate_limit_name, bucket, per_second_limit, concurrent_limit)
+        query_id: str
+        rate_history_sec: int - How many seconds to retain completed queries for the per-second rolling window limit
+        rate_limit_shard_factor: int - How many shards to use for the rate limit buckets
+
+    Usage:
+
+        >>> stats = rate_limit_start_request(rate_limit_params, query_id, rate_history_sec, rate_limit_shard_factor)
+        >>> if (
+        >>>    stats.rate > rate_limit_params.per_second_limit or
+        >>>    stats.concurrent > rate_limit_params.concurrent_limit):
+        >>>     # do what you gotta do
+
+        >>> # after you're done with the thing you want to rate limit
+        >>> rate_limit_finish_request(
+        >>>    rate_limit_params, query_id, rate_history_sec, rate_limit_shard_factor, was_rate_limited=False)
+
+    Implementation details:
+        It uses one redis sorted set to keep track of both of these limits
+        The following mapping is kept in redis:
+
+            bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
+
+
+        Queries are thrown ahead in time when they start so we can count them
+        as concurrent, and thrown back to their start time once they finish so
+        we can count them towards the historical rate. See the comments for
+        an example.
+
+                   time >>----->
+        +-----------------------------+--------------------------------+
+        | historical query window     | currently executing queries    |
+        +-----------------------------+--------------------------------+
+                                      ^
+                                     now
+
+    """
+
     now = time.time()
 
     # Compute the set shard to which we should add and remove the query_id
@@ -316,23 +360,11 @@ def rate_limit(
         * a rolling-window per-second rate
         * the number of queries concurrently running.
 
-    It uses one redis sorted set to keep track of both of these limits
-    The following mapping is kept in redis:
+    usage:
+        with rate_limit(rate_limit_params) as stats:
+            do_something()
+            # will raise RateLimitExceeded if the rate limit is exceeded
 
-        bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
-
-
-    Queries are thrown ahead in time when they start so we can count them
-    as concurrent, and thrown back to their start time once they finish so
-    we can count them towards the historical rate. See the comments for
-    an example.
-
-               time >>----->
-    +-----------------------------+--------------------------------+
-    | historical query window     | currently executing queries    |
-    +-----------------------------+--------------------------------+
-                                  ^
-                                 now
     """
     (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
         [
@@ -346,7 +378,7 @@ def rate_limit(
             ("rate_limit_shard_factor", 1),
         ]
     )
-    assert isinstance(rate_history_s, (int, float))
+    assert isinstance(rate_history_s, int)
     assert isinstance(rate_limit_shard_factor, int)
     assert rate_limit_shard_factor > 0
 
