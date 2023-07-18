@@ -5,11 +5,7 @@ import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
-from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
-    ClickhouseQueryProfile,
-    Querylog,
-    QueryMetadata,
-)
+from sentry_kafka_schemas.schema_types.snuba_queries_v1 import Querylog, QueryMetadata
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
@@ -75,22 +71,13 @@ class QuerylogProcessor(DatasetMessageProcessor):
             # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
             consistent.append(int(query["stats"].get("consistent") or 0))
-            fallback_profile: ClickhouseQueryProfile = {
-                "time_range": 0,
-                "all_columns": [],
-                "multi_level_condition": False,
-                "where_profile": {"columns": [], "mapping_cols": []},
-                "groupby_cols": [],
-                "array_join_cols": [],
-            }
-            profile = query.get("profile") or fallback_profile
-
+            profile = query["profile"]
             result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
             num_days.append(
                 time_range if time_range is not None and time_range >= 0 else 0
             )
-            all_columns.append(profile.get("all_columns") or [])
+            all_columns.append(profile["all_columns"])
             or_conditions.append(profile["multi_level_condition"])
             where_columns.append(profile["where_profile"]["columns"])
             where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
