@@ -68,7 +68,9 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
 
 
-def aggregation_options_for_set_message(_: Mapping[str, Any]) -> Mapping[str, Any]:
+def aggregation_options_for_set_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
     return {
         "materialization_version": 1,
         "granularities": [
@@ -80,9 +82,10 @@ def aggregation_options_for_set_message(_: Mapping[str, Any]) -> Mapping[str, An
 
 
 def aggregation_options_for_distribution_message(
-    _: Mapping[str, Any]
+    message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
     return {
+        "min_retention_days": retention_days,
         "materialization_version": 2,
         "enable_histogram": 1,
         "granularities": [
@@ -93,7 +96,9 @@ def aggregation_options_for_distribution_message(
     }
 
 
-def aggregation_options_for_counter_message(_: Mapping[str, Any]) -> Mapping[str, Any]:
+def aggregation_options_for_counter_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
     return {
         "materialization_version": 1,
         "granularities": [
