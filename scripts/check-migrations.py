@@ -17,6 +17,7 @@ ALLOWED_MIGRATIONS_GLOBS = [
     "snuba/migrations/groups.py",
     "snuba/migrations/group_loader.py",
     "snuba/settings/*",
+    "snuba/clusters/storage_sets.py",
     "tests",
     "test_distributed_migrations",
     "test_initialization",

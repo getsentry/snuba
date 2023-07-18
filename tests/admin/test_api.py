@@ -232,6 +232,8 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
+    key = next(iter(data["formatted_trace_output"]))
+    assert "executeQuery" in data["formatted_trace_output"][key]["read_performance"][0]
 
 
 @pytest.mark.redis_db
@@ -430,12 +432,15 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             ]
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(True, 1, {})
 
         def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
         ) -> None:
             pass
 

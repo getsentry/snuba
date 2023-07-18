@@ -15,6 +15,7 @@ use crate::config::MessageProcessorConfig;
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     py_process_message: Py<PyAny>,
+    message_carried_over: Option<Message<BytesInsertBatch>>,
 }
 
 impl PythonTransformStep {
@@ -69,16 +70,29 @@ def _wrapped(message, offset, partition, timestamp):
         Ok(PythonTransformStep {
             next_step,
             py_process_message,
+            message_carried_over: None,
         })
     }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Option<CommitRequest> {
+        if let Some(message) = self.message_carried_over.take() {
+            if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
+                self.message_carried_over = Some(transformed_message);
+            }
+        }
+
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
+        if self.message_carried_over.is_some() {
+            return Err(MessageRejected {
+                message,
+            });
+        }
+
         // TODO: add procspawn/parallelism
         log::debug!("processing message,  message={}", message);
 
@@ -109,13 +123,17 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         });
 
         match result {
-            Ok(data) => self.next_step.submit(message.replace(data)),
+            Ok(data) => {
+                if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message.replace(data)) {
+                    self.message_carried_over = Some(transformed_message);
+                }
+            },
             Err(_) => {
                 log::error!("Invalid message");
-                Ok(())
             },
         }
 
+        Ok(())
 
     }
 

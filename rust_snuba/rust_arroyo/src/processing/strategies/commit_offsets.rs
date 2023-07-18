@@ -14,7 +14,7 @@ impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
         self.commit(false)
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }

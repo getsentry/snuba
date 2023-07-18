@@ -100,8 +100,10 @@ def build_request(
             )
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
+            query_project_id = None
             if project_ids is not None and len(project_ids) == 1:
-                sentry_sdk.set_tag("snuba_project_id", project_ids.pop())
+                query_project_id = project_ids.pop()
+                sentry_sdk.set_tag("snuba_project_id", query_project_id)
 
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
@@ -115,6 +117,11 @@ def build_request(
             attribution_info["tenant_ids"] = request_parts.attribution_info[
                 "tenant_ids"
             ]
+            if (
+                "project_id" not in attribution_info["tenant_ids"]
+                and query_project_id is not None
+            ):
+                attribution_info["tenant_ids"]["project_id"] = query_project_id
 
             request_id = uuid.uuid4().hex
             request = Request(
