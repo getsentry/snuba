@@ -7,62 +7,16 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
-};
+use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Message, Topic};
+use rust_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 
+use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 use crate::{config, setup_sentry};
-
-struct ClickhouseWriterStep {
-    next_step: Box<dyn ProcessingStrategy<()>>,
-}
-
-impl ClickhouseWriterStep {
-    fn new<N>(next_step: N) -> Self
-    where
-        N: ProcessingStrategy<()> + 'static,
-    {
-        ClickhouseWriterStep {
-            next_step: Box::new(next_step),
-        }
-    }
-}
-impl ProcessingStrategy<Vec<BytesInsertBatch>> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.next_step.poll()
-    }
-
-    fn submit(&mut self, message: Message<Vec<BytesInsertBatch>>) -> Result<(), MessageRejected> {
-        for batch in message.payload() {
-            for row in batch.rows {
-                let decoded_row = String::from_utf8_lossy(&row);
-                log::debug!("insert: {:?}", decoded_row);
-            }
-        }
-
-        log::info!("Insert {} rows", message.payload().len());
-
-        self.next_step.submit(message.replace(()))
-    }
-
-    fn close(&mut self) {
-        self.next_step.close();
-    }
-
-    fn terminate(&mut self) {
-        self.next_step.terminate();
-    }
-
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
-    }
-}
 
 #[pyfunction]
 pub fn consumer(
@@ -70,33 +24,54 @@ pub fn consumer(
     consumer_group: &str,
     auto_offset_reset: &str,
     consumer_config_raw: &str,
+    skip_write: bool,
 ) {
-    py.allow_threads(|| consumer_impl(consumer_group, auto_offset_reset, consumer_config_raw));
+    py.allow_threads(|| {
+        consumer_impl(
+            consumer_group,
+            auto_offset_reset,
+            consumer_config_raw,
+            skip_write,
+        )
+    });
 }
 
-pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_config_raw: &str) {
+pub fn consumer_impl(
+    consumer_group: &str,
+    auto_offset_reset: &str,
+    consumer_config_raw: &str,
+    skip_write: bool,
+) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
         max_batch_size: usize,
         max_batch_time: Duration,
+        clickhouse_cluster_config: config::ClickhouseConfig,
+        clickhouse_table_name: String,
+        skip_write: bool,
     }
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let accumulator =
-                Arc::new(|mut acc: Vec<BytesInsertBatch>, value: BytesInsertBatch| {
-                    acc.push(value);
-                    acc
-                });
+            let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
+                for row in value.rows {
+                    acc.rows.push(row);
+                }
+                acc
+            });
 
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
                 Reduce::new(
-                    Box::new(ClickhouseWriterStep::new(CommitOffsets::new(
-                        Duration::from_secs(1),
-                    ))),
+                    Box::new(ClickhouseWriterStep::new(
+                        CommitOffsets::new(Duration::from_secs(1)),
+                        self.clickhouse_cluster_config.clone(),
+                        self.clickhouse_table_name.clone(),
+                        self.skip_write,
+                        2,
+                    )),
                     accumulator,
-                    Vec::new(),
+                    BytesInsertBatch { rows: vec![] },
                     self.max_batch_size,
                     self.max_batch_time,
                 ),
@@ -150,6 +125,8 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
     );
 
     let processor_config = first_storage.message_processor.clone();
+    let clickhouse_cluster_config = first_storage.clickhouse_cluster.clone();
+    let clickhouse_table_name = first_storage.clickhouse_table_name.clone();
 
     let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
@@ -158,6 +135,9 @@ pub fn consumer_impl(consumer_group: &str, auto_offset_reset: &str, consumer_con
             processor_config,
             max_batch_size,
             max_batch_time,
+            clickhouse_cluster_config,
+            clickhouse_table_name,
+            skip_write,
         }),
     );
 

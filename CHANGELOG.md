@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.7.0
+
+### Various fixes & improvements
+
+- Switch to pipedream pipelines (#4526) by @mattgauntseo-sentry
+- feat(rust-consumer): Support parallel insert to ClickHouse (#4519) by @lynnagara
+- run search_issues migration in self-hosted (#4518) by @hubertdeng123
+- bump materialization_version to 2 (#4505) by @john-z-yang
+- perf: Allow parallel clickhouse insert (#4516) by @lynnagara
+- add facilities to insert aggregation_options in processor (#4509) by @john-z-yang
+- feat(subscriptions): add clickhouse connection check (#4512) by @dbanda
+- Revert "feat(replays): Add click_is_dead and click_is_rage columns (#4470)" (0788e2ad) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.19 (#4515) by @getsentry-bot
+- migration(group_attributes): create new GroupAttributes table that mirrors a subset of columns from sentry (#4496) by @barkbarkimashark
+- Allow snuba/clusters/storage_sets.py  in migrations check (#4514) by @dbanda
+- feat(replays): Add click_is_dead and click_is_rage columns (#4470) by @cmanallen
+- add migrations for new distributions matview (#4504) by @john-z-yang
+- fix: Actually resubmit carried over message in clickhouse strategy (#4502) by @lynnagara
+- feat(replays): Add migration for click_is_dead and click_is_rage columns (#4469) by @cmanallen
+- ref: bump sentry-kafka-schemas to 0.1.18 (#4501) by @getsentry-bot
+- fix(rust-consumer): Actually commit messages even if we are skipping the clickhouse write (#4500) by @lynnagara
+- feat(generic-metrics): Add aggregation options for generic metrics raw tables (#4467) by @john-z-yang
+- ref(rust-consumer): Move clickhouse_client out of rust_arroyo (#4499) by @lynnagara
+- feat(rust-consumer): Write to ClickHouse (#4490) by @lynnagara
+- Fix MultistorageCollector as #4297 (#4475) by @qbx2
+- test: Rust CI improvements (#4258) by @lynnagara
+- check connections on consumer startup (#4497) by @dbanda
+- Update jsonnet lib and add rollback pipeline (#4495) by @mattgauntseo-sentry
+
+_Plus 17 more_
+
 ## 23.6.2
 
 ### Various fixes & improvements

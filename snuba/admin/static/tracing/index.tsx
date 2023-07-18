@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-import { Table } from "../table";
-import { LogLine, TracingRequest, TracingResult } from "./types";
+import QueryDisplay from "./query_display";
+import {
+  LogLine,
+  TracingRequest,
+  TracingResult,
+  PredefinedQuery,
+} from "./types";
 import { parseLogLine } from "./util";
 
 type QueryState = Partial<TracingRequest>;
@@ -15,6 +20,12 @@ enum MessageCategory {
   memory_tracker,
   unknown,
 }
+
+let collapsibleStyle = {
+  listStyleType: "none",
+  fontFamily: "Monaco",
+  width: "fit-content",
+};
 
 function getMessageCategory(logLine: LogLine): MessageCategory {
   const component = logLine.component;
@@ -38,8 +49,6 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
     return MessageCategory.unknown;
   }
 }
-
-let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
 
 function NodalDisplay(props: {
   host: string;
@@ -73,37 +82,56 @@ function NodalDisplay(props: {
   );
 }
 
+function FormattedNodalDisplay(props: {
+  header: string;
+  data: string[] | string | number;
+}) {
+  const [visible, setVisible] = useState<boolean>(false);
+
+  return (
+    <li>
+      <span onClick={() => setVisible(!visible)}>
+        {visible ? "[-]" : "[+]"} {props.header.split("_").join(" ")}
+      </span>
+
+      <ol style={collapsibleStyle}>
+        {visible &&
+          Array.isArray(props.data) &&
+          props.data.map((log: string, log_idx: number) => {
+            return <li>{log}</li>;
+          })}
+        {visible &&
+          (typeof props.data === "string" ||
+            typeof props.data === "number") && <li>{props.data}</li>}
+      </ol>
+    </li>
+  );
+}
+
 function TracingQueries(props: { api: Client }) {
-  const [storages, setStorages] = useState<string[]>([]);
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
+    PredefinedQuery[]
+  >([]);
+
   const endpoint = "clickhouse_trace_query";
+  const hidden_formatted_trace_fields = new Set<string>([
+    "thread_ids",
+    "node_name",
+    "node_type",
+    "storage_nodes_accessed",
+  ]);
 
-  useEffect(() => {
-    props.api.getClickhouseNodes().then((res) => {
-      setStorages(res.map((n) => n.storage_name));
-    });
-  }, []);
-
-  function selectStorage(storage: string) {
-    setQuery((prevQuery) => {
-      return {
-        ...prevQuery,
-        storage: storage,
-      };
-    });
-  }
-
-  function updateQuerySql(sql: string) {
-    setQuery((prevQuery) => {
-      return {
-        ...prevQuery,
-        sql,
-      };
-    });
+  function formatSQL(sql: string) {
+    const formatted = sql
+      .split("\n")
+      .map((line) => line.substring(4, line.length))
+      .join("\n");
+    return formatted.trim();
   }
 
   function executeQuery() {
@@ -120,6 +148,7 @@ function TracingQueries(props: { api: Client }) {
           num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
+          formatted_trace_output: result.formatted_trace_output,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [
@@ -140,17 +169,17 @@ function TracingQueries(props: { api: Client }) {
     window.navigator.clipboard.writeText(text);
   }
 
-  function tablePopulator(queryResult: TracingResult) {
+  function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
     if (queryResult.error) {
       elements = { Error: [queryResult.error, 200] };
     } else {
       elements = { Trace: [queryResult, 400] };
     }
-    return tracingOutput(elements);
+    return tracingOutput(elements, showFormatted);
   }
 
-  function tracingOutput(elements: Object) {
+  function tracingOutput(elements: Object, showFormatted: boolean) {
     return (
       <>
         <br />
@@ -169,35 +198,48 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            return (
-              <div>
-                <br />
-                <b>Number of rows in result set:</b> {value.num_rows_result}
-                <br />
-                {heirarchicalTraceDisplay(title, value.trace_output)}
-              </div>
-            );
+            if (!showFormatted) {
+              return (
+                <div>
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {heirarchicalRawTraceDisplay(title, value.trace_output)}
+                </div>
+              );
+            } else {
+              return (
+                <div>
+                  <br />
+                  <b>Number of rows in result set:</b> {value.num_rows_result}
+                  <br />
+                  {formattedTraceDisplay(title, value.formatted_trace_output)}
+                </div>
+              );
+            }
           }
         })}
       </>
     );
   }
 
-  // query execution flow:
-  // [high-level query node]
-  //    [housekeeping] (access control, parsing)
-  //    [propagation step]
-  //       [for each storage node]
-  //          [housekeeping]
-  //          [select executor + MergeTreeSelectProcessor]
-  //          [aggregating transform]
-  //          [memory tracker]
-  //    [aggregating transform]
-  //    [memory tracker]
-  function heirarchicalTraceDisplay(
+  function heirarchicalRawTraceDisplay(
     title: string,
     value: any
   ): JSX.Element | undefined {
+    /*
+    query execution flow:
+    [high-level query node]
+      [housekeeping] (access control, parsing)
+      [propagation step]
+      [for each storage node]
+        [housekeeping]
+        [select executor + MergeTreeSelectProcessor]
+        [aggregating transform]
+        [memory tracker]
+      [aggregating transform]
+      [memory tracker]
+    */
     const parsedLines: Array<LogLine> = value
       .split(/\n/)
       .map(parseLogLine)
@@ -299,63 +341,63 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
+  function formattedTraceDisplay(
+    title: string,
+    value: any
+  ): JSX.Element | undefined {
+    let node_names = Object.keys(value);
+    let query_node_name = "";
+    for (const node_name of node_names) {
+      if (value[node_name]["node_type"] == "query") {
+        query_node_name = node_name;
+      }
+    }
+    return (
+      <ol style={collapsibleStyle}>
+        <li>Query node - {query_node_name}</li>
+        <ol style={collapsibleStyle}>
+          {Object.keys(value[query_node_name]).map(
+            (header: string, idx: number) => {
+              if (!hidden_formatted_trace_fields.has(header)) {
+                const data = value[query_node_name][header];
+                return <FormattedNodalDisplay header={header} data={data} />;
+              }
+            }
+          )}
+        </ol>
+        {node_names.map((node_name, idx) => {
+          if (node_name != query_node_name) {
+            return (
+              <ol style={collapsibleStyle}>
+                <br />
+                <li>Storage node - {node_name}</li>
+                <ol style={collapsibleStyle}>
+                  {Object.keys(value[node_name]).map(
+                    (header: string, idx: number) => {
+                      if (!hidden_formatted_trace_fields.has(header)) {
+                        const data = value[node_name][header];
+                        return (
+                          <FormattedNodalDisplay header={header} data={data} />
+                        );
+                      }
+                    }
+                  )}
+                </ol>
+              </ol>
+            );
+          }
+        })}
+      </ol>
+    );
+  }
+
   return (
     <div>
-      <form>
-        <h2>Construct a ClickHouse Query</h2>
-        <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
-          🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
-        </a>
-        <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
-        </div>
-        <div style={executeActionsStyle}>
-          <div>
-            <select
-              value={query.storage || ""}
-              onChange={(evt) => selectStorage(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a storage
-              </option>
-              {storages.map((storage) => (
-                <option key={storage} value={storage}>
-                  {storage}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <button
-              onClick={(_) => executeQuery()}
-              style={executeButtonStyle}
-              disabled={isExecuting || !query.storage || !query.sql}
-            >
-              Execute query
-            </button>
-          </div>
-        </div>
-      </form>
-      <div>
-        <h2>Query results</h2>
-        <Table
-          headerData={["Query", "Response"]}
-          rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
-              {tablePopulator(queryResult)}
-            </div>,
-          ])}
-          columnWidths={[1, 5]}
-        />
-      </div>
+      {QueryDisplay({
+        api: props.api,
+        resultDataPopulator: tablePopulator,
+        predefinedQueryOptions: [],
+      })}
     </div>
   );
 }
