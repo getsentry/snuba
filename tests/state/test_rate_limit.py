@@ -31,7 +31,6 @@ def rate_limit_shards(request: Any) -> None:
 
 
 class TestRateLimit:
-
     @pytest.mark.redis_db
     def test_ratelimit_aggregator(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
