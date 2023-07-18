@@ -139,9 +139,11 @@ jobs:
       - name: Pull snuba CI images
         if: github.repository_owner == 'getsentry'
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -198,9 +200,11 @@ jobs:
 
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -267,9 +271,11 @@ jobs:
 
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
         run: |
@@ -352,9 +358,11 @@ jobs:
 
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
         run: |
