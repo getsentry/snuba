@@ -8,18 +8,11 @@ use std::pin::Pin;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
-pub type RunTaskFunc<TPayload, TTransformed> = Pin<
-    Box<
-        dyn Fn(
-            Message<TPayload>,
-        ) -> Pin<
-            Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>,
-        >,
-    >,
->;
+pub type RunTaskFunc<TTransformed> =
+    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>>;
 
 pub trait TaskRunner<TPayload: Clone, TTransformed: Clone + Send + Sync>: Send + Sync {
-    fn get_task(&self) -> RunTaskFunc<TPayload, TTransformed>;
+    fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
 pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
@@ -110,7 +103,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             return Err(MessageRejected { message });
         }
 
-        let handle = self.runtime.spawn((self.task_runner.get_task())(message));
+        let handle = self.runtime.spawn(self.task_runner.get_task(message));
         self.handles.push_back(handle);
 
         Ok(())
@@ -159,8 +152,8 @@ mod tests {
         struct IdentityTaskRunner {}
 
         impl<T: Clone + Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
-            fn get_task(&self) -> RunTaskFunc<T, T> {
-                Box::pin(|msg: Message<T>| Box::pin(async move { Ok(msg) }))
+            fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
+                Box::pin(async move { Ok(message) })
             }
         }
 

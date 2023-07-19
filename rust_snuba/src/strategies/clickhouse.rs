@@ -21,31 +21,27 @@ impl ClickhouseWriter {
 }
 
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
-    fn get_task(&self) -> RunTaskFunc<BytesInsertBatch, BytesInsertBatch> {
+    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client: ClickhouseClient = self.client.clone();
-        Box::pin(move |msg: Message<BytesInsertBatch>| {
-            // TODO: Avoid cloning twice
-            let client_clone = client.clone();
-            Box::pin(async move {
-                let len = msg.payload().rows.len();
-                let mut data = vec![];
-                for row in msg.payload().rows {
-                    data.extend(row);
-                    data.extend(b"\n");
-                }
+        Box::pin(async move {
+            let len = message.payload().rows.len();
+            let mut data = vec![];
+            for row in message.payload().rows {
+                data.extend(row);
+                data.extend(b"\n");
+            }
 
-                if skip_write {
-                    log::info!("skipping write of {} rows", len);
-                    return Ok(msg);
-                }
+            if skip_write {
+                log::info!("skipping write of {} rows", len);
+                return Ok(message);
+            }
 
-                log::debug!("performing write");
-                let response = client_clone.send(data).await.unwrap();
-                log::debug!("response: {:?}", response);
-                log::info!("Inserted {} rows", len);
-                Ok(msg)
-            })
+            log::debug!("performing write");
+            let response = client.send(data).await.unwrap();
+            log::debug!("response: {:?}", response);
+            log::info!("Inserted {} rows", len);
+            Ok(message)
         })
     }
 }
