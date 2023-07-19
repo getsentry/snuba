@@ -332,6 +332,11 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
 # Enable spans ingestion
 ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
+# Enable group attributes consumer
+ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
+    "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
+)
+
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = 23
