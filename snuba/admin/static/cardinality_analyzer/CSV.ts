@@ -10,9 +10,13 @@ export class CSV {
   static cell(value: unknown): string {
     if (!value) return "";
 
+    let sanitizedValue: string = "";
+
     if (typeof value === "string") {
+      sanitizedValue = value.replace(/"/g, '\\"');
+
       if (value.includes(",")) {
-        return `"${value}"`;
+        return `"${sanitizedValue}"`;
       }
     }
 
