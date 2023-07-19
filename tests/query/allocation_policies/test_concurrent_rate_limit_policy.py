@@ -7,7 +7,7 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
-    RateLimitAllocationPolicy,
+    ConcurrentRateLimitAllocationPolicy,
 )
 from snuba.web import QueryException, QueryResult
 
@@ -30,8 +30,8 @@ MAX_QUERIES_PER_SECOND = 10
 
 
 @pytest.fixture(scope="function")
-def policy() -> RateLimitAllocationPolicy:
-    policy = RateLimitAllocationPolicy(
+def policy() -> ConcurrentRateLimitAllocationPolicy:
+    policy = ConcurrentRateLimitAllocationPolicy(
         storage_key=StorageKey("test"),
         required_tenant_types=["organization_id"],
         default_config_overrides={
@@ -42,7 +42,7 @@ def policy() -> RateLimitAllocationPolicy:
 
 
 @pytest.mark.redis_db
-def test_rate_limit_concurrent(policy: RateLimitAllocationPolicy) -> None:
+def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     for i in range(MAX_CONCURRENT_QUERIES):
         policy.get_quota_allowance(
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
@@ -55,7 +55,9 @@ def test_rate_limit_concurrent(policy: RateLimitAllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_rate_limit_concurrent_diff_tenants(policy: RateLimitAllocationPolicy) -> None:
+def test_rate_limit_concurrent_diff_tenants(
+    policy: ConcurrentRateLimitAllocationPolicy,
+) -> None:
     RATE_LIMITED_ORG_ID = 123
     OTHER_ORG_ID = 456
     for i in range(MAX_CONCURRENT_QUERIES):
@@ -76,7 +78,7 @@ def test_rate_limit_concurrent_diff_tenants(policy: RateLimitAllocationPolicy) -
 
 @pytest.mark.redis_db
 def test_rate_limit_concurrent_complete_query(
-    policy: RateLimitAllocationPolicy,
+    policy: ConcurrentRateLimitAllocationPolicy,
 ) -> None:
     # submit the max concurrent queries
     for i in range(MAX_CONCURRENT_QUERIES):
@@ -111,7 +113,7 @@ def test_rate_limit_concurrent_complete_query(
 
 
 @pytest.mark.redis_db
-def test_update_quota_balance(policy: RateLimitAllocationPolicy) -> None:
+def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     # test that it doesn't matter if we had an error state or a success state
     # when a query is finished (in whatever state), it is no longer counted as a concurrent query
 
@@ -131,3 +133,14 @@ def test_update_quota_balance(policy: RateLimitAllocationPolicy) -> None:
         assert policy.get_quota_allowance(
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
         ).can_run
+
+
+def test_tenant_selection(policy):
+    tenant_ids = {"organization_id": 123, "project_id": 456}
+    assert policy._get_tenant_key_and_value(tenant_ids) == ("project_id", 456)
+    assert policy._get_tenant_key_and_value({"organization_id": 123}) == (
+        "organization_id",
+        123,
+    )
+    with pytest.raises(AllocationPolicyViolation):
+        policy._get_tenant_key_and_value({})

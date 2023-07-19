@@ -36,7 +36,7 @@ def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
     return "{}{}{}".format(prefix, bucket, shard_suffix)
 
 
-class RateLimitAllocationPolicy(AllocationPolicy):
+class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         # Define policy specific config definitions, these will be used along
         # with the default definitions of the base class. (is_enforced, is_active)
@@ -52,6 +52,7 @@ class RateLimitAllocationPolicy(AllocationPolicy):
                 description="""number of shards that each redis set is supposed to have.
                  increasing this value multiplies the number of redis keys by that
                  factor, and (on average) reduces the size of each redis set. You probably don't need to change this
+                 unless you're scaling out redis for some reason
                  """,
                 value_type=int,
                 default=1,
