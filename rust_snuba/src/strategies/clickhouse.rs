@@ -21,7 +21,7 @@ impl ClickhouseWriter {
 }
 
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
-    fn get_task<'a>(&self) -> RunTaskFunc<BytesInsertBatch, BytesInsertBatch> {
+    fn get_task(&self) -> RunTaskFunc<BytesInsertBatch, BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client: ClickhouseClient = self.client.clone();
         Box::pin(move |msg: Message<BytesInsertBatch>| {
@@ -37,6 +37,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
                 if skip_write {
                     log::info!("skipping write of {} rows", len);
+                    return Ok(msg);
                 }
 
                 log::debug!("performing write");
