@@ -52,6 +52,12 @@ def with_query_differ(
     original = str(query)
     yield
     transformed = str(query)
+    add_transform_step(category, name, original, transformed)
+
+
+def add_transform_step(
+    category: str, name: str, original: str, transformed: str
+) -> None:
     diff = difflib.ndiff(original.split("\n"), transformed.split("\n"))
     diff_data = [str(df) for df in diff]
     step_data = TransformStepData(
@@ -69,21 +75,27 @@ def add_step(
         if data is None:
             data = StepData()
         step = ExplainStep(category, step_type, name, data)
-
-        if not hasattr(g, "explain_meta"):
-            g.explain_meta = ExplainMeta()
-
-        g.explain_meta.add_step(step)
+        if (meta := get_explain_meta()) is not None:
+            meta.add_step(step)
     except RuntimeError:
         # Code is executing outside of a flask context
         return
+
+
+def set_original_ast(original_ast: str) -> None:
+    meta = get_explain_meta()
+    if not meta:
+        return  # outside request context
+
+    g.explain_meta.original_ast = original_ast
 
 
 def get_explain_meta() -> ExplainMeta | None:
     try:
         if hasattr(g, "explain_meta"):
             return cast(ExplainMeta, g.explain_meta)
-        return None
+        g.explain_meta = ExplainMeta()
+        return g.explain_meta
     except RuntimeError:
         # Code is executing outside of a flask context
         return None

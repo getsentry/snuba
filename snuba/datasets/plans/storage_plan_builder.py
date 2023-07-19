@@ -219,6 +219,11 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 )
             )
 
+        if settings.get_dry_run():
+            explain_meta.add_transform_step(
+                "storage_planning", "mappers", str(query), str(clickhouse_query)
+            )
+
         db_query_processors = [
             *storage.get_query_processors(),
             *self.__post_processors,
