@@ -126,28 +126,4 @@ const executeButtonStyle = {
   marginRight: 10,
 };
 
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
-};
-
-function TextArea(props: { value: string; onChange: (nextValue: string) => void }) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 140 }}
-      placeholder={"Write your query here"}
-    />
-  );
-}
-
-const queryDescription = {
-  minHeight: 10,
-  width: "auto",
-  fontSize: 16,
-  padding: "10px 5px",
-};
 export default QueryDisplay;
