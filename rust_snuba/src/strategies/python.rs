@@ -128,8 +128,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     self.message_carried_over = Some(transformed_message);
                 }
             },
-            Err(_) => {
-                log::error!("Invalid message");
+            Err(e) => {
+                log::error!("Invalid message {:?}", e);
             },
         }
 

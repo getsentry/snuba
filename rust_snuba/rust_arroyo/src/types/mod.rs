@@ -113,6 +113,31 @@ pub struct Message<T: Clone> {
 }
 
 impl<T: Clone> Message<T> {
+    pub fn new_broker_message(
+        payload: T,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                payload,
+                partition,
+                offset,
+                timestamp,
+            }),
+        }
+    }
+
+    pub fn new_any_message(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
+        Self {
+            inner_message: InnerMessage::AnyMessage(AnyMessage {
+                payload,
+                committable,
+            }),
+        }
+    }
+
     pub fn payload(&self) -> T {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload.clone(),

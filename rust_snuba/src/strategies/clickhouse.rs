@@ -2,20 +2,55 @@ use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Error, Response};
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    RunTaskFunc, RunTaskInThreads, TaskRunner,
+};
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use rust_arroyo::types::Message;
-use std::collections::VecDeque;
 use std::time::Duration;
-use tokio::task::JoinHandle;
+
+struct ClickhouseWriter {
+    client: ClickhouseClient,
+    skip_write: bool,
+}
+
+impl ClickhouseWriter {
+    pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
+        ClickhouseWriter { client, skip_write }
+    }
+}
+
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
+    fn get_task<'a>(&self) -> RunTaskFunc<BytesInsertBatch, BytesInsertBatch> {
+        let skip_write = self.skip_write;
+        let client: ClickhouseClient = self.client.clone();
+        Box::pin(move |msg: Message<BytesInsertBatch>| {
+            // TODO: Avoid cloning twice
+            let client_clone = client.clone();
+            Box::pin(async move {
+                let len = msg.payload().rows.len();
+                let mut data = vec![];
+                for row in msg.payload().rows {
+                    data.extend(row);
+                    data.extend(b"\n");
+                }
+
+                if skip_write {
+                    log::info!("skipping write of {} rows", len);
+                }
+
+                log::debug!("performing write");
+                let response = client_clone.send(data).await.unwrap();
+                log::debug!("response: {:?}", response);
+                log::info!("Inserted {} rows", len);
+                Ok(msg)
+            })
+        })
+    }
+}
 
 pub struct ClickhouseWriterStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
-    clickhouse_client: ClickhouseClient,
-    runtime: tokio::runtime::Runtime,
-    skip_write: bool,
-    concurrency: usize,
-    handles: VecDeque<JoinHandle<Result<Message<BytesInsertBatch>, Error>>>,
-    message_carried_over: Option<Message<BytesInsertBatch>>,
+    inner: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
 }
 
 impl ClickhouseWriterStep {
@@ -33,118 +68,41 @@ impl ClickhouseWriterStep {
         let http_port = cluster_config.http_port;
         let database = cluster_config.database;
 
-        ClickhouseWriterStep {
-            next_step: Box::new(next_step),
-            clickhouse_client: ClickhouseClient::new(&hostname, http_port, &table, &database),
-            runtime: tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap(),
-            skip_write,
+        let inner = Box::new(RunTaskInThreads::new(
+            next_step,
+            Box::new(ClickhouseWriter::new(
+                ClickhouseClient::new(&hostname, http_port, &table, &database),
+                skip_write,
+            )),
             concurrency,
-            handles: VecDeque::new(),
-            message_carried_over: None,
-        }
+        ));
+
+        ClickhouseWriterStep { inner }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Option<CommitRequest> {
-        if let Some(message) = self.message_carried_over.take() {
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(message)
-            {
-                self.message_carried_over = Some(transformed_message);
-                return None;
-            }
-        }
-
-        while !self.handles.is_empty() {
-            if let Some(front) = self.handles.front() {
-                if front.is_finished() {
-                    let handle = self.handles.pop_front().unwrap();
-                    match self.runtime.block_on(handle) {
-                        Ok(Ok(message)) => {
-                            if let Err(MessageRejected {
-                                message: transformed_message,
-                            }) = self.next_step.submit(message)
-                            {
-                                self.message_carried_over = Some(transformed_message);
-                            }
-                        }
-                        Ok(Err(e)) => {
-                            log::error!("clickhouse error {}", e);
-                        }
-                        Err(e) => {
-                            log::error!("the thread crashed {}", e);
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-
-        self.next_step.poll()
+        self.inner.poll()
     }
 
     fn submit(
         &mut self,
         message: Message<BytesInsertBatch>,
     ) -> Result<(), MessageRejected<BytesInsertBatch>> {
-        if self.message_carried_over.is_some() {
-            log::warn!("carried over message, rejecting subsequent messages");
-            return Err(MessageRejected { message });
-        }
-
-        if self.handles.len() > self.concurrency {
-            log::warn!("Reached max concurrency, rejecting message");
-            return Err(MessageRejected { message });
-        }
-
-        let len = message.payload().rows.len();
-        let mut data = vec![];
-        for row in message.payload().rows {
-            data.extend(row);
-            data.extend(b"\n");
-        }
-
-        if !self.skip_write {
-            log::debug!("performing write");
-
-            let client: ClickhouseClient = self.clickhouse_client.clone();
-            let handle = self.runtime.spawn(async move {
-                let response = client.send(data).await.unwrap();
-                log::debug!("response: {:?}", response);
-                log::info!("Inserted {} rows", len);
-                Ok(message)
-            });
-
-            self.handles.push_back(handle);
-        } else {
-            log::info!("skipping write of {} rows", len);
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(message)
-            {
-                self.message_carried_over = Some(transformed_message);
-            }
-        }
-
-        Ok(())
+        self.inner.submit(message)
     }
 
     fn close(&mut self) {
-        self.next_step.close();
+        self.inner.close();
     }
 
     fn terminate(&mut self) {
-        self.next_step.terminate();
+        self.inner.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
+        self.inner.join(timeout)
     }
 }
 
