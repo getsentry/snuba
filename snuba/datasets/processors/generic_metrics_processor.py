@@ -41,7 +41,9 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
         raise NotImplementedError
 
     #
@@ -134,7 +136,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
             **self._process_values(message),
-            **self._aggregation_options(message),
+            **self._aggregation_options(message, retention_days),
             "retention_days": retention_days,
             "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
         }
@@ -156,8 +158,10 @@ class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_set_message(message)
 
-    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return aggregation_options_for_set_message(message)
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_set_message(message, retention_days)
 
 
 class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
@@ -167,8 +171,10 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_distribution_message(message)
 
-    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return aggregation_options_for_distribution_message(message)
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_distribution_message(message, retention_days)
 
 
 class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
@@ -178,5 +184,7 @@ class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return value_for_counter_message(message)
 
-    def _aggregation_options(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return aggregation_options_for_counter_message(message)
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_counter_message(message, retention_days)

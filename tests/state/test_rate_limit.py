@@ -71,6 +71,14 @@ class TestRateLimit:
                 pass
 
     @pytest.mark.redis_db
+    def test_fails_open(self, rate_limit_shards: Any) -> None:
+        with patch("snuba.state.rate_limit.rds.pipeline") as pipeline:
+            pipeline.execute.side_effect = Exception("Boom!")
+            rate_limit_params = RateLimitParameters("foo", "bar", 4, 20)
+            with rate_limit(rate_limit_params):
+                pass
+
+    @pytest.mark.redis_db
     def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)

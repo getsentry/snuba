@@ -14,6 +14,7 @@ local pipedream_config = {
   rollback: {
     material_name: 'snuba_repo',
     stage: 'deploy-primary',
+    elastic_profile_id: 'snuba',
   },
 
   // Set to true to auto-deploy changes (defaults to true)
