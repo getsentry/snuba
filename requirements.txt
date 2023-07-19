@@ -7,7 +7,7 @@ clickhouse-driver==0.2.4
 confluent-kafka==2.1.1
 datadog==0.21.0
 flake8==5.0.4
-Flask==2.2.2
+Flask==2.2.5
 honcho==1.1.0
 python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
