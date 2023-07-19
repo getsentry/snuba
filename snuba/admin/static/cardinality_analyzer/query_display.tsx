@@ -5,6 +5,10 @@ import QueryEditor from "../query_editor";
 
 import { CardinalityQueryRequest, CardinalityQueryResult, PredefinedQuery } from "./types";
 
+enum ClipboardFormats {
+  CSV = "csv",
+  JSON = "json",
+}
 type QueryState = Partial<CardinalityQueryRequest>;
 
 function QueryDisplay(props: {
@@ -46,8 +50,17 @@ function QueryDisplay(props: {
     return output;
   }
 
-  function copyText(queryResult: CardinalityQueryResult, format: string) {
-    const formatter = format == "csv" ? convertResultsToCSV : JSON.stringify;
+  function copyText(queryResult: CardinalityQueryResult, format: ClipboardFormats) {
+    let formatter: (input: CardinalityQueryResult) => string = (s) => s.toString();
+
+    if (format === ClipboardFormats.JSON) {
+      formatter = JSON.stringify;
+    }
+
+    if (format === ClipboardFormats.CSV) {
+      formatter = convertResultsToCSV;
+    }
+
     window.navigator.clipboard.writeText(formatter(queryResult));
   }
 
@@ -82,12 +95,12 @@ function QueryDisplay(props: {
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
                 <p>
-                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, "json")}>
+                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.JSON)}>
                     Copy to clipboard (JSON)
                   </button>
                 </p>
                 <p>
-                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, "csv")}>
+                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.CSV)}>
                     Copy to clipboard (CSV)
                   </button>
                 </p>
@@ -98,10 +111,10 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button style={executeButtonStyle} onClick={() => copyText(queryResult, "json")}>
+              <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.JSON)}>
                 Copy to clipboard (JSON)
               </button>
-              <button style={executeButtonStyle} onClick={() => copyText(queryResult, "csv")}>
+              <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.CSV)}>
                 Copy to clipboard (CSV)
               </button>
               {props.resultDataPopulator(queryResult)}
