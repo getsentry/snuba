@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
+import { CSV } from "./CSV";
 import QueryEditor from "../query_editor";
 
 import { CardinalityQueryRequest, CardinalityQueryResult, PredefinedQuery } from "./types";
@@ -42,12 +43,7 @@ function QueryDisplay(props: {
   }
 
   function convertResultsToCSV(queryResult: CardinalityQueryResult) {
-    let output = queryResult.column_names.join(",");
-    for (const row of queryResult.rows) {
-      const escaped = row.map((v) => (typeof v == "string" && v.includes(",") ? '"' + v + '"' : v));
-      output = output + "\n" + escaped.join(",");
-    }
-    return output;
+    return CSV.sheet([queryResult.column_names, ...queryResult.rows]);
   }
 
   function copyText(queryResult: CardinalityQueryResult, format: ClipboardFormats) {
