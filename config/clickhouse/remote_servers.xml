@@ -9,4 +9,7 @@
             </shard>
         </cluster_one_sh>
     </remote_servers>
+    <merge_tree>
+        <check_sample_column_is_correct>false</check_sample_column_is_correct>
+    </merge_tree>
 </yandex>

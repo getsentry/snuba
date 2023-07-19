@@ -3,4 +3,7 @@
         <replica>1</replica>
         <shard>1</shard>
     </macros>
+    <merge_tree>
+        <check_sample_column_is_correct>false</check_sample_column_is_correct>
+    </merge_tree>
 </yandex>
