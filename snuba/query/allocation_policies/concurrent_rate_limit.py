@@ -25,17 +25,6 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
 
-def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
-    shard_suffix = ""
-    if shard_id > 0:
-        # special case shard 0 so that it is backwards-compatible with the
-        # previous version of this rate limiter that did not have a concept of
-        # sharding.
-        shard_suffix = f":shard-{shard_id}"
-
-    return "{}{}{}".format(prefix, bucket, shard_suffix)
-
-
 class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         # Define policy specific config definitions, these will be used along
