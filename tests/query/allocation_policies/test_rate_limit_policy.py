@@ -6,7 +6,9 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
 )
-from snuba.query.allocation_policies.rate_limit import RateLimitAllocationPolicy
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    RateLimitAllocationPolicy,
+)
 from snuba.web import QueryException, QueryResult
 
 _RESULT_SUCCESS = QueryResultOrError(
