@@ -2,7 +2,6 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
-import rapidjson
 from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -31,7 +30,6 @@ from snuba.datasets.storages.factory import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
-from snuba.state import get_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -213,25 +211,6 @@ def multistorage_consumer(
         "consumer",
         tags=metrics_tags,
     )
-    # Collect metrics from librdkafka if we have stats_collection_freq_ms set
-    # for the consumer group, or use the default.
-    stats_collection_frequency_ms = get_config(
-        f"stats_collection_freq_ms_{consumer_group}",
-        get_config("stats_collection_freq_ms", 0),
-    )
-
-    if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
-
-        def stats_callback(stats_json: str) -> None:
-            stats = rapidjson.loads(stats_json)
-            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
-
-        configuration.update(
-            {
-                "statistics.interval.ms": stats_collection_frequency_ms,
-                "stats_cb": stats_callback,
-            }
-        )
 
     consumer = KafkaConsumer(configuration)
 
