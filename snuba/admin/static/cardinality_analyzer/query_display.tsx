@@ -13,9 +13,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<QueryState>({});
-  const [queryResultHistory, setCardinalityQueryResultHistory] = useState<
-    CardinalityQueryResult[]
-  >([]);
+  const [queryResultHistory, setCardinalityQueryResultHistory] = useState<CardinalityQueryResult[]>([]);
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -42,9 +40,7 @@ function QueryDisplay(props: {
   function convertResultsToCSV(queryResult: CardinalityQueryResult) {
     let output = queryResult.column_names.join(",");
     for (const row of queryResult.rows) {
-      const escaped = row.map((v) =>
-        typeof v == "string" && v.includes(",") ? '"' + v + '"' : v
-      );
+      const escaped = row.map((v) => (typeof v == "string" && v.includes(",") ? '"' + v + '"' : v));
       output = output + "\n" + escaped.join(",");
     }
     return output;
@@ -86,18 +82,12 @@ function QueryDisplay(props: {
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
                 <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(queryResult, "json")}
-                  >
+                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, "json")}>
                     Copy to clipboard (JSON)
                   </button>
                 </p>
                 <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(queryResult, "csv")}
-                  >
+                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, "csv")}>
                     Copy to clipboard (CSV)
                   </button>
                 </p>
@@ -108,16 +98,10 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(queryResult, "json")}
-              >
+              <button style={executeButtonStyle} onClick={() => copyText(queryResult, "json")}>
                 Copy to clipboard (JSON)
               </button>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(queryResult, "csv")}
-              >
+              <button style={executeButtonStyle} onClick={() => copyText(queryResult, "csv")}>
                 Copy to clipboard (CSV)
               </button>
               {props.resultDataPopulator(queryResult)}
@@ -147,10 +131,7 @@ const selectStyle = {
   height: 30,
 };
 
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
+function TextArea(props: { value: string; onChange: (nextValue: string) => void }) {
   const { value, onChange } = props;
   return (
     <textarea
