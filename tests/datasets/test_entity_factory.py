@@ -36,6 +36,7 @@ ENTITY_KEYS = [
     EntityKey.GENERIC_METRICS_COUNTERS,
     EntityKey.GENERIC_ORG_METRICS_COUNTERS,
     EntityKey.SPANS,
+    EntityKey.GROUP_ATTRIBUTES,
 ]
 
 

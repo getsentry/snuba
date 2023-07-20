@@ -48,7 +48,9 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-    return _parse_snql_query(request_parts.query["query"], dataset, custom_processing)
+    return _parse_snql_query(
+        request_parts.query["query"], dataset, custom_processing, settings
+    )
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:

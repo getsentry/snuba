@@ -60,22 +60,21 @@ def test_get_dataset_factory_and_mapping_coupling() -> None:
 
 def test_all_names() -> None:
     factory._DS_FACTORY = None
-    assert set(get_enabled_dataset_names()) == set(
-        [
-            "discover",
-            "events",
-            "groupassignee",
-            "groupedmessage",
-            "metrics",
-            "outcomes",
-            "outcomes_raw",
-            "sessions",
-            "transactions",
-            "profiles",
-            "functions",
-            "generic_metrics",
-            "replays",
-            "search_issues",
-            "spans",
-        ]
-    )
+    assert set(get_enabled_dataset_names()) == {
+        "discover",
+        "events",
+        "groupassignee",
+        "groupedmessage",
+        "metrics",
+        "outcomes",
+        "outcomes_raw",
+        "sessions",
+        "transactions",
+        "profiles",
+        "functions",
+        "generic_metrics",
+        "replays",
+        "search_issues",
+        "spans",
+        "group_attributes",
+    }

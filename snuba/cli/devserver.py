@@ -440,6 +440,22 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
+    if settings.ENABLE_GROUP_ATTRIBUTES_CONSUMER:
+        daemons += [
+            (
+                "group-attributes-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--storage=group_attributes",
+                    "--consumer-group=group_attributes_group",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(
