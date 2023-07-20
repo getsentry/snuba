@@ -13,7 +13,7 @@ export class CSV {
     let sanitizedValue: string = "";
 
     if (typeof value === "string") {
-      sanitizedValue = value.replace(/"/g, '\\"');
+      sanitizedValue = value.replace(/"/g, '""');
 
       if (value.includes(",")) {
         return `"${sanitizedValue}"`;

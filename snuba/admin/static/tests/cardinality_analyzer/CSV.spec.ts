@@ -25,6 +25,6 @@ describe("CSV.sheet", () => {
         ["name", "motto"],
         ["George", 'hello, "world"'],
       ])
-    ).toEqual(`name,motto\nGeorge,"hello, \\"world\\""`);
+    ).toEqual(`name,motto\nGeorge,"hello, ""world"""`);
   });
 });
