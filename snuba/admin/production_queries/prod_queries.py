@@ -36,6 +36,14 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
 
 
 def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
+    """
+    Validates that the projects accessed by the query are allowed to be accessed.
+    """
+
+    # In debug, we don't need to validate projects
+    if settings.DEBUG:
+        return
+
     request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
     query = parse_snql_query(request_parts.query["query"], dataset)[0]
     project_ids = get_object_ids_in_query_ast(query, "project_id")
