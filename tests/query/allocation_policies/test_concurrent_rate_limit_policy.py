@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from snuba.datasets.storage import StorageKey
@@ -135,8 +137,8 @@ def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> No
         ).can_run
 
 
-def test_tenant_selection(policy):
-    tenant_ids = {"organization_id": 123, "project_id": 456}
+def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
+    tenant_ids: dict[str, int | str] = {"organization_id": 123, "project_id": 456}
     assert policy._get_tenant_key_and_value(tenant_ids) == ("project_id", 456)
     assert policy._get_tenant_key_and_value({"organization_id": 123}) == (
         "organization_id",
@@ -144,3 +146,17 @@ def test_tenant_selection(policy):
     )
     with pytest.raises(AllocationPolicyViolation):
         policy._get_tenant_key_and_value({})
+
+
+@pytest.mark.redis_db
+def test_get_overrides(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "project_id": 456,
+        "referrer": "abc",
+    }
+
+    assert policy._get_overrides(tenant_ids) == {}
+
+    policy.set_config_value("organization_override", 1, {"organization_id": 123})
+    assert policy._get_overrides(tenant_ids) == {"organization_override": 1}
