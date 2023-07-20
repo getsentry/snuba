@@ -35,7 +35,7 @@ sql-metadata==2.6.0
 typing-extensions==4.5.0
 urllib3==1.26.12
 pyuwsgi==2.0.20
-Werkzeug==2.2.2
+Werkzeug==2.2.3
 PyYAML==6.0
 sqlparse==0.4.2
 google-api-python-client==2.88.0
