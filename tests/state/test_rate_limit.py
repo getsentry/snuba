@@ -31,6 +31,7 @@ def rate_limit_shards(request: Any) -> None:
 
 
 class TestRateLimit:
+    @pytest.mark.redis_db
     def test_concurrent_limit(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
@@ -69,6 +70,15 @@ class TestRateLimit:
             with RateLimitAggregator([rate_limit_params2]):
                 pass
 
+    @pytest.mark.redis_db
+    def test_fails_open(self, rate_limit_shards: Any) -> None:
+        with patch("snuba.state.rate_limit.rds.pipeline") as pipeline:
+            pipeline.execute.side_effect = Exception("Boom!")
+            rate_limit_params = RateLimitParameters("foo", "bar", 4, 20)
+            with rate_limit(rate_limit_params):
+                pass
+
+    @pytest.mark.redis_db
     def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
@@ -101,6 +111,7 @@ class TestRateLimit:
             with rate_limit(rate_limit_params) as stats:
                 assert stats is not None
 
+    @pytest.mark.redis_db
     def test_aggregator(self, rate_limit_shards: Any) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
@@ -129,6 +140,7 @@ class TestRateLimit:
             ):
                 pass
 
+    @pytest.mark.redis_db
     def test_rate_limit_container(self) -> None:
         rate_limit_container = RateLimitStatsContainer()
         rate_limit_stats = RateLimitStats(rate=0.5, concurrent=2)
@@ -143,6 +155,7 @@ class TestRateLimit:
             "foo_concurrent": 2,
         }
 
+    @pytest.mark.redis_db
     def test_bypass_rate_limit(self) -> None:
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         state.set_config("bypass_rate_limit", 1)
@@ -150,6 +163,7 @@ class TestRateLimit:
         with rate_limit(rate_limit_params) as stats:
             assert stats is None
 
+    @pytest.mark.redis_db
     def test_rate_limit_exceptions(self) -> None:
         params = RateLimitParameters("foo", "bar", None, 5)
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
@@ -175,6 +189,7 @@ class TestRateLimit:
 
         assert count() == 2
 
+    @pytest.mark.redis_db
     def test_rate_limit_ttl(self) -> None:
         params = RateLimitParameters("foo", "bar", None, 5)
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
@@ -197,6 +212,7 @@ tests = [
     "vals",
     tests,
 )
+@pytest.mark.redis_db
 def test_rate_limit_failures(
     vals: Tuple[int, int, int], rate_limit_shards: Any
 ) -> None:
@@ -238,6 +254,7 @@ dual_write_tests = [
 
 
 @pytest.mark.parametrize("ps_in_new, ps_in_old, ct_in_new, ct_in_old", dual_write_tests)
+@pytest.mark.redis_db
 def test_rate_limit_dual_write(
     ps_in_new: int | None, ps_in_old: int | None, ct_in_new: bool, ct_in_old: bool
 ) -> None:
@@ -276,6 +293,7 @@ def test_rate_limit_dual_write(
     )
 
 
+@pytest.mark.redis_db
 def test_rate_limit_interface() -> None:
     ps_key = "project_per_second_limit_36"
     ct_key = "project_concurrent_limit_36"

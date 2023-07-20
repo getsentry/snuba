@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from snuba.snapshots import (  # NOQA
@@ -46,7 +48,7 @@ META_FILE = """
 
 
 class TestPostgresSnapshot:
-    def __prepare_directory(self, tmp_path, table_content):
+    def __prepare_directory(self, tmp_path: Path, table_content: str) -> str:
         snapshot_base = tmp_path / "cdc-snapshot"
         snapshot_base.mkdir()
         meta = snapshot_base / "metadata.json"
@@ -60,9 +62,9 @@ class TestPostgresSnapshot:
             """id,project_id
 """
         )
-        return snapshot_base
+        return str(snapshot_base)
 
-    def test_parse_snapshot(self, tmp_path):
+    def test_parse_snapshot(self, tmp_path: Path) -> None:
         snapshot_base = self.__prepare_directory(
             tmp_path,
             """id,status
@@ -99,17 +101,15 @@ class TestPostgresSnapshot:
         )
 
         with snapshot.get_parsed_table_file("sentry_groupedmessage") as table:
-            line = next(table)
-            assert line == {
+            assert next(table) == {
                 "id": "0",
                 "status": "1",
             }
 
         with snapshot.get_preprocessed_table_file("sentry_groupedmessage") as table:
-            line = next(table)
-            assert line == b"id,status\n0,1\n"
+            assert next(table) == b"id,status\n0,1\n"
 
-    def test_parse_invalid_snapshot(self, tmp_path):
+    def test_parse_invalid_snapshot(self, tmp_path: Path) -> None:
         snapshot_base = self.__prepare_directory(
             tmp_path,
             """id

@@ -361,5 +361,4 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                 (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)),
             ),
         )
-
         return runner(query, query_settings)

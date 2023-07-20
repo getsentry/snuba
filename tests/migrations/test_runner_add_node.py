@@ -1,6 +1,7 @@
 import importlib
 import os
 from copy import deepcopy
+from typing import Generator
 
 import pytest
 
@@ -11,7 +12,8 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import runner
 
 
-def setup_function() -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     settings.CLUSTERS = [
         {
             **deepcopy(settings.CLUSTERS[0]),
@@ -36,14 +38,15 @@ def setup_function() -> None:
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
+    yield
 
-def teardown_function() -> None:
     importlib.reload(settings)
     importlib.reload(cluster)
     importlib.reload(runner)
 
 
 @pytest.mark.ci_only
+@pytest.mark.clickhouse_db
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))

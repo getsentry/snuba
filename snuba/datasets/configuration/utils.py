@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Type, TypedDict
-
-from arroyo import Topic as KafkaTopic
-from arroyo.backends.kafka import KafkaProducer
-from arroyo.processing.strategies.dead_letter_queue import (
-    DeadLetterQueuePolicy,
-    ProduceInvalidMessagePolicy,
-)
+from typing import Any, Type, TypedDict
 
 from snuba.clickhouse.columns import (
     Array,
@@ -31,8 +24,6 @@ from snuba.utils.schemas import (
     IPv4,
     IPv6,
 )
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.topics import Topic
 
 
 class QueryProcessorDefinition(TypedDict):
@@ -48,26 +39,6 @@ class QuerySplitterDefinition(TypedDict):
 class MandatoryConditionCheckerDefinition(TypedDict):
     condition: str
     args: dict[str, Any]
-
-
-def generate_policy_creator(
-    dlq_policy_config: dict[str, Any],
-) -> Callable[[], DeadLetterQueuePolicy] | None:
-    """
-    Creates a DLQ Policy creator function.
-    """
-    if dlq_policy_config["type"] == "produce":
-        dlq_topic = dlq_policy_config["args"][0]
-
-        def produce_policy_creator() -> DeadLetterQueuePolicy:
-            return ProduceInvalidMessagePolicy(
-                KafkaProducer(build_kafka_producer_configuration(Topic(dlq_topic))),
-                KafkaTopic(dlq_topic),
-            )
-
-        return produce_policy_creator
-    # TODO: Add rest of DLQ policy types
-    return None
 
 
 def get_query_processors(

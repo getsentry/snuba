@@ -80,6 +80,7 @@ VALID_QUERY_CASES = [
 
 
 @pytest.mark.parametrize("input_query", deepcopy(INVALID_QUERY_CASES))
+@pytest.mark.redis_db
 def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
     set_config("throw_on_uniq_select_and_having", True)
     with pytest.raises(MismatchedAggregationException):
@@ -87,6 +88,7 @@ def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
 
 
 @pytest.mark.parametrize("input_query", deepcopy(VALID_QUERY_CASES))
+@pytest.mark.redis_db
 def test_valid_uniq_queries(input_query: ClickhouseQuery) -> None:
     set_config("throw_on_uniq_select_and_having", True)
     og_query = deepcopy(input_query)

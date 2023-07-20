@@ -160,8 +160,17 @@ def get_raw_event() -> InsertEvent:
                         },
                         "type": "ArithmeticException",
                         "value": "/ by zero",
+                        "thread_id": 1,
                     }
                 ],
+            },
+            "sentry.interfaces.Threads": {
+                "values": [
+                    {
+                        "id": 1,
+                        "main": True,
+                    },
+                ]
             },
             "sentry.interfaces.Message": {"message": "Caught exception!"},
             "tags": [

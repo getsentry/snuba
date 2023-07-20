@@ -7,6 +7,9 @@ type TracingResult = {
   input_query?: string;
   timestamp: number;
   trace_output?: string;
+  formatted_trace_output?: Object;
+  cols?: Array<Array<string>>;
+  num_rows_result?: number;
   error?: string;
 };
 
@@ -19,4 +22,10 @@ type LogLine = {
   message: string;
 };
 
-export { TracingRequest, TracingResult, LogLine };
+type PredefinedQuery = {
+  name: string;
+  sql: string;
+  description: string;
+};
+
+export { TracingRequest, TracingResult, LogLine, PredefinedQuery };

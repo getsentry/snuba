@@ -7,6 +7,7 @@ from hashlib import md5
 from typing import (
     Any,
     Dict,
+    FrozenSet,
     Iterable,
     MutableMapping,
     NamedTuple,
@@ -34,6 +35,7 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 class InsertBatch(NamedTuple):
     rows: Sequence[WriterTableRow]
     origin_timestamp: Optional[datetime]
+    sentry_received_timestamp: Optional[datetime] = None
 
 
 # Indicates that we need an encoder that will interpolate
@@ -88,20 +90,8 @@ class ReplacementType(str, Enum):
     EXCLUDE_GROUPS = "exclude_groups"
 
 
-REPLACEMENT_EVENT_TYPES = frozenset(
-    [
-        ReplacementType.START_DELETE_GROUPS,
-        ReplacementType.START_MERGE,
-        ReplacementType.START_UNMERGE,
-        ReplacementType.START_DELETE_TAG,
-        ReplacementType.END_DELETE_GROUPS,
-        ReplacementType.END_MERGE,
-        ReplacementType.END_UNMERGE,
-        ReplacementType.END_DELETE_TAG,
-        ReplacementType.TOMBSTONE_EVENTS,
-        ReplacementType.EXCLUDE_GROUPS,
-        ReplacementType.REPLACE_GROUP,
-    ]
+REPLACEMENT_EVENT_TYPES: FrozenSet[ReplacementType] = frozenset(
+    ReplacementType.__members__.values()
 )
 
 
@@ -175,19 +165,6 @@ def _boolify(s: Any) -> Optional[bool]:
         return False
 
     return None
-
-
-def _floatify(s: Any) -> Optional[float]:
-    if s is None:
-        return None
-
-    if isinstance(s, float):
-        return s
-
-    try:
-        return float(s)
-    except (ValueError, TypeError):
-        return None
 
 
 def _unicodify(s: Any) -> Optional[str]:

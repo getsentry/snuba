@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import logging
 from glob import glob
-from typing import Generator
+from typing import MutableSequence, Sequence
 
 import sentry_sdk
 
@@ -11,11 +10,8 @@ from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.validator import StorageValidator
 from snuba.utils.config_component_factory import ConfigComponentFactory
-
-logger = logging.getLogger(__name__)
-
-USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
 
 class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
@@ -26,21 +22,12 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             self.__initialize()
 
     def __initialize(self) -> None:
-        self._config_built_storages = {
-            storage.get_storage_key(): storage
-            for storage in [
-                build_storage_from_config(config_file)
-                for config_file in glob(
-                    settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
-                )
-            ]
-        }
+        for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True):
+            storage = build_storage_from_config(config_file)
+            StorageValidator(storage).validate()
+            self._config_built_storages[storage.get_storage_key()] = storage
 
         self._all_storages = self._config_built_storages
-
-    def iter_all(self) -> Generator[Storage, None, None]:
-        for storage in self._all_storages.values():
-            yield storage
 
     def get(self, storage_key: StorageKey) -> Storage:
         return self._all_storages[storage_key]
@@ -94,6 +81,18 @@ def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
     storage = _storage_factory().get(storage_key)
     assert isinstance(storage, WritableTableStorage)
     return storage
+
+
+def get_writable_storages() -> Sequence[WritableTableStorage]:
+    writable_storages: MutableSequence[WritableTableStorage] = []
+    storage_keys = get_all_storage_keys()
+    for storage_key in storage_keys:
+        try:
+            writable_storages.append(get_writable_storage(storage_key))
+        except AssertionError:
+            pass
+
+    return writable_storages
 
 
 def get_cdc_storage(storage_key: StorageKey) -> CdcStorage:

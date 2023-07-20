@@ -11,7 +11,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    TypeVar,
 )
 
 from snuba import settings, state
@@ -32,8 +31,6 @@ from snuba.subscriptions.data import SubscriptionWithMetadata
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
-
-TSubscription = TypeVar("TSubscription")
 
 Tags = Mapping[str, str]
 

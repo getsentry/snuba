@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
+import pytest
 import simplejson as json
 from snuba_sdk import (
     Column,
@@ -29,12 +30,14 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestSDKSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -71,7 +74,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(dataset="discover", query=query, app_id="default")
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         request.flags.consistent = True
         request.flags.debug = True
 
@@ -111,7 +119,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(100)
         )
 
-        request = Request(dataset="sessions", query=query, app_id="default")
+        request = Request(
+            dataset="sessions",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
@@ -142,7 +155,12 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(dataset="discover", query=query, app_id="default")
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
@@ -177,7 +195,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(dataset="discover", query=query, app_id="default")
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -214,7 +237,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(dataset="events", query=query, app_id="default")
+        request = Request(
+            dataset="events",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -251,7 +279,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        request = Request(dataset="events", query=query, app_id="default")
+        request = Request(
+            dataset="events",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -283,7 +316,12 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(dataset="discover", query=query, app_id="default")
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         request.flags.debug = True
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
@@ -305,7 +343,12 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(dataset="events", query=query, app_id="default")
+        request = Request(
+            dataset="events",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
 
         data = json.loads(response.data)
@@ -391,7 +434,12 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(10)
         )
 
-        request = Request(dataset="discover", query=query, app_id="default")
+        request = Request(
+            dataset="discover",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
 
         resp = json.loads(response.data)
@@ -413,7 +461,12 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(dataset="events", query=query, app_id="default")
+        request = Request(
+            dataset="events",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
 
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
@@ -437,7 +490,12 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        request = Request(dataset="events", query=query, app_id="default")
+        request = Request(
+            dataset="events",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
@@ -456,7 +514,12 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
         )
-        request = Request(dataset="generic_metrics", query=query, app_id="default")
+        request = Request(
+            dataset="generic_metrics",
+            query=query,
+            app_id="default",
+            tenant_ids={"referrer": "r", "organization_id": 123},
+        )
         response = self.post(
             "/generic_metrics/snql", data=json.dumps(request.to_dict())
         )

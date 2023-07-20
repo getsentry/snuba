@@ -4,6 +4,7 @@ import dataclasses
 import logging
 import uuid
 from datetime import datetime, timezone
+from functools import partial
 from hashlib import md5
 from typing import Any, Callable, Mapping, MutableMapping, Optional, TypeVar
 
@@ -32,6 +33,7 @@ RetentionDays = int
 
 # Limit for error_ids / trace_ids / urls array elements
 LIST_ELEMENT_LIMIT = 1000
+MAX_CLICK_EVENTS = 20
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
@@ -68,7 +70,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["dist"] = maybe(to_string, replay_event.get("dist"))
         processed["platform"] = maybe(to_string, replay_event["platform"])
         processed["replay_type"] = maybe(
-            to_enum(["session", "error"]), replay_event.get("replay_type")
+            to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
         )
 
         # Archived can only be 1 or null.
@@ -80,6 +82,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         tags = process_tags_object(replay_event.get("tags"))
+
+        # we have to set title to empty string as it is non-nullable,
+        # and on clickhouse 20 this throws an error.
         processed["title"] = tags.transaction
         processed["tags.key"] = tags.keys
         processed["tags.value"] = tags.values
@@ -165,43 +170,92 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if event_hash is None:
             event_hash = segment_id_to_event_hash(replay_event["segment_id"])
 
-        processed["event_hash"] = event_hash
+        processed["event_hash"] = str(uuid.UUID(event_hash))
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        replay_event = rapidjson.loads(bytes(message["payload"]))
         try:
-            replay_event = rapidjson.loads(bytes(message["payload"]))
-            try:
-                retention_days = enforce_retention(
-                    message["retention_days"],
-                    datetime.utcfromtimestamp(message["start_time"]),
-                )
-            except EventTooOld:
-                return None
+            retention_days = enforce_retention(
+                message["retention_days"],
+                datetime.utcfromtimestamp(message["start_time"]),
+            )
+        except EventTooOld:
+            return None
 
-            processed: MutableMapping[str, Any] = {
-                "retention_days": retention_days,
-                "project_id": message["project_id"],
-            }
+        processed: MutableMapping[str, Any] = {
+            "retention_days": retention_days,
+            "project_id": message["project_id"],
+        }
 
-            # # The following helper functions should be able to be applied in any order.
-            # # At time of writing, there are no reads of the values in the `processed`
-            # # dictionary to inform values in other functions.
-            # # Ideally we keep continue that rule
+        if replay_event["type"] == "replay_actions":
+            actions = process_replay_actions(replay_event, processed, metadata)
+            return InsertBatch(actions, None)
+        else:
+            # The following helper functions should be able to be applied in any order.
+            # At time of writing, there are no reads of the values in the `processed`
+            # dictionary to inform values in other functions.
+            # Ideally we keep continue that rule
             self._process_base_replay_event_values(processed, replay_event)
             self._process_tags(processed, replay_event)
             self._process_sdk(processed, replay_event)
             self._process_kafka_metadata(metadata, processed)
 
-            # # the following operation modifies the event_dict and is therefore *not* order-independent
+            # the following operation modifies the event_dict and is therefore *not*
+            # order-independent
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except Exception:
-            metrics.increment("consumer_error")
-            raise
+
+
+def process_replay_actions(
+    payload: Mapping[Any, Any],
+    processed: Mapping[Any, Any],
+    metadata: KafkaMessageMetadata,
+) -> list[dict[str, Any]]:
+    """Process replay_actions message type."""
+    return [
+        {
+            # Primary-key.
+            "project_id": processed["project_id"],
+            "timestamp": raise_on_null(
+                "timestamp", maybe(to_datetime, click["timestamp"])
+            ),
+            "replay_id": to_uuid(payload["replay_id"]),
+            "segment_id": None,
+            "event_hash": click["event_hash"],
+            # Default values for non-nullable columns.
+            "trace_ids": [],
+            "error_ids": [],
+            "urls": [],
+            "platform": "javascript",
+            "user": None,
+            "sdk_name": None,
+            "sdk_version": None,
+            # Kafka columns.
+            "retention_days": processed["retention_days"],
+            "partition": metadata.partition,
+            "offset": metadata.offset,
+            # DOM Index fields.
+            "click_node_id": _collapse_or_err(_collapse_uint32, int(click["node_id"])),
+            "click_tag": to_string(click["tag"])[:32],
+            "click_id": to_string(click["id"])[:64],
+            "click_class": to_typed_list(
+                partial(to_capped_string, 64), click["class"][:10]
+            ),
+            "click_text": to_string(click["text"])[:1024],
+            "click_role": to_string(click["role"])[:32],
+            "click_alt": to_string(click["alt"])[:64],
+            "click_testid": to_string(click["testid"])[:64],
+            "click_aria_label": to_string(click["aria_label"])[:64],
+            "click_title": to_string(click["title"])[:64],
+            "click_is_dead": to_uint1(click["is_dead"]),
+            "click_is_rage": to_uint1(click["is_rage"]),
+        }
+        for click in payload["clicks"][:MAX_CLICK_EVENTS]
+    ]
 
 
 T = TypeVar("T")
@@ -214,7 +268,7 @@ def segment_id_to_event_hash(segment_id: int | None) -> str:
         # originate from the SDK and do not relate to a specific segment.
         #
         # For example: archive requests.
-        return str(uuid.uuid4().hex)
+        return str(uuid.uuid4())
     else:
         segment_id_bytes = force_bytes(str(segment_id))
         segment_hash = md5(segment_id_bytes).hexdigest()
@@ -242,6 +296,14 @@ def to_datetime(value: Any) -> datetime:
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
 
 
+def to_uint1(value: Any) -> int:
+    int_value = int(value)
+    if int_value == 0 or int_value == 1:
+        return int_value
+    else:
+        raise ValueError("Value must be 0 or 1")
+
+
 def to_uint16(value: Any) -> int:
     return _collapse_or_err(_collapse_uint16, int(value))
 
@@ -259,6 +321,11 @@ def to_string(value: Any) -> str:
         return ""
     else:
         return _encode_utf8(str(value))
+
+
+def to_capped_string(capacity: int, value: Any) -> str:
+    """Return a capped string."""
+    return to_string(value)[:capacity]
 
 
 def to_enum(enumeration: list[str]) -> Callable[[Any], str | None]:
@@ -283,6 +350,12 @@ def to_typed_list(callable: Callable[[Any], T], values: list[Any]) -> list[T]:
 def to_uuid(value: Any) -> str:
     """Return a stringified uuid or err."""
     return str(uuid.UUID(str(value)))
+
+
+def raise_on_null(field: str, value: Any) -> Any:
+    if value is None:
+        raise ValueError(f"Missing data for required field: {field}")
+    return value
 
 
 def _is_list(value: Any) -> list[Any]:

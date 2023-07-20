@@ -1,28 +1,41 @@
 {
-    "bindings": [
-      {
-        "members": [
-          "user:fpacifici@sentry.io",
-          "user:meredith@sentry.io",
-          "user:nikhar.saxena@sentry.io",
-          "user:dalitso.banda@sentry.io"
-        ],
-        "role": "roles/NonBlockingMigrationsExecutor"
-      },
-      {
-        "members": [
-          "user:fpacifici@sentry.io",
-          "user:meredith@sentry.io",
-          "user:nikhar.saxena@sentry.io",
-          "user:dalitso.banda@sentry.io"
-        ],
-        "role": "roles/SearchIssuesExecutor"
-      },
-      {
-        "members": [
-          "group:team-sns@sentry.io"
-        ],
-        "role": "roles/MigrationsReader"
-      }
-    ]
-  }
+  "bindings": [
+    {
+      "members": [
+        "group:role-deploy-snuba-migrations-operator@sentry.io"
+      ],
+      "role": "roles/NonBlockingMigrationsExecutor"
+    },
+    {
+      "members": [
+        "group:role-deploy-snuba-migrations-operator@sentry.io"
+      ],
+      "role": "roles/SearchIssuesExecutor"
+    },
+    {
+      "members": [
+        "group:team-sns@sentry.io"
+      ],
+      "role": "roles/MigrationsReader"
+    },
+    {
+      "members": [
+        "group:team-sns@sentry.io"
+      ],
+      "role": "roles/AllTools"
+    },
+    {
+      "members": [
+          "group:access-snuba-admin@sentry.io"
+      ],
+      "role": "roles/ProductTools"
+    },
+    {
+      "members": [
+          "group:team-starfish@sentry.io",
+          "group:team-ingestion-pipeline@sentry.io"
+      ],
+      "role": "roles/CardinalityAnalyzer"
+    }
+  ]
+}

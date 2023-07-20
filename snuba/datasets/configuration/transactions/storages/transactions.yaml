@@ -6,6 +6,8 @@ storage:
   key: transactions
   set_key: transactions
 
+readiness_state: complete
+
 schema:
   columns:
     [
@@ -159,6 +161,17 @@ schema:
   local_table_name: transactions_local
   dist_table_name: transactions_dist
   partition_format: [retention_days, date]
+
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor

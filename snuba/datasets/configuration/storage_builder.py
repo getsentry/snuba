@@ -10,7 +10,6 @@ from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
-    generate_policy_creator,
     get_mandatory_condition_checkers,
     get_query_processors,
     get_query_splitters,
@@ -18,6 +17,7 @@ from snuba.datasets.configuration.utils import (
 )
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -26,6 +26,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.processor import MessageProcessor
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -37,10 +38,10 @@ from snuba.utils.streams.topics import Topic
 KIND = "kind"
 READABLE_STORAGE = "readable_storage"
 WRITABLE_STORAGE = "writable_storage"
-CDC_STORAGE = "cdc_storage"
 STORAGE = "storage"
 STORAGE_KEY = "storage_key"
 SET_KEY = "set_key"
+READINESS_STATE = "readiness_state"
 SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
@@ -51,6 +52,7 @@ WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
+ALLOCATION_POLICIES = "allocation_policies"
 
 
 def build_storage_from_config(
@@ -71,10 +73,12 @@ def build_storage_from_config(
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    storage_key = register_storage_key(config[STORAGE]["key"])
     return {
-        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
+        STORAGE_KEY: storage_key,
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
         SCHEMA: __build_storage_schema(config),
+        READINESS_STATE: ReadinessState(config[READINESS_STATE]),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
@@ -86,6 +90,17 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if MANDATORY_CONDITION_CHECKERS in config
             else []
         ),
+        ALLOCATION_POLICIES: [
+            AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                **{
+                    **policy.get("args", {}),
+                    "storage_key": storage_key.value,
+                }
+            )
+            for policy in config[ALLOCATION_POLICIES]
+        ]
+        if ALLOCATION_POLICIES in config
+        else [],
     }
 
 
@@ -176,11 +191,8 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         else None
     )
     subscription_result_topic = __get_topic(loader_config, "subscription_result_topic")
-    dead_letter_queue_policy_creator = (
-        generate_policy_creator(loader_config[DLQ_POLICY])
-        if DLQ_POLICY in loader_config and loader_config[DLQ_POLICY] is not None
-        else None
-    )
+
+    dlq_topic = __get_topic(loader_config, "dlq_topic")
 
     return build_kafka_stream_loader_from_settings(
         processor,
@@ -191,7 +203,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduler_mode,
         subscription_scheduled_topic,
         subscription_result_topic,
-        dead_letter_queue_policy_creator,
+        dlq_topic,
     )
 
 

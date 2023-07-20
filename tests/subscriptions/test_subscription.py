@@ -61,6 +61,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     timer = Timer("test")
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         identifier = creator.create(subscription, self.timer)
@@ -77,6 +79,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         )
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
@@ -85,6 +89,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test_invalid_aggregation(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
@@ -100,6 +106,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
+    @pytest.mark.clickhouse_db
     def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -146,6 +153,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
+    @pytest.mark.clickhouse_db
     def test_invalid_resolution(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -245,6 +253,8 @@ class TestMetricsCountersSubscriptionCreator:
         self.dataset = get_dataset("metrics")
 
     @pytest.mark.parametrize("subscription, entity_key", TESTS_CREATE_METRICS)
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData, entity_key: EntityKey) -> None:
         creator = SubscriptionCreator(self.dataset, entity_key)
         identifier = creator.create(subscription, self.timer)
@@ -261,6 +271,7 @@ class TestMetricsCountersSubscriptionCreator:
         )
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID_METRICS)
+    @pytest.mark.clickhouse_db
     def test_missing_conditions_for_groupby_clause(
         self, subscription: SubscriptionData
     ) -> None:
@@ -273,6 +284,8 @@ class TestMetricsCountersSubscriptionCreator:
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         subscription = SubscriptionData(

@@ -13,8 +13,8 @@ def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, 
     """
     with sentry_sdk.start_span(op="load_and_validate") as span:
         span.set_tag("file", path)
-        file = open(path)
-        config = safe_load(file)
+        with open(path) as file:
+            config = safe_load(file)
         assert isinstance(config, dict)
         validators[config["kind"]](config)
         span.description = config["name"]

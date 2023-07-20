@@ -12,7 +12,7 @@ steps:
         "-f",
         "./Dockerfile",
       ]
-    timeout: 180s
+    timeout: 1200s
   # Unit tests
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: unit-tests

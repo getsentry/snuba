@@ -136,6 +136,8 @@ def test_subscription_task_result_encoder() -> None:
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
+        "profile": {},
+        "trace_output": "",
     }
 
     task_result = SubscriptionTaskResult(
@@ -162,7 +164,7 @@ def test_subscription_task_result_encoder() -> None:
         task_result.task.task.subscription.identifier
     )
     assert payload["request"] == request.original_body
-    assert payload["result"] == result
+    assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == EntityKey.EVENTS.value
 
@@ -219,6 +221,8 @@ def test_metrics_subscription_task_result_encoder(
             {"name": "tags[3]", "type": "UInt64"},
             {"name": "value", "type": "Float64"},
         ],
+        "profile": {},
+        "trace_output": "",
     }
     task_result = SubscriptionTaskResult(
         ScheduledSubscriptionTask(
@@ -243,7 +247,7 @@ def test_metrics_subscription_task_result_encoder(
         task_result.task.task.subscription.identifier
     )
     assert payload["request"] == request.original_body
-    assert payload["result"] == result
+    assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == entity_key.value
 

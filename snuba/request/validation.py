@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -48,7 +48,9 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-    return _parse_snql_query(request_parts.query["query"], dataset, custom_processing)
+    return _parse_snql_query(
+        request_parts.query["query"], dataset, custom_processing, settings
+    )
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
@@ -65,7 +67,7 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 
 
 def build_request(
-    body: MutableMapping[str, Any],
+    body: Dict[str, Any],
     parser: Parser,
     settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
     schema: RequestSchema,
@@ -98,8 +100,10 @@ def build_request(
             )
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
+            query_project_id = None
             if project_ids is not None and len(project_ids) == 1:
-                sentry_sdk.set_tag("snuba_project_id", project_ids.pop())
+                query_project_id = project_ids.pop()
+                sentry_sdk.set_tag("snuba_project_id", query_project_id)
 
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
@@ -113,6 +117,11 @@ def build_request(
             attribution_info["tenant_ids"] = request_parts.attribution_info[
                 "tenant_ids"
             ]
+            if (
+                "project_id" not in attribution_info["tenant_ids"]
+                and query_project_id is not None
+            ):
+                attribution_info["tenant_ids"]["project_id"] = query_project_id
 
             request_id = uuid.uuid4().hex
             request = Request(

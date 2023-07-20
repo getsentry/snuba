@@ -38,7 +38,7 @@ class Entity(Describable, ABC):
         join_relationships: Mapping[str, JoinRelationship],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
-        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
+        validate_data_model: ColumnValidationMode = ColumnValidationMode.ERROR,
         subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
@@ -55,8 +55,9 @@ class Entity(Describable, ABC):
         self.__subscription_validators = subscription_validators
         self.required_time_column = required_time_column
 
+        mappers = [s.translation_mappers for s in storages]
         columns_exist_validator = EntityContainsColumnsValidator(
-            self.__data_model, validation_mode=validate_data_model
+            self.__data_model, mappers, validation_mode=validate_data_model
         )
         self.__validators = (
             [*validators, columns_exist_validator]

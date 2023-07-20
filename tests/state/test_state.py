@@ -17,6 +17,7 @@ class TestState:
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore
 
+    @pytest.mark.redis_db
     def test_config(self) -> None:
         state.set_config("foo", 1)
         state.set_configs({"bar": 2, "baz": 3})
@@ -35,6 +36,7 @@ class TestState:
             all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)]
         )
 
+    @pytest.mark.redis_db
     def test_config_desc(self) -> None:
         state.set_config_description("foo", "Does foo")
         assert state.get_config_description("foo") == "Does foo"
@@ -46,6 +48,7 @@ class TestState:
         state.delete_config_description("foo")
         assert state.get_config_description("foo") is None
 
+    @pytest.mark.redis_db
     def test_config_types(self) -> None:
         # Tests for ints
         state.set_config("test_int", 1)
@@ -89,6 +92,7 @@ class TestState:
         state.set_config("some_key", "some_value", force=True)
         assert state.get_config("some_key") == "some_value"
 
+    @pytest.mark.redis_db
     def test_memoize(self) -> None:
         @state.memoize(0.1)  # type: ignore
         def rand(config_key: str = "test") -> float:
@@ -100,6 +104,7 @@ class TestState:
         time.sleep(0.1)
         assert rand1 != rand()
 
+    @pytest.mark.redis_db
     def test_memoize_with_args(self) -> None:
         @state.memoize(0.1)  # type: ignore
         def rand(config_key: str = "test1") -> str:

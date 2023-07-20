@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any
+from unittest import mock
+
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
@@ -7,6 +10,13 @@ from flask.testing import FlaskClient
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    AllocationPolicyConfig,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 
 
 @pytest.fixture
@@ -16,6 +26,7 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.redis_db
 def test_get_configs(admin_api: FlaskClient) -> None:
     response = admin_api.get("/configs")
     assert response.status_code == 200
@@ -44,6 +55,7 @@ def test_get_configs(admin_api: FlaskClient) -> None:
     ]
 
 
+@pytest.mark.redis_db
 def test_post_configs(admin_api: FlaskClient) -> None:
     # int
     response = admin_api.post(
@@ -98,6 +110,7 @@ def test_post_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
 
 
+@pytest.mark.redis_db
 def test_delete_configs(admin_api: FlaskClient) -> None:
     # delete a config and its description
     state.set_config("delete_this", "1")
@@ -141,6 +154,7 @@ def test_delete_configs(admin_api: FlaskClient) -> None:
     assert state.get_config_description("delete_this") == "description for this config"
 
 
+@pytest.mark.redis_db
 def test_config_descriptions(admin_api: FlaskClient) -> None:
     state.set_config_description("desc_test", "description test")
     state.set_config_description("another_test", "another description")
@@ -152,6 +166,7 @@ def test_config_descriptions(admin_api: FlaskClient) -> None:
     }
 
 
+@pytest.mark.redis_db
 def get_node_for_table(
     admin_api: FlaskClient, storage_name: str
 ) -> tuple[str, str, int]:
@@ -168,6 +183,8 @@ def get_node_for_table(
     raise Exception(f"{storage_name} does not have a local node")
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -188,6 +205,7 @@ def test_system_query(admin_api: FlaskClient) -> None:
     assert data["rows"] == []
 
 
+@pytest.mark.redis_db
 def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/clickhouse_queries",
@@ -200,6 +218,8 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     assert data[0]["name"] == "CurrentMerges"
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -212,8 +232,12 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
+    key = next(iter(data["formatted_trace_output"]))
+    assert "executeQuery" in data["formatted_trace_output"][key]["read_performance"][0]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -229,6 +253,8 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -244,6 +270,8 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     assert "validation" == data["error"]["type"]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
@@ -256,6 +284,8 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
     assert "column_names" in data and data["column_names"] == ["count()"]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -268,6 +298,8 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     assert "error" in data and data["error"]["message"].startswith("Invalid FROM")
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_querylog_describe(admin_api: FlaskClient) -> None:
     response = admin_api.get("/clickhouse_querylog_schema")
     assert response.status_code == 200
@@ -275,6 +307,7 @@ def test_querylog_describe(admin_api: FlaskClient) -> None:
     assert "column_names" in data and "rows" in data
 
 
+@pytest.mark.redis_db
 def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/querylog_queries",
@@ -287,6 +320,7 @@ def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
     assert data[0]["name"] == "QueryByID"
 
 
+@pytest.mark.redis_db
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     response = admin_api.get("/snuba_datasets")
     assert response.status_code == 200
@@ -294,18 +328,20 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     assert set(data) == set(get_enabled_dataset_names())
 
 
-def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
+@pytest.mark.redis_db
+def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
 
-def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
+@pytest.mark.redis_db
+def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -315,7 +351,9 @@ def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
     )
 
 
-def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (sessions)
     SELECT sessions_crashed
@@ -325,8 +363,255 @@ def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     AND started < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": snql_query})
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
     )
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
+    assert "timing" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (sessions)
+    SELECT sessions_crashed
+    WHERE org_id = 100
+    AND project_id IN tuple(100)
+    AND started >= toDateTime('2022-01-01 00:00:00')
+    AND started < toDateTime('2022-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["sql"] != ""
+    assert len(data["explain"]["steps"]) > 0
+    assert data["explain"]["original_ast"].startswith("SELECT")
+
+    expected_steps = [
+        {
+            "category": "entity_processor",
+            "name": "BasicFunctionsProcessor",
+            "type": "query_transform",
+        },
+        {
+            "category": "storage_planning",
+            "name": "mappers",
+            "type": "query_transform",
+        },
+        {
+            "category": "snql_parsing",
+            "name": "_parse_datetime_literals",
+            "type": "query_transform",
+        },
+    ]
+
+    for e in expected_steps:
+        assert any(
+            step["category"] == e["category"]
+            and step["name"] == e["name"]
+            and step["type"] == e["type"]
+            and step["data"]["original"] != ""
+            and step["data"]["transformed"] != ""
+            and len(step["data"]["diff"]) > 0
+            for step in data["explain"]["steps"]
+        )
+
+
+@pytest.mark.redis_db
+def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
+    class FakePolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return [
+                AllocationPolicyConfig(
+                    "fake_optional_config", "", int, -1, param_types={"org_id": int}
+                )
+            ]
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int], query_id: str
+        ) -> QuotaAllowance:
+            return QuotaAllowance(True, 1, {})
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            pass
+
+    def mock_get_policies() -> list[AllocationPolicy]:
+        policy = FakePolicy(StorageKey("nothing"), [], {})
+        policy.set_config_value("fake_optional_config", 10, {"org_id": 10})
+        return [policy]
+
+    with mock.patch(
+        "snuba.datasets.storage.ReadableTableStorage.get_allocation_policies",
+        side_effect=mock_get_policies,
+    ):
+        response = admin_api.get("/allocation_policy_configs/errors")
+
+    assert response.status_code == 200
+    assert response.json is not None and len(response.json) == 1
+    [data] = response.json
+    assert data["policy_name"] == "FakePolicy"
+    assert data["optional_config_definitions"] == [
+        {
+            "name": "fake_optional_config",
+            "type": "int",
+            "default": -1,
+            "description": "",
+            "params": [{"name": "org_id", "type": "int"}],
+        }
+    ]
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 10,
+        "params": {"org_id": 10},
+    } in data["configs"]
+
+
+@pytest.mark.redis_db
+def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
+    # an end to end test setting a config, retrieving allocation policy configs,
+    # and deleting the config afterwards
+    auditlog_records = []
+
+    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
+        nonlocal auditlog_records
+        auditlog_records.append((user, action, data, notify))
+
+    with mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+        response = admin_api.post(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "policy": "BytesScannedWindowAllocationPolicy",
+                    "key": "org_limit_bytes_scanned_override",
+                    "params": {"org_id": 1},
+                    "value": "420",
+                }
+            ),
+        )
+
+        assert response.status_code == 200, response.json
+        # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
+        response = admin_api.get("/allocation_policy_configs/errors")
+        assert response.status_code == 200
+
+        # one policy
+        assert response.json is not None and len(response.json) == 1
+        [policy_configs] = response.json
+        assert policy_configs["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        assert {
+            "default": -1,
+            "description": "Number of bytes a specific org can scan in a 10 minute "
+            "window.",
+            "name": "org_limit_bytes_scanned_override",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } in policy_configs["configs"]
+
+        # no need to record auditlog when nothing was updated
+        assert not auditlog_records
+        assert (
+            admin_api.delete(
+                "/allocation_policy_config",
+                data=json.dumps(
+                    {
+                        "storage": "errors",
+                        "policy": "BytesScannedWindowAllocationPolicy",
+                        "key": "org_limit_bytes_scanned_override",
+                        "params": {"org_id": 1},
+                    }
+                ),
+            ).status_code
+            == 200
+        )
+
+        response = admin_api.get("/allocation_policy_configs/errors")
+        assert response.status_code == 200
+        assert response.json is not None and len(response.json) == 1
+        assert {
+            "default": -1,
+            "description": "Number of bytes a specific org can scan in a 10 minute "
+            "window.",
+            "name": "org_limit_bytes_scanned_override",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } not in response.json[0]["configs"]
+        # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' does not exist"
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "sessions", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
+    )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 1
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 2
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"

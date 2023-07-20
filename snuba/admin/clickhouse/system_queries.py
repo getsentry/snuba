@@ -6,15 +6,6 @@ from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connec
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.utils.serializable_exception import SerializableException
-
-
-class NonExistentSystemQuery(SerializableException):
-    pass
-
-
-class InvalidResultError(SerializableException):
-    pass
 
 
 def _run_sql_query_on_host(
@@ -23,8 +14,17 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
+    if storage_name == "querylog":
+        # querylog readonly user profile has readonly=2 set, but if you try
+        # and set readonly=2 as part of the request this will error since
+        # clickhouse doesn't let you set readonly setting if readonly=2 in
+        # the current settings https://github.com/ClickHouse/ClickHouse/blob/20.7/src/Access/SettingsConstraints.cpp#L243-L249
+        settings = ClickhouseClientSettings.QUERYLOG
+    else:
+        settings = ClickhouseClientSettings.QUERY
+
     connection = get_ro_node_connection(
-        clickhouse_host, clickhouse_port, storage_name, ClickhouseClientSettings.QUERY
+        clickhouse_host, clickhouse_port, storage_name, settings
     )
     query_result = connection.execute(query=sql, with_column_types=True)
 
@@ -36,12 +36,12 @@ SYSTEM_QUERY_RE = re.compile(
         ^ # Start
         (SELECT|select)
         \s
-        (?P<select_statement>[\w\s\',()*+\-\/]+|\*)
+        (?P<select_statement>[\w\s\',()*+\-\/:]+|\*)
         \s
         (FROM|from)
         \s
         system.[a-z_]+
-        (?P<extra>\s[\w\s,=()*+<>'%"\-\/]+)?
+        (?P<extra>\s[\w\s,=()*+<>'%"\-\/:]+)?
         ;? # Optional semicolon
         $ # End
     """,

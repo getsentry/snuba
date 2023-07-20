@@ -1,8 +1,8 @@
-import logging
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
+import structlog
 from clickhouse_driver import errors
 
 from snuba import settings
@@ -15,33 +15,40 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
+from snuba.migrations.groups import (
+    OPTIONAL_GROUPS,
+    MigrationGroup,
+    get_group_loader,
+    get_group_readiness_state,
+)
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.migrations.status import Status
 
-logger = logging.getLogger("snuba.migrations")
+logger = structlog.get_logger().bind(module=__name__)
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
-
-    return [
-        group
-        for group in MigrationGroup
-        if not (
+    groups = []
+    for group in MigrationGroup:
+        if (
             group in OPTIONAL_GROUPS
             and group.value in settings.SKIPPED_MIGRATION_GROUPS
-        )
-    ]
+            or get_group_readiness_state(group).value not in settings.SUPPORTED_STATES
+        ):
+            continue
+        groups.append(group)
+    return groups
 
 
 class MigrationKey(NamedTuple):
@@ -145,7 +152,13 @@ class Runner:
         return migrations
 
     def run_all(
-        self, *, force: bool = False, group: Optional[MigrationGroup] = None
+        self,
+        *,
+        through: str = "all",
+        fake: bool = False,
+        force: bool = False,
+        group: Optional[MigrationGroup] = None,
+        readiness_states: Optional[Sequence[ReadinessState]] = None,
     ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
@@ -166,6 +179,28 @@ class Runner:
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
+        if readiness_states:
+            pending_migrations = [
+                m
+                for m in pending_migrations
+                if get_group_readiness_state(m.group) in readiness_states
+            ]
+
+        use_through = False if through == "all" else True
+
+        def exact_migration_exists(through: str) -> bool:
+            migration_ids = [
+                key.migration_id
+                for key in pending_migrations
+                if key.migration_id.startswith(through)
+            ]
+            if len(migration_ids) == 1:
+                return True
+            return False
+
+        if use_through and not exact_migration_exists(through):
+            raise MigrationError(f"No exact match for: {through}")
+
         # Do not run migrations if any are blocking
         if not force:
             for migration_key in pending_migrations:
@@ -176,7 +211,14 @@ class Runner:
                     raise MigrationError("Requires force to run blocking migrations")
 
         for migration_key in pending_migrations:
-            self._run_migration_impl(migration_key, force=force)
+            if fake:
+                self._update_migration_status(migration_key, Status.COMPLETED)
+            else:
+                self._run_migration_impl(migration_key, force=force)
+
+            if use_through and migration_key.migration_id.startswith(through):
+                logger.info(f"Ran through: {migration_key.migration_id}")
+                break
 
     def run_migration(
         self,

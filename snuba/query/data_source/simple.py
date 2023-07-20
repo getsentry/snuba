@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
@@ -5,6 +7,7 @@ from typing import Optional, Sequence
 from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
 
@@ -55,6 +58,12 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: PhysicalColumnSet
+    # By default a table has a regular passthrough policy.
+    # this is overwridden by the query pipeline if there
+    # is one defined on the storage.
+    allocation_policies: list[AllocationPolicy] = field(
+        default_factory=lambda: [DEFAULT_PASSTHROUGH_POLICY]
+    )
     final: bool = False
     sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions out of

@@ -10,7 +10,8 @@ from snuba.admin.clickhouse.migration_checks import (
     RunResult,
     StatusChecker,
 )
-from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
+from snuba.migrations.group_loader import DirectoryLoader, GroupLoader
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -93,6 +94,7 @@ def test_status_checker_reverse(
     assert result.reason == expected_reason
 
 
+@pytest.mark.clickhouse_db
 def test_status_checker_errors() -> None:
     """
     Tests the following failure cases:

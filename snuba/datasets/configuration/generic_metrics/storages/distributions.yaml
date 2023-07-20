@@ -4,6 +4,7 @@ name: generic_metrics_distributions
 storage:
   key: generic_metrics_distributions
   set_key: generic_metrics_distributions
+readiness_state: complete
 schema:
   columns:
     [
@@ -91,6 +92,24 @@ schema:
     ]
   local_table_name: generic_metric_distributions_aggregated_local
   dist_table_name: generic_metric_distributions_aggregated_dist
+
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+
 query_processors:
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _raw_tags_hash
+      killswitch: generic_metrics/tags_hash_map_enabled
+      value_subcolumn_name: raw_value
   - processor: TableRateLimit
   - processor: TupleUnaliaser

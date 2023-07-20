@@ -4,6 +4,7 @@ name: metrics_sets
 storage:
   key: metrics_sets
   set_key: metrics
+readiness_state: complete
 schema:
   columns:
     [
@@ -55,7 +56,4 @@ stream_loader:
   processor:
     name: SetsAggregateProcessor
   default_topic: snuba-metrics
-  dlq_policy:
-    type: produce
-    args:
-      - snuba-dead-letter-metrics
+  dlq_topic: snuba-dead-letter-metrics-sets

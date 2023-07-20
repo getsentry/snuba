@@ -56,8 +56,8 @@ TEST_ASSIGNEE_JOIN_PARAMS = [
 
 
 class TestCdcEvents(BaseApiTest):
-    def setup_method(self, test_method):
-        super().setup_method(test_method)
+    @pytest.fixture(autouse=True)
+    def setup_fixture(self, clickhouse_db, redis_db):
         self.app.post = partial(self.app.post, headers={"referer": "test"})
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -99,6 +99,8 @@ class TestCdcEvents(BaseApiTest):
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(assignee).encode("utf-8") for assignee in assignees])
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "relationship, operator, expected_rows", TEST_GROUP_JOIN_PARAMS
     )
@@ -136,6 +138,8 @@ class TestCdcEvents(BaseApiTest):
         assert response.status_code == 200
         assert len(data["data"]) == expected_rows, data
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "relationship, operator, expected_rows", TEST_ASSIGNEE_JOIN_PARAMS
     )

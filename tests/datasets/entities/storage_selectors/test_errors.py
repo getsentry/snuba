@@ -106,6 +106,7 @@ TEST_CASES = [
     "snql_query, dataset, storage_connections, selector, use_readable, expected_storage",
     TEST_CASES,
 )
+@pytest.mark.redis_db
 def test_query_storage_selector(
     snql_query: str,
     dataset: Dataset,

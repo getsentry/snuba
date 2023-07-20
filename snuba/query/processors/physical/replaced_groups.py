@@ -1,4 +1,3 @@
-import logging
 from dataclasses import replace
 from datetime import datetime
 from typing import MutableMapping, Optional, Set
@@ -12,13 +11,12 @@ from snuba.clickhouse.query_dsl.accessors import (
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
 CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
@@ -52,6 +50,18 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         if project_ids is None:
             self._set_query_final(query, False)
             return
+
+        for no_final_subscriptions_project in (
+            get_config("skip_final_subscriptions_projects") or "[]"
+        )[1:-1].split(","):
+            if (
+                no_final_subscriptions_project
+                and int(no_final_subscriptions_project) in project_ids
+                and isinstance(query_settings, SubscriptionQuerySettings)
+            ):
+                metrics.increment(name="subscriptions_skipped_final")
+                self._set_query_final(query, False)
+                return
 
         for denied_project_id_string in (
             get_config("post_replacement_consistency_projects_denylist") or "[]"

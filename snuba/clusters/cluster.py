@@ -1,4 +1,3 @@
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -17,6 +16,8 @@ from typing import (
     TypeVar,
 )
 
+import structlog
+
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
@@ -31,7 +32,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -60,6 +61,7 @@ class ClickhouseClientSettings(Enum):
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
+    QUERYLOG = ClickhouseClientSettingsType({}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
@@ -362,6 +364,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_port(self) -> int:
         return self.__port
 
+    def get_http_port(self) -> int:
+        return self.__http_port
+
 
 CLUSTERS = [
     ClickhouseCluster(
@@ -394,12 +399,6 @@ _unique_registered_storage_sets = set(_registered_storage_sets)
 assert len(_registered_storage_sets) == len(
     _unique_registered_storage_sets
 ), "Storage set registered to more than one cluster"
-
-expected_storage_sets = {
-    s
-    for s in StorageSetKey
-    if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
-}
 
 _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster

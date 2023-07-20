@@ -1,9 +1,9 @@
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::types::{Message, Partition, Topic};
+use crate::types::{InnerMessage, Message, Partition, Topic};
 use std::collections::HashMap;
-use std::mem::replace;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -31,6 +31,17 @@ struct Strategies<TPayload: Clone> {
 
 struct Callbacks<TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessorHandle {
+    shutdown_requested: Arc<AtomicBool>,
+}
+
+impl ProcessorHandle {
+    pub fn signal_shutdown(&mut self) {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
+    }
 }
 
 impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
@@ -71,7 +82,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     consumer: Box<dyn Consumer<'a, TPayload> + 'a>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
-    shutdown_requested: bool,
+    processor_handle: ProcessorHandle,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -88,14 +99,16 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             consumer,
             strategies,
             message: None,
-            shutdown_requested: false,
+            processor_handle: ProcessorHandle {
+                shutdown_requested: Arc::new(AtomicBool::new(false)),
+            },
         }
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> =
             Box::new(Callbacks::new(self.strategies.clone()));
-        let _ = self.consumer.subscribe(&[topic], callbacks);
+        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -115,8 +128,18 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             let msg = self.consumer.poll(Some(Duration::ZERO));
             //TODO: Support errors properly
             match msg {
-                Ok(m) => self.message = m,
-                Err(_) => return Err(RunError::PollError),
+                Ok(None) => {
+                    self.message = None;
+                }
+                Ok(Some(inner)) => {
+                    self.message = Some(Message {
+                        inner_message: InnerMessage::BrokerMessage(inner),
+                    });
+                }
+                Err(e) => {
+                    log::error!("poll error: {}", e);
+                    return Err(RunError::PollError);
+                }
             }
         }
 
@@ -131,12 +154,12 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                 match commit_request {
                     None => {}
                     Some(request) => {
-                        self.consumer.stage_positions(request.positions).unwrap();
-                        self.consumer.commit_positions().unwrap();
+                        self.consumer.stage_offsets(request.positions).unwrap();
+                        self.consumer.commit_offsets().unwrap();
                     }
                 };
 
-                let msg = replace(&mut self.message, None);
+                let msg = self.message.take();
                 if let Some(msg_s) = msg {
                     let ret = strategy.submit(msg_s);
                     match ret {
@@ -170,7 +193,11 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
     /// The main run loop, see class docstring for more information.
     pub fn run(&mut self) -> Result<(), RunError> {
-        while !self.shutdown_requested {
+        while !self
+            .processor_handle
+            .shutdown_requested
+            .load(Ordering::Relaxed)
+        {
             let ret = self.run_once();
             match ret {
                 Ok(()) => {}
@@ -183,6 +210,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             strategy.terminate();
                         }
                     }
+                    drop(trait_callbacks); // unlock mutex so we can close consumer
                     self.consumer.close();
                     return Err(e);
                 }
@@ -192,8 +220,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         Ok(())
     }
 
-    pub fn signal_shutdown(&mut self) {
-        self.shutdown_requested = true;
+    pub fn get_handle(&self) -> ProcessorHandle {
+        self.processor_handle.clone()
     }
 
     pub fn shutdown(&mut self) {
@@ -214,7 +242,7 @@ mod tests {
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalConsumer;
     use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::types::{Message, Partition, Position, Topic};
+    use crate::types::{Message, Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
     use std::time::Duration;
@@ -229,18 +257,12 @@ mod tests {
             match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from([(
-                        message.partition.clone(),
-                        Position {
-                            offset: message.offset,
-                            timestamp: message.timestamp,
-                        },
-                    )]),
+                    positions: HashMap::from_iter(message.committable().into_iter()),
                 }),
             }
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected> {
+        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected<String>> {
             self.message = Some(message);
             Ok(())
         }

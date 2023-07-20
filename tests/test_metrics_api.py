@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Tuple, Union, cast
+from typing import Any, Callable, Generator, Optional, Tuple, Union, cast
 
 import pytest
 import pytz
@@ -45,6 +45,8 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -55,11 +57,10 @@ class TestMetricsApiCounters(BaseApiTest):
         return "metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, _build_snql_post_methods: Callable[[str], Any], clickhouse_db: None
+    ) -> Generator[None, None, None]:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         # values for test data
         self.metric_id = 1001
@@ -76,13 +77,15 @@ class TestMetricsApiCounters(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_time = utc_yesterday_12_15() - timedelta(minutes=1)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
         )
         self.generate_counters()
 
-    def teardown_method(self, test_method: Any) -> None:
+        yield
+
         teardown_common()
 
     def generate_counters(self) -> None:
@@ -105,6 +108,8 @@ class TestMetricsApiCounters(BaseApiTest):
                                 "tags": self.default_tags,
                                 "metric_id": self.metric_id,
                                 "retention_days": RETENTION_DAYS,
+                                "sentry_received_timestamp": self.sentry_received_time.timestamp()
+                                + n,
                             }
                         ),
                         KafkaMessageMetadata(0, 0, self.base_time),
@@ -196,6 +201,8 @@ class TestMetricsApiCounters(BaseApiTest):
         assert aggregation["total_seconds"] == 3600
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOrgMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -220,6 +227,9 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        )
+        self.sentry_received_timestamp = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
         self.storage = cast(
@@ -252,6 +262,8 @@ class TestOrgMetricsApiCounters(BaseApiTest):
                                     "timestamp": self.base_time.timestamp() + n,
                                     "metric_id": self.metric_id,
                                     "retention_days": RETENTION_DAYS,
+                                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                                    + n,
                                 }
                             ),
                             KafkaMessageMetadata(0, 0, self.base_time),
@@ -331,6 +343,8 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         ]
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiSets(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -362,6 +376,9 @@ class TestMetricsApiSets(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
+            minutes=self.seconds
+        )
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
@@ -387,6 +404,8 @@ class TestMetricsApiSets(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 }
 
                 processed = processor.process_message(
@@ -427,6 +446,8 @@ class TestMetricsApiSets(BaseApiTest):
         assert aggregation["unique_values"] == self.unique_set_values
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -459,6 +480,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
+            seconds=self.seconds
+        )
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
@@ -484,6 +508,8 @@ class TestMetricsApiDistributions(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 }
 
                 processed = processor.process_message(

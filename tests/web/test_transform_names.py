@@ -2,6 +2,8 @@ import time
 import uuid
 from datetime import datetime
 
+import pytest
+
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -21,6 +23,8 @@ from snuba.web.query import parse_and_run_query
 from tests.helpers import write_unprocessed_events
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_transform_column_names() -> None:
     """
     Runs a simple query containing selected expressions names that
@@ -87,7 +91,7 @@ def test_transform_column_names() -> None:
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
-                {"tenant_type": "tenant_id"},
+                {"organization_id": 123, "referrer": "r"},
                 "blah",
                 None,
                 None,

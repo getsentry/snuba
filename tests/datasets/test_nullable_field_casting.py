@@ -28,6 +28,7 @@ from snuba.web import QueryResult
         )
     ],
 )
+@pytest.mark.clickhouse_db
 def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> None:
     dataset_name = "discover"
 
@@ -65,8 +66,8 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
     # --------------------------------------------------------------------
 
     def query_verifier(
-        query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         # The only reason this extends StringifyVisitor is because it has all the other
@@ -89,7 +90,7 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
                     self.sdk_version_cast_to_null = True
                 return super().visit_function_call(exp)
 
-        for select_expr in query.get_selected_columns():
+        for select_expr in clickhouse_query.get_selected_columns():
             verifier = NullCastingVerifier()
             select_expr.expression.accept(verifier)
             assert verifier.sdk_version_cast_to_null

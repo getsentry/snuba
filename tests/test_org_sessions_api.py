@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import pytest
 import pytz
 import simplejson as json
 from snuba_sdk import Request
@@ -21,13 +22,14 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOrgSessionsApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
-
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         # values for test data
         self.started = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc

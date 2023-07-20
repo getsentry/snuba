@@ -1,16 +1,22 @@
 import importlib
 from datetime import datetime
-from unittest.mock import patch
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+import snuba.migrations.connect
 from snuba import settings
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
-from snuba.migrations.errors import MigrationError
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.migrations.connect import check_for_inactive_replicas
+from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
@@ -29,14 +35,22 @@ def _drop_all_tables() -> None:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
 
-def setup_function() -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+    _drop_all_tables()
+    yield
     _drop_all_tables()
 
 
-def teardown_function() -> None:
-    _drop_all_tables()
+@pytest.fixture(scope="function")
+def temp_settings() -> Any:
+    from snuba import settings
+
+    yield settings
+    importlib.reload(settings)
 
 
+@pytest.mark.clickhouse_db
 def test_get_status() -> None:
     runner = Runner()
     assert runner.get_status(
@@ -54,6 +68,7 @@ def test_get_status() -> None:
     assert isinstance(status[1], datetime)
 
 
+@pytest.mark.clickhouse_db
 def test_show_all() -> None:
     runner = Runner()
     assert all(
@@ -73,6 +88,7 @@ def test_show_all() -> None:
     )
 
 
+@pytest.mark.clickhouse_db
 def test_show_all_for_groups() -> None:
     runner = Runner()
     migration_key = MigrationKey(MigrationGroup("system"), "0001_migrations")
@@ -92,6 +108,7 @@ def test_show_all_for_groups() -> None:
     assert all([migration.status == Status.COMPLETED for migration in migrations])
 
 
+@pytest.mark.clickhouse_db
 def test_run_migration() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
@@ -118,6 +135,7 @@ def test_run_migration() -> None:
     assert connection.execute("SHOW TABLES LIKE 'sentry_local'").results == []
 
 
+@pytest.mark.clickhouse_db
 def test_reverse_migration() -> None:
     runner = Runner()
     runner.run_all(force=True)
@@ -145,6 +163,7 @@ def test_reverse_migration() -> None:
     ), "Table still exists"
 
 
+@pytest.mark.clickhouse_db
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
@@ -153,6 +172,7 @@ def test_get_pending_migrations() -> None:
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
+@pytest.mark.clickhouse_db
 def test_get_pending_migrations_for_group() -> None:
     runner = Runner()
     group = MigrationGroup.EVENTS
@@ -163,6 +183,7 @@ def test_get_pending_migrations_for_group() -> None:
     assert len(runner._get_pending_migrations_for_group(MigrationGroup.SYSTEM)) == 0
 
 
+@pytest.mark.clickhouse_db
 def test_run_all_with_group() -> None:
     runner = Runner()
     group = MigrationGroup.EVENTS
@@ -183,6 +204,7 @@ def test_run_all_with_group() -> None:
     assert len(runner._get_pending_migrations()) == expected_pending_count
 
 
+@pytest.mark.clickhouse_db
 def test_run_all() -> None:
     runner = Runner()
     assert len(runner._get_pending_migrations()) == get_total_migration_count()
@@ -194,6 +216,82 @@ def test_run_all() -> None:
     assert runner._get_pending_migrations() == []
 
 
+@pytest.mark.clickhouse_db
+def test_run_all_using_through() -> None:
+    """
+    Using "through" allows migrating up to (including)
+    a specified migration id (or prefix) for a given group.
+
+    `snuba migrations migrate generic_metrics 0003`
+
+    Prefix must match exactly one migration id to be valid.
+    """
+    runner = Runner()
+
+    with pytest.raises(MigrationError):
+        # using through requires a group
+        runner.run_all(force=True, through="0001")
+
+    group = MigrationGroup.GENERIC_METRICS
+    all_generic_metrics = len(get_group_loader(group).get_migrations())
+    assert (
+        len(runner._get_pending_migrations_for_group(group=group))
+        == all_generic_metrics
+    )
+
+    with pytest.raises(MigrationError):
+        # too many migrations id matches
+        runner.run_all(force=True, group=group, through="00")
+
+    with pytest.raises(MigrationError):
+        # no migration id matches
+        runner.run_all(force=True, group=group, through="9999")
+
+    runner.run_all(force=True, group=group, through="0002")
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (
+        all_generic_metrics - 2
+    )
+
+    # Running with --fake
+    # (generic_metric_sets_aggregation_mv was added in 0003)
+    runner.run_all(force=True, group=group, through="0003", fake=True)
+    connection = get_cluster(StorageSetKey.GENERIC_METRICS_SETS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert (
+        connection.execute(
+            "SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'"
+        ).results
+        == []
+    )
+
+
+@pytest.mark.clickhouse_db
+def test_run_all_using_readiness() -> None:
+    """
+    Using "readiness_state" filtering groups by readiness state.
+    """
+    runner = Runner()
+
+    group = MigrationGroup.GENERIC_METRICS
+    all_generic_metrics = len(get_group_loader(group).get_migrations())
+    assert (
+        len(runner._get_pending_migrations_for_group(group=group))
+        == all_generic_metrics
+    )
+
+    # using different readiness wont change anything
+    runner.run_all(force=True, group=group, readiness_states=[ReadinessState.LIMITED])
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (
+        all_generic_metrics
+    )
+
+    # using correct readiness state runs the migration
+    runner.run_all(force=True, group=group, readiness_states=[ReadinessState.COMPLETE])
+    assert len(runner._get_pending_migrations_for_group(group=group)) == 0
+
+
+@pytest.mark.clickhouse_db
 def test_reverse_all() -> None:
     runner = Runner()
     all_migrations = runner._get_pending_migrations()
@@ -209,6 +307,7 @@ def test_reverse_all() -> None:
     ), "All tables should be deleted"
 
 
+@pytest.mark.clickhouse_db
 def test_reverse_idempotency_all() -> None:
     # This test is to ensure that reversing a migration twice does not cause any
     # issues or unintended side effects. This is important because we may need to reverse
@@ -259,6 +358,7 @@ def test_reverse_idempotency_all() -> None:
     ), "All tables should be deleted"
 
 
+@pytest.mark.clickhouse_db
 def get_total_migration_count() -> int:
     count = 0
     for group in get_active_migration_groups():
@@ -266,6 +366,23 @@ def get_total_migration_count() -> int:
     return count
 
 
+@pytest.mark.clickhouse_db
+def test_get_active_migration_groups(temp_settings: Any) -> None:
+    temp_settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
+    active_groups = get_active_migration_groups()
+    assert (
+        MigrationGroup.SEARCH_ISSUES not in active_groups
+    )  # should be skipped by SKIPPED_MIGRATION_GROUPS
+
+    temp_settings.SKIPPED_MIGRATION_GROUPS = {}
+    temp_settings.SUPPORTED_STATES = {}
+    active_groups = get_active_migration_groups()
+    assert (
+        MigrationGroup.SEARCH_ISSUES not in active_groups
+    )  # should be skipped by readiness_state
+
+
+@pytest.mark.clickhouse_db
 def test_reverse_in_progress() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
@@ -290,6 +407,7 @@ def test_reverse_in_progress() -> None:
     assert runner.get_status(migration_key)[0] == Status.NOT_STARTED
 
 
+@pytest.mark.clickhouse_db
 def test_version() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
@@ -301,6 +419,7 @@ def test_version() -> None:
     assert runner._get_next_version(migration_key) == 3
 
 
+@pytest.mark.clickhouse_db
 def test_no_schema_differences() -> None:
     settings.ENABLE_DEV_FEATURES = True
     importlib.reload(factory)
@@ -329,13 +448,57 @@ def test_no_schema_differences() -> None:
     importlib.reload(factory)
 
 
+@pytest.mark.clickhouse_db
 def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"test_migration"}):
         runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES LIKE 'querylog_local'").results == []
+    assert connection.execute("SHOW TABLES LIKE 'test_migration_local'").results == []
+
+
+@pytest.mark.clickhouse_db
+def test_check_inactive_replica() -> None:
+    inactive_replica_query_result = ClickhouseResult(
+        results=[
+            ["bad_table_1", 3, 2],
+            ["bad_table_2", 4, 1],
+        ]
+    )
+
+    with patch.object(
+        snuba.migrations.connect, "get_all_storage_keys"
+    ) as mock_storage_keys:
+        storage_key = StorageKey.ERRORS
+        storage = get_storage(storage_key)
+        database = storage.get_cluster().get_database()
+        mock_storage_keys.return_value = [storage_key]
+
+        with patch("snuba.migrations.connect.get_storage") as MockGetStorage:
+            mock_cluster = MagicMock()
+            MockGetStorage.return_value.get_cluster.return_value = mock_cluster
+
+            mock_conn = mock_cluster.get_node_connection.return_value
+            mock_conn.database = database
+            mock_conn.execute.return_value = inactive_replica_query_result
+
+            with pytest.raises(InactiveClickhouseReplica) as exc:
+                check_for_inactive_replicas()
+
+            assert exc.value.args[0] == (
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_1 "
+                f"with 2 out of 3 replicas active.\n"
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_2 "
+                f"with 1 out of 4 replicas active."
+            )
+
+            assert mock_conn.execute.call_count == 1
+            query = (
+                "SELECT table, total_replicas, active_replicas FROM system.replicas "
+                f"WHERE active_replicas < total_replicas AND database ='{database}'"
+            )
+            mock_conn.execute.assert_called_with(query)

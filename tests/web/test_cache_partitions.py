@@ -1,8 +1,11 @@
+import pytest
+
 from snuba import state
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.web.db_query import _get_cache_partition, _get_cache_wait_timeout
 
 
+@pytest.mark.redis_db
 def test_cache_partition() -> None:
     pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
     reader1 = NativeDriverReader(None, pool, None)
@@ -22,6 +25,7 @@ def test_cache_partition() -> None:
     assert id(default_cache) != id(nondefault_cache)
 
 
+@pytest.mark.redis_db
 def test_cache_wait_timeout() -> None:
     pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
     default_reader = NativeDriverReader(None, pool, None)

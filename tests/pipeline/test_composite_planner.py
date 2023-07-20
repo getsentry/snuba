@@ -60,6 +60,7 @@ events_table_name = events_storage.get_table_writer().get_schema().get_table_nam
 events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
+    allocation_policies=events_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
     mandatory_conditions=events_storage.get_schema()
@@ -77,6 +78,7 @@ assert isinstance(groups_schema, TableSchema)
 groups_table = Table(
     groups_schema.get_table_name(),
     groups_schema.get_columns(),
+    allocation_policies=groups_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
     mandatory_conditions=groups_schema.get_data_source().get_mandatory_conditions(),
@@ -492,6 +494,7 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("logical_query, composite_plan, processed_query", TEST_CASES)
+@pytest.mark.clickhouse_db
 def test_composite_planner(
     logical_query: CompositeQuery[Entity],
     composite_plan: CompositeQueryPlan,
@@ -542,11 +545,11 @@ def test_composite_planner(
             )
 
     def runner(
-        query: Union[ClickhouseQuery, CompositeQuery[Table]],
+        clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
-        report = query.equals(processed_query)
+        report = clickhouse_query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"
         return QueryResult(
             {"data": []},

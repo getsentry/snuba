@@ -10,12 +10,13 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.threading import ThreadingIntegration
 from structlog.processors import JSONRenderer
 from structlog.types import EventDict
 from structlog_sentry import SentryProcessor
 
 from snuba import settings
-from snuba.util import create_metrics
+from snuba.utils.metrics.util import create_metrics
 
 
 def add_severity_attribute(
@@ -62,6 +63,9 @@ def setup_logging(level: Optional[str] = None) -> None:
         processors=[
             add_severity_attribute,
             structlog.contextvars.merge_contextvars,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             SentryProcessor(),
             drop_level,
@@ -78,6 +82,7 @@ def setup_sentry() -> None:
             GnuBacktraceIntegration(),
             LoggingIntegration(event_level=logging.WARNING),
             RedisIntegration(),
+            ThreadingIntegration(propagate_hub=True),
         ],
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,

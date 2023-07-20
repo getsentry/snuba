@@ -4,6 +4,7 @@ name: sessions_hourly
 storage:
   key: sessions_hourly
   set_key: sessions
+readiness_state: deprecate
 schema:
   columns:
     [

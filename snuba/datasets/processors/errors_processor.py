@@ -10,6 +10,7 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
     InsertEvent,
     SentryExceptionChain,
     SentryRequest,
+    SentryThreadChain,
     SentryUser,
 )
 
@@ -72,7 +73,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], None)
+            return InsertBatch([row], row["received"])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
@@ -133,7 +134,20 @@ class ErrorsProcessor(DatasetMessageProcessor):
             or {"values": []}
         )
         stacks = exception.get("values", None) or []
-        self.extract_stacktraces(processed, stacks)
+
+        threadChain: SentryThreadChain = data.get(
+            "threads",
+            cast(SentryThreadChain, data.get("sentry.interfaces.Threads", None)),
+        ) or {"values": []}
+        threads = threadChain.get("values", None) or []
+
+        self.extract_stacktraces(processed, stacks, threads)
+
+        processing_errors = data.get("errors", None)
+        if processing_errors is None:
+            processed["num_processing_errors"] = 0
+        elif processing_errors is not None and isinstance(processing_errors, list):
+            processed["num_processing_errors"] = len(processing_errors)
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
@@ -168,7 +182,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         metadata: KafkaMessageMetadata,
-    ) -> Mapping[str, Any]:
+    ) -> MutableMapping[str, Any]:
         data = event.get("data", {})
 
         # XXX(markus): pretty sure there should be no
@@ -191,10 +205,10 @@ class ErrorsProcessor(DatasetMessageProcessor):
             elif ip_address.version == 6:
                 output["ip_address_v6"] = str(ip_address)
 
-        contexts: Mapping[str, Any] = _as_dict_safe(data.get("contexts", None))
+        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
         geo = user_dict.get("geo", None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
-            contexts["geo"] = geo  # type: ignore
+            contexts["geo"] = geo
 
         request = (
             data.get(
@@ -230,6 +244,16 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
         output["user"] = tags.get("sentry:user", "") or ""
+
+        replay_id = tags.get("replayId")
+        if replay_id:
+            try:
+                # replay_id as a tag is not guarenteed to be UUID (user could set value in theory)
+                # so simply continue if not UUID.
+                output["replay_id"] = str(uuid.UUID(replay_id))
+            except ValueError:
+                pass
+
         # The table has an empty string default, but the events coming from eventstream
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
@@ -238,17 +262,30 @@ class ErrorsProcessor(DatasetMessageProcessor):
     def extract_promoted_contexts(
         self,
         output: MutableMapping[str, Any],
-        contexts: Mapping[str, Any],
-        tags: Mapping[str, Any],
+        contexts: MutableMapping[str, Any],
+        tags: MutableMapping[str, Any],
     ) -> None:
         transaction_ctx = contexts.get("trace") or {}
         trace_id = transaction_ctx.get("trace_id", None)
         span_id = transaction_ctx.get("span_id", None)
+        trace_sampled = transaction_ctx.get("sampled", None)
+
+        replay_ctx = contexts.get("replay") or {}
+        replay_id = replay_ctx.get("replay_id", None)
+
+        if replay_id:
+            replay_id_uuid = uuid.UUID(replay_id)
+            output["replay_id"] = str(replay_id_uuid)
+            if "replayId" not in tags:
+                tags["replayId"] = replay_id_uuid.hex
+            del contexts["replay"]
 
         if trace_id:
             output["trace_id"] = str(uuid.UUID(trace_id))
         if span_id:
             output["span_id"] = int(span_id, 16)
+        if trace_sampled:
+            output["trace_sampled"] = bool(trace_sampled)
 
     def extract_common(
         self,
@@ -282,7 +319,10 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["modules.version"] = module_versions
 
     def extract_stacktraces(
-        self, output: MutableMapping[str, Any], stacks: Sequence[Any]
+        self,
+        output: MutableMapping[str, Any],
+        stacks: Sequence[Any],
+        threads: Sequence[Any],
     ) -> None:
         stack_types = []
         stack_values = []
@@ -298,6 +338,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         frame_colnos = []
         frame_linenos = []
         frame_stack_levels = []
+        exception_main_thread = None
 
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
             stack_level = 0
@@ -311,6 +352,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
                 mechanism = stack.get("mechanism", None) or {}
                 stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
                 stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
+
+                thread_id = stack.get("thread_id", None)
 
                 frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
                 for frame in frames:
@@ -327,6 +370,27 @@ class ErrorsProcessor(DatasetMessageProcessor):
                     frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
                     frame_stack_levels.append(stack_level)
 
+                ## mark if at least one of the exceptions happened in the main thread
+                if thread_id is not None and exception_main_thread is not True:
+                    for thread in threads:
+                        if thread is None:
+                            continue
+
+                        main = thread.get("main", None)
+                        id = thread.get("id", None)
+
+                        if main is None or id is None:
+                            continue
+
+                        if id == thread_id and main is True:
+                            ## if it's the main thread, mark it as such and stop it
+                            exception_main_thread = True
+                            break
+                        else:
+                            ## if it's NOT the main thread, mark it as such, but
+                            ## keep looking for the main thread
+                            exception_main_thread = False
+
                 stack_level += 1
 
         output["exception_stacks.type"] = stack_types
@@ -342,6 +406,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["exception_frames.colno"] = frame_colnos
         output["exception_frames.lineno"] = frame_linenos
         output["exception_frames.stack_level"] = frame_stack_levels
+
+        if exception_main_thread is not None:
+            output["exception_main_thread"] = exception_main_thread
 
     def extract_required(
         self,

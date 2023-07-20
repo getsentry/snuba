@@ -2,6 +2,8 @@ import threading
 from typing import List, MutableSequence, Optional, Tuple, Union
 from unittest.mock import ANY, Mock, call
 
+import pytest
+
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
@@ -30,6 +32,8 @@ from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_copying_disallowed() -> None:
     set_config(
         "pipeline-delegator-disallow-query-copy", "subscription;subscriptions_executor"
@@ -42,6 +46,8 @@ def test_query_copying_disallowed() -> None:
     delete_config("pipeline-delegator-disallow-query-copy")
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test() -> None:
     cv = threading.Condition()
     query_result = QueryResult({}, {"stats": {}, "sql": "", "experiments": {}})
@@ -105,15 +111,15 @@ def test() -> None:
     runner_settings: MutableSequence[QuerySettings] = []
 
     def query_runner(
-        query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         nonlocal runner_call_count
         nonlocal runner_settings
 
         runner_call_count += 1
-        runner_settings.append(settings)
+        runner_settings.append(query_settings)
         return query_result
 
     set_config("pipeline_split_rate_limiter", 1)

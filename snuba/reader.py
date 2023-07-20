@@ -6,10 +6,10 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Callable,
+    Dict,
     Iterator,
+    List,
     Mapping,
-    MutableMapping,
-    MutableSequence,
     Optional,
     Pattern,
     Sequence,
@@ -20,15 +20,16 @@ from typing import (
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 
-Column = TypedDict("Column", {"name": str, "type": str})
-Row = MutableMapping[str, Any]
+Column = TypedDict("Column", {"name": str, "type": str}, total=False)
+Row = Dict[str, Any]
+
 Result = TypedDict(
     "Result",
     {
-        "meta": Sequence[Column],
-        "data": MutableSequence[Row],
+        "meta": List[Column],
+        "data": List[Row],
         "totals": Row,
-        "profile": Optional[Mapping[str, Any]],
+        "profile": Optional[Dict[str, Any]],
         "trace_output": str,
     },
     total=False,

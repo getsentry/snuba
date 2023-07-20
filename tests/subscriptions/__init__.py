@@ -2,6 +2,8 @@ import calendar
 import uuid
 from datetime import datetime, timedelta
 
+import pytest
+
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
@@ -14,7 +16,8 @@ from tests.helpers import write_unprocessed_events
 
 
 class BaseSubscriptionTest:
-    def setup_method(self) -> None:
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20

@@ -1,4 +1,4 @@
-from snuba.query.expressions import Column, SubscriptableReference
+from snuba.query.expressions import SubscriptableReference
 
 # Contains functions to derive the expanded column names in the ColumnSet
 # that correspond to a subscriptable nested column like tags and contexts.
@@ -6,7 +6,6 @@ from snuba.query.expressions import Column, SubscriptableReference
 # tags.key and tags.value in ColumnSet objects.
 
 SUBSCRIPT_KEY = "key"
-SUBSCRIPT_VAL = "value"
 
 
 def _subscript_col_name(expression: SubscriptableReference, col_name: str) -> str:
@@ -17,23 +16,3 @@ def _subscript_col_name(expression: SubscriptableReference, col_name: str) -> st
 
 def subscript_key_column_name(expression: SubscriptableReference) -> str:
     return _subscript_col_name(expression, SUBSCRIPT_KEY)
-
-
-def subscript_val_column_name(expression: SubscriptableReference) -> str:
-    return _subscript_col_name(expression, SUBSCRIPT_VAL)
-
-
-def subscript_key_column(expression: SubscriptableReference) -> Column:
-    return Column(
-        None,
-        expression.column.table_name,
-        f"{expression.column.column_name}.{SUBSCRIPT_KEY}",
-    )
-
-
-def subscript_val_column(expression: SubscriptableReference) -> Column:
-    return Column(
-        None,
-        expression.column.table_name,
-        f"{expression.column.column_name}.{SUBSCRIPT_VAL}",
-    )

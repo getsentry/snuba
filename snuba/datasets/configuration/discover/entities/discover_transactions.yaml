@@ -211,11 +211,31 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.city
             nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_subdivision
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.subdivision
+            nullable: true
         - mapper: ColumnToLiteral
           args:
             from_table_name: null
             from_col_name: group_id
             to_literal_value: 0
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
         - mapper: DefaultNoneColumnMapper
           args:
             column_names:
@@ -244,8 +264,11 @@ storages:
               - exception_frames.colno
               - exception_frames.lineno
               - exception_frames.stack_level
+              - exception_main_thread
               - modules.name
               - modules.version
+              - trace_sampled
+              - num_processing_errors
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -299,7 +322,6 @@ query_processors:
         - start_ts
         - finish_ts
         - timestamp
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
   - processor: ApdexProcessor
   - processor: FailureRateProcessor

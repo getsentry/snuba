@@ -1,11 +1,12 @@
 import React from "react";
 import { it, expect, describe, jest, afterEach } from "@jest/globals";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
 import QueryEditor from "../query_editor";
 
 describe("Query editor", () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
   describe("when generating queries", () => {
     it("should replace all instances of parameter name when it has a non-empty parameter value", () => {
@@ -62,8 +63,8 @@ describe("Query editor", () => {
           description: "descripton for query 2",
         },
       ];
-      let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
       it("should show right number of predefined queries in drop down menu", () => {
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getAllByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
@@ -76,30 +77,48 @@ describe("Query editor", () => {
       });
       it("should invoke callback when predefined query is selected", async () => {
         const user = userEvent.setup();
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        predefinedQueries.forEach(async (predefinedQuery) => {
-          await user.selectOptions(getByTestId("select"), predefinedQuery.name);
+        for (const predefinedQuery of predefinedQueries) {
+          await act(async () =>
+            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+          );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
-        });
+        }
       });
       it("should show query and description when predefined query selected", async () => {
         const user = userEvent.setup();
-        let { getByTestId, getByText } = render(
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        let { getByTestId, getByText, getAllByText } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        predefinedQueries.forEach(async (predefinedQuery) => {
-          await user.selectOptions(getByTestId("select"), predefinedQuery.name);
+        for (const predefinedQuery of predefinedQueries) {
+          await act(async () =>
+            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+          );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
-          expect(getByText(predefinedQuery.sql)).toBeTruthy();
-        });
+          expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
+        }
+      });
+    });
+    describe("with text area input", () => {
+      it("should invoke call back with text area value when no labels are present", async () => {
+        const user = userEvent.setup();
+        let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        let { getByTestId } = render(
+          <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
+        );
+        const input = "abcde";
+        await act(async () => user.type(getByTestId("text-area-input"), input));
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });
   });

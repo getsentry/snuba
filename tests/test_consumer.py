@@ -15,6 +15,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
     InsertBatchWriter,
+    LatencyRecorder,
     MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
@@ -29,15 +30,17 @@ from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.fixtures import get_raw_error_message
 
 
 def test_streaming_consumer_strategy() -> None:
     messages = (
         Message(
             BrokerValue(
-                KafkaPayload(None, b"{}", []),
+                KafkaPayload(
+                    None, json.dumps(get_raw_error_message()).encode("utf-8"), []
+                ),
                 Partition(Topic("events"), 0),
                 i,
                 datetime.now(),
@@ -46,7 +49,7 @@ def test_streaming_consumer_strategy() -> None:
         for i in itertools.count()
     )
 
-    replacements_producer = FakeConfluentKafkaProducer()
+    replacements_producer = Mock()
 
     processor = Mock()
     processor.process_message.side_effect = [
@@ -72,11 +75,13 @@ def test_streaming_consumer_strategy() -> None:
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
-            process_message, processor, "consumer_group", SnubaTopic.EVENTS
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS, True
         ),
         write_step,
         max_batch_size=10,
         max_batch_time=60,
+        max_insert_batch_size=None,
+        max_insert_batch_time=None,
         processes=None,
         input_block_size=None,
         output_block_size=None,
@@ -112,7 +117,9 @@ def test_streaming_consumer_strategy() -> None:
     ), assert_changes(
         lambda: writer.write.call_count, 0, expected_write_count
     ), assert_changes(
-        lambda: len(replacements_producer.messages), 0, 1
+        lambda: replacements_producer.produce.call_count,
+        0,
+        1,
     ):
         strategy.close()
         strategy.join()
@@ -143,6 +150,7 @@ def get_row_count(storage: Storage) -> int:
     )
 
 
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize(
     "processes, input_block_size, output_block_size",
     [
@@ -210,6 +218,7 @@ def test_multistorage_strategy(
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(topic=Topic(name="topic"), index=0): 3}),
                 call({}, force=True),
             ],
@@ -218,6 +227,7 @@ def test_multistorage_strategy(
             strategy.join()
 
 
+@pytest.mark.clickhouse_db
 def test_metrics_writing_e2e() -> None:
     distributions_storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS)
     polymorphic_bucket = get_writable_storage(StorageKey.METRICS_RAW)
@@ -233,6 +243,7 @@ def test_metrics_writing_e2e() -> None:
             "tags": {"6": 91, "9": 134, "4": 117, "5": 7},
             "metric_id": 8,
             "retention_days": 90,
+            "sentry_received_timestamp": datetime.now().timestamp(),
         }
     )
 
@@ -263,9 +274,24 @@ def test_metrics_writing_e2e() -> None:
             lambda: commit.call_args_list,
             [],
             [
+                call({}),
                 call({Partition(Topic("topic"), 0): 1}),
                 call({}, force=True),
             ],
         ):
             strategy.close()
             strategy.join()
+
+
+def test_latency_recorder() -> None:
+    recorder = LatencyRecorder()
+
+    assert recorder.max_ms is None
+
+    recorder.record(1.0)
+    recorder.record(0.5)
+    recorder.record(1.2)
+
+    assert recorder.max_ms == 1200.0
+    # (2.7 / 3) * 1000 == 900
+    assert recorder.avg_ms == 900.0

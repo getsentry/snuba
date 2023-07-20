@@ -21,8 +21,5 @@ class CdcStorage(WritableTableStorage):
     def get_row_processor(self) -> CdcRowProcessor:
         return self.__row_processor
 
-    def get_default_control_topic(self) -> str:
-        return self.__default_control_topic
-
     def get_postgres_table(self) -> str:
         return self.__postgres_table

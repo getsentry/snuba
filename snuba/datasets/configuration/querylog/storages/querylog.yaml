@@ -4,9 +4,9 @@ name: querylog
 storage:
   key: querylog
   set_key: querylog
+readiness_state: partial
 schema:
-  columns:
-    [
+  columns: [
       { name: request_id, type: UUID },
       { name: request_body, type: String },
       { name: referrer, type: String },
@@ -167,3 +167,4 @@ stream_loader:
   processor:
     name: QuerylogProcessor
   default_topic: snuba-queries
+  dlq_topic: snuba-dead-letter-querylog

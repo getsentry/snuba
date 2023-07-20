@@ -3,8 +3,7 @@ use super::AssignmentCallbacks;
 use super::Consumer as ArroyoConsumer;
 use super::ConsumerError;
 use crate::backends::kafka::types::KafkaPayload;
-use crate::types::Message as ArroyoMessage;
-use crate::types::{Partition, Position, Topic};
+use crate::types::{BrokerMessage, Partition, Topic};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -49,7 +48,7 @@ impl KafkaConsumerState {
     }
 }
 
-fn create_kafka_message(msg: BorrowedMessage) -> ArroyoMessage<KafkaPayload> {
+fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     let topic = Topic {
         name: msg.topic().to_string(),
     };
@@ -59,15 +58,18 @@ fn create_kafka_message(msg: BorrowedMessage) -> ArroyoMessage<KafkaPayload> {
     };
     let time_millis = msg.timestamp().to_millis().unwrap_or(0);
 
-    ArroyoMessage::new(
-        partition,
-        msg.offset() as u64,
+    BrokerMessage::new(
         KafkaPayload {
             key: msg.key().map(|k| k.to_vec()),
             headers: msg.headers().map(BorrowedHeaders::detach),
             payload: msg.payload().map(|p| p.to_vec()),
         },
-        DateTime::from_utc(NaiveDateTime::from_timestamp(time_millis, 0), Utc),
+        partition,
+        msg.offset() as u64,
+        DateTime::from_utc(
+            NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
+            Utc,
+        ),
     )
 }
 
@@ -144,7 +146,7 @@ pub struct KafkaConsumer {
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    staged_offsets: HashMap<Partition, Position>,
+    staged_offsets: HashMap<Partition, u64>,
 }
 
 impl KafkaConsumer {
@@ -193,7 +195,7 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
     fn poll(
         &mut self,
         timeout: Option<Duration>,
-    ) -> Result<Option<ArroyoMessage<KafkaPayload>>, ConsumerError> {
+    ) -> Result<Option<BrokerMessage<KafkaPayload>>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
         let duration = timeout.unwrap_or(Duration::ZERO);
@@ -264,24 +266,21 @@ impl<'a> ArroyoConsumer<'a, KafkaPayload> for KafkaConsumer {
         Ok(())
     }
 
-    fn stage_positions(
-        &mut self,
-        positions: HashMap<Partition, Position>,
-    ) -> Result<(), ConsumerError> {
-        for (partition, position) in positions {
-            self.staged_offsets.insert(partition, position);
+    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        for (partition, offset) in offsets {
+            self.staged_offsets.insert(partition, offset);
         }
         Ok(())
     }
 
-    fn commit_positions(&mut self) -> Result<HashMap<Partition, Position>, ConsumerError> {
+    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
         let mut topic_map = HashMap::new();
-        for (partition, position) in self.staged_offsets.iter() {
+        for (partition, offset) in self.staged_offsets.iter() {
             topic_map.insert(
                 (partition.topic.name.clone(), partition.index as i32),
-                Offset::from_raw(position.offset as i64),
+                Offset::from_raw(*offset as i64),
             );
         }
 
@@ -311,8 +310,7 @@ mod tests {
     use super::{AssignmentCallbacks, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::Consumer;
-    use crate::types::{Partition, Position, Topic};
-    use chrono::Utc;
+    use crate::types::{Partition, Topic};
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;
     use rdkafka::config::ClientConfig;
@@ -405,8 +403,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit() {
-        create_topic("test", 1).await;
-
+        create_topic("test2", 1).await;
         let configuration = KafkaConfig::new_consumer_config(
             vec!["localhost:9092".to_string()],
             "my-group-2".to_string(),
@@ -417,21 +414,15 @@ mod tests {
 
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic {
-            name: "test".to_string(),
+            name: "test2".to_string(),
         };
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         consumer.subscribe(&[topic.clone()], my_callbacks).unwrap();
 
-        let positions = HashMap::from([(
-            Partition { topic, index: 0 },
-            Position {
-                offset: 100,
-                timestamp: Utc::now(),
-            },
-        )]);
+        let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
-        consumer.stage_positions(positions.clone()).unwrap();
+        consumer.stage_offsets(positions.clone()).unwrap();
 
         // Wait until the consumer got an assignment
         for _ in 0..10 {
@@ -443,11 +434,11 @@ mod tests {
             sleep(Duration::from_millis(200));
         }
 
-        let res = consumer.commit_positions().unwrap();
+        let res = consumer.commit_offsets().unwrap();
         assert_eq!(res, positions);
         consumer.unsubscribe().unwrap();
         consumer.close();
-        delete_topic("test").await;
+        delete_topic("test2").await;
     }
 
     #[test]

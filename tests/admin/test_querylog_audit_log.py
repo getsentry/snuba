@@ -3,14 +3,14 @@ import importlib
 import pytest
 from structlog.testing import capture_logs
 
-import snuba.admin.audit_log.querylog
-from snuba.admin.audit_log.querylog import QueryExecutionStatus, audit_log
+import snuba.admin.audit_log.query
+from snuba.admin.audit_log.query import QueryExecutionStatus, audit_log
 from snuba.clickhouse.native import ClickhouseResult
 
 
 def test_audit_log_success() -> None:
     with capture_logs() as cap_logs:
-        importlib.reload(snuba.admin.audit_log.querylog)
+        importlib.reload(snuba.admin.audit_log.query)
 
         @audit_log
         def successful_query(query: str, user: str) -> ClickhouseResult:

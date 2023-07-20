@@ -1,4 +1,3 @@
-import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -23,8 +22,6 @@ from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
 DISABLED_MATERIALIZATION_VERSION = 1
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
-
-logger = logging.getLogger(__name__)
 
 
 class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
@@ -116,7 +113,15 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
-        return InsertBatch([processed], None)
+        sentry_received_timestamp = None
+        if message.get("sentry_received_timestamp"):
+            sentry_received_timestamp = datetime.utcfromtimestamp(
+                message["sentry_received_timestamp"]
+            )
+
+        return InsertBatch(
+            [processed], None, sentry_received_timestamp=sentry_received_timestamp
+        )
 
 
 class SetsMetricsProcessor(MetricsBucketProcessor):

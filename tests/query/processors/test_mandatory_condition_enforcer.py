@@ -154,6 +154,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("query, valid, org_id_enforcer", test_data)
+@pytest.mark.redis_db
 def test_condition_enforcer(
     query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer
 ) -> None:

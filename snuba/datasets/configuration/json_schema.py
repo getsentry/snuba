@@ -11,25 +11,11 @@ import sentry_sdk
 
 TYPE_STRING = {"type": "string"}
 TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
-TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
-TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 
 def string_with_description(description: str) -> dict[str, str]:
     return {**TYPE_STRING, "description": description}
 
-
-FUNCTION_CALL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "type": {
-            "type": "string",
-            "description": "Name of FunctionCall class config key",
-        },
-        "args": {"type": "array", "items": {"type": "string"}, "description": ""},
-    },
-    "additionalProperties": False,
-}
 
 STREAM_LOADER_SCHEMA = {
     "type": "object",
@@ -71,6 +57,10 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the replacements Kafka topic",
         },
+        "dlq_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the DLQ Kafka topic",
+        },
         "pre_filter": {
             "type": "object",
             "properties": {
@@ -86,30 +76,9 @@ STREAM_LOADER_SCHEMA = {
             "additionalProperties": False,
             "description": "Name of class which filter messages incoming from stream",
         },
-        "dlq_policy": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "type": "string",
-                    "description": "DLQ policy type",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Key/value mappings required to instantiate DLQ class (e.g. topic name).",
-                },
-            },
-            "additionalProperties": False,
-            "description": "Name of class which filter messages incoming from stream",
-        },
     },
     "additionalProperties": False,
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
-}
-
-NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA = {
-    "type": ["array", "null"],
-    "items": TYPE_STRING,
 }
 
 ######
@@ -367,6 +336,11 @@ STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "ConditionChecker",
     "Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.",
 )
+STORAGE_ALLOCATION_POLICIES_SCHEMA = registered_class_array_schema(
+    "name",
+    "AllocationPolicy",
+    "Name of the AllocationPolicy used for allocating read resources per query on this storage.",
+)
 STORAGE_REPLACER_PROCESSOR_SCHEMA = registered_class_schema(
     "processor",
     "ReplacerProcessor",
@@ -480,6 +454,12 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
     },
 }
 
+READINESS_STATE_SCHEMA = {
+    "type": "string",
+    "enum": ["limited", "deprecate", "partial", "complete"],
+    "description": "The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with `limited` which only exposes the storage to CI and local development.",
+}
+
 STORAGE_AND_MAPPER = {
     "type": "object",
     "properties": {
@@ -553,21 +533,23 @@ V1_READABLE_STORAGE_SCHEMA = {
         "kind": {"const": "readable_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the readable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
     },
     "required": [
         "version",
         "kind",
         "name",
         "storage",
+        "readiness_state",
         "schema",
     ],
     "additionalProperties": False,
 }
-
 
 V1_WRITABLE_STORAGE_SCHEMA = {
     "title": "Writable Storage Schema",
@@ -577,11 +559,13 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "kind": {"const": "writable_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
@@ -593,6 +577,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "kind",
         "name",
         "storage",
+        "readiness_state",
         "schema",
         "stream_loader",
     ],
@@ -609,6 +594,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "kind": {"const": "cdc_storage", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
+        "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "default_control_topic": TYPE_STRING,
@@ -617,6 +603,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
+        "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
@@ -714,10 +701,6 @@ V1_DATASET_SCHEMA = {
         "version": {"const": "v1", "description": "Version of schema"},
         "kind": {"const": "dataset", "description": "Component kind"},
         "name": {"type": "string", "description": "Name of the dataset"},
-        "is_experimental": {
-            "type": "boolean",
-            "description": "Marks the dataset as experimental. Healthchecks failing on this dataset will not block deploys and affect Snuba server's SLOs",
-        },
         "entities": {
             "type": "array",
             "items": TYPE_STRING,
@@ -729,7 +712,6 @@ V1_DATASET_SCHEMA = {
         "kind",
         "name",
         "entities",
-        "is_experimental",
     ],
     "additionalProperties": False,
 }

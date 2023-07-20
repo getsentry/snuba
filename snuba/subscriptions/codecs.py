@@ -4,6 +4,7 @@ from typing import cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
+from sentry_kafka_schemas.schema_types import events_subscription_results_v1
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
@@ -39,20 +40,24 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         entity, subscription, _ = value.task.task
         subscription_id = str(subscription.identifier)
         request, result = value.result
+
+        data: events_subscription_results_v1.SubscriptionResult = {
+            "version": 3,
+            "payload": {
+                "subscription_id": subscription_id,
+                "request": {**request.original_body},
+                "result": {
+                    "data": result["data"],
+                    "meta": result["meta"],
+                },
+                "timestamp": value.task.timestamp.isoformat(),
+                "entity": entity.value,
+            },
+        }
+
         return KafkaPayload(
             subscription_id.encode("utf-8"),
-            json.dumps(
-                {
-                    "version": 3,
-                    "payload": {
-                        "subscription_id": subscription_id,
-                        "request": {**request.original_body},
-                        "result": result,
-                        "timestamp": value.task.timestamp.isoformat(),
-                        "entity": entity.value,
-                    },
-                }
-            ).encode("utf-8"),
+            json.dumps(data).encode("utf-8"),
             [],
         )
 

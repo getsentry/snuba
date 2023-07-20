@@ -1,7 +1,10 @@
-from typing import List, Optional, Sequence
+from __future__ import annotations
+
+from typing import Optional, Sequence
 
 import sentry_sdk
 
+from snuba import settings as snuba_settings
 from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
@@ -23,7 +26,9 @@ from snuba.datasets.storage import (
     EntityStorageConnection,
     ReadableStorage,
     ReadableTableStorage,
+    StorageNotAvailable,
 )
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -34,7 +39,8 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
 from snuba.query.query_settings import QuerySettings
-from snuba.util import with_span
+from snuba.state import explain_meta
+from snuba.utils.metrics.util import with_span
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -68,8 +74,19 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 with sentry_sdk.start_span(
                     description=type(processor).__name__, op="processor"
                 ):
-                    processor.process_query(query, query_settings)
-            return runner(query, query_settings, self.__cluster.get_reader())
+                    if query_settings.get_dry_run():
+                        with explain_meta.with_query_differ(
+                            "storage_processor", type(processor).__name__, query
+                        ):
+                            processor.process_query(query, query_settings)
+                    else:
+                        processor.process_query(query, query_settings)
+
+            return runner(
+                clickhouse_query=query,
+                query_settings=query_settings,
+                reader=self.__cluster.get_reader(),
+            )
 
         use_split = state.get_config("use_split", 1)
         if use_split:
@@ -87,12 +104,16 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
 
 
 def get_query_data_source(
-    relational_source: RelationalSource, final: bool, sampling_rate: Optional[float]
+    relational_source: RelationalSource,
+    allocation_policies: list[AllocationPolicy],
+    final: bool,
+    sampling_rate: Optional[float],
 ) -> Table:
     assert isinstance(relational_source, TableSource)
     return Table(
         table_name=relational_source.get_table_name(),
         schema=relational_source.get_columns(),
+        allocation_policies=allocation_policies,
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
@@ -107,7 +128,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: List[EntityStorageConnection],
+        storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         partition_key_column_name: Optional[str] = None,
@@ -165,6 +186,18 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storage_connection = self.get_storage(query, settings)
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
+
+        # Return failure if storage readiness state is not supported in current environment
+        if snuba_settings.READINESS_STATE_FAIL_QUERIES:
+            assert isinstance(storage, ReadableTableStorage)
+            readiness_state = storage.get_readiness_state()
+            if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
+                raise StorageNotAvailable(
+                    StorageNotAvailable.__name__,
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+                )
+
+        # If storage is supported in this environment, we can safely check get the existing cluster.
         cluster = self.get_cluster(storage, query, settings)
 
         with sentry_sdk.start_span(
@@ -180,9 +213,15 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             clickhouse_query.set_from_clause(
                 get_query_data_source(
                     storage.get_schema().get_data_source(),
+                    allocation_policies=storage.get_allocation_policies(),
                     final=query.get_final(),
                     sampling_rate=query.get_sample(),
                 )
+            )
+
+        if settings.get_dry_run():
+            explain_meta.add_transform_step(
+                "storage_planning", "mappers", str(query), str(clickhouse_query)
             )
 
         db_query_processors = [

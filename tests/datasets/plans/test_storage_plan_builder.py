@@ -1,9 +1,8 @@
-from typing import List, Optional
+import importlib
+from typing import Any, List, Optional
 
 import pytest
 
-from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToIPAddress,
@@ -25,10 +24,10 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request import Request
 
 errors_translators = TranslationMappers(
     columns=[
@@ -95,6 +94,8 @@ TEST_CASES = [
 ]
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 @pytest.mark.parametrize(
     "snql_query, dataset, storage_connections, selector, partition_key_column_name, expected_storage_set_key",
     TEST_CASES,
@@ -114,18 +115,63 @@ def test_storage_query_plan_builder(
     )
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
-    request = Request(
-        id="a",
-        original_body={"query": snql_query, "dataset": "transactions"},
-        query=query,
-        snql_anonymized=snql_anonymized,
-        query_settings=HTTPQuerySettings(referrer="r"),
-        attribution_info=AttributionInfo(
-            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
-        ),
-    )
     plan: ClickhouseQueryPlan = query_plan_builder.build_and_rank_plans(
-        query=query, settings=request.query_settings
+        query=query, settings=HTTPQuerySettings(referrer="r")
     )[0]
-
     assert plan.storage_set_key == expected_storage_set_key
+
+    # make sure that an allocation policy on the storage is applied to the
+    # from clause of the query. The query plan does not return the
+    # chosen storage so this complicated check exists to make sure the chosen storage's
+    # allocation policy exists on the data source
+    ch_from_clause = plan.query.get_from_clause()
+    correct_policy_assigned = False
+    for storage_conn in storage_connections:
+        storage = storage_conn.storage
+        table_name = storage.get_schema().get_data_source().get_table_name()  # type: ignore
+        if (
+            table_name == ch_from_clause.table_name
+            and ch_from_clause.allocation_policies == storage.get_allocation_policies()
+        ):
+            correct_policy_assigned = True
+    assert correct_policy_assigned
+
+
+@pytest.fixture(scope="function")
+def temp_settings() -> Any:
+    from snuba import settings
+
+    yield settings
+    importlib.reload(settings)
+
+
+def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
+    snql_query = """
+        MATCH (events)
+        SELECT col1
+        WHERE tags_key IN tuple('t1', 't2')
+            AND timestamp >= toDateTime('2021-01-01T00:00:00')
+            AND timestamp < toDateTime('2021-01-02T00:00:00')
+            AND project_id = 1
+    """
+    dataset = get_dataset("events")
+    storage_connections = get_entity(EntityKey.EVENTS).get_all_storage_connections()
+    selector = ErrorsQueryStorageSelector()
+    query_plan_builder = StorageQueryPlanBuilder(
+        storages=storage_connections,
+        selector=selector,
+        partition_key_column_name=None,
+    )
+    query, _ = parse_snql_query(str(snql_query), dataset)
+
+    temp_settings.SUPPORTED_STATES = {}  # remove all supported states
+    temp_settings.READINESS_STATE_FAIL_QUERIES = True
+
+    assert isinstance(query, Query)
+    with pytest.raises(
+        QueryPlanException,
+        match="The selected storage=errors is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+    ):
+        query_plan_builder.build_and_rank_plans(
+            query=query, settings=HTTPQuerySettings(referrer="r")
+        )

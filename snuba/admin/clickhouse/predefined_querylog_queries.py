@@ -166,3 +166,187 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     ORDER BY pct_diff DESC
     LIMIT 10
     """
+
+
+class TopNReferrerBytotalByteScannedPercentage(QuerylogQuery):
+    """Specify a time period and N. Get the top N referrers with the highest percentage of all bytes scanned."""
+
+    sql = """
+    WITH
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned
+    SELECT
+        referrer,
+        sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) AS bytes_scanned,
+        all_bytes_scanned,
+        round((bytes_scanned / all_bytes_scanned) * 100, 3) AS pct
+    FROM querylog_local
+    WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
+    AND dataset IN ('{{dataset}}')
+    GROUP BY referrer
+    ORDER BY bytes_scanned DESC
+    LIMIT {{n}}
+    """
+
+
+class ChangeInTotalByteScannedPercentage(QuerylogQuery):
+    """Specify a 2 time periods and an org ID. Get the change in percentage of all bytes scanned that org used between those time periods."""
+
+    sql = """
+    WITH
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{t0}}))
+        AND (timestamp < {{t0}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned_p0,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE (timestamp > ({{t1}}))
+        AND (timestamp < {{t1}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS all_bytes_scanned_p1,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE organization = {{org}}
+        AND (timestamp > ({{t0}}))
+        AND (timestamp < {{t0}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS bytes_scanned_p0,
+    (
+        SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
+        FROM querylog_local
+        WHERE organization = {{org}}
+        AND (timestamp > ({{t1}}))
+        AND (timestamp < {{t1}} + {{delta_t}})
+        AND dataset IN ('{{dataset}}')
+    ) AS bytes_scanned_p1
+    SELECT
+        bytes_scanned_p0,
+        all_bytes_scanned_p0,
+        round(bytes_scanned_p0 / all_bytes_scanned_p0 * 100, 4) AS pct_bytes_scanned_p0,
+        bytes_scanned_p1,
+        all_bytes_scanned_p1,
+        round(bytes_scanned_p1 / all_bytes_scanned_p1 * 100, 4) AS pct_bytes_scanned_p1,
+        round(pct_bytes_scanned_p1 - pct_bytes_scanned_p0, 4) AS delta_pct
+    """
+
+
+class DurationForReferrerByOrganizations(QuerylogQuery):
+    """For a given referrer, show the top organizations with the highest cumulative request duration over time."""
+
+    sql = """
+    SELECT time, organization, c
+    FROM (
+        SELECT
+            toStartOfTenMinutes(timestamp) AS time,
+            sum(duration_ms) AS c,
+            organization
+        FROM querylog_local
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - ({{duration}}))
+        AND time < now()
+        GROUP BY
+            organization,
+            time
+        ORDER BY
+            time ASC,
+            c DESC
+        LIMIT 5 BY time
+    )
+    ORDER BY c DESC
+    """
+
+
+class BytesScannedForReferrerByOrganization(QuerylogQuery):
+    """For a given referrer, show the top organizations with the highest cumulative bytes scanned over time. Duration is how many seconds ago to begin."""
+
+    sql = """
+    SELECT time, organization, c
+    FROM (
+        SELECT
+            toStartOfTenMinutes(timestamp) AS time,
+            sum(arraySum(clickhouse_queries.bytes_scanned)) AS c,
+            organization
+        FROM querylog_local
+        WHERE referrer = '{{referrer}}'
+        AND time > (now() - ({{duration}}))
+        AND time < now()
+        GROUP BY
+            organization,
+            time
+        ORDER BY
+            time ASC,
+            c DESC
+        LIMIT 5 BY time
+    )
+    ORDER BY c DESC
+    """
+
+
+class MostThrottledOrgs(QuerylogQuery):
+    """Orgs with the highest ratios of throttled queries. This isn't perfect, it just shows how many queries an Allocation Policy has set to
+    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown."""
+
+    sql = """
+    SELECT organization, throttled_queries, total_queries, divide(throttled_queries, total_queries) as ratio
+    FROM
+    (
+        SELECT organization, count(*) as throttled_queries
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND JSONExtractRaw(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'explanation') != '{}'
+            AND JSONExtractInt(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'max_threads') != 10
+            AND timestamp < now()
+        GROUP BY organization
+    )
+    AS throttled_orgs
+    INNER JOIN
+    (
+        SELECT organization, count(*) as total_queries
+        FROM querylog_local
+        WHERE
+            timestamp > (now() - {{duration}})
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp < now()
+        GROUP BY organization
+    ) AS queries_by_org
+    ON throttled_orgs.organization = queries_by_org.organization
+    ORDER BY ratio desc
+    LIMIT 20
+    """
+
+
+class OrgQueryDurationQuantiles(QuerylogQuery):
+    """Returns count, p50, p75, p90, p99 of all queries per Organization over a certain period of time, sorted by descending p99"""
+
+    sql = """
+    SELECT
+        organization,
+        sum(c) as total_queries,
+        quantile(0.50)(duration_ms) as p50,
+        quantile(0.75)(duration_ms) as p75,
+        quantile(0.9)(duration_ms) as p90,
+        quantile(0.99)(duration_ms) as p99
+    FROM
+    (
+        SELECT organization, count(*) as c, arrayJoin(clickhouse_queries.duration_ms) as duration_ms
+        FROM querylog_local
+        WHERE
+            timestamp < now()
+            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
+            AND timestamp > (now() - {{duration}})
+        GROUP BY organization, duration_ms
+    )
+    GROUP BY organization
+    ORDER BY p99 DESC
+    LIMIT 20
+"""

@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
+import pytest
+
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -82,6 +84,7 @@ class TestSubscriptionScheduler:
 
         assert result == expected
 
+    @pytest.mark.redis_db
     def test_simple(self) -> None:
         state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
@@ -104,6 +107,7 @@ class TestSubscriptionScheduler:
             ],
         )
 
+    @pytest.mark.redis_db
     def test_simple_jittered(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
         start = timedelta(minutes=-10)
@@ -126,6 +130,7 @@ class TestSubscriptionScheduler:
             ],
         )
 
+    @pytest.mark.redis_db
     def test_subscription_not_running(self) -> None:
         self.run_test(
             [self.build_subscription(timedelta(minutes=3))],
@@ -134,6 +139,7 @@ class TestSubscriptionScheduler:
             expected=[],
         )
 
+    @pytest.mark.redis_db
     def test_subscription_resolution_larger_than_interval(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=3))
         start = timedelta(minutes=-1)
@@ -154,6 +160,7 @@ class TestSubscriptionScheduler:
             ],
         )
 
+    @pytest.mark.redis_db
     def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
         state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
@@ -175,6 +182,7 @@ class TestSubscriptionScheduler:
             ],
         )
 
+    @pytest.mark.redis_db
     def test_multiple_subscriptions(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
         other_subscription = self.build_subscription(timedelta(minutes=2))

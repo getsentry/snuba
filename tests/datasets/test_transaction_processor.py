@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
+import pytest
+
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.transactions_processor import (
@@ -42,6 +44,7 @@ class TransactionEvent:
     app_start_type: str = "warm"
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
+    replay_id: Optional[str] = None
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -53,6 +56,11 @@ class TransactionEvent:
         if self.profile_id is None:
             return None
         return {"profile_id": self.profile_id}
+
+    def get_replay_context(self) -> Optional[Mapping[str, str]]:
+        if self.replay_id is None:
+            return None
+        return {"replay_id": self.replay_id}
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -153,6 +161,7 @@ class TransactionEvent:
                         "app": self.get_app_context(),
                         "experiments": {"test1": 1, "test2": 2},
                         "profile": self.get_profile_context(),
+                        "replay": self.get_replay_context(),
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -230,6 +239,7 @@ class TransactionEvent:
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
+                "geo.subdivision",
             ],
             "contexts.value": [
                 "True",
@@ -238,6 +248,7 @@ class TransactionEvent:
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
+                self.geo["subdivision"],
             ],
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
@@ -266,10 +277,16 @@ class TransactionEvent:
 
         if self.profile_id is not None:
             ret["profile_id"] = str(uuid.UUID(self.profile_id))
+        if self.replay_id is not None:
+            ret["replay_id"] = str(uuid.UUID(self.replay_id))
+            ret["tags.key"].append("replayId")
+            ret["tags.value"].append(self.replay_id)
 
         return ret
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestTransactionsProcessor:
     def __get_timestamps(self) -> Tuple[float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
@@ -301,9 +318,15 @@ class TestTransactionsProcessor:
             sdk_version="0.9.0",
             http_method="POST",
             http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
             transaction_source="url",
             profile_id="046852d24483455c8c44f0c8fbf496f9",
+            replay_id="d2731f8ed8934c6fa5253e450915aa12",
         )
 
     def test_skip_non_transactions(self) -> None:
@@ -412,3 +435,89 @@ class TestTransactionsProcessor:
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
+
+    def test_replay_id_as_tag(self) -> None:
+        # we should write both the tag and the top level field
+        # if replay_id is sent as a tag
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+
+        payload[2]["data"]["tags"].append(
+            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
+        )
+        del payload[2]["data"]["contexts"]["replay"]
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        result = message.build_result(meta)
+
+        # when the replay_id is sent as a tag instead of a context,
+        # the order in which it's placed in the tags list is different
+        result["tags.key"].remove("replayId")
+        result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
+        result["tags.key"].insert(1, "replayId")
+        result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)
+
+    def test_replay_id_as_tag_and_context(self) -> None:
+        """
+        replays shoud only ever have the context set, or the tag set, not both
+        but just in case, ensure that we don't write two replay_id tags
+        """
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+
+        payload[2]["data"]["tags"].append(
+            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
+        )
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        result = message.build_result(meta)
+
+        # when the replay_id is sent as a tag instead of a context,
+        # the order in which it's placed in the tags list is different
+        result["tags.key"].remove("replayId")
+        result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
+        result["tags.key"].insert(1, "replayId")
+        result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)
+
+    def test_replay_id_as_invalid_tag(self) -> None:
+        """
+        if a replayId is sent as an invalid uuid, don't try to set it on the context,
+        and keep it as a tag
+        """
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+        del payload[2]["data"]["contexts"]["replay"]
+        payload[2]["data"]["tags"].append(["replayId", "I_AM_NOT_A_UUID"])
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        result = message.build_result(meta)
+
+        del result["replay_id"]
+        result["tags.key"].remove("replayId")
+        result["tags.value"].remove("d2731f8ed8934c6fa5253e450915aa12")
+        result["tags.key"].insert(1, "replayId")
+        result["tags.value"].insert(1, "I_AM_NOT_A_UUID")
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)

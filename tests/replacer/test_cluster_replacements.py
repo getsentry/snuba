@@ -1,6 +1,18 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Any, Callable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import pytest
 
@@ -17,8 +29,16 @@ from snuba.replacer import (
     ReplacerWorker,
     ShardedExecutor,
 )
-from snuba.replacers.errors_replacer import NEEDS_FINAL, LegacyReplacement
-from snuba.replacers.replacer_processor import ReplacementMessageMetadata
+from snuba.replacers.errors_replacer import (
+    NeedsFinal,
+    QueryTimeFlags,
+    Replacement,
+    ReplacementContext,
+)
+from snuba.replacers.replacer_processor import (
+    ReplacementMessage,
+    ReplacementMessageMetadata,
+)
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -56,18 +76,22 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
 @pytest.fixture
 def override_cluster(
     monkeypatch: pytest.MonkeyPatch,
-) -> Callable[[bool], FakeClickhouseCluster]:
-    def override(healthy: bool) -> FakeClickhouseCluster:
-        test_cluster = _build_cluster(healthy=healthy)
-        monkeypatch.setattr(cluster, "CLUSTERS", [test_cluster])
-        monkeypatch.setattr(
-            cluster,
-            "_STORAGE_SET_CLUSTER_MAP",
-            {StorageSetKey.EVENTS: cluster.CLUSTERS[0]},
-        )
-        return test_cluster
+    clickhouse_db: None,
+    redis_db: None,
+) -> Generator[Callable[[bool], FakeClickhouseCluster], None, None]:
+    with monkeypatch.context() as m:
 
-    return override
+        def override(healthy: bool) -> FakeClickhouseCluster:
+            test_cluster = _build_cluster(healthy=healthy)
+            m.setattr(cluster, "CLUSTERS", [test_cluster])
+            m.setattr(
+                cluster,
+                "_STORAGE_SET_CLUSTER_MAP",
+                {StorageSetKey.EVENTS: cluster.CLUSTERS[0]},
+            )
+            return test_cluster
+
+        yield override
 
 
 LOCAL_QUERY = """\
@@ -122,29 +146,47 @@ TEST_CASES = [
     ),
 ]
 
-COUNT_QUERY_TEMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
-INSERT_QUERY_TEMPLATE = """\
-INSERT INTO %(table_name)s (%(required_columns)s)
-SELECT %(select_columns)s
-FROM %(table_name)s FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-"""
 
-FINAL_QUERY_TEMPLATE = {
-    "required_columns": "project_id, timestamp, event_id",
-    "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
-}
+class DummyReplacement(Replacement):
+    @classmethod
+    def parse_message(
+        cls,
+        message: ReplacementMessage[Any],
+        context: ReplacementContext,
+    ) -> Optional[DummyReplacement]:
+        return cls()
 
-REPLACEMENT_TYPE = (
-    ReplacementType.EXCLUDE_GROUPS
-)  # Arbitrary replacement type, no impact on tests
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"SELECT count() FROM {table_name} FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
 
-REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0, "")
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = "project_id, timestamp, event_id"
+        select_columns = "project_id, timestamp, event_id, group_id, primary_hash"
+
+        return (
+            f"INSERT INTO {table_name} ({required_columns})\n"
+            f"SELECT {select_columns}\n"
+            f"FROM {table_name} FINAL\n"
+            f"WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'\n"
+        )
+
+    def get_query_time_flags(self) -> QueryTimeFlags:
+        return NeedsFinal()
+
+    @classmethod
+    def get_replacement_type(cls) -> ReplacementType:
+        # Arbitrary replacement type, no impact on tests
+        return ReplacementType.EXCLUDE_GROUPS
+
+    def get_project_id(self) -> int:
+        return 1
 
 
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
 )
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
@@ -165,23 +207,14 @@ def test_write_each_node(
         DummyMetricsBackend(),
     )
 
-    replacer.flush_batch(
-        [
-            LegacyReplacement(
-                COUNT_QUERY_TEMPLATE,
-                INSERT_QUERY_TEMPLATE,
-                FINAL_QUERY_TEMPLATE,
-                (NEEDS_FINAL, 1),
-                REPLACEMENT_TYPE,
-                REPLACEMENT_MESSAGE_METADATA,
-            )
-        ]
-    )
+    replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())])
 
     queries = test_cluster.get_queries()
     assert queries == expected_queries
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_failing_query(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -200,19 +233,12 @@ def test_failing_query(
 
     with pytest.raises(ServerExplodedException):
         replacer.flush_batch(
-            [
-                LegacyReplacement(
-                    COUNT_QUERY_TEMPLATE,
-                    INSERT_QUERY_TEMPLATE,
-                    FINAL_QUERY_TEMPLATE,
-                    (NEEDS_FINAL, 1),
-                    REPLACEMENT_TYPE,
-                    REPLACEMENT_MESSAGE_METADATA,
-                )
-            ]
+            [(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())]
         )
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_load_balancing(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -228,15 +254,13 @@ def test_load_balancing(
         "consumer_group",
         DummyMetricsBackend(),
     )
-    replacement = LegacyReplacement(
-        COUNT_QUERY_TEMPLATE,
-        INSERT_QUERY_TEMPLATE,
-        FINAL_QUERY_TEMPLATE,
-        (NEEDS_FINAL, 1),
-        REPLACEMENT_TYPE,
-        REPLACEMENT_MESSAGE_METADATA,
+    replacement = DummyReplacement()
+    replacer.flush_batch(
+        [
+            (ReplacementMessageMetadata(0, 0, ""), replacement),
+            (ReplacementMessageMetadata(0, 0, ""), replacement),
+        ]
     )
-    replacer.flush_batch([replacement, replacement])
 
     assert cluster.get_queries() == {
         "query_node": [
@@ -336,6 +360,8 @@ TEST_LOCAL_EXECUTOR = [
 @pytest.mark.parametrize(
     "nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
 )
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_local_executor(
     nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,
@@ -385,14 +411,7 @@ def test_local_executor(
     )
 
     insert_executor.execute(
-        replacement=LegacyReplacement(
-            COUNT_QUERY_TEMPLATE,
-            INSERT_QUERY_TEMPLATE,
-            FINAL_QUERY_TEMPLATE,
-            (NEEDS_FINAL, 1),
-            REPLACEMENT_TYPE,
-            REPLACEMENT_MESSAGE_METADATA,
-        ),
+        replacement=DummyReplacement(),
         records_count=1,
     )
 

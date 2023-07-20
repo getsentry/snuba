@@ -102,6 +102,8 @@ class TestBuildRequestBase:
 
 class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
     @pytest.mark.parametrize("subscription, exception", TESTS)
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test_conditions(
         self, subscription: SubscriptionData, exception: Optional[Type[Exception]]
     ) -> None:

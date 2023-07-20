@@ -13,9 +13,7 @@ impl KafkaConfig {
     ) -> Self {
         let mut config_map = HashMap::new();
         config_map.insert("bootstrap.servers".to_string(), bootstrap_servers.join(","));
-
         let config = Self { config_map };
-
         apply_override_params(config, override_params)
     }
 
@@ -62,13 +60,10 @@ fn apply_override_params(
     mut config: KafkaConfig,
     override_params: Option<HashMap<String, String>>,
 ) -> KafkaConfig {
-    match override_params {
-        Some(params) => {
-            for (param, value) in params {
-                config.config_map.insert(param, value);
-            }
+    if let Some(params) = override_params {
+        for (param, value) in params {
+            config.config_map.insert(param, value);
         }
-        None => {}
     }
     config
 }

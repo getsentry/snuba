@@ -15,10 +15,10 @@ jobs:
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
+        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc # v2.0.0
         continue-on-error: true
         with:
-          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v4
         with:
@@ -59,9 +59,20 @@ jobs:
       # If working tree is dirty, commit and update if we have a token
       - name: Apply any pre-commit fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
-        uses: getsentry/action-github-commit@main
+        uses: getsentry/action-github-commit@v1.0.0
         with:
           github-token: ${{ steps.token.outputs.token }}
+
+  rust-linting:
+    name: "Linting - Rust"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout code
+      - name: Run linter
+        run: |
+          make lint-rust
 
   typing:
     name: "mypy typing"
@@ -134,6 +145,7 @@ jobs:
         run: |
           docker build . \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg SHOULD_BUILD_RUST=false \
             -t ghcr.io/getsentry/snuba-ci:latest \
             -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
@@ -156,88 +168,11 @@ jobs:
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
 
-  # This step does not have a set timeout because it is very slow. This is due
-  # because emulation required (this is running on an Intel host rather than an arm64 host)
-  # and that many Python packages do not have arm wheels, thus, requirying to build them from source.
-  # Upgrading Python package versions + giving access to a cache could improve things a lot
-  snuba-arm64-image:
-    name: "Docker Arm64 build"
-    runs-on: ubuntu-latest
-    env:
-      # `sentry devservices up snuba` picks up the `amd64` version of the image
-      # For now, we will publish to a different name until we want to officially
-      # support the image on Docker Hub
-      # NOTE: This image has only been tested for local development
-      SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
-      NODE_VERSION: 19.x
-    steps:
-      - uses: actions/checkout@v3
-        name: Checkout code
-      - uses: actions/setup-node@v3
-        with:
-          node-version: ${{env.NODE_VERSION}}
-      - name: Get branch name
-        id: branch
-        # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
-        # it can be used as a docker tag
-        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
-      # for Arm64, we build the bundle.js outside of docker because inside it is extremely
-      # slow due to emulation.
-      - name: build admin UI
-        run: |
-          # allow copying the bundle to docker image
-          sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
-          # build bundle
-          cd snuba/admin
-          yarn install
-          yarn run build
-
-      - name: enable arm64 building
-        run: docker run --rm --privileged tonistiigi/binfmt --install arm64
-
-      - name: Registry login
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      - name: Pull snuba CI images
-        run: |
-          docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
-            docker pull ${SNUBA_IMAGE}:latest || true
-
-      - name: Create Image
-        run: |
-          docker buildx create --name arm64-builder --use
-          docker buildx build --platform linux/arm64 \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg BUILD_BASE=base \
-            --cache-from ${SNUBA_IMAGE}:latest \
-            --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
-            -t ${SNUBA_IMAGE}:latest \
-            -t ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
-            -t ${SNUBA_IMAGE}:${{ github.sha }} \
-            --load .
-
-      - name: Publish
-        # Forks cannot push to the getsentry org
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # Useful to speed up PRs
-          docker push ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }}
-          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
-            # Useful for regression testing on Sentry's checkout
-            docker push ${SNUBA_IMAGE}:${{ github.sha }}
-            # The latest tag should only be published on `master`
-            docker push ${SNUBA_IMAGE}:latest
-          fi
-
   tests:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     strategy:
       matrix:
         snuba_settings:
@@ -256,6 +191,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
@@ -281,7 +217,6 @@ jobs:
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
-
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
@@ -293,25 +228,17 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+      - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
         run: cd snuba/admin && yarn install && yarn run test --coverage
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-  sentry:
+  rust-tests:
     needs: [snuba-image]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-
-    strategy:
-      matrix:
-        instance: [0, 1]
-
-    env:
-      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
-      MATRIX_INSTANCE_TOTAL: 2
-      MIGRATIONS_TEST_MIGRATE: 1
+    timeout-minutes: 20
 
     steps:
       # Checkout codebase
@@ -328,6 +255,7 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
@@ -374,7 +302,91 @@ jobs:
             -e REDIS_HOST=sentry_redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
-            -e ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES=1 \
+            --name sentry_snuba \
+            --network sentry \
+            snuba-test
+          docker exec sentry_snuba snuba migrations migrate --force
+
+      - name: Run Rust tests
+        run: |
+          make test-rust
+
+  sentry:
+    needs: [snuba-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      matrix:
+        instance: [0, 1]
+
+    env:
+      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
+      MATRIX_INSTANCE_TOTAL: 2
+      MIGRATIONS_TEST_MIGRATE: 1
+
+    steps:
+      # Checkout codebase
+      - name: Checkout snuba
+        uses: actions/checkout@v2
+
+      - name: Pull snuba CI images
+        run: |
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+
+      - name: Build snuba docker image for CI
+        run: |
+          docker build . \
+            -t snuba-test \
+            --build-arg SHOULD_BUILD_RUST=false \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --target testing
+
+      # Checkout Sentry and run integration tests against latest snuba
+      # Make sure this is after `docker build`, otherwise we'll break docker cache
+      - name: Checkout sentry
+        uses: actions/checkout@v2
+        with:
+          repository: getsentry/sentry
+          path: sentry
+
+      - name: Setup steps
+        id: setup
+        run: |
+          pip install --upgrade pip wheel
+          # We cannot execute actions that are not placed under .github of the main repo
+          mkdir -p .github/actions
+          cp -r sentry/.github/actions/* .github/actions
+
+      - name: Setup Sentry
+        id: setup-sentry
+        uses: ./.github/actions/setup-sentry
+        with:
+          workdir: sentry
+          cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
+          python-version: 3.8
+          snuba: false
+          kafka: true
+          clickhouse: true
+
+      - name: Start snuba
+        run: |
+          docker run -d --rm \
+            -p 127.0.0.1:1218:1218 \
+            -e PYTHONUNBUFFERED=1 \
+            -e SNUBA_SETTINGS=docker \
+            -e DEBUG=1 \
+            -e DEFAULT_BROKERS=sentry_kafka:9092 \
+            -e CLICKHOUSE_HOST=sentry_clickhouse \
+            -e CLICKHOUSE_PORT=9000 \
+            -e CLICKHOUSE_HTTP_PORT=8123 \
+            -e REDIS_HOST=sentry_redis \
+            -e REDIS_PORT=6379 \
+            -e REDIS_DB=1 \
             --name sentry_snuba \
             --network sentry \
             snuba-test
@@ -394,7 +406,7 @@ jobs:
       - name: Checkout Snuba
         uses: actions/checkout@v3
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@77805295ebff8a603def5970e18743ded72cb304
+        uses: getsentry/action-self-hosted-e2e-tests@f45ef07793b2cc805a9a9401819f486da449a90a
         with:
           project_name: snuba
           docker_repo: getsentry/snuba

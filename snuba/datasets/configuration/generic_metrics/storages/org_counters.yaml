@@ -4,6 +4,7 @@ name: generic_org_metrics_counters
 storage:
   key: generic_org_metrics_counters
   set_key: generic_metrics_counters
+readiness_state: complete
 schema:
   columns:
     [
@@ -28,5 +29,17 @@ schema:
     ]
   local_table_name: generic_metric_counters_aggregated_local
   dist_table_name: generic_metric_counters_aggregated_dist
+
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+
 query_processors:
   - processor: TableRateLimit

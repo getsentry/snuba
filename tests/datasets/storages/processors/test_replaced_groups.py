@@ -13,7 +13,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
@@ -120,6 +120,7 @@ def teardown_function() -> None:
     get_redis_client(RedisClientKey.REPLACEMENTS_STORE).flushdb()
 
 
+@pytest.mark.redis_db
 def test_with_turbo(query: ClickhouseQuery) -> None:
     PostReplacementConsistencyEnforcer("project_id", None).process_query(
         query, HTTPQuerySettings(turbo=True)
@@ -128,6 +129,7 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
     assert query.get_condition() == build_in("project_id", [2])
 
 
+@pytest.mark.redis_db
 def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
     ProjectsQueryFlags.set_project_needs_final(
         2,
@@ -143,6 +145,7 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
     assert query.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
     PostReplacementConsistencyEnforcer("project_id", None).process_query(
         query, HTTPQuerySettings()
@@ -152,6 +155,28 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
     assert not query.get_from_clause().final
 
 
+@pytest.mark.redis_db
+def test_remove_final_subscriptions(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
+    )
+
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.ERRORS
+    ).process_query(query, SubscriptionQuerySettings())
+    assert query.get_condition() == build_in("project_id", [2])
+    assert query.get_from_clause().final
+
+    state.set_config("skip_final_subscriptions_projects", "[2,3,4]")
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.ERRORS
+    ).process_query(query, SubscriptionQuerySettings())
+    assert not query.get_from_clause().final
+
+
+@pytest.mark.redis_db
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 5)
     ProjectsQueryFlags.set_project_exclude_groups(
@@ -187,6 +212,7 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     assert not query.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 2)
     ProjectsQueryFlags.set_project_exclude_groups(
@@ -204,6 +230,7 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     assert query.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_query_overlaps_replacements_processor(
     query: ClickhouseQuery,
     query_with_timestamp: ClickhouseQuery,
@@ -239,6 +266,7 @@ def test_query_overlaps_replacements_processor(
     assert not query_with_future_timestamp.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> None:
     """
     Query is looking for a group that has not been replaced, but the project itself
@@ -263,6 +291,7 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
     assert not query_with_single_group_id.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) -> None:
     """
     Query is looking for a group that has been replaced, and there are too many
@@ -288,6 +317,7 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
     assert not query_with_single_group_id.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_single_not_too_many_exclude(
     query_with_single_group_id: ClickhouseQuery,
 ) -> None:
@@ -315,6 +345,7 @@ def test_single_not_too_many_exclude(
     assert not query_with_single_group_id.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_multiple_disjoint_replaced(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -341,6 +372,7 @@ def test_multiple_disjoint_replaced(
     assert not query_with_multiple_group_ids.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_multiple_fewer_exclude_than_queried(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -368,6 +400,7 @@ def test_multiple_fewer_exclude_than_queried(
     assert not query_with_multiple_group_ids.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_multiple_too_many_excludes(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -396,6 +429,7 @@ def test_multiple_too_many_excludes(
     assert not query_with_multiple_group_ids.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_multiple_not_too_many_excludes(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -423,6 +457,7 @@ def test_multiple_not_too_many_excludes(
     assert not query_with_multiple_group_ids.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and not too many to exclude.
@@ -447,6 +482,7 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     assert not query.get_from_clause().final
 
 
+@pytest.mark.redis_db
 def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and too many to exclude.

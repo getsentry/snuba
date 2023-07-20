@@ -1,0 +1,129 @@
+version: v1
+kind: writable_storage
+name: spans
+
+storage:
+  key: spans
+  set_key: spans
+
+readiness_state: partial
+
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: transaction_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: transaction_op, type: String, args: { schema_modifiers: [nullable] } },
+      { name: trace_id, type: UUID},
+      { name: span_id, type: UInt, args: { size: 64 } },
+      { name: parent_span_id, type: UInt, args: { size: 64, schema_modifiers: [nullable] } },
+      { name: segment_id, type: UInt, args: { size: 64 } },
+      { name: is_segment, type: UInt, args: { size: 8 } },
+      { name: segment_name, type: String },
+      { name: start_timestamp, type: DateTime },
+      { name: start_ms, type: UInt, args: { size: 16 } },
+      { name: end_timestamp, type: DateTime },
+      { name: end_ms, type: UInt, args: { size: 16 } },
+      { name: duration, type: UInt, args: { size: 32 } },
+      { name: exclusive_time, type: Float, args: { size: 64 } },
+      { name: op, type: String },
+      { name: group, type: UInt, args: { size: 64 } },
+      { name: span_status, type: UInt, args: { size: 8 } },
+      { name: span_kind, type: String },
+      { name: description, type: String },
+      { name: status, type: UInt, args: { size: 32, schema_modifiers: [nullable] } },
+      { name: module, type: String },
+      { name: action, type: String, args: { schema_modifiers: [nullable] } },
+      { name: domain, type: String, args: { schema_modifiers: [nullable] } },
+      { name: platform, type: String, args: { schema_modifiers: [nullable] } },
+      { name: user, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [ { name: key, type: String }, { name: value, type: String } ],
+          },
+      },
+      {
+        name: measurements,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: String },
+                { name: value, type: Float, args: { size: 64 } },
+              ],
+          },
+      },
+      {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
+          },
+      },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: deleted, type: UInt, args: { size: 8 } },
+    ]
+  local_table_name: spans_local
+  dist_table_name: spans_dist
+  partition_format: [retention_days, date]
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+query_processors:
+  - processor: UniqInSelectAndHavingProcessor
+  - processor: UUIDColumnProcessor
+    args:
+      columns: [transaction_id, trace_id]
+  - processor: HexIntColumnProcessor
+    args:
+      columns: [span_id, parent_span_id, segment_id, group, group_raw]
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _tags_hash_map
+      killswitch: tags_hash_map_enabled
+  - processor: EmptyTagConditionProcessor
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: measurements
+  - processor: ArrayHasOptimizer
+    args:
+      array_columns: [measurements.key]
+  - processor: PrewhereProcessor
+    args:
+      prewhere_candidates:
+        [transaction_id, trace_id, span_id, segment_name]
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser
+
+query_splitters:
+  - splitter: TimeSplitQueryStrategy
+    args:
+      timestamp_col: end_timestamp
+
+mandatory_condition_checkers:
+  - condition: ProjectIdEnforcer
+
+stream_loader:
+  processor:
+    name: SpansMessageProcessor
+  default_topic: transactions

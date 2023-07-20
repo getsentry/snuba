@@ -28,19 +28,14 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
         "scheduled-subscriptions-generic-metrics-counters"
     )
+
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
     SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
-    SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS = (
-        "generic-metrics-sets-subscription-results"
-    )
-    SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS = (
-        "generic-metrics-distributions-subscription-results"
-    )
-    SUBSCRIPTION_RESULTS_GENERIC_METRICS_COUNTERS = (
-        "generic-metrics-counters-subscription-results"
-    )
+
+    SUBSCRIPTION_RESULTS_GENERIC_METRICS = "generic-metrics-subscription-results"
+
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     PROFILES_FUNCTIONS = "profiles-call-tree"
@@ -53,13 +48,19 @@ class Topic(Enum):
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
     GENERIC_EVENTS = "generic-events"
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
+    GROUP_ATTRIBUTES = "group-attributes"
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
+    DEAD_LETTER_METRICS_SETS = "snuba-dead-letter-metrics-sets"
+    DEAD_LETTER_METRICS_COUNTERS = "snuba-dead-letter-metrics-counters"
+    DEAD_LETTER_METRICS_DISTRIBUTIONS = "snuba-dead-letter-metrics-distributions"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
+    DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
+    DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
@@ -68,8 +69,13 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.REPLAYEVENTS: {
+            "message.timestamp.type": "LogAppendTime",
+            "max.message.bytes": "15000000",
+        },
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.QUERYLOG: {"max.message.bytes": "2000000"},
+        Topic.GROUP_ATTRIBUTES: {"message.timestamp.type": "LogAppendTime"},
     }
     return config.get(topic, {})

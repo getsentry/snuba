@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Generic, Mapping, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Generic, Mapping, Optional, Protocol, Sequence, Tuple, TypeVar, Union
 
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
@@ -15,9 +15,16 @@ from snuba.query.query_settings import QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult
 
-QueryRunner = Callable[
-    [Union[Query, CompositeQuery[Table]], QuerySettings, Reader], QueryResult
-]
+
+class QueryRunner(Protocol):
+    def __call__(
+        self,
+        clickhouse_query: Union[Query, CompositeQuery[Table]],
+        query_settings: QuerySettings,
+        reader: Reader,
+    ) -> QueryResult:
+        ...
+
 
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
 

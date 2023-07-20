@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Sequence, cast
+from typing import Any, Dict, Generator, Optional, Sequence, cast
+
+import pytest
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -31,14 +33,14 @@ def _drop_all_tables() -> None:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
 
-def setup_function() -> None:
+@pytest.fixture(autouse=True)
+def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+    _drop_all_tables()
+    yield
     _drop_all_tables()
 
 
-def teardown_function() -> None:
-    _drop_all_tables()
-
-
+@pytest.mark.clickhouse_db
 def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
 
@@ -111,6 +113,7 @@ def test_transactions_compatibility() -> None:
     ) == [(5,)]
 
 
+@pytest.mark.clickhouse_db
 def generate_transactions() -> None:
     from datetime import datetime
 
@@ -141,6 +144,7 @@ def generate_transactions() -> None:
     ).write(rows)
 
 
+@pytest.mark.clickhouse_db
 def test_groupedmessages_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
 
@@ -191,6 +195,7 @@ def test_groupedmessages_compatibility() -> None:
     assert outcome == [("project_id, id",)]
 
 
+@pytest.mark.clickhouse_db
 def run_prior_migrations(
     migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
 ) -> None:
@@ -219,6 +224,7 @@ def run_prior_migrations(
         )
 
 
+@pytest.mark.clickhouse_db
 def perform_select_query(
     columns: Sequence[str],
     table: str,
@@ -251,6 +257,7 @@ def perform_select_query(
     return connection.execute(full_query).results
 
 
+@pytest.mark.clickhouse_db
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
     return int(
         perform_select_query(["count()"], table_name, None, None, connection)[0][0]

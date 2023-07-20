@@ -91,6 +91,7 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("general_mode, subscriptions, expected_modes", TEST_CASES)
+@pytest.mark.redis_db
 def test_state_changes(
     general_mode: str,
     subscriptions: Sequence[Tuple[Subscription, int]],

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Union
+from typing import Any, Dict, Union
 
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.query.composite import CompositeQuery
@@ -13,7 +13,7 @@ from snuba.query.query_settings import QuerySettings
 @dataclass(frozen=True)
 class Request:
     id: str
-    original_body: Mapping[str, Any]
+    original_body: Dict[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
     query_settings: QuerySettings
     attribution_info: AttributionInfo

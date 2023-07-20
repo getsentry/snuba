@@ -114,6 +114,7 @@ TEST_QUERIES = [
 
 
 @pytest.mark.parametrize("input_query,expected_query", TEST_QUERIES)
+@pytest.mark.redis_db
 def test_tuple_unaliaser(input_query, expected_query):
     set_config("tuple_unaliaser_rollout", 1)
     settings = HTTPQuerySettings()

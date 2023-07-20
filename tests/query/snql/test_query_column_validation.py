@@ -424,7 +424,7 @@ time_validation_tests = [
 
 
 @pytest.fixture(autouse=True)
-def set_configs() -> Generator[None, None, None]:
+def set_configs(redis_db: None) -> Generator[None, None, None]:
     old_max = state.get_config("max_days")
     old_align = state.get_config("date_align_seconds")
     state.set_config("max_days", 5)
@@ -435,6 +435,7 @@ def set_configs() -> Generator[None, None, None]:
 
 
 @pytest.mark.parametrize("query_body, expected_query", time_validation_tests)
+@pytest.mark.redis_db
 def test_entity_column_validation(
     query_body: str, expected_query: LogicalQuery, set_configs: Any, monkeypatch
 ) -> None:

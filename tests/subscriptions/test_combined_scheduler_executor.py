@@ -4,6 +4,7 @@ from contextlib import closing
 from datetime import datetime, timedelta
 from unittest import mock
 
+import pytest
 from arroyo.backends.kafka import KafkaProducer
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
@@ -41,6 +42,8 @@ def create_subscription() -> None:
     )
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_combined_scheduler_and_executor() -> None:
     create_subscription()
     epoch = datetime(1970, 1, 1)

@@ -63,6 +63,7 @@ tests = [
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
+@pytest.mark.redis_db
 def test_project_rate_limit_processor(unprocessed: Expression, project_id: int) -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
@@ -82,6 +83,7 @@ def test_project_rate_limit_processor(unprocessed: Expression, project_id: int) 
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
+@pytest.mark.redis_db
 def test_project_rate_limit_processor_overridden(
     unprocessed: Expression, project_id: int
 ) -> None:

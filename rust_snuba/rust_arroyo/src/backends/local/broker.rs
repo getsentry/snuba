@@ -1,5 +1,5 @@
 use crate::backends::storages::{ConsumeError, MessageStorage, TopicDoesNotExist, TopicExists};
-use crate::types::{Message, Partition, Topic};
+use crate::types::{BrokerMessage, Partition, Topic};
 use crate::utils::clock::Clock;
 use chrono::DateTime;
 use std::collections::{HashMap, HashSet};
@@ -141,7 +141,7 @@ impl<TPayload: Clone> LocalBroker<TPayload> {
         &self,
         partition: &Partition,
         offset: u64,
-    ) -> Result<Option<Message<TPayload>>, ConsumeError> {
+    ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError> {
         self.storage.consume(partition, offset)
     }
 
@@ -202,7 +202,7 @@ mod tests {
 
         let message = broker.consume(&partition, 0).unwrap().unwrap();
         assert_eq!(message.offset, 0);
-        assert_eq!(message.next_offset(), 1);
+        assert_eq!(message.partition, partition.clone());
         assert_eq!(message.payload, "message".to_string());
     }
 

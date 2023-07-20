@@ -20,6 +20,11 @@ ILLEGAL_VALUE_IN_DIST = "Illegal value in distribution."
 ILLEGAL_VALUE_IN_COUNTER = "Illegal value in counter."
 INT_FLOAT_EXPECTED = "Int or Float expected"
 
+# These are the hardcoded values from the materialized view
+GRANULARITY_ONE_MINUTE = 1
+GRANULARITY_ONE_HOUR = 2
+GRANULARITY_ONE_DAY = 3
+
 
 def is_set_message(message: Mapping[str, Any]) -> bool:
     return message["type"] is not None and message["type"] == InputType.SET.value
@@ -61,3 +66,44 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     ), f"{ILLEGAL_VALUE_IN_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
 
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
+
+
+def aggregation_options_for_set_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
+    return {
+        "materialization_version": 1,
+        "granularities": [
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ],
+    }
+
+
+def aggregation_options_for_distribution_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
+    return {
+        "min_retention_days": retention_days,
+        "materialization_version": 2,
+        "enable_histogram": 1,
+        "granularities": [
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ],
+    }
+
+
+def aggregation_options_for_counter_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
+    return {
+        "materialization_version": 1,
+        "granularities": [
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ],
+    }

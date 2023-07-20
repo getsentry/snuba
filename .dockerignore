@@ -18,3 +18,4 @@ snuba.egg-info/
 .github/
 snuba/admin/dist/bundle.js*
 */node_modules
+rust_snuba/target/

@@ -1,0 +1,6 @@
+version: v1
+kind: dataset
+name: group_attributes
+
+entities:
+  - group_attributes

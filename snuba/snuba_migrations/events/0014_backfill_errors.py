@@ -135,8 +135,6 @@ def backfill_errors(logger: logging.Logger) -> None:
     cluster = errors_storage.get_cluster()
     database_name = cluster.get_database()
 
-    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-
     events_local_table_name = "sentry_local"
     events_dist_table_name = "sentry_dist"
     events_table_name = (
@@ -146,6 +144,14 @@ def backfill_errors(logger: logging.Logger) -> None:
     )
 
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
+
+    if cluster.is_single_node():
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+    else:
+        dist_node = cluster.get_distributed_nodes()[0]
+        clickhouse = cluster.get_node_connection(
+            ClickhouseClientSettings.MIGRATE, dist_node
+        )
 
     try:
         (ts,) = clickhouse.execute(

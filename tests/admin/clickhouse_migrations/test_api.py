@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 from dataclasses import asdict
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence, Type
 from unittest.mock import patch
 
 import pytest
@@ -11,13 +11,47 @@ from flask.testing import FlaskClient
 from structlog.testing import CapturingLogger
 
 from snuba.admin.auth import _set_roles
-from snuba.admin.auth_roles import ROLES, generate_test_role
+from snuba.admin.auth_roles import (
+    MIGRATIONS_RESOURCES,
+    ROLES,
+    ExecuteAllAction,
+    ExecuteNonBlockingAction,
+    ExecuteNoneAction,
+    MigrationAction,
+    MigrationResource,
+    Role,
+    generate_tool_test_role,
+)
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.user import AdminUser
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.redis import RedisClientKey, get_redis_client
+
+
+def generate_migration_test_role(
+    group: str,
+    policy: str,
+    override_resource: bool = False,
+    name: Optional[str] = None,
+) -> Role:
+    if not name:
+        name = f"{group}-{policy}"
+
+    if policy == "all":
+        action: Type[MigrationAction] = ExecuteAllAction
+    elif policy == "non_blocking":
+        action = ExecuteNonBlockingAction
+    else:
+        action = ExecuteNoneAction
+
+    resource = (
+        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
+    )
+
+    return Role(name=name, actions={action([resource])})
 
 
 @pytest.fixture
@@ -27,9 +61,11 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
-    with patch("snuba.admin.auth.DEFAULT_ROLES", []):
+    with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
         response = admin_api.get("/migrations/groups")
 
     assert response.status_code == 200
@@ -38,8 +74,9 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "all"),
-            generate_test_role("generic_metrics", "non_blocking"),
+            generate_migration_test_role("system", "all"),
+            generate_migration_test_role("generic_metrics", "non_blocking"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/groups")
@@ -70,12 +107,15 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         ]
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "non_blocking"),
-            generate_test_role("generic_metrics", "none"),
+            generate_migration_test_role("system", "non_blocking"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/system/list")
@@ -100,8 +140,9 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("test_migration", "non_blocking"),
-            generate_test_role("generic_metrics", "none"),
+            generate_migration_test_role("test_migration", "non_blocking"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_tool_test_role("all"),
         ],
     ):
         response = admin_api.get("/migrations/test_migration/list")
@@ -128,15 +169,9 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
     assert sorted_response == sorted_expected_json
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
-@patch(
-    "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
-    {
-        "system",
-        "generic_metrics",
-        "events",
-    },
-)
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
     method = "run_migration" if action == "run" else "reverse_migration"
@@ -144,9 +179,10 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
-            generate_test_role("system", "all"),
-            generate_test_role("generic_metrics", "none"),
-            generate_test_role("events", "non_blocking", True),
+            generate_migration_test_role("system", "all"),
+            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events", "non_blocking", True),
+            generate_tool_test_role("all"),
         ],
     ):
         # invalid action
@@ -278,11 +314,13 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert mock_run_migration.call_count == 1
 
 
+@pytest.mark.redis_db
 def test_get_iam_roles(caplog: Any) -> None:
-    system_role = generate_test_role("system", "all")
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
-        [system_role],
+        [system_role, tool_role],
     ):
         iam_file = tempfile.NamedTemporaryFile()
         iam_file.write(
@@ -309,9 +347,15 @@ def test_get_iam_roles(caplog: Any) -> None:
                                 "group:team-sns@sentry.io",
                                 "user:test_user1@sentry.io",
                                 "user:test_user2@sentry.io",
-                                "user:test_user3@sentry.io",
                             ],
                             "role": "roles/owner",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/AllTools",
                         },
                     ]
                 }
@@ -327,7 +371,9 @@ def test_get_iam_roles(caplog: Any) -> None:
             assert user1.roles == [
                 ROLES["NonBlockingMigrationsExecutor"],
                 ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
                 system_role,
+                tool_role,
             ]
 
             user2 = AdminUser(email="test_user2@sentry.io", id="unknown")
@@ -336,7 +382,18 @@ def test_get_iam_roles(caplog: Any) -> None:
             assert user2.roles == [
                 ROLES["TestMigrationsExecutor"],
                 system_role,
+                tool_role,
             ]
+
+            user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
+            _set_roles(user3)
+
+            assert user3.roles == [
+                system_role,
+                tool_role,
+            ]
+
+        iam_file.close()
 
         with patch(
             "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
@@ -348,3 +405,122 @@ def test_get_iam_roles(caplog: Any) -> None:
                 assert "IAM policy file not found file_not_exists.json" in str(
                     log.calls
                 )
+
+
+@pytest.mark.redis_db
+def test_get_iam_roles_cache() -> None:
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role, tool_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(
+            json.dumps(
+                {
+                    "bindings": [
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/NonBlockingMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/TestMigrationsExecutor",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                                "user:test_user2@sentry.io",
+                            ],
+                            "role": "roles/owner",
+                        },
+                        {
+                            "members": [
+                                "group:team-sns@sentry.io",
+                                "user:test_user1@sentry.io",
+                            ],
+                            "role": "roles/AllTools",
+                        },
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+        iam_file.flush()
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
+                system_role,
+                tool_role,
+            ]
+
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+            _set_roles(user1)
+
+            assert user1.roles == [
+                ROLES["NonBlockingMigrationsExecutor"],
+                ROLES["TestMigrationsExecutor"],
+                ROLES["AllTools"],
+                system_role,
+                tool_role,
+            ]
+
+            redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
+            redis_client.delete(f"roles-{user1.email}")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                system_role,
+                tool_role,
+            ]
+
+
+@pytest.mark.redis_db
+@patch("redis.Redis")
+def test_get_iam_roles_cache_fail(mock_redis: Any) -> None:
+    mock_redis.get.side_effect = Exception("Test exception")
+    mock_redis.set.side_effect = Exception("Test exception")
+    system_role = generate_migration_test_role("system", "all")
+    tool_role = generate_tool_test_role("snql-to-sql")
+    with patch(
+        "snuba.admin.auth.DEFAULT_ROLES",
+        [system_role, tool_role],
+    ):
+        iam_file = tempfile.NamedTemporaryFile()
+        iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
+        iam_file.flush()
+
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
+            user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
+            _set_roles(user1)
+
+            assert user1.roles == [
+                system_role,
+                tool_role,
+            ]
+
+            _set_roles(user1)
+
+            assert user1.roles == [
+                system_role,
+                tool_role,
+            ]

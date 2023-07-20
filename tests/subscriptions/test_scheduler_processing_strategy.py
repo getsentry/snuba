@@ -557,6 +557,7 @@ def test_scheduled_subscription_queue() -> None:
     assert len(queue) == 0
 
 
+@pytest.mark.redis_db
 def test_produce_scheduled_subscription_message() -> None:
     epoch = datetime(1970, 1, 1)
     metrics_backend = TestingMetricsBackend()
@@ -674,6 +675,7 @@ def test_produce_scheduled_subscription_message() -> None:
     strategy.join()
 
 
+@pytest.mark.redis_db
 def test_produce_stale_message() -> None:
     stale_threshold_seconds = 90
     now = datetime.now()

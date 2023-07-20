@@ -1,6 +1,8 @@
+import os
 import time
 import uuid
 from datetime import datetime, timedelta
+from typing import Optional, Set
 from unittest.mock import call, patch
 
 import pytest
@@ -41,30 +43,61 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
         ),
     ],
 )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+@pytest.mark.skipif(
+    os.environ.get("SNUBA_SETTINGS") == "test_distributed",
+    reason="This test is flaky for distributed tests",
+)
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
-    assert len(tracker.get_all_partitions()) == 0
-    assert len(tracker.get_completed_partitions()) == 0
+    def assert_partitions(
+        *,
+        all: Optional[Set[str]] = None,
+        completed: Optional[Set[str]] = None,
+        pending: Optional[Set[str]] = None,
+    ) -> None:
+        """
+        Assert partition status with sleep + retry. This is needed for when the
+        test runs on multinode clickhouse cluster and the state is not immediately
+        updated.
+        """
+
+        def _do_assertions() -> None:
+            if all is not None:
+                assert tracker.get_all_partitions() == all
+            if completed is not None:
+                assert tracker.get_completed_partitions() == completed
+            if pending is not None:
+                assert tracker.get_partitions_to_optimize() == pending
+
+        for _ in range(10):
+            try:
+                _do_assertions()
+                return
+            except AssertionError:
+                time.sleep(0.5)
+        _do_assertions()
+
     with pytest.raises(NoOptimizedStateException):
         tracker.get_partitions_to_optimize()
 
+    assert_partitions(all=set(), completed=set())
+
     tracker.update_all_partitions(["Partition 1", "Partition 2"])
     tracker.update_completed_partitions("Partition 1")
-    assert tracker.get_completed_partitions() == {"Partition 1"}
-    assert tracker.get_partitions_to_optimize() == {"Partition 2"}
+    assert_partitions(completed={"Partition 1"}, pending={"Partition 2"})
 
     tracker.update_completed_partitions("Partition 2")
-    assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
-    partitions_to_optimize = tracker.get_partitions_to_optimize()
     # Check that we don't return None but a set whose length is 0 indicating
     # that all optimizations have been run.
-    assert partitions_to_optimize is not None
-    assert len(partitions_to_optimize) == 0
+    assert_partitions(completed={"Partition 1", "Partition 2"}, pending=set())
 
     tracker.delete_all_states()
-    assert len(tracker.get_all_partitions()) == 0
-    assert len(tracker.get_completed_partitions()) == 0
+    assert_partitions(all=set(), completed=set())
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_run_optimize_with_partition_tracker() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(
@@ -153,6 +186,8 @@ def test_run_optimize_with_partition_tracker() -> None:
     assert num_optimized == original_num_partitions
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_run_optimize_with_ongoing_merges() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(

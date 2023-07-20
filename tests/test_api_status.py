@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
+import pytest
 import simplejson as json
 from clickhouse_driver.errors import ErrorCodes
 
@@ -31,6 +32,7 @@ class TestApiCodes(BaseApiTest):
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
+                    "tenant_ids": {"organization_id": 132, "referrer": "r"},
                 }
             ),
             headers={"referer": "test"},
@@ -50,6 +52,8 @@ class TestApiCodes(BaseApiTest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     @patch("snuba.web.db_query.execute_query_with_rate_limits")
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     def test_correct_error_codes(
         self, execute_mock: MagicMock, record_query: MagicMock
     ) -> None:
@@ -100,6 +104,14 @@ class TestApiCodes(BaseApiTest):
             ),
             (TimeoutError("test"), "cache-set-timeout", "against"),
             (ExecutionTimeoutError("test"), "cache-wait-timeout", "against"),
+            (
+                ClickhouseError(
+                    "DB::Exception: There is no supertype for types UInt32, String because some of them are String/FixedString and some of them are not: While processing has(exception_frames.colno AS `_snuba_exception_frames.colno`, '300'). Stack trace:",
+                    code=ErrorCodes.NO_COMMON_TYPE,
+                ),
+                "invalid-typing",
+                "for",
+            ),
         ]
 
         for exception, status, slo in tests:

@@ -2,21 +2,21 @@ from abc import abstractmethod
 from typing import Callable, Mapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies import ProcessingStrategy, ProcessingStrategyFactory
+from arroyo.commit import ONCE_PER_SECOND
+from arroyo.processing.strategies import (
+    FilterStep,
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+    Reduce,
+    RunTask,
+    RunTaskInThreads,
+    RunTaskWithMultiprocessing,
+)
 from arroyo.processing.strategies.commit import CommitOffsets
-from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
-    DeadLetterQueue,
-)
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
-)
-from arroyo.processing.strategies.filter import FilterStep
-from arroyo.processing.strategies.reduce import Reduce
-from arroyo.processing.strategies.run_task import RunTaskInThreads
-from arroyo.processing.strategies.transform import ParallelTransformStep, TransformStep
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
+from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
 
 ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
@@ -35,16 +35,8 @@ class StreamMessageFilter(Protocol):
 
 class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     """
-    Do not use for new consumers.
-    This is deprecated and will be removed in a future version.
-
     Builds a four step consumer strategy consisting of dead letter queue,
     filter, transform, and collect phases.
-
-    The `dead_letter_queue_policy_creator` defines the policy for what to do
-    when an bad message is encountered throughout the next processing step(s).
-    A DLQ wraps the entire strategy, catching InvalidMessage exceptions and
-    handling them as the policy dictates.
 
     The `prefilter` supports passing a test function to determine whether a
     message should proceed to the next processing steps or be dropped. If no
@@ -57,6 +49,9 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     The `collector` function should return a strategy to be executed on
     batches of messages. Could be used to write messages to disk in batches.
+
+    `max_messages_to_process` is passed only by the DLQ consumer. It is used
+    to stop the consumer after a fixed number of messages are processed.
     """
 
     def __init__(
@@ -69,18 +64,22 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time: Optional[float],
+        # Passed in the case of DLQ consumer which exits after a certain number of messages
+        # is processed
+        max_messages_to_process: Optional[int] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
-        dead_letter_queue_policy_creator: Optional[
-            Callable[[], DeadLetterQueuePolicy]
-        ] = None,
     ) -> None:
         self.__prefilter = prefilter
-        self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
         self.__process_message = process_message
         self.__collector = collector
+        self.__max_messages_to_process = max_messages_to_process
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
+        self.__max_insert_batch_size = max_insert_batch_size or max_batch_size
+        self.__max_insert_batch_time = max_insert_batch_time or max_batch_time
 
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -121,18 +120,19 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
+        commit_strategy = CommitOffsets(commit)
+
         collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
-            self.__max_batch_size,
-            self.__max_batch_time,
+            self.__max_insert_batch_size,
+            self.__max_insert_batch_time,
             accumulator,
             self.__collector,
             RunTaskInThreads(
                 flush_batch,
-                # The threadpool has 1 worker since we want to ensure batches are processed
-                # sequentially and passed to the next step in order.
-                1,
-                1,
-                CommitOffsets(commit),
+                # We process up to 2 insert batches in parallel
+                2,
+                3,
+                commit_strategy,
             ),
         )
 
@@ -140,11 +140,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
         if self.__processes is None:
-            strategy = TransformStep(transform_function, collect)
+            strategy = RunTask(transform_function, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
+            strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
                 self.__processes,
@@ -156,14 +156,13 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             )
 
         if self.__prefilter is not None:
-            strategy = FilterStep(self.__should_accept, strategy)
+            strategy = FilterStep(
+                self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND
+            )
 
-        if self.__dead_letter_queue_policy_creator is not None:
-            # The DLQ Policy is instantiated here so it gets the correct
-            # metrics singleton in the init function of the policy
-            # It also ensures any producer/consumer is recreated on rebalance
-            strategy = DeadLetterQueue(
-                strategy, self.__dead_letter_queue_policy_creator()
+        if self.__max_messages_to_process is not None:
+            strategy = ExitAfterNMessages(
+                strategy, self.__max_messages_to_process, 10.0
             )
 
         return strategy

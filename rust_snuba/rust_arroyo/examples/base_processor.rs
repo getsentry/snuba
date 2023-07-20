@@ -4,59 +4,17 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    ProcessingStrategy, ProcessingStrategyFactory,
 };
+use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{Message, Partition, Position, Topic};
-use std::collections::HashMap;
+use rust_arroyo::types::Topic;
 use std::time::Duration;
-
-struct TestStrategy {
-    partitions: HashMap<Partition, Position>,
-}
-impl ProcessingStrategy<KafkaPayload> for TestStrategy {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        println!("POLL");
-        if !self.partitions.is_empty() {
-            // TODO: Actually make commit work. It does not seem
-            // to work now.
-            let ret = Some(CommitRequest {
-                positions: self.partitions.clone(),
-            });
-            self.partitions.clear();
-            ret
-        } else {
-            None
-        }
-    }
-
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected> {
-        println!("SUBMIT {}", message);
-        self.partitions.insert(
-            message.partition,
-            Position {
-                offset: message.offset,
-                timestamp: message.timestamp,
-            },
-        );
-        Ok(())
-    }
-
-    fn close(&mut self) {}
-
-    fn terminate(&mut self) {}
-
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-        None
-    }
-}
 
 struct TestFactory {}
 impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        Box::new(TestStrategy {
-            partitions: HashMap::new(),
-        })
+        Box::new(CommitOffsets::new(Duration::from_secs(1)))
     }
 }
 

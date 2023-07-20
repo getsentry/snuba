@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -24,9 +23,6 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.migrations.columns import MigrationModifiers
-
-logger = logging.getLogger("snuba.migrate")
-
 
 grammar = Grammar(
     r"""

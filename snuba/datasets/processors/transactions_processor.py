@@ -50,6 +50,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         "sentry:release",
         "sentry:user",
         "sentry:dist",
+        "replayId",
     }
 
     def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
@@ -157,6 +158,16 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         )
         processed["environment"] = promoted_tags.get("environment")
         processed["user"] = promoted_tags.get("sentry:user", "")
+
+        replay_id = promoted_tags.get("replayId")
+        if replay_id:
+            try:
+                processed["replay_id"] = str(uuid.UUID(replay_id))
+            except ValueError:
+                # replay_id as a tag is not guarenteed to be UUID (user could set value in theory)
+                # so simply continue if not UUID.
+                pass
+
         processed["dist"] = _unicodify(
             promoted_tags.get("sentry:dist", event_dict["data"].get("dist")),
         )
@@ -258,6 +269,19 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             profile_id = profile_context.get("profile_id")
             if profile_id is not None:
                 processed["profile_id"] = str(uuid.UUID(profile_id))
+
+        replay_context = contexts.get("replay")
+        if replay_context is not None:
+            replay_id = replay_context.get("replay_id")
+            if replay_id is not None:
+                replay_id_uuid = uuid.UUID(replay_id)
+                processed["replay_id"] = str(replay_id_uuid)
+
+                # remove this after 90 days or we shift query conditions based on timestamp
+                if "replayId" not in processed["tags.key"]:
+                    processed["tags.key"].append("replayId")
+                    # the tag value should not have dashes in it so we use .hex
+                    processed["tags.value"].append(replay_id_uuid.hex)
 
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
@@ -402,10 +426,12 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         if app_ctx is not None:
             app_ctx.pop("start_type", None)
 
-        # The profile_id is promoted as a column, so no need to store it
+        # The profile_id and replay_id are promoted as columns, so no need to store them
         # again in the context array
         profile_ctx = sanitized_context.get("profile", {})
         profile_ctx.pop("profile_id", None)
+        replay_ctx = sanitized_context.get("replay", {})
+        replay_ctx.pop("replay_id", None)
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()

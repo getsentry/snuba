@@ -3,7 +3,6 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
-import rapidjson
 import sentry_sdk
 from arroyo import configure_metrics
 
@@ -13,9 +12,11 @@ from snuba.consumers.consumer_builder import (
     KafkaParameters,
     ProcessingParameters,
 )
-from snuba.datasets.storages.factory import get_writable_storage_keys
+from snuba.consumers.consumer_config import resolve_consumer_config
+from snuba.datasets.storages.factory import get_storage, get_writable_storage_keys
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -71,13 +72,31 @@ logger = logging.getLogger(__name__)
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
-    help="Max number of messages to batch in memory before writing to Kafka.",
+    help=(
+        "Max number of messages to batch in memory.\n\n"
+        "Batching parameters apply to three steps: Batching of messages for "
+        "processing them (=transforming them into ClickHouse rows), batching for"
+        "the INSERT statement, and batching of offset commits.\n\n"
+        "Commits are additionally debounced to happen at most once per second."
+    ),
 )
 @click.option(
     "--max-batch-time-ms",
     default=settings.DEFAULT_MAX_BATCH_TIME_MS,
     type=int,
-    help="Max length of time to buffer messages in memory before writing to Kafka.",
+    help="Max duration to buffer messages in memory for.",
+)
+@click.option(
+    "--max-insert-batch-size",
+    default=None,
+    type=int,
+    help="Max number of messages to batch in memory for inserts into ClickHouse. Defaults to --max-batch-size",
+)
+@click.option(
+    "--max-insert-batch-time-ms",
+    default=None,
+    type=int,
+    help="Max duration to batch in memory for inserts into ClickHouse. Defaults to --max-batch-time-ms",
 )
 @click.option(
     "--auto-offset-reset",
@@ -115,8 +134,20 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
+@click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
 )
 def consumer(
     *,
@@ -131,6 +162,8 @@ def consumer(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    max_insert_batch_size: Optional[int],
+    max_insert_batch_time_ms: Optional[int],
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
@@ -138,16 +171,25 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
+    join_timeout: int = 5,
+    enforce_schema: bool = False,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    max_poll_interval_ms: Optional[int] = None,
 ) -> None:
 
     setup_logging(log_level)
     setup_sentry()
+
     logger.info("Consumer Starting")
 
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
+
+    logger.info("Checking Clickhouse connections")
+    storage = get_storage(storage_key)
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
 
     metrics_tags = {
         "consumer_group": consumer_group,
@@ -160,20 +202,23 @@ def consumer(
     metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 
-    def stats_callback(stats_json: str) -> None:
-        stats = rapidjson.loads(stats_json)
-        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
+    consumer_config = resolve_consumer_config(
+        storage_names=[storage_name],
+        raw_topic=raw_events_topic,
+        commit_log_topic=commit_log_topic,
+        replacements_topic=replacements_topic,
+        bootstrap_servers=bootstrap_server,
+        commit_log_bootstrap_servers=commit_log_bootstrap_server,
+        replacement_bootstrap_servers=replacement_bootstrap_server,
+        slice_id=slice_id,
+        max_batch_size=max_batch_size,
+        max_batch_time_ms=max_batch_time_ms,
+    )
 
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
+        consumer_config=consumer_config,
         kafka_params=KafkaParameters(
-            raw_topic=raw_events_topic,
-            replacements_topic=replacements_topic,
-            bootstrap_servers=bootstrap_server,
-            commit_log_bootstrap_servers=commit_log_bootstrap_server,
-            replacements_bootstrap_servers=replacement_bootstrap_server,
             group_id=consumer_group,
-            commit_log_topic=commit_log_topic,
             auto_offset_reset=auto_offset_reset,
             strict_offset_reset=not no_strict_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
@@ -186,13 +231,17 @@ def consumer(
         ),
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        max_insert_batch_size=max_insert_batch_size,
+        max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
-        stats_callback=stats_callback,
         slice_id=slice_id,
+        join_timeout=join_timeout,
+        max_poll_interval_ms=max_poll_interval_ms,
+        enforce_schema=enforce_schema,
     )
 
-    consumer = consumer_builder.build_base_consumer(slice_id)
+    consumer = consumer_builder.build_base_consumer()
 
     def handler(signum: int, frame: Any) -> None:
         consumer.signal_shutdown()

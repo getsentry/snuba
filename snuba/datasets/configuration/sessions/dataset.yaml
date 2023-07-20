@@ -2,7 +2,5 @@ version: v1
 kind: dataset
 name: sessions
 
-is_experimental: false
-
 entities:
   - sessions

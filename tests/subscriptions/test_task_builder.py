@@ -215,6 +215,7 @@ TEST_CASES = [
 @pytest.mark.parametrize(
     "builder, primary_builder_config, sequence_in, task_sequence, metrics", TEST_CASES
 )
+@pytest.mark.redis_db
 def test_sequences(
     builder: TaskBuilder,
     primary_builder_config: str,

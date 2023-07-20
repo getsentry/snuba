@@ -17,11 +17,13 @@ class TestHTTPBatchWriter:
     entity = get_entity(EntityKey.EVENTS)
     metrics = DummyMetricsBackend(strict=True)
 
+    @pytest.mark.clickhouse_db
     def test_empty_batch(self) -> None:
         enforce_table_writer(self.entity).get_batch_writer(metrics=self.metrics).write(
             []
         )
 
+    @pytest.mark.clickhouse_db
     def test_error_handling(self) -> None:
         table_writer = enforce_table_writer(self.entity)
 
@@ -52,6 +54,7 @@ class FakeQuery(FormattedQuery):
         return "SELECT count() FROM groupedmessage_local;"
 
 
+@pytest.mark.clickhouse_db
 def test_gzip_load() -> None:
     content = gzip.compress(DATA.encode("utf-8"))
 

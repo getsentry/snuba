@@ -4,6 +4,7 @@ name: sessions_raw
 storage:
   key: sessions_raw
   set_key: sessions
+readiness_state: deprecate
 schema:
   columns:
     [

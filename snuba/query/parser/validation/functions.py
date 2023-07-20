@@ -1,4 +1,3 @@
-import logging
 from typing import List, Mapping
 
 from snuba.clickhouse.columns import Array, DateTime, String
@@ -15,8 +14,6 @@ from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.query.validation.functions import AllowedFunctionValidator
 from snuba.query.validation.signature import Any, Column, SignatureValidator
-
-logger = logging.getLogger(__name__)
 
 DateTimeValidator = SignatureValidator([Column({DateTime})], enforce=False)
 

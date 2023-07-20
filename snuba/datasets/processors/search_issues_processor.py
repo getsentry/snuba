@@ -1,3 +1,4 @@
+import numbers
 import uuid
 from datetime import datetime
 from typing import (
@@ -51,6 +52,8 @@ class IssueOccurrenceData(TypedDict, total=False):
     fingerprint: Sequence[str]
     issue_title: str
     subtitle: str
+    culprit: str
+    level: str
     resource_id: Optional[str]
     detection_time: float
 
@@ -59,6 +62,9 @@ class IssueEventData(TypedDict, total=False):
     # general data from event.data map
     received: float
     client_timestamp: float
+    timestamp: float
+    start_timestamp: float
+
     tags: Mapping[str, Any]
     user: Mapping[str, Any]  # user_hash, user_id, user_name, user_email, ip_address
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
@@ -86,6 +92,7 @@ class SearchIssueEvent(TypedDict, total=False):
     group_id: int
     platform: str
     primary_hash: str
+    message: str
     datetime: str
 
     data: IssueEventData
@@ -183,6 +190,41 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             if trace_id is not None:
                 processed["trace_id"] = ensure_uuid(trace_id)
 
+        profile = contexts.get("profile", {})
+        if profile.get("profile_id") is not None:
+            profile_id = _unicodify(profile["profile_id"])
+            if profile_id is not None:
+                processed["profile_id"] = ensure_uuid(profile_id)
+
+        replay = contexts.get("replay", {})
+        if replay.get("replay_id") is not None:
+            replay_id = _unicodify(replay["replay_id"])
+            if replay_id is not None:
+                processed["replay_id"] = ensure_uuid(replay_id)
+
+    def __extract_timestamp(self, field: int) -> datetime:
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
+        if timestamp is None:
+            timestamp = datetime.utcnow()
+        return timestamp
+
+    def _process_transaction_duration(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        if isinstance(event_data.get("start_timestamp"), numbers.Number) and isinstance(
+            event_data.get("timestamp"), numbers.Number
+        ):
+            start_ts = self.__extract_timestamp(
+                int(event_data.get("start_timestamp", 0))
+            )
+            finish_ts = self.__extract_timestamp(int(event_data.get("timestamp", 0)))
+            duration_secs = (finish_ts - start_ts).total_seconds()
+            processed["transaction_duration"] = max(int(duration_secs * 1000), 0)
+        else:
+            processed["transaction_duration"] = 0
+
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
     ) -> Sequence[Mapping[str, Any]]:
@@ -223,14 +265,19 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "project_id": event["project_id"],
             "event_id": ensure_uuid(event["event_id"]),
             "search_title": event_occurrence_data["issue_title"],
+            "subtitle": event_occurrence_data.get("subtitle", None),
+            "culprit": event_occurrence_data.get("culprit", None),
+            "level": event_occurrence_data.get("level", None),
             "primary_hash": ensure_uuid(event["primary_hash"]),
             "fingerprint": fingerprints,
+            "resource_id": event_occurrence_data.get("resource_id", None),
             "occurrence_id": ensure_uuid(event_occurrence_data["id"]),
             "occurrence_type_id": event_occurrence_data["type"],
             "detection_timestamp": detection_timestamp,
             "receive_timestamp": receive_timestamp,
             "client_timestamp": client_timestamp,
             "platform": event["platform"],
+            "message": _unicodify(event["message"]),
         }
 
         # optional fields
@@ -243,6 +290,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self._process_request_data(event_data, fields)  # http_method, http_referer
         self._process_sdk_data(event_data, fields)  # sdk_name, sdk_version
         self._process_contexts(event_data, fields)  # contexts.key, contexts.value
+
+        # start_timestamp, timestamp
+        self._process_transaction_duration(event_data, fields)
 
         return [
             {
@@ -277,7 +327,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             processed = self.process_insert_v1(event, metadata)
         except EventTooOld:
             metrics.increment("event_too_old")
-            raise
+            return None
         except IndexError:
             metrics.increment("invalid_message")
             raise

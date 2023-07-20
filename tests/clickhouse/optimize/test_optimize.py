@@ -63,7 +63,7 @@ test_data = [
             None,
         ),
         last_midnight
-        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
         + timedelta(minutes=30),
         id="errors parallel",
     ),
@@ -99,7 +99,7 @@ test_data = [
             None,
         ),
         last_midnight
-        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
         + timedelta(minutes=30),
         id="transactions parallel",
     ),
@@ -107,6 +107,8 @@ test_data = [
 
 
 class TestOptimize:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date, current_time",
         test_data,
@@ -234,12 +236,13 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
 
+@pytest.mark.clickhouse_db
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
     """
     prev_job_cutoff_time = settings.OPTIMIZE_JOB_CUTOFF_TIME
-    settings.OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+    settings.OPTIMIZE_JOB_CUTOFF_TIME = 23
     storage = get_writable_storage(StorageKey.ERRORS)
     cluster = storage.get_cluster()
     clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
@@ -259,7 +262,9 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     tracker.update_all_partitions([dummy_partition])
 
     with freeze_time(
-        last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
+        last_midnight
+        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+        + timedelta(minutes=15)
     ):
         scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):

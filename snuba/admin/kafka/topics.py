@@ -1,13 +1,10 @@
 import json
-import logging
 from typing import Any, Sequence
 
 from confluent_kafka.admin import AdminClient
 
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-
-logger = logging.getLogger(__name__)
 
 
 def get_broker_data() -> Sequence[Any]:

@@ -30,6 +30,7 @@ assert isinstance(sessions_read_schema, TableSchema)
 assert isinstance(sessions_raw_schema, TableSchema)
 
 
+@pytest.mark.clickhouse_db
 def test_sessions_processing() -> None:
     query_body = {
         "query": """
@@ -59,12 +60,12 @@ def test_sessions_processing() -> None:
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
         )
-        assert query.get_selected_columns() == [
+        assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(
                 "duration_quantiles",
                 CurriedFunctionCall(
@@ -204,6 +205,7 @@ selector_tests = [
     "query_body, is_subscription, expected_table",
     selector_tests,
 )
+@pytest.mark.clickhouse_db
 def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:
@@ -233,9 +235,9 @@ def test_select_storage(
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
-        assert query.get_from_clause().table_name == expected_table
+        assert clickhouse_query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})
 
     sessions_entity.get_query_pipeline_builder().build_execution_pipeline(

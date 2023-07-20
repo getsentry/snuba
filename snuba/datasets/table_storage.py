@@ -1,9 +1,6 @@
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
-)
 
 from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
@@ -32,6 +29,9 @@ from snuba.writer import BatchWriter
 class KafkaTopicSpec:
     def __init__(self, topic: Topic) -> None:
         self.__topic = topic
+
+    def __hash__(self) -> int:
+        return hash(self.__topic)
 
     @property
     def topic(self) -> Topic:
@@ -89,9 +89,7 @@ class KafkaStreamLoader:
         subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
-        dead_letter_queue_policy_creator: Optional[
-            Callable[[], DeadLetterQueuePolicy]
-        ] = None,
+        dlq_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
         assert (
             (subscription_scheduler_mode is None)
@@ -107,7 +105,7 @@ class KafkaStreamLoader:
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
-        self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
+        self.__dlq_topic_spec = dlq_topic_spec
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -137,10 +135,8 @@ class KafkaStreamLoader:
     def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_result_topic_spec
 
-    def get_dead_letter_queue_policy_creator(
-        self,
-    ) -> Optional[Callable[[], DeadLetterQueuePolicy]]:
-        return self.__dead_letter_queue_policy_creator
+    def get_dlq_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__dlq_topic_spec
 
 
 def build_kafka_stream_loader_from_settings(
@@ -152,9 +148,7 @@ def build_kafka_stream_loader_from_settings(
     subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
-    dead_letter_queue_policy_creator: Optional[
-        Callable[[], DeadLetterQueuePolicy]
-    ] = None,
+    dlq_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
@@ -183,6 +177,11 @@ def build_kafka_stream_loader_from_settings(
     else:
         subscription_result_topic_spec = None
 
+    if dlq_topic is not None:
+        dlq_topic_spec = KafkaTopicSpec(dlq_topic)
+    else:
+        dlq_topic_spec = None
+
     return KafkaStreamLoader(
         processor,
         default_topic_spec,
@@ -192,7 +191,7 @@ def build_kafka_stream_loader_from_settings(
         subscription_scheduler_mode=subscription_scheduler_mode,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
-        dead_letter_queue_policy_creator=dead_letter_queue_policy_creator,
+        dlq_topic_spec=dlq_topic_spec,
     )
 
 

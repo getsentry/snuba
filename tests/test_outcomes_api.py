@@ -15,6 +15,8 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestLegacyOutcomesApi(BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -25,17 +27,10 @@ class TestLegacyOutcomesApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    @pytest.fixture(scope="class")
-    def get_project_id(self, request: object) -> Callable[[], int]:
-        id_iter = itertools.count()
-        next(id_iter)  # skip 0
-        return lambda: next(id_iter)
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.skew_minutes = 180
         self.skew = timedelta(minutes=self.skew_minutes)
@@ -43,6 +38,12 @@ class TestLegacyOutcomesApi(BaseApiTest):
             datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
         )
         self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
+
+    @pytest.fixture(scope="class")
+    def get_project_id(self, request: object) -> Callable[[], int]:
+        id_iter = itertools.count()
+        next(id_iter)  # skip 0
+        return lambda: next(id_iter)
 
     def generate_outcomes(
         self,
@@ -166,6 +167,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
                         ["timestamp", "<=", to_date],
                     ],
                     "groupby": ["project_id", "time"],
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )
@@ -274,6 +276,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
                         ["project_id", "=", project_id],
                     ],
                     "groupby": ["category"],
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )
@@ -299,6 +302,8 @@ class TestLegacyOutcomesApi(BaseApiTest):
         assert data["data"] == correct_data
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOutcomesAPI(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
@@ -355,8 +360,8 @@ class TestOutcomesAPI(BaseApiTest):
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()
 
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self, clickhouse_db: None) -> None:
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -423,6 +428,7 @@ class TestOutcomesAPI(BaseApiTest):
                     GRANULARITY 60
                     """,
                     "dataset": "outcomes",
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
         )

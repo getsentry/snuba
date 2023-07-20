@@ -174,6 +174,11 @@ schema:
         },
     },
     {
+      name: exception_main_thread,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 8 },
+    },
+    {
       name: sdk_integrations,
       type: Array,
       args: { inner_type: { type: String } },
@@ -186,6 +191,16 @@ schema:
           subcolumns:
             [{ name: name, type: String }, { name: version, type: String }],
         },
+    },
+    {
+      name: trace_sampled,
+      type: UInt,
+      args: { schema_modifiers: [ nullable ], size: 8 },
+    },
+    {
+      name: num_processing_errors,
+      type: UInt,
+      args: { schema_modifiers: [ nullable ], size: 64 },
     },
   ]
 required_time_column: timestamp
@@ -264,6 +279,14 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.city
             nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_subdivision
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.subdivision
+            nullable: true
         - mapper: DefaultNoneColumnMapper
           args:
             column_names:
@@ -283,6 +306,18 @@ storages:
               - group_ids
               - app_start_type
               - profile_id
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -388,6 +423,26 @@ storages:
             to_nested_col_name: contexts
             to_nested_mapping_key: geo.city
             nullable: true
+        - mapper: ColumnToMapping
+          args:
+            from_table_name: null
+            from_col_name: geo_subdivision
+            to_nested_col_table_name: null
+            to_nested_col_name: contexts
+            to_nested_mapping_key: geo.subdivision
+            nullable: true
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
         - mapper: DefaultNoneColumnMapper
           args:
             column_names:
@@ -449,7 +504,6 @@ query_processors:
       time_parse_columns:
         - timestamp
         - received
-  - processor: TagsExpanderProcessor
   - processor: BasicFunctionsProcessor
   - processor: HandledFunctionsProcessor
     args:

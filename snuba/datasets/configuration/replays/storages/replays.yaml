@@ -4,6 +4,7 @@ name: replays
 storage:
   key: replays
   set_key: replays
+readiness_state: complete
 schema:
   columns:
     [
@@ -37,7 +38,11 @@ schema:
       },
       { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
       { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
-      { name: title, type: String, args: { schema_modifiers: [readonly] } },
+      {
+        name: title,
+        type: String,
+        args: { schema_modifiers: [readonly, nullable] },
+      },
       { name: url, type: String, args: { schema_modifiers: [nullable] } },
       { name: urls, type: Array, args: { inner_type: { type: String } } },
       {
@@ -64,7 +69,7 @@ schema:
         type: IPv6,
         args: { schema_modifiers: [nullable] },
       },
-      { name: user, type: String },
+      { name: user, type: String, args: { schema_modifiers: [nullable] } },
       { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
       { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -108,8 +113,12 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
-      { name: sdk_name, type: String },
-      { name: sdk_version, type: String },
+      { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
+      {
+        name: sdk_version,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
       {
         name: tags,
         type: Nested,
@@ -119,6 +128,30 @@ schema:
               [{ name: key, type: String }, { name: value, type: String }],
           },
       },
+      { name: click_node_id, type: UInt, args: { size: 32 } },
+      {
+        name: click_tag,
+        type: String,
+        args: { schema_modifiers: [low_cardiality] },
+      },
+      { name: click_id, type: String, args: {} },
+      {
+        name: click_class,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      { name: click_text, type: String, args: {} },
+      {
+        name: click_role,
+        type: String,
+        args: { schema_modifiers: [low_cardiality] },
+      },
+      { name: click_alt, type: String, args: {} },
+      { name: click_testid, type: String, args: {} },
+      { name: click_aria_label, type: String, args: {} },
+      { name: click_title, type: String, args: {} },
+      { name: click_is_dead, type: UInt, args: { size: 8 } },
+      { name: click_is_rage, type: UInt, args: { size: 8 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: partition, type: UInt, args: { size: 16 } },
       { name: offset, type: UInt, args: { size: 64 } },
@@ -127,12 +160,25 @@ schema:
   dist_table_name: replays_dist
 query_processors:
   - processor: TableRateLimit
+  - processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_rows_to_group_by: 1000000
+        group_by_overflow_mode: any
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 stream_loader:
   processor:
     name: ReplaysProcessor
   default_topic: ingest-replay-events
-  dlq_policy:
-    type: produce
-    args: [snuba-dead-letter-replays]
+  dlq_topic: snuba-dead-letter-replays
+allocation_policies:
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000

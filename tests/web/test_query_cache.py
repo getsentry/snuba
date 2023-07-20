@@ -46,7 +46,7 @@ def run_query() -> None:
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
-                {"tenant_type": "tenant_id"},
+                {"referrer": "r", "organization_id": 1234},
                 "blah",
                 None,
                 None,
@@ -59,6 +59,8 @@ def run_query() -> None:
     assert result.result["data"] == []
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_cache_retries_on_bad_query_id(
     monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
 ) -> None:

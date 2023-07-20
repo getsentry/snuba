@@ -1,11 +1,13 @@
 import json
-from typing import Any, Callable, Iterator, Tuple, Union
+import traceback
+from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
@@ -22,8 +24,13 @@ def pytest_configure() -> None:
         settings.TESTING
     ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
+    initialize_snuba()
     setup_sentry()
+    initialize_snuba()
 
+
+@pytest.fixture(scope="session")
+def create_databases() -> None:
     for cluster in settings.CLUSTERS:
         clickhouse_cluster = ClickhouseCluster(
             host=cluster["host"],
@@ -54,8 +61,94 @@ def pytest_configure() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-@pytest.fixture(autouse=True)
-def run_migrations() -> Iterator[None]:
+def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
+    for item in items:
+        if item.get_closest_marker("clickhouse_db"):
+            item.fixturenames.append("clickhouse_db")
+        else:
+            item.fixturenames.append("block_clickhouse_db")
+
+        if item.get_closest_marker("redis_db"):
+            item.fixturenames.append("redis_db")
+        else:
+            item.fixturenames.append("block_redis_db")
+
+
+class BlockedObject:
+    def __init__(self, message: str) -> None:
+        self.__failures: List[List[str]] = []
+        self.__message = message
+
+    def snuba_test_teardown(self) -> None:
+        if self.__failures:
+            lines = "\n".join(self.__failures[0])
+            pytest.fail(f"{self.__message}, stacktrace: \n{lines}")
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # record stacktrace and print it during teardown so there's no chance
+        # of the exception being caught down somehow
+        self.__failures.append(traceback.format_stack())
+        pytest.fail(self.__message)
+
+
+@pytest.fixture
+def block_redis_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    from snuba.redis import _redis_clients
+
+    blocked = BlockedObject(
+        "attempted to access redis in test that does not use @pytest.mark.redis_db"
+    )
+
+    for key in _redis_clients:
+        monkeypatch.setattr(_redis_clients[key], "execute_command", blocked)
+
+    # Patch out Snuba settings so that random config access does not hit redis
+    # (setting config still requires redis_db marker)
+    monkeypatch.setattr("snuba.state.get_raw_configs", dict)
+
+    yield
+
+    blocked.snuba_test_teardown()
+
+
+@pytest.fixture
+def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    from snuba.clusters.cluster import ClickhouseCluster
+
+    blocked = BlockedObject(
+        "attempted to access clickhouse in test that does not use @pytest.mark.clickhouse_db"
+    )
+
+    monkeypatch.setattr(ClickhouseCluster, "get_query_connection", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_node_connection", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_batch_writer", blocked)
+    monkeypatch.setattr(ClickhouseCluster, "get_reader", blocked)
+
+    yield
+
+    blocked.snuba_test_teardown()
+
+
+@pytest.fixture
+def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("redis_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail("Need to use redis_db marker if redis_db fixture is used")
+
+    for redis_client in all_redis_clients():
+        redis_client.flushdb()
+
+    yield
+
+
+@pytest.fixture
+def clickhouse_db(
+    request: pytest.FixtureRequest, create_databases: None
+) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("clickhouse_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")
+
     from snuba.migrations.runner import Runner
 
     try:
@@ -81,12 +174,9 @@ def run_migrations() -> Iterator[None]:
                         f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
                     )
 
-        for redis_client in all_redis_clients():
-            redis_client.flushdb()
-
 
 @pytest.fixture(autouse=True)
-def clear_recorded_metrics() -> Iterator[None]:
+def clear_recorded_metrics() -> Generator[None, None, None]:
     from snuba.utils.metrics.backends.testing import clear_recorded_metric_calls
 
     yield
@@ -148,6 +238,6 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 
 
 @pytest.fixture
-def disable_query_cache(snuba_set_config: SnubaSetConfig) -> None:
+def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
     snuba_set_config("use_cache", False)
     snuba_set_config("use_readthrough_query_cache", 0)

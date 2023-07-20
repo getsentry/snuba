@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
+from typing import Any, Dict, MutableSequence, Optional, Set
 
 from clickhouse_driver.errors import ErrorCodes
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.datasets.storage import StorageNotAvailable
 from snuba.request import Request
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
@@ -99,6 +101,8 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.NETWORK_ERROR: RequestStatus.NETWORK_TIMEOUT,
     ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: RequestStatus.INVALID_TYPING,
     ErrorCodes.TYPE_MISMATCH: RequestStatus.INVALID_TYPING,
+    ErrorCodes.NO_COMMON_TYPE: RequestStatus.INVALID_TYPING,
+    ErrorCodes.UNKNOWN_FUNCTION: RequestStatus.INVALID_REQUEST,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
 }
 
@@ -119,6 +123,8 @@ def get_request_status(cause: Exception | None = None) -> Status:
         slo_status = RequestStatus.CACHE_SET_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
+    elif isinstance(cause, StorageNotAvailable):
+        slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
 
@@ -135,7 +141,7 @@ class FilterProfile:
     # Filters on non optimized mapping columns like tags/contexts
     mapping_cols: Columnset
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.ClickhouseQueryProfileWhereProfile:
         return {
             "columns": sorted(self.columns),
             "mapping_cols": sorted(self.mapping_cols),
@@ -162,7 +168,7 @@ class ClickhouseQueryProfile:
     # Columns in arrayjoin statements
     array_join_cols: Columnset
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.ClickhouseQueryProfile:
         return {
             "time_range": self.time_range,
             "table": self.table,
@@ -180,14 +186,14 @@ class ClickhouseQueryMetadata:
     sql_anonymized: str
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
-    stats: Mapping[str, Any]
+    stats: Dict[str, Any]
     status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
-    result_profile: Optional[Mapping[str, Any]] = None
+    result_profile: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.QueryMetadata:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
@@ -221,10 +227,10 @@ class SnubaQueryMetadata:
     projects: Set[int]
     snql_anonymized: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> snuba_queries_v1.Querylog:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
-        return {
+        request_dict: snuba_queries_v1.Querylog = {
             "request": {
                 "id": self.request.id,
                 "body": self.request.original_body,
@@ -245,6 +251,11 @@ class SnubaQueryMetadata:
             "projects": list(self.projects),
             "snql_anonymized": self.snql_anonymized,
         }
+        # TODO: Remove check once Org IDs are required
+        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
+            if isinstance(org_id, int):
+                request_dict["organization"] = org_id
+        return request_dict
 
     @property
     def status(self) -> QueryStatus:

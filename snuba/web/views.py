@@ -12,6 +12,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -32,11 +33,10 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
-from markdown import markdown
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
-from snuba import environment, settings, state, util
+from snuba import environment, settings, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import (
@@ -56,19 +56,20 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query.exceptions import InvalidQueryException
+from snuba.datasets.storage import Storage, StorageNotAvailable
+from snuba.query.allocation_policies import AllocationPolicyViolations
+from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
-from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
@@ -115,29 +116,25 @@ else:
             return False
 
 
-def check_clickhouse(
-    ignore_experimental: bool = True, metric_tags: dict[str, Any] | None = None
-) -> bool:
+def filter_checked_storages() -> List[Storage]:
+    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+    entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
+
+    storages: List[Storage] = []
+    for entity in entities:
+        for storage in entity.get_all_storages():
+            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
+                storages.append(storage)
+    return storages
+
+
+def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
+    TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
     """
     try:
-        if ignore_experimental:
-            datasets = [
-                get_dataset(name)
-                for name in get_enabled_dataset_names()
-                if not get_dataset(name).is_experimental()
-            ]
-        else:
-            datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-
-        entities = itertools.chain(
-            *[dataset.get_all_entities() for dataset in datasets]
-        )
-        storages = list(
-            itertools.chain(*[entity.get_all_storages() for entity in entities])
-        )
-
+        storages = filter_checked_storages()
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
@@ -307,89 +304,6 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
     )
 
 
-@application.route("/")
-def root() -> str:
-    with open("README.rst") as f:
-        return render_template("index.html", body=markdown(f.read()))
-
-
-@application.route("/css/<path:path>")
-def send_css(path: str) -> Response:
-    return application.send_static_file(os.path.join("css", path))
-
-
-@application.route("/img/<path:path>")
-@application.route("/snuba/web/static/img/<path:path>")
-def send_img(path: str) -> Response:
-    return application.send_static_file(os.path.join("img", path))
-
-
-@application.route("/dashboard")
-@application.route("/dashboard.<fmt>")
-def dashboard(fmt: str = "html") -> Union[Response, RespTuple]:
-    if fmt == "json":
-        result = {
-            "queries": state.get_queries(),
-            "concurrent": {k: state.get_concurrent(k) for k in ["global"]},
-            "rates": {k: state.get_rates(k) for k in ["global"]},
-        }
-        return (json.dumps(result), 200, {"Content-Type": "application/json"})
-    else:
-        return application.send_static_file("dashboard.html")
-
-
-@application.route("/config")
-@application.route("/config.<fmt>", methods=["GET", "POST"])
-def config(fmt: str = "html") -> Union[Response, RespTuple]:
-    if fmt == "json":
-        if http_request.method == "GET":
-            return (
-                json.dumps(state.get_raw_configs()),
-                200,
-                {"Content-Type": "application/json"},
-            )
-        else:
-            assert http_request.method == "POST"
-            try:
-                state.set_configs(
-                    json.loads(http_request.data),
-                    user=http_request.headers.get("x-forwarded-email"),
-                )
-                return (
-                    json.dumps(state.get_raw_configs()),
-                    200,
-                    {"Content-Type": "application/json"},
-                )
-            except MismatchedTypeException as exc:
-                return (
-                    json.dumps(
-                        {
-                            "error": {
-                                "type": "client_error",
-                                "message": "Existing value and New value have different types. Use option force to override check",
-                                "key": str(exc.key),
-                                "original value type": str(exc.original_type),
-                                "new_value_type": str(exc.new_type),
-                            }
-                        },
-                        indent=4,
-                    ),
-                    400,
-                    {"Content-Type": "application/json"},
-                )
-    else:
-        return application.send_static_file("config.html")
-
-
-@application.route("/config/changes.json")
-def config_changes() -> RespTuple:
-    return (
-        json.dumps(state.get_config_changes_legacy()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
 @application.route("/health_envoy")
 def health_envoy() -> Response:
     """K8s can decide to shut down the pod, at which point it will write the down file.
@@ -425,11 +339,7 @@ def health() -> Response:
         "thorough": str(thorough),
     }
 
-    clickhouse_health = (
-        check_clickhouse(ignore_experimental=True, metric_tags=metric_tags)
-        if thorough
-        else True
-    )
+    clickhouse_health = check_clickhouse(metric_tags=metric_tags) if thorough else True
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
@@ -446,18 +356,19 @@ def health() -> Response:
 
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
+        logger.error(f"Snuba health check failed! Tags: {metric_tags}")
     metrics.timing(
         "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
     )
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
-def parse_request_body(http_request: Request) -> MutableMapping[str, Any]:
+def parse_request_body(http_request: Request) -> Dict[str, Any]:
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
-            assert isinstance(body, MutableMapping)
+            assert isinstance(body, Dict)
             return body
         except json.JSONDecodeError as error:
             raise JsonDecodeException(str(error)) from error
@@ -505,9 +416,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 
 
 @with_span()
-def dataset_query(
-    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
-) -> Response:
+def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
@@ -537,7 +446,7 @@ def dataset_query(
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, RateLimitExceeded):
+        if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
             status = 429
             details = {
                 "type": "rate-limited",
@@ -572,7 +481,20 @@ def dataset_query(
             status,
             {"Content-Type": "application/json"},
         )
-
+    except QueryPlanException as exception:
+        if isinstance(exception, StorageNotAvailable):
+            status = 400
+            details = {
+                "type": "storage-not-available",
+                "message": str(exception.message),
+            }
+        else:
+            raise  # exception should have been chained
+        return Response(
+            json.dumps({"error": details, "timing": timer.for_json()}),
+            status,
+            {"Content-Type": "application/json"},
+        )
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
@@ -697,6 +619,7 @@ if application.debug or application.testing:
 
         storage = entity.get_writable_storage()
         assert storage is not None
+        should_validate_schema = True
 
         try:
             if type_ == "insert":
@@ -720,6 +643,7 @@ if application.debug or application.testing:
                         stream_loader.get_processor(),
                         "consumer_grouup",
                         stream_loader.get_default_topic_spec().topic,
+                        should_validate_schema,
                     ),
                     build_batch_writer(table_writer, metrics=metrics),
                     max_batch_size=1,
@@ -727,6 +651,8 @@ if application.debug or application.testing:
                     processes=None,
                     input_block_size=None,
                     output_block_size=None,
+                    max_insert_batch_size=None,
+                    max_insert_batch_time=None,
                 ).create_with_partitions(commit, {})
                 strategy.submit(message)
                 strategy.close()

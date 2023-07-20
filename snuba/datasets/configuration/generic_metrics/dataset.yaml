@@ -2,8 +2,6 @@ version: v1
 kind: dataset
 name: generic_metrics
 
-is_experimental: false
-
 entities:
   - generic_metrics_sets
   - generic_metrics_distributions

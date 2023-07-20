@@ -1,3 +1,5 @@
+import pytest
+
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
@@ -13,6 +15,7 @@ from snuba.request import Request
 from snuba.web import QueryResult
 
 
+@pytest.mark.clickhouse_db
 def test_events_processing() -> None:
     query_body = {
         "query": """
@@ -41,9 +44,9 @@ def test_events_processing() -> None:
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
     ) -> QueryResult:
-        assert query.get_selected_columns() == [
+        assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(
                 "tags[transaction]",
                 Column("_snuba_tags[transaction]", None, "transaction_name"),

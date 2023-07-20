@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, MutableMapping
 
@@ -9,10 +8,6 @@ from snuba import environment, settings, state
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "bucket_timer")
-
-
-def get_time_sum(group: List[timedelta]) -> timedelta:
-    return sum([processing_time for processing_time in group], timedelta())
 
 
 def floor_minute(time: datetime) -> datetime:
@@ -25,21 +20,16 @@ def ceil_minute(time: datetime) -> datetime:
     return floor_minute(time + timedelta(minutes=1))
 
 
-@dataclass
-class Bucket:
-    project_id: int
-    minute: datetime
-    processing_time: timedelta = timedelta(seconds=0)
-
-
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]
+
+COUNTER_WINDOW_SIZE = timedelta(minutes=settings.COUNTER_WINDOW_SIZE_MINUTES)
 
 
 class Counter:
     """
     The Counter class is used to track time spent on some activity (e.g. processing a replacement) for a project.
     To accomplish this, the `record_time_spent()` function captures some processing time range and splits it by a per
-    minute resolution (Bucket). The buckets older than settings.COUNTER_WINDOW_SIZE are trimmed. Finally, the `get_bucket_totals_exceeding_limit()`
+    minute resolution (Bucket). The buckets older than COUNTER_WINDOW_SIZE are trimmed. Finally, the `get_bucket_totals_exceeding_limit()`
     function returns all project ids who's total processing time has exceeded self.limit.
     """
 
@@ -49,11 +39,11 @@ class Counter:
 
         percentage = state.get_config("project_quota_time_percentage", 1.0)
         assert isinstance(percentage, float)
-        self.limit = settings.COUNTER_WINDOW_SIZE * percentage
+        self.limit = COUNTER_WINDOW_SIZE * percentage
 
     def __trim_expired_buckets(self, now: datetime) -> None:
         current_minute = floor_minute(now)
-        window_start = current_minute - settings.COUNTER_WINDOW_SIZE
+        window_start = current_minute - COUNTER_WINDOW_SIZE
         new_buckets: Buckets = {}
         for min, dict in self.buckets.items():
             if min >= window_start:

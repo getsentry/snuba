@@ -1,7 +1,7 @@
 import copy
 import uuid
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, MutableMapping, Union
 
 import pytest
@@ -36,6 +36,7 @@ def message_base() -> SearchIssueEvent:
         "primary_hash": str(uuid.uuid4()),
         "datetime": datetime.utcnow().isoformat() + "Z",
         "platform": "other",
+        "message": "something",
         "data": {
             "received": datetime.now().timestamp(),
         },
@@ -70,6 +71,7 @@ class TestSearchIssuesMessageProcessor:
         "platform",
         "tags.key",
         "tags.value",
+        "message",
     }
 
     def process_message(
@@ -343,6 +345,38 @@ class TestSearchIssuesMessageProcessor:
             "200.1",
         ]
 
+    def test_extract_resource_id(self, message_base):
+        resource_id = uuid.uuid4().hex
+        message_base["occurrence_data"]["resource_id"] = resource_id
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "resource_id" in insert_row and insert_row["resource_id"] == resource_id
+
+    def test_extract_subtitle(self, message_base):
+        sub = "Just according to keikaku. (Translator’s note: Keikaku means plan)"
+        message_base["occurrence_data"]["subtitle"] = sub
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "subtitle" in insert_row and insert_row["subtitle"] == sub
+
+    def test_extract_culprit(self, message_base):
+        culprit = "it was me, I did it"
+        message_base["occurrence_data"]["culprit"] = culprit
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "culprit" in insert_row and insert_row["culprit"] == culprit
+
+    def test_extract_level(self, message_base):
+        level = "info"
+        message_base["occurrence_data"]["level"] = level
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "level" in insert_row and insert_row["level"] == level
+
     def test_extract_trace_id_from_contexts(self, message_base):
         trace_id = str(uuid.uuid4().hex)
         message_base["data"]["contexts"] = {"trace": {"trace_id": trace_id}}
@@ -355,6 +389,65 @@ class TestSearchIssuesMessageProcessor:
             message_base["data"]["contexts"]["trace"]["trace_id"] = invalid_trace_id
             with pytest.raises(ValueError):
                 self.process_message(message_base)
+
+    def test_extract_transaction_duration(self, message_base):
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
+
+        now = datetime.utcnow()
+        message_base["data"]["start_timestamp"] = int(
+            (now - timedelta(seconds=10)).timestamp()
+        )
+        message_base["data"]["timestamp"] = int(now.timestamp())
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 10 * 1000
+
+        message_base["data"]["start_timestamp"] = "shouldn't be valid"
+        message_base["data"]["timestamp"] = {"key": "val"}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["transaction_duration"] == 0
+
+    def test_extract_profile_id(self, message_base):
+        profile_id = str(uuid.uuid4().hex)
+        message_base["data"]["contexts"] = {"profile": {"profile_id": profile_id}}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["profile_id"] == ensure_uuid(profile_id)
+
+        for invalid_profile_id in ["", "im a little tea pot", 1, 1.1]:
+            message_base["data"]["contexts"]["profile"][
+                "profile_id"
+            ] = invalid_profile_id
+            with pytest.raises(ValueError):
+                self.process_message(message_base)
+
+    def test_extract_replay_id(self, message_base):
+        replay_id = str(uuid.uuid4().hex)
+        message_base["data"]["contexts"] = {"replay": {"replay_id": replay_id}}
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["replay_id"] == ensure_uuid(replay_id)
+
+        for invalid_replay_id in ["", "im a little tea pot", 1, 1.1]:
+            message_base["data"]["contexts"]["replay"]["replay_id"] = invalid_replay_id
+            with pytest.raises(ValueError):
+                self.process_message(message_base)
+
+    def test_extract_message(self, message_base):
+        message = "a message"
+        message_base["message"] = message
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["message"] == message
 
     def test_ensure_uuid(self):
         with pytest.raises(ValueError):

@@ -21,7 +21,6 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralType
 from snuba.query.matchers import Any as AnyMatcher
 from snuba.query.matchers import Column as ColumnMatcher
-from snuba.query.matchers import Literal as LiteralMatcher
 from snuba.query.matchers import Param
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.utils.schemas import ColumnSet
@@ -46,8 +45,6 @@ COLUMN_PATTERN = ColumnMatcher(
     table_name=None,
     column_name=Param("column_name", AnyMatcher(str)),
 )
-
-LITERAL_PATTERN = LiteralMatcher()
 
 AllowedTypes = Union[
     Type[Array],

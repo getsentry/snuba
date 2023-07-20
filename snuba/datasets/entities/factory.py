@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from glob import glob
-from typing import Generator, Optional, Sequence, Type
+from typing import Optional, Sequence, Type
 
 import sentry_sdk
 
@@ -41,10 +41,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             if k.value not in settings.DISABLED_ENTITIES
         }
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
-
-    def iter_all(self) -> Generator[Entity, None, None]:
-        for ent in self._entity_map.values():
-            yield ent
 
     def all_names(self) -> Sequence[EntityKey]:
         return [name for name in self._entity_map.keys()]

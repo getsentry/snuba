@@ -22,6 +22,7 @@ from snuba.query.matchers import (
     Column,
     FunctionCall,
     Literal,
+    Or,
     Param,
     String,
 )
@@ -106,6 +107,25 @@ class ColumnToFunction(ColumnToExpression):
             alias=expression.alias,
             function_name=self.to_function_name,
             parameters=self.to_function_params,
+        )
+
+
+@dataclass(frozen=True)
+class ColumnToFunctionOnColumn(ColumnToExpression):
+    """
+    Maps a column into a function expression that preserves the alias.
+    """
+
+    to_function_name: str
+    to_function_column: str
+
+    def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
+        return FunctionCallExpr(
+            alias=expression.alias,
+            function_name=self.to_function_name,
+            parameters=(
+                ColumnExpr(None, expression.table_name, self.to_function_column),
+            ),
         )
 
 
@@ -298,7 +318,7 @@ mapping_pattern = FunctionCall(
             String("indexOf"),
             (
                 Column(None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
-                Literal(Param(KEY_MAPPING_PARAM, Any(str))),
+                Literal(Param(KEY_MAPPING_PARAM, Or([Any(str), Any(int)]))),
             ),
         ),
     ),

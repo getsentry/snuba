@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from datetime import timedelta
 from pathlib import Path
 from typing import (
     Any,
@@ -12,10 +11,16 @@ from typing import (
     Set,
     Tuple,
     TypedDict,
-    TypeVar,
 )
 
 from snuba.settings.validation import validate_settings
+
+# All settings must be uppercased, have a default value and cannot start with _.
+# The Rust consumer relies on this to create a JSON file from the evaluated settings
+# upon startup with any variables in this module that conform to this format.
+# Similarly, variables that are not supposed to be settings for override/export should not
+# follow this convention otherwise they will be included in the JSON.
+# Sets will be converted to arrays.
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -26,12 +31,16 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+##################
+# Admin Settings #
+##################
+
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://127.0.0.1:1219")
 
-ADMIN_AUTH_PROVIDER = "NOOP"
-ADMIN_AUTH_JWT_AUDIENCE = ""
+ADMIN_AUTH_PROVIDER = os.environ.get("ADMIN_AUTH_PROVIDER", "NOOP")
+ADMIN_AUTH_JWT_AUDIENCE = os.environ.get("ADMIN_AUTH_JWT_AUDIENCE", "")
 
 # file path to the IAM policy file which contains the roles
 ADMIN_IAM_POLICY_FILE = os.environ.get(
@@ -39,19 +48,21 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
     f"{Path(__file__).parent.parent.as_posix()}/admin/iam_policy/iam_policy.json",
 )
 
-# Migrations Groups that are allowed to be managed
-# in the snuba admin tool.
-ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
-    "search_issues",
-    "test_migration",
-    "events",
-    "transactions",
-}
+ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
+ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
+    os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
+)
+
+
+ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ROLES_REDIS_TTL = 600
+
+######################
+# End Admin Settings #
+######################
+
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -89,6 +100,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
+            "spans",
+            "group_attributes",
         },
         "single_node": True,
     },
@@ -119,6 +132,7 @@ class RedisClusterConfig(TypedDict):
     port: int
     password: str | None
     db: int
+    ssl: bool
     reinitialize_steps: int
 
 
@@ -132,10 +146,9 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
+REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
-
-T = TypeVar("T")
 
 
 class RedisClusters(TypedDict):
@@ -146,6 +159,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -156,9 +170,8 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
-
-USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
@@ -181,6 +194,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
+
 
 # Processor/Writer Options
 
@@ -239,7 +253,26 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (logical topic name, # of partitions)
+# Capacity Management
+# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
+# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
+# available for single tenant since we can enable/disable policies at runtime there.
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
+
+# By default, allocation policies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with allocation
+# policy code, the request will still be able to go through (but it will create a dangerous
+# situation eventually)
+RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
+# By default, the readthrough cache won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache
+# the request will still be able to go through as if the cache did not exist
+RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
+
+
+# (logical topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -247,17 +280,13 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "querylog",
-    "profiles",
-    "functions",
-    "test_migration",
-    "search_issues",
-}
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
-if os.environ.get("ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES", False):
-    SKIPPED_MIGRATION_GROUPS.remove("search_issues")
-
+# Dataset readiness states supported in this environment
+SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+# [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
+# We expect to remove them after all storages and migration groups have been migrated.
+READINESS_STATE_FAIL_QUERIES: bool = True
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -281,7 +310,8 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+# (entity name, buffer size)
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
@@ -299,20 +329,17 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
 
+# Enable spans ingestion
+ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
-MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
-
-# Start time from UTC 00:00:00 after which we are allowed to run optimize
-# jobs in parallel.
-PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=0)
-
-# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
-# parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
+# Enable group attributes consumer
+ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
+    "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
+)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
-OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+OPTIMIZE_JOB_CUTOFF_TIME = 23
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # sleep time to wait for a merge to complete
 OPTIMIZE_BASE_SLEEP_TIME = 300  # 5 mins
@@ -323,6 +350,14 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+
+# Start time in hours from UTC 00:00:00 after which we are allowed to run
+# optimize jobs in parallel.
+PARALLEL_OPTIMIZE_JOB_START_TIME = 0
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
+# parallel to avoid running in parallel when peak traffic starts.
+PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
@@ -335,7 +370,7 @@ ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 # Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE = timedelta(minutes=10)
+COUNTER_WINDOW_SIZE_MINUTES = 10
 
 
 # Slicing Configuration

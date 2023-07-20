@@ -14,8 +14,10 @@ from snuba.datasets.processors.replays_processor import (
     maybe,
     normalize_tags,
     process_tags_object,
+    raise_on_null,
     segment_id_to_event_hash,
     to_capped_list,
+    to_capped_string,
     to_datetime,
     to_enum,
     to_string,
@@ -418,7 +420,7 @@ class TestReplaysProcessor:
         result = ReplaysProcessor().process_message(minimal_payload, meta)
         assert isinstance(result, InsertBatch)
         assert len(result.rows) == 1
-        assert result.rows[0]["event_hash"] == event_hash
+        assert result.rows[0]["event_hash"] == str(uuid.UUID(event_hash))
 
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
@@ -658,3 +660,93 @@ class TestReplaysProcessor:
 
         with pytest.raises(TypeError):
             normalize_tags("a")
+
+    def test_to_capped_string(self) -> None:
+        """Test "to_capped_string" function."""
+        assert to_capped_string(1, "123") == "1"
+        assert to_capped_string(2, "123") == "12"
+        assert to_capped_string(3, "123") == "123"
+        assert to_capped_string(4, "123") == "123"
+
+    def test_raise_on_null(self) -> None:
+        with pytest.raises(ValueError):
+            raise_on_null("test", None)
+
+
+class TestReplaysActionProcessor:
+    def test_replay_actions(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+
+        message = {
+            "type": "replay_event",
+            "start_time": datetime.now().timestamp(),
+            "replay_id": "bb570198b8f04f8bbe87077668530da7",
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_actions",
+                            "replay_id": "bb570198b8f04f8bbe87077668530da7",
+                            "clicks": [
+                                {
+                                    "node_id": 59,
+                                    "tag": "div",
+                                    "id": "id",
+                                    "class": ["class1", "class2"],
+                                    "role": "button",
+                                    "aria_label": "test",
+                                    "alt": "",
+                                    "testid": "",
+                                    "title": "",
+                                    "text": "text",
+                                    "timestamp": int(now.timestamp()),
+                                    "event_hash": "df3c3aa2daae465e89f1169e49139827",
+                                    "is_dead": 0,
+                                    "is_rage": 1,
+                                }
+                            ],
+                        }
+                    ).encode()
+                )
+            ),
+        }
+
+        result = ReplaysProcessor().process_message(message, meta)
+        assert isinstance(result, InsertBatch)
+        rows = result.rows
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["project_id"] == 1
+        assert row["timestamp"] == now
+        assert row["replay_id"] == str(uuid.UUID("bb570198b8f04f8bbe87077668530da7"))
+        assert row["event_hash"] == "df3c3aa2daae465e89f1169e49139827"
+        assert row["segment_id"] is None
+        assert row["trace_ids"] == []
+        assert row["error_ids"] == []
+        assert row["urls"] == []
+        assert row["platform"] == "javascript"
+        assert row["user"] is None
+        assert row["sdk_name"] is None
+        assert row["sdk_version"] is None
+        assert row["retention_days"] == 30
+        assert row["partition"] == 0
+        assert row["offset"] == 0
+        assert row["click_node_id"] == 59
+        assert row["click_tag"] == "div"
+        assert row["click_id"] == "id"
+        assert row["click_class"] == ["class1", "class2"]
+        assert row["click_aria_label"] == "test"
+        assert row["click_role"] == "button"
+        assert row["click_text"] == "text"
+        assert row["click_alt"] == ""
+        assert row["click_testid"] == ""
+        assert row["click_title"] == ""
+        assert row["click_is_dead"] == 0
+        assert row["click_is_rage"] == 1

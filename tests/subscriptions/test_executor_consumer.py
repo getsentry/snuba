@@ -47,6 +47,8 @@ from tests.backends.metrics import Increment, TestingMetricsBackend
 
 
 @pytest.mark.ci_only
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_executor_consumer() -> None:
     """
     End to end integration test
@@ -214,6 +216,8 @@ def generate_message(
         i += 1
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_execute_query_strategy() -> None:
     next_step = mock.Mock()
 
@@ -247,6 +251,8 @@ def test_execute_query_strategy() -> None:
     strategy.join()
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_too_many_concurrent_queries() -> None:
     state.set_config("executor_queue_size_factor", 1)
 
@@ -271,6 +277,8 @@ def test_too_many_concurrent_queries() -> None:
     strategy.join()
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_skip_execution_for_entity() -> None:
     metrics = TestingMetricsBackend()
 
@@ -289,6 +297,9 @@ def test_skip_execution_for_entity() -> None:
     metrics_counters_message = next(generate_message(EntityKey.METRICS_COUNTERS))
     strategy.submit(metrics_counters_message)
 
+    strategy.close()
+    strategy.join()
+
     assert (
         Increment("skipped_execution", 1, {"entity": "metrics_sets"})
         not in metrics.calls
@@ -299,6 +310,7 @@ def test_skip_execution_for_entity() -> None:
     )
 
 
+@pytest.mark.clickhouse_db
 def test_produce_result() -> None:
     epoch = datetime(1970, 1, 1)
     scheduled_topic = Topic("scheduled-subscriptions-events")
@@ -334,6 +346,8 @@ def test_produce_result() -> None:
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
+        "profile": {},
+        "trace_output": "",
     }
 
     message = Message(
@@ -370,6 +384,8 @@ def test_produce_result() -> None:
     assert commit.call_count == 3
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_execute_and_produce_result() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")

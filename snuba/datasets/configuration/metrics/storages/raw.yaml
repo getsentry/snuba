@@ -4,6 +4,7 @@ name: metrics_raw
 storage:
   key: metrics_raw
   set_key: metrics
+readiness_state: complete
 schema:
   columns:
     [
@@ -50,7 +51,4 @@ stream_loader:
   subscription_scheduler_mode: global
   subscription_scheduled_topic: scheduled-subscriptions-metrics
   subscription_result_topic: metrics-subscription-results
-  dlq_policy:
-    type: produce
-    args:
-      - snuba-dead-letter-metrics
+  dlq_topic: snuba-dead-letter-metrics

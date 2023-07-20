@@ -2,7 +2,7 @@ import calendar
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Generator, Tuple, Union
 
 import pytest
 import pytz
@@ -19,6 +19,8 @@ SNQL_ROUTE = "/transactions/snql"
 LIMIT_BY_COUNT = 5
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestTransactionsApi(BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -29,11 +31,13 @@ class TestTransactionsApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self,
+        clickhouse_db: None,
+        redis_db: None,
+        _build_snql_post_methods: Callable[[str], Any],
+    ) -> Generator[None, None, None]:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
@@ -50,7 +54,8 @@ class TestTransactionsApi(BaseApiTest):
         self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
-    def teardown_method(self, test_method: Any) -> None:
+        yield
+
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")
@@ -176,6 +181,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["transaction_name", "ip_address", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -194,6 +200,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["transaction_op", "platform", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -213,6 +220,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["transaction_name", "span_id"],
                     "conditions": [
@@ -249,6 +257,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": [
                         "event_id",
@@ -271,6 +280,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id", "ip_address", "project_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -292,6 +302,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id", "span_id", "project_id"],
                     "conditions": [["event_id", "=", first_event_id]],
@@ -312,6 +323,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["trace_id", "ip_address", "project_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -332,6 +344,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["trace_id", "project_id"],
                     "conditions": [["trace_id", "=", first_trace_id]],
@@ -351,6 +364,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["transaction_name", "duration"],
                     "aggregations": [["apdex(duration, 300)", "", "apdex_score"]],
@@ -378,6 +392,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["transaction_name", "duration"],
                     "aggregations": [["failure_rate()", "", "error_percentage"]],
@@ -404,6 +419,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": [
                         "event_id",
@@ -428,6 +444,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": [
                         "event_id",
@@ -458,6 +475,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": [
                         "event_id",
@@ -488,6 +506,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": [
                         "event_id",
@@ -518,6 +537,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id"],
                     "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff\\"]],
@@ -537,6 +557,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id"],
                     "conditions": [["transaction", "LIKE", "stuff \n stuff"]],
@@ -556,6 +577,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id"],
                     "conditions": [["transaction", "LIKE", "stuff \\n stuff"]],
@@ -578,6 +600,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id"],
                     "conditions": [
@@ -599,6 +622,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
                     "conditions": [["span_id", "=", "841662216cc598b1"]],
@@ -618,6 +642,7 @@ class TestTransactionsApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
                     "conditions": [["span_id", "IN", ["841662216cc598b1"]]],
@@ -649,7 +674,14 @@ class TestTransactionsApi(BaseApiTest):
             limit_by_count=LIMIT_BY_COUNT,
         )
         response = self.app.post(
-            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
         )
         parsed_data = json.loads(response.data)
 
@@ -690,7 +722,14 @@ class TestTransactionsApi(BaseApiTest):
             end_time=(self.base_time + self.skew).isoformat(),
         )
         response = self.app.post(
-            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "transactions",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
         )
         data = json.loads(response.data)
 

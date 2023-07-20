@@ -76,6 +76,8 @@ SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
 }
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -86,11 +88,10 @@ class TestGenericMetricsApiSets(BaseApiTest):
         return "generic_metrics_sets"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
         self.count = 10
@@ -98,6 +99,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
         self.unique_values = 5
@@ -134,6 +136,8 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": mapping_meta,
                     "use_case_id": self.use_case_id,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -153,7 +157,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -190,7 +200,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -227,7 +243,13 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -236,6 +258,8 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -246,11 +270,10 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         return "generic_metrics_distributions"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
         self.count = 10
@@ -258,6 +281,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
 
@@ -298,6 +322,8 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -322,7 +348,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -347,7 +379,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -373,7 +411,13 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -387,7 +431,38 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
 
+    def test_tags_hash_map(self) -> None:
+        shared_key = 65546  # pick a key from shared_values
+        value_index = SHARED_TAGS[str(shared_key)]
+        expected_value = SHARED_MAPPING_META["c"][str(value_index)]
+        query_str = f"""MATCH (generic_metrics_distributions)
+                        SELECT count() AS thecount
+                        WHERE tags_raw[{shared_key}] = '{expected_value}'
+                        AND project_id = {self.project_id}
+                        AND org_id = {self.org_id}
+                        AND timestamp >= toDateTime('{self.start_time}')
+                        AND timestamp < toDateTime('{self.end_time}')
+                        """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                    "debug": True,
+                }
+            ),
+        )
+        data = json.loads(response.data)
 
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+        assert "_raw_tags_hash" in data["sql"]
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -398,11 +473,10 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_post(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
-
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
 
         self.write_storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
         self.count = 10
@@ -410,6 +484,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         self.project_id = 2
         self.metric_id = 3
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_timestamp = utc_yesterday_12_15()
         self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
 
@@ -441,6 +516,8 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                    + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -460,7 +537,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -480,7 +563,13 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                 """
         response = self.app.post(
             SNQL_ROUTE,
-            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -488,6 +577,8 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 1, data
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -498,13 +589,14 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
         self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
         self.count = 3600
         self.base_time = utc_yesterday_12_15()
+        self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
         self.end_time = (
@@ -547,6 +639,8 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
                                 "retention_days": RETENTION_DAYS,
                                 "mapping_meta": self.mapping_meta,
                                 "use_case_id": self.use_case_id,
+                                "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                                + n,
                             }
                         ),
                         KafkaMessageMetadata(0, 0, self.base_time),
@@ -573,7 +667,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
@@ -607,7 +706,12 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        request = Request(dataset="generic_metrics", app_id="default", query=query)
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": 1},
+        )
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(request.to_dict()),
@@ -615,31 +719,3 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         data = json.loads(response.data)
         first_row = data["data"][0]
         assert first_row["tag_string"] == expected_value
-
-
-class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
-
-    def test_arbitrary_granularity(self) -> None:
-        super().test_arbitrary_granularity()
-
-    def test_retrieval_percentiles(self) -> None:
-        super().test_retrieval_percentiles()
-
-    def test_retrieval_basic(self) -> None:
-        pass
-
-
-class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
-
-    def test_indexed_tags(self) -> None:
-        super().test_indexed_tags()
-
-    def test_raw_tags(self) -> None:
-        super().test_raw_tags()
-
-    def test_retrieval_basic(self) -> None:
-        pass

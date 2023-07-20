@@ -3,15 +3,29 @@ name = "rust_snuba"
 version = "0.1.0"
 edition = "2021"
 
-
-[workspace]
-members = ["rust_arroyo"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[[bin]]
-name = "querylog_consumer"
-path = "src/bin/consumer/querylog_consumer.rs"
+
+[lib]
+# The name of the native library. This is the name which will be used in Python to import the
+# library (i.e. `import string_sum`). If you change this, you must also change the name of the
+# `#[pymodule]` in `src/lib.rs`.
+name = "rust_snuba"
+
+# "cdylib" is necessary to produce a shared library for Python to import from.
+crate-type = ["cdylib"]
 
 [dependencies]
+anyhow = "1.0.69"
+futures = "0.3.21"
 rust_arroyo = { path = "./rust_arroyo" }
+serde_yaml = "0.9.19"
 tokio = { version = "1.19.2", features = ["full"] }
+log = "0.4"
+env_logger = "0.10.0"
+serde = { version = "1.0", features = ["derive"]}
+serde_json = { version = "1.0" }
+glob = "0.3.1"
+pyo3 = { version = "0.18.1", features = ["chrono", "extension-module"] }
+ctrlc = "3.2.5"
+sentry = "0.31.0"
+reqwest = "0.11.11"

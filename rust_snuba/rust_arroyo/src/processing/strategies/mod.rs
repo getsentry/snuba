@@ -1,12 +1,16 @@
-use crate::types::{Message, Partition, Position};
+use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub mod noop;
+pub mod commit_offsets;
+pub mod produce;
+pub mod reduce;
 pub mod transform;
 
 #[derive(Debug, Clone)]
-pub struct MessageRejected;
+pub struct MessageRejected<T: Clone> {
+    pub message: Message<T>,
+}
 
 #[derive(Debug, Clone)]
 pub struct InvalidMessage;
@@ -14,7 +18,7 @@ pub struct InvalidMessage;
 /// Signals that we need to commit offsets
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommitRequest {
-    pub positions: HashMap<Partition, Position>,
+    pub positions: HashMap<Partition, u64>,
 }
 
 /// A processing strategy defines how a stream processor processes messages
@@ -47,7 +51,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// If the processing strategy is unable to accept a message (due to it
     /// being at or over capacity, for example), this method will raise a
     /// ``MessageRejected`` exception.
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected>;
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>>;
 
     /// Close this instance. No more messages should be accepted by the
     /// instance after this method has been called.
