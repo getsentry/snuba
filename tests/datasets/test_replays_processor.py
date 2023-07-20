@@ -284,7 +284,7 @@ class TestReplaysProcessor:
         )
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == InsertBatch([message.build_result(meta)], Any)
 
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(
