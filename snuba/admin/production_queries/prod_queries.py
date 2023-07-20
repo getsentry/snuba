@@ -41,7 +41,7 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
     """
 
     # In debug, we don't need to validate projects
-    if settings.DEBUG:
+    if settings.DEBUG and len(settings.ADMIN_ALLOWED_PROD_PROJECTS) == 0:
         return
 
     request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
