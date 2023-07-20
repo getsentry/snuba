@@ -64,7 +64,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     storage_set=StorageSetKey.QUERYLOG,
                     order_by="(toStartOfDay(timestamp), request_id)",
                     partition_by="(toMonday(timestamp))",
-                    sample_by="request_id",
+                    # sample_by="request_id",
                 ),
             )
         ]
