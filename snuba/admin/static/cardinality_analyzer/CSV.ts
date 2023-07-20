@@ -10,14 +10,15 @@ export class CSV {
   static cell(value: unknown): string {
     if (!value) return "";
 
-    let sanitizedValue: string = "";
-
     if (typeof value === "string") {
+      let sanitizedValue: string = "";
       sanitizedValue = value.replace(/"/g, '""');
 
       if (value.includes(",")) {
         return `"${sanitizedValue}"`;
       }
+
+      return sanitizedValue;
     }
 
     return value.toString();

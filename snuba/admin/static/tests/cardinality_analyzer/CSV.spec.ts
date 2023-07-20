@@ -19,12 +19,21 @@ describe("CSV.sheet", () => {
     ).toEqual(`name,motto\nGeorge,"do a good job, don't do a bad job"`);
   });
 
-  it("Should escape quotes by escaping with a backslash", () => {
+  it("Should escape quotes in comma-containing values", () => {
     expect(
       CSV.sheet([
         ["name", "motto"],
         ["George", 'hello, "world"'],
       ])
     ).toEqual(`name,motto\nGeorge,"hello, ""world"""`);
+  });
+
+  it("Should escape quotes by escaping with a backslash", () => {
+    expect(
+      CSV.sheet([
+        ["name", "motto"],
+        ["George", 'hello "world"'],
+      ])
+    ).toEqual(`name,motto\nGeorge,hello ""world""`);
   });
 });
