@@ -1201,6 +1201,7 @@ class TestApi(SimpleAPITest):
         )
         assert "SAMPLE 0.1" in response["sql"]
 
+    @pytest.mark.skip("not supported in 23.3")
     def test_promoted_expansion(self) -> None:
         result = json.loads(
             self.post(
@@ -1224,7 +1225,6 @@ class TestApi(SimpleAPITest):
                 ),
             ).data
         )
-
         result_map = {d["tags_key"]: d for d in result["data"]}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set(
