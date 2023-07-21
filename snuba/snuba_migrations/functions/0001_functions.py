@@ -93,7 +93,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={
                         "index_granularity": self.index_granularity,
-                        "allow_nullable_key": "1",
                     },
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
