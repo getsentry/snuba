@@ -162,7 +162,7 @@ class ReplayEvent:
 
         return {
             "type": "replay_event",
-            "start_time": datetime.now().timestamp(),
+            "start_time": self.timestamp,
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
@@ -245,6 +245,7 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp())
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
@@ -258,8 +259,8 @@ class TestReplaysProcessor:
                 "8bea4461d8b944f393c15a3cb1c4169a",
             ],
             segment_id=0,
-            timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
-            replay_start_timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
+            timestamp=timestamp,
+            replay_start_timestamp=timestamp,
             platform="python",
             dist="",
             urls=["http://127.0.0.1:8001"],
@@ -284,7 +285,9 @@ class TestReplaysProcessor:
         )
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], Any)
+        ) == InsertBatch(
+            [message.build_result(meta)], datetime.utcfromtimestamp(timestamp)
+        )
 
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(
