@@ -22,6 +22,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Literal
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
@@ -126,7 +127,9 @@ def test_apply_thread_quota(
 
 
 def _build_test_query(
-    select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
+    select_expression: str,
+    allocation_policies: list[AllocationPolicy] | None = None,
+    query_id: int | None = None,
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
     return (
@@ -142,7 +145,8 @@ def _build_test_query(
                 SelectedExpression(
                     "some_alias",
                     parse_clickhouse_function(select_expression),
-                )
+                ),
+                SelectedExpression("id_alias", Literal(None, query_id or -1)),
             ],
         ),
         storage,
@@ -363,8 +367,6 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
-    # Disable query caching since same query is run multiple times in this test
-    state.set_config("read_through_cache.short_circuit", 1)
     MAX_QUERIES_TO_RUN = 2
 
     queries_run = 0
@@ -424,15 +426,18 @@ def test_allocation_policy_updates_quota() -> None:
             queries_run_duplicate += 1
 
     # both policies should error
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-            CountQueryPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-        ],
-    )
 
-    def _run_query() -> None:
+    def _run_query(query_id: int | None) -> None:
+        query, storage, attribution_info = _build_test_query(
+            "count(distinct(project_id))",
+            [
+                CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+                CountQueryPolicyDuplicate(
+                    StorageKey("doesntmatter"), ["a", "b", "c"], {}
+                ),
+            ],
+            query_id,
+        )
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         settings = HTTPQuerySettings()
@@ -450,10 +455,10 @@ def test_allocation_policy_updates_quota() -> None:
             robust=False,
         )
 
-    for _ in range(MAX_QUERIES_TO_RUN):
-        _run_query()
+    for i in range(MAX_QUERIES_TO_RUN):
+        _run_query(i)
     with pytest.raises(QueryException) as e:
-        _run_query()
+        _run_query(MAX_QUERIES_TO_RUN + 1)
 
     assert e.value.extra["stats"]["quota_allowance"] == {
         "CountQueryPolicy": {
