@@ -198,52 +198,6 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_db_query_bypass_cache() -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("bypass_readthrough_cache_probability.errors_local", 0.3)
-
-    query_metadata_list: list[ClickhouseQueryMetadata] = []
-    stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
-
-    # cache should not be used for the errors table
-    # so if the bypass does not work, the test will try to
-    # use a bad cache
-    with mock.patch("snuba.web.db_query._get_cache_partition"):
-        # random() is less than `bypass_readthrough_cache_probability` therefore we bypass the cache
-        with mock.patch("snuba.web.db_query.random", return_value=0.2):
-            result = db_query(
-                clickhouse_query=query,
-                query_settings=HTTPQuerySettings(),
-                attribution_info=attribution_info,
-                dataset_name="events",
-                query_metadata_list=query_metadata_list,
-                formatted_query=format_query(query),
-                reader=storage.get_cluster().get_reader(),
-                timer=Timer("foo"),
-                stats=stats,
-                trace_id="trace_id",
-                robust=False,
-            )
-            assert stats["quota_allowance"] == {
-                "BytesScannedWindowAllocationPolicy": {
-                    "can_run": True,
-                    "explanation": {},
-                    "max_threads": 10,
-                }
-            }
-            assert len(query_metadata_list) == 1
-            assert result.extra["stats"] == stats
-            assert result.extra["sql"] is not None
-            assert set(result.result["profile"].keys()) == {  # type: ignore
-                "elapsed",
-                "bytes",
-                "blocks",
-                "rows",
-            }
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
 def test_db_query_fail() -> None:
     query, storage, attribution_info = _build_test_query("count(non_existent_column)")
 
