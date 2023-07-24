@@ -403,10 +403,11 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         except Exception as e:
             metrics.increment("message_processing_error")
-            log_bad_span_pct = state.get_config(
-                "log_bad_span_message_percentage", default=0.0
+            log_bad_span_pct = (
+                state.get_float_config("log_bad_span_message_percentage", default=0.0)
+                or 0.0
             )
-            if random.random() < float(log_bad_span_pct if log_bad_span_pct else 0.0):
+            if random.random() < log_bad_span_pct:
                 # key fields in extra_bag are prefixed with "spans_" to avoid conflicts with
                 # other fields in LogRecords
                 extra_bag = {"spans_" + str(k): v for k, v in message[2].items()}
