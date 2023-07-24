@@ -224,6 +224,8 @@ def test_db_query_fail() -> None:
     assert excinfo.value.extra["sql"] is not None
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
@@ -248,6 +250,8 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         ) -> None:
             return
 
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+
     with mock.patch(
         "snuba.web.db_query._get_allocation_policies",
         return_value=[
@@ -258,13 +262,13 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
             db_query(
-                clickhouse_query=mock.Mock(),
+                clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
-                attribution_info=mock.Mock(),
+                attribution_info=attribution_info,
                 dataset_name="events",
                 query_metadata_list=query_metadata_list,
-                formatted_query=mock.Mock(),
-                reader=mock.Mock(),
+                formatted_query=format_query(query),
+                reader=storage.get_cluster().get_reader(),
                 timer=Timer("foo"),
                 stats=stats,
                 trace_id="trace_id",
@@ -359,6 +363,8 @@ def test_allocation_policy_threads_applied_to_query() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
+    # Disable query caching since same query is run multiple times in this test
+    state.set_config("read_through_cache.short_circuit", 1)
     MAX_QUERIES_TO_RUN = 2
 
     queries_run = 0
