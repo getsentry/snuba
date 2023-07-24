@@ -149,14 +149,64 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
 
 
 @pytest.mark.redis_db
-def test_get_overrides(policy: ConcurrentRateLimitAllocationPolicy) -> None:
-    tenant_ids: dict[str, int | str] = {
-        "organization_id": 123,
-        "project_id": 456,
-        "referrer": "abc",
-    }
-
+@pytest.mark.parametrize(
+    "overrides,tenant_ids,expected",
+    [
+        pytest.param(
+            [("organization_override", 1, {"organization_id": 123})],
+            {"organization_id": 123},
+            {"organization_override": 1},
+            id="organization_override",
+        ),
+        pytest.param(
+            [("organization_override", 1, {"organization_id": 123})],
+            {"organization_id": 456},
+            {},
+            id="non-matching tenant_id",
+        ),
+        pytest.param(
+            [("referrer_override", 1, {"referrer": "abcd"})],
+            {"organization_id": 456, "referrer": "abcd"},
+            {"referrer_override": 1},
+        ),
+        pytest.param(
+            [
+                ("referrer_override", 1, {"referrer": "abcd"}),
+                ("project_override", 4, {"project_id": 134}),
+            ],
+            {"organization_id": 456, "referrer": "abcd", "project_id": 134},
+            {"referrer_override": 1, "project_override": 4},
+        ),
+        pytest.param(
+            [
+                (
+                    "referrer_organization_override",
+                    1,
+                    {"referrer": "abcd", "organization_id": 123},
+                ),
+            ],
+            {"organization_id": 123, "referrer": "abcd", "project_id": 134},
+            {"referrer_organization_override": 1},
+            id="referrer_organization_override",
+        ),
+        pytest.param(
+            [
+                (
+                    "referrer_project_override",
+                    1,
+                    {"referrer": "abcd", "project_id": 456},
+                ),
+            ],
+            {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+            {"referrer_project_override": 1},
+            id="referrer_organization_override",
+        ),
+    ],
+)
+def test_get_overrides(
+    policy: ConcurrentRateLimitAllocationPolicy, overrides, tenant_ids, expected
+) -> None:
     assert policy._get_overrides(tenant_ids) == {}
-
-    policy.set_config_value("organization_override", 1, {"organization_id": 123})
-    assert policy._get_overrides(tenant_ids) == {"organization_override": 1}
+    for override in overrides:
+        policy.set_config_value(*override)
+    assert policy._get_overrides(tenant_ids) == expected

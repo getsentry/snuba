@@ -142,15 +142,16 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
         overrides = {}
         available_tenant_ids = set(tenant_ids.keys())
+        # get all overrides that can be retrieved with the tenant_ids
+        # e.g. if organization_id and referrer are passed in, retrieve ('organization_override, 'referrer_organization_override', 'referrer_override')
         for config_definition in self._additional_config_definitions():
             if config_definition.name.endswith("_override"):
                 param_types = config_definition.param_types
-                if set(param_types.keys()).intersection(available_tenant_ids):
+                if set(param_types.keys()).issubset(available_tenant_ids):
                     params = {param: tenant_ids[param] for param in param_types}
                     config_value = self.get_config_value(config_definition.name, params)
                     if config_value != config_definition.default:
                         overrides[config_definition.name] = config_value
-
         return overrides
 
     def _get_tenant_key_and_value(
