@@ -423,61 +423,6 @@ def _get_query_settings_from_config(
     return clickhouse_query_settings
 
 
-def _raw_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    query_settings: QuerySettings,
-    attribution_info: AttributionInfo,
-    dataset_name: str,
-    # NOTE: This variable is a piece of state which is updated and used outside this function
-    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    # NOTE: This variable is a piece of state which is updated and used outside this function
-    stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
-    robust: bool = False,
-) -> QueryResult:
-    """
-    this function is responsible for running the clickhouse query and if there is any error, constructing the
-    QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
-    """
-
-    sql = formatted_query.get_sql()
-
-    result = execute_query_with_rate_limits(
-        clickhouse_query,
-        query_settings,
-        formatted_query,
-        reader,
-        timer,
-        stats,
-        clickhouse_query_settings,
-        robust,
-    )
-
-    stats = update_query_metadata_and_stats(
-        query=clickhouse_query,
-        query_metadata_list=query_metadata_list,
-        sql=sql,
-        stats=stats,
-        query_settings=clickhouse_query_settings,
-        trace_id=trace_id,
-        status=QueryStatus.SUCCESS,
-        request_status=get_request_status(),
-        profile_data=result["profile"],
-    )
-    return QueryResult(
-        result,
-        {
-            "stats": stats,
-            "sql": sql,
-            "experiments": clickhouse_query.get_experiments(),
-        },
-    )
-
-
 def _get_allocation_policies(
     clickhouse_query: Union[Query, CompositeQuery[Table]]
 ) -> list[AllocationPolicy]:
@@ -560,7 +505,7 @@ def db_query(
         return cache_partition.get_readthrough(
             query_id,
             partial(
-                old_db_query,
+                _raw_query,
                 clickhouse_query,
                 clickhouse_query_settings,
                 query_settings,
@@ -661,7 +606,7 @@ def db_query(
         ) from cause
 
 
-def old_db_query(
+def _raw_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     clickhouse_query_settings: MutableMapping[str, Any],
     query_settings: QuerySettings,
@@ -726,23 +671,43 @@ def old_db_query(
         query_id,
     )
 
+    sql = formatted_query.get_sql()
+
     result = None
     error = None
     try:
-        result = _raw_query(
+        raw_result = execute_query_with_rate_limits(
             clickhouse_query,
-            clickhouse_query_settings,
             query_settings,
-            attribution_info,
-            dataset_name,
-            query_metadata_list,
             formatted_query,
             reader,
             timer,
             stats,
-            trace_id,
+            clickhouse_query_settings,
             robust,
         )
+
+        stats = update_query_metadata_and_stats(
+            query=clickhouse_query,
+            query_metadata_list=query_metadata_list,
+            sql=sql,
+            stats=stats,
+            query_settings=clickhouse_query_settings,
+            trace_id=trace_id,
+            status=QueryStatus.SUCCESS,
+            request_status=get_request_status(),
+            profile_data=raw_result["profile"],
+        )
+
+        result = QueryResult(
+            raw_result,
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
+
     except Exception as e:
         error = e
     finally:
