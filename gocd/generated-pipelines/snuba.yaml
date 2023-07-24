@@ -18,4 +18,4 @@ pipelines:
             pipeline-complete:
               tasks:
                 - exec:
-                    command: true
+                    command: false
