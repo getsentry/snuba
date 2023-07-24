@@ -531,6 +531,10 @@ def db_query(
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
+        elif isinstance(cause, AllocationPolicyViolations):
+            stats["quota_allowance"] = {
+                k: v.quota_allowance for k, v in cause.violations.items()
+            }
         elif isinstance(cause, ClickhouseError):
             if (
                 cause.code == ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
@@ -749,16 +753,7 @@ def _apply_allocation_policies_quota(
         except AllocationPolicyViolation as e:
             violations[allocation_policy.config_key()] = e
     if violations:
-        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
-        raise QueryException.from_args(
-            AllocationPolicyViolations.__name__,
-            "Query cannot be run due to allocation policies",
-            extra={
-                "stats": stats,
-                "sql": formatted_query.get_sql(),
-                "experiments": {},
-            },
-        ) from AllocationPolicyViolations(
+        raise AllocationPolicyViolations(
             "Query cannot be run due to allocation policies", violations
         )
 
