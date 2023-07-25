@@ -1,16 +1,16 @@
 format_version: 10
 pipelines:
-  deploy-snuba-us:
-    display_order: 3
+  deploy-snuba-s4s:
+    display_order: 2
     environment_variables:
       GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
-      SENTRY_REGION: us
+      SENTRY_REGION: s4s
     group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-s4s-pipeline-complete:
-        pipeline: deploy-snuba-s4s
+      deploy-snuba-pipeline-complete:
+        pipeline: deploy-snuba
         stage: pipeline-complete
       snuba_repo:
         branch: master
