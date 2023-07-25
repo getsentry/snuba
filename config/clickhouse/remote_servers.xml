@@ -11,5 +11,6 @@
     </remote_servers>
     <merge_tree>
         <check_sample_column_is_correct>false</check_sample_column_is_correct>
+        <allow_nullable_key>1</allow_nullable_key>
     </merge_tree>
 </yandex>
