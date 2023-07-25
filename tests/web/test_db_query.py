@@ -478,6 +478,85 @@ def test_allocation_policy_updates_quota() -> None:
     assert "CountQueryPolicyDuplicate" in cause.violations
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_cached_query_avoids_allocation_policy() -> None:
+    class RunOnceAllocationPolicy(AllocationPolicy):
+
+        ran = False
+
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int], query_id: str
+        ) -> QuotaAllowance:
+            if self.ran:
+                return QuotaAllowance(
+                    can_run=False,
+                    max_threads=0,
+                    explanation={"reason": "Can only run once!"},
+                )
+            self.ran = True
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=10,
+                explanation={},
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            return
+
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        [RunOnceAllocationPolicy(StorageKey("something"), ["a", "b"], {})],
+    )
+
+    def _run_query() -> None:
+        query_metadata_list: list[ClickhouseQueryMetadata] = []
+        stats: dict[str, Any] = {}
+        settings = HTTPQuerySettings()
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+
+    _run_query()  # updates allocation policy to ran once, rejecting future queries
+
+    state.set_config("read_through_cache.short_circuit", 0)
+    _run_query()  # cache hit should avoid allocation policy altogether
+
+    state.set_config("read_through_cache.short_circuit", 1)
+    with pytest.raises(QueryException) as e:
+        _run_query()  # cache disabled should hit allocation policy, rejecting the query
+
+    # ensure correct reason for failure
+    assert e.value.extra["stats"]["quota_allowance"] == {
+        "RunOnceAllocationPolicy": {
+            "can_run": False,
+            "max_threads": 0,
+            "explanation": {"reason": "Can only run once!"},
+        },
+    }
+    cause = e.value.__cause__
+    assert isinstance(cause, AllocationPolicyViolations)
+    assert "RunOnceAllocationPolicy" in cause.violations
+
+
 @pytest.mark.redis_db
 def test_clickhouse_settings_applied_to_query() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")

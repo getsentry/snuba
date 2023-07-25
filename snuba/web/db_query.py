@@ -615,7 +615,6 @@ def _raw_query(
     clickhouse_query_settings: MutableMapping[str, Any],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
-    dataset_name: str,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     formatted_query: FormattedQuery,
@@ -669,7 +668,6 @@ def _raw_query(
     _apply_allocation_policies_quota(
         query_settings,
         attribution_info,
-        formatted_query,
         stats,
         allocation_policies,
         query_id,
@@ -715,6 +713,8 @@ def _raw_query(
     except Exception as e:
         error = e
     finally:
+        if error is not None and not isinstance(error, SerializableException):
+            error = SerializableException(str(error))
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
@@ -731,7 +731,6 @@ def _raw_query(
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
-    formatted_query: FormattedQuery,
     stats: MutableMapping[str, Any],
     allocation_policies: list[AllocationPolicy],
     query_id: str,
