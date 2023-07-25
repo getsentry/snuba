@@ -171,9 +171,9 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         overrides = self._get_overrides(tenant_ids)
-        concurrent_limit = min(
-            [self.get_config_value("concurrent_limit")] + list(overrides.values())
-        )
+        concurrent_limit = self.get_config_value("concurrent_limit")
+        if overrides:
+            concurrent_limit = min(overrides.values())
 
         within_rate_limit, why = self._is_within_rate_limit(
             query_id,

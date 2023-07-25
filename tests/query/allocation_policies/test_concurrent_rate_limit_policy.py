@@ -204,6 +204,19 @@ OVERRIDE_TEST_CASES = [
         1,
         id="referrer_organization_override",
     ),
+    pytest.param(
+        [
+            (
+                "referrer_project_override",
+                MAX_CONCURRENT_QUERIES * 2,
+                {"referrer": "abcd", "project_id": 456},
+            ),
+        ],
+        {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+        {"referrer_project_override": MAX_CONCURRENT_QUERIES * 2},
+        MAX_CONCURRENT_QUERIES * 2,
+        id="override to a greater number",
+    ),
 ]
 
 
