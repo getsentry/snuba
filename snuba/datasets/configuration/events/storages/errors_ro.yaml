@@ -231,6 +231,7 @@ schema:
         type: UInt,
         args: { schema_modifiers: [ nullable ], size: 64 },
       },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
