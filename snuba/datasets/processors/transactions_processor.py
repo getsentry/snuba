@@ -476,6 +476,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
 
         try:
             raw_received = _collapse_uint32(int(event_dict["data"]["received"]))
+            assert raw_received is not None
             received = datetime.utcfromtimestamp(raw_received)
             return InsertBatch([processed], received)
         except Exception:
