@@ -207,24 +207,6 @@ OVERRIDE_TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize(
-    "overrides,tenant_ids,expected_overrides,expected_concurrent_limit",
-    OVERRIDE_TEST_CASES,
-)
-@pytest.mark.redis_db
-def test_get_overrides(
-    policy: ConcurrentRateLimitAllocationPolicy,
-    overrides,
-    tenant_ids,
-    expected_overrides,
-    expected_concurrent_limit,
-) -> None:
-    assert policy._get_overrides(tenant_ids) == {}
-    for override in overrides:
-        policy.set_config_value(*override)
-    assert policy._get_overrides(tenant_ids) == expected_overrides
-
-
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
     "overrides,tenant_ids,expected_overrides,expected_concurrent_limit",
