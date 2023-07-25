@@ -143,7 +143,8 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         overrides = {}
         available_tenant_ids = set(tenant_ids.keys())
         # get all overrides that can be retrieved with the tenant_ids
-        # e.g. if organization_id and referrer are passed in, retrieve ('organization_override, 'referrer_organization_override', 'referrer_override')
+        # e.g. if organization_id and referrer are passed in, retrieve
+        # ('organization_override, 'referrer_organization_override', 'referrer_override')
         for config_definition in self._additional_config_definitions():
             if config_definition.name.endswith("_override"):
                 param_types = config_definition.param_types
@@ -169,16 +170,23 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
+        overrides = self._get_overrides(tenant_ids)
+        concurrent_limit = min(
+            [self.get_config_value("concurrent_limit")] + list(overrides.values())
+        )
+
         within_rate_limit, why = self._is_within_rate_limit(
             query_id,
             RateLimitParameters(
                 tenant_key,
                 bucket=str(tenant_value),
                 per_second_limit=None,
-                concurrent_limit=self.get_config_value("concurrent_limit"),
+                concurrent_limit=concurrent_limit,
             ),
         )
-        return QuotaAllowance(within_rate_limit, self.max_threads, {"reason": why})
+        return QuotaAllowance(
+            within_rate_limit, self.max_threads, {"reason": why, "overrides": overrides}
+        )
 
     def _update_quota_balance(
         self,

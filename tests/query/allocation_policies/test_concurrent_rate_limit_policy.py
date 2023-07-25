@@ -148,65 +148,101 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
         policy._get_tenant_key_and_value({})
 
 
-@pytest.mark.redis_db
+OVERRIDE_TEST_CASES = [
+    pytest.param(
+        [("organization_override", 1, {"organization_id": 123})],
+        {"organization_id": 123},
+        {"organization_override": 1},
+        1,
+        id="organization_override",
+    ),
+    pytest.param(
+        [("organization_override", 1, {"organization_id": 123})],
+        {"organization_id": 456},
+        {},
+        MAX_CONCURRENT_QUERIES,
+        id="non-matching tenant_id",
+    ),
+    pytest.param(
+        [("referrer_override", 1, {"referrer": "abcd"})],
+        {"organization_id": 456, "referrer": "abcd"},
+        {"referrer_override": 1},
+        1,
+    ),
+    pytest.param(
+        [
+            ("referrer_override", 1, {"referrer": "abcd"}),
+            ("project_override", 4, {"project_id": 134}),
+        ],
+        {"organization_id": 456, "referrer": "abcd", "project_id": 134},
+        {"referrer_override": 1, "project_override": 4},
+        1,
+    ),
+    pytest.param(
+        [
+            (
+                "referrer_organization_override",
+                1,
+                {"referrer": "abcd", "organization_id": 123},
+            ),
+        ],
+        {"organization_id": 123, "referrer": "abcd", "project_id": 134},
+        {"referrer_organization_override": 1},
+        1,
+        id="referrer_organization_override",
+    ),
+    pytest.param(
+        [
+            (
+                "referrer_project_override",
+                1,
+                {"referrer": "abcd", "project_id": 456},
+            ),
+        ],
+        {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+        {"referrer_project_override": 1},
+        1,
+        id="referrer_organization_override",
+    ),
+]
+
+
 @pytest.mark.parametrize(
-    "overrides,tenant_ids,expected",
-    [
-        pytest.param(
-            [("organization_override", 1, {"organization_id": 123})],
-            {"organization_id": 123},
-            {"organization_override": 1},
-            id="organization_override",
-        ),
-        pytest.param(
-            [("organization_override", 1, {"organization_id": 123})],
-            {"organization_id": 456},
-            {},
-            id="non-matching tenant_id",
-        ),
-        pytest.param(
-            [("referrer_override", 1, {"referrer": "abcd"})],
-            {"organization_id": 456, "referrer": "abcd"},
-            {"referrer_override": 1},
-        ),
-        pytest.param(
-            [
-                ("referrer_override", 1, {"referrer": "abcd"}),
-                ("project_override", 4, {"project_id": 134}),
-            ],
-            {"organization_id": 456, "referrer": "abcd", "project_id": 134},
-            {"referrer_override": 1, "project_override": 4},
-        ),
-        pytest.param(
-            [
-                (
-                    "referrer_organization_override",
-                    1,
-                    {"referrer": "abcd", "organization_id": 123},
-                ),
-            ],
-            {"organization_id": 123, "referrer": "abcd", "project_id": 134},
-            {"referrer_organization_override": 1},
-            id="referrer_organization_override",
-        ),
-        pytest.param(
-            [
-                (
-                    "referrer_project_override",
-                    1,
-                    {"referrer": "abcd", "project_id": 456},
-                ),
-            ],
-            {"organization_id": 123, "referrer": "abcd", "project_id": 456},
-            {"referrer_project_override": 1},
-            id="referrer_organization_override",
-        ),
-    ],
+    "overrides,tenant_ids,expected_overrides,expected_concurrent_limit",
+    OVERRIDE_TEST_CASES,
 )
+@pytest.mark.redis_db
 def test_get_overrides(
-    policy: ConcurrentRateLimitAllocationPolicy, overrides, tenant_ids, expected
+    policy: ConcurrentRateLimitAllocationPolicy,
+    overrides,
+    tenant_ids,
+    expected_overrides,
+    expected_concurrent_limit,
 ) -> None:
     assert policy._get_overrides(tenant_ids) == {}
     for override in overrides:
         policy.set_config_value(*override)
-    assert policy._get_overrides(tenant_ids) == expected
+    assert policy._get_overrides(tenant_ids) == expected_overrides
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "overrides,tenant_ids,expected_overrides,expected_concurrent_limit",
+    OVERRIDE_TEST_CASES,
+)
+def test_apply_overrides(
+    policy: ConcurrentRateLimitAllocationPolicy,
+    overrides,
+    tenant_ids,
+    expected_overrides,
+    expected_concurrent_limit,
+) -> None:
+    for override in overrides:
+        policy.set_config_value(*override)
+    for i in range(expected_concurrent_limit):
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
+    with pytest.raises(AllocationPolicyViolation) as e:
+        policy.get_quota_allowance(
+            tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit+1}"
+        )
+    assert e.value.explanation["overrides"] == expected_overrides
