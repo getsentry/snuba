@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.7.1
+
+### Various fixes & improvements
+
+- ref: bump sentry-kafka-schemas to 0.1.22 (#4559) by @getsentry-bot
+- ref: Remove manual collection of librdkafka stats (#4542) by @lynnagara
+- feat: Banish fetching untyped runtime config (#4540) by @lynnagara
+- Fix validation pipeline (#4547) by @mattgauntseo-sentry
+- feat(rust-consumer): Add RunTaskInThreads strategy (#4537) by @lynnagara
+- ref: Remove unnecessary config (#4541) by @lynnagara
+- fix(prod-queries): Remove project validation in debug env (#4549) by @davidtsuk
+- Update gocd jsonnet libs and fix rollbacks (#4544) by @mattgauntseo-sentry
+- fix(cardinality-analyzer): Fix CSV escaping (#4546) by @gggritso
+- build(deps): bump flask from 2.2.2 to 2.2.5 (#4543) by @dependabot
+- build(deps): bump werkzeug from 2.2.2 to 2.2.3 (#3771) by @dependabot
+- chore: bump sentry-kafka-schemas to 0.1.21 (#4529) by @ayirr7
+- ref(snubsplain): Add steps for snql parsing and query mappers (#4486) by @evanh
+- feat(group-attributes): expose storage and entity, process messages (#4507) by @barkbarkimashark
+- ref: Simplify querylog processor more (#4520) by @lynnagara
+- ci: add GoCD pipeline validation (#4528) by @joshuarli
+- ref(capman): split the rate limit function into a start and finish phase (#4532) by @volokluev
+- ref: Simplify querylog processor (#4511) by @lynnagara
+- Add elastic agent to rollback pipeline (#4534) by @mattgauntseo-sentry
+- set min_retention_days to retention_days (#4533) by @john-z-yang
+- feat(admin): Add new trace logs view (#4510) by @enochtangg
+- Revert "Revert "feat(replays): Add click_is_dead and click_is_rage columns (#4470)"" (#4517) by @cmanallen
+- Enable Sentry `Hub` propagation (#4530) by @gggritso
+- Fix canaries and migrations in s4s snuba (#4531) by @mattgauntseo-sentry
+
+_Plus 1 more_
+
 ## 23.7.0
 
 ### Various fixes & improvements
