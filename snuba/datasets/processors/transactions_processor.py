@@ -474,11 +474,9 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # the following operation modifies the event_dict and is therefore *not* order-independent
         self._process_contexts_and_user(processed, event_dict)
 
-        if event_dict["data"]["received"] is not None:
+        try:
             raw_received = _collapse_uint32(int(event_dict["data"]["received"]))
-            assert raw_received is not None
             received = datetime.utcfromtimestamp(raw_received)
-        else:
-            received = None
-
-        return InsertBatch([processed], received)
+            return InsertBatch([processed], received)
+        except Exception:
+            raise KeyError("Missing received timestamp field in transaction")
