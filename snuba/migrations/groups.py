@@ -159,7 +159,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
-        readiness_state=ReadinessState.LIMITED,
+        readiness_state=ReadinessState.PARTIAL,
     ),
 }
 

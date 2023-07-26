@@ -32,6 +32,20 @@ def rate_limit_shards(request: Any) -> None:
 
 class TestRateLimit:
     @pytest.mark.redis_db
+    def test_ratelimit_aggregator(self, rate_limit_shards: Any) -> None:
+        # No concurrent limit should not raise
+        rate_limit_params1 = RateLimitParameters("foo", "bar", None, 1)
+        rate_limit_params2 = RateLimitParameters("foo", "bar", None, 0)
+
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([rate_limit_params1, rate_limit_params2]):
+                pass
+
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([rate_limit_params2, rate_limit_params1]):
+                pass
+
+    @pytest.mark.redis_db
     def test_concurrent_limit(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)

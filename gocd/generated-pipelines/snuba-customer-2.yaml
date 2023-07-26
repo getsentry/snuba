@@ -1,16 +1,16 @@
 format_version: 10
 pipelines:
-  deploy-snuba-monitor:
-    display_order: 2
+  deploy-snuba-customer-2:
+    display_order: 5
     environment_variables:
       GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
-      SENTRY_REGION: monitor
+      SENTRY_REGION: customer-2
     group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-pipeline-complete:
-        pipeline: deploy-snuba
+      deploy-snuba-customer-1-pipeline-complete:
+        pipeline: deploy-snuba-customer-1
         stage: pipeline-complete
       snuba_repo:
         branch: master

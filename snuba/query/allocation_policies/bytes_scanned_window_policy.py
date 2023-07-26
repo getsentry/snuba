@@ -43,6 +43,7 @@ _ORG_LESS_REFERRERS = set(
         "replays.query.download_replay_segments",
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
+        "http://localhost:1219/",
         "reprocessing2.start_group_reprocessing",
     ]
 )

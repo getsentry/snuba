@@ -3,16 +3,16 @@ pipelines:
   rollback-snuba:
     display_order: 1
     environment_variables:
-      ALL_PIPELINE_FLAGS: --pipeline="deploy-snuba-monitor" --pipeline="deploy-snuba-us" --pipeline="deploy-snuba"
+      ALL_PIPELINE_FLAGS: --pipeline=deploy-snuba-s4s --pipeline=deploy-snuba-us --pipeline=deploy-snuba-customer-1 --pipeline=deploy-snuba-customer-2 --pipeline=deploy-snuba
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
-      REGION_PIPELINE_FLAGS: --pipeline="deploy-snuba-monitor" --pipeline="deploy-snuba-us"
+      REGION_PIPELINE_FLAGS: --pipeline=deploy-snuba-s4s --pipeline=deploy-snuba-us --pipeline=deploy-snuba-customer-1 --pipeline=deploy-snuba-customer-2
       ROLLBACK_MATERIAL_NAME: snuba_repo
       ROLLBACK_STAGE: deploy-primary
     group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-us-pipeline-complete:
-        pipeline: deploy-snuba-us
+      deploy-snuba-customer-2-pipeline-complete:
+        pipeline: deploy-snuba-customer-2
         stage: pipeline-complete
     stages:
       - pause_pipelines:
@@ -35,25 +35,9 @@ pipelines:
                     gocd-pause-and-cancel-pipelines \
                       --pause-message="This pipeline is being rolled back, please check with team before un-pausing." \
                       "$@"
-        start_rollback:
+      - start_rollback:
           jobs:
             rollback:
               elastic_profile_id: snuba
               tasks:
-                - script: |
-                    ##!/bin/bash
-
-                    ## Note: $REGION_PIPELINE_FLAGS has no quoting, for word expansion
-                    ## shellcheck disable=SC2086
-                    if [[ "${REGION_PIPELINE_FLAGS:-}" ]]; then
-                      set -- $REGION_PIPELINE_FLAGS
-                    fi
-
-                    ## Get sha from the given pipeline run to deploy to all pipedream pipelines.
-                    sha=$(gocd-sha-for-pipeline --material-name="${ROLLBACK_MATERIAL_NAME}")
-
-                    gocd-emergency-deploy \
-                      --commit-sha="${sha}" \
-                      --deploy-stage="${ROLLBACK_STAGE}" \
-                      --pause-message="This pipeline was rolled back, please check with team before un-pausing." \
-                      "$@"
+                - script: "##!/bin/bash\n\n## Note: $REGION_PIPELINE_FLAGS has no quoting, for word expansion\n## shellcheck disable=SC2086\nif [[ \"${REGION_PIPELINE_FLAGS:-}\" ]]; then\n  set -- $REGION_PIPELINE_FLAGS\nfi\n\n## Get sha from the given pipeline run to deploy to all pipedream pipelines.\nsha=$(gocd-sha-for-pipeline --material-name=\"${ROLLBACK_MATERIAL_NAME}\")\n\necho \"\U0001F4D1 Rolling back to sha: ${sha}\"\n\ngocd-emergency-deploy \\\n  --material-name=\"${ROLLBACK_MATERIAL_NAME}\" \\\n  --commit-sha=\"${sha}\" \\\n  --deploy-stage=\"${ROLLBACK_STAGE}\" \\\n  --pause-message=\"This pipeline was rolled back, please check with team before un-pausing.\" \\\n  \"$@\"\n"
