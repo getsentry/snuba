@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, MutableSequence, Optional, Set
+from typing import Any, Dict, MutableSequence, Optional, Set, cast
 
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
@@ -201,7 +201,7 @@ class ClickhouseQueryMetadata:
             "sql_anonymized": self.sql_anonymized,
             "start_timestamp": start,
             "end_timestamp": end,
-            "stats": self.stats,  # type: ignore
+            "stats": cast(snuba_queries_v1._QueryMetadataStats, self.stats),
             "status": self.status.value,
             "request_status": self.request_status.status.value,
             "slo": self.request_status.slo.value,
