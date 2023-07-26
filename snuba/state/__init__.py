@@ -165,7 +165,35 @@ def set_configs(
         set_config(k, v, user=user, force=force, config_key=config_key)
 
 
+def get_int_config(
+    key: str, default: Optional[int] = None, config_key: str = config_hash
+) -> Optional[int]:
+    config = _get_config(key, default, config_key)
+    return int(config) if config is not None else None
+
+
+def get_float_config(
+    key: str, default: Optional[float] = None, config_key: str = config_hash
+) -> Optional[float]:
+    config = _get_config(key, default, config_key)
+    return float(config) if config is not None else None
+
+
+def get_str_config(
+    key: str, default: Optional[str] = None, config_key: str = config_hash
+) -> Optional[str]:
+    config = _get_config(key, default, config_key)
+    return str(config) if config is not None else None
+
+
+# To be deprecated, use get_int_config, get_float_config, get_str_config instead
 def get_config(
+    key: str, default: Optional[Any] = None, config_key: str = config_hash
+) -> Optional[Any]:
+    return _get_config(key, default, config_key)
+
+
+def _get_config(
     key: str, default: Optional[Any] = None, config_key: str = config_hash
 ) -> Optional[Any]:
     return get_all_configs(config_key=config_key).get(key, default)

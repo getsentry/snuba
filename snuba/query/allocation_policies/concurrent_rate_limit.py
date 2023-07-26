@@ -139,6 +139,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_prefix,
         )
 
+
     def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
         overrides = {}
         available_tenant_ids = set(tenant_ids.keys())
@@ -154,6 +155,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                     if config_value != config_definition.default:
                         overrides[config_definition.name] = config_value
         return overrides
+
 
     def _get_tenant_key_and_value(
         self, tenant_ids: dict[str, str | int]
@@ -174,7 +176,6 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         concurrent_limit = self.get_config_value("concurrent_limit")
         if overrides:
             concurrent_limit = min(overrides.values())
-
         within_rate_limit, why = self._is_within_rate_limit(
             query_id,
             RateLimitParameters(
@@ -187,7 +188,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         return QuotaAllowance(
             within_rate_limit, self.max_threads, {"reason": why, "overrides": overrides}
         )
-
+    
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],

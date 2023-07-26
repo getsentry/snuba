@@ -3,16 +3,16 @@ pipelines:
   rollback-snuba:
     display_order: 1
     environment_variables:
-      ALL_PIPELINE_FLAGS: --pipeline=deploy-snuba-monitor --pipeline=deploy-snuba-us --pipeline=deploy-snuba
+      ALL_PIPELINE_FLAGS: --pipeline=deploy-snuba-s4s --pipeline=deploy-snuba-us --pipeline=deploy-snuba-customer-1 --pipeline=deploy-snuba-customer-2 --pipeline=deploy-snuba
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
-      REGION_PIPELINE_FLAGS: --pipeline=deploy-snuba-monitor --pipeline=deploy-snuba-us
+      REGION_PIPELINE_FLAGS: --pipeline=deploy-snuba-s4s --pipeline=deploy-snuba-us --pipeline=deploy-snuba-customer-1 --pipeline=deploy-snuba-customer-2
       ROLLBACK_MATERIAL_NAME: snuba_repo
       ROLLBACK_STAGE: deploy-primary
     group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-us-pipeline-complete:
-        pipeline: deploy-snuba-us
+      deploy-snuba-customer-2-pipeline-complete:
+        pipeline: deploy-snuba-customer-2
         stage: pipeline-complete
     stages:
       - pause_pipelines:

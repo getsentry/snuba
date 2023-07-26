@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
-import rapidjson
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
@@ -17,7 +16,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
@@ -294,28 +292,6 @@ class SchedulerBuilder:
             auto_offset_reset=self.__auto_offset_reset,
             strict_offset_reset=self.__strict_offset_reset,
         )
-
-        # Collect metrics from librdkafka if we have stats_collection_freq_ms set
-        # for the consumer group, or use the default.
-        stats_collection_frequency_ms = get_config(
-            f"stats_collection_freq_ms_{self.__consumer_group}",
-            get_config("stats_collection_freq_ms", 0),
-        )
-
-        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
-
-            def stats_callback(stats_json: str) -> None:
-                stats = rapidjson.loads(stats_json)
-                self.__metrics.gauge(
-                    "librdkafka.total_queue_size", stats.get("replyq", 0)
-                )
-
-            consumer_configuration.update(
-                {
-                    "statistics.interval.ms": stats_collection_frequency_ms,
-                    "stats_cb": stats_callback,
-                }
-            )
 
         return CommitLogTickConsumer(
             KafkaConsumer(consumer_configuration),

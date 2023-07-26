@@ -80,6 +80,7 @@ logger = logging.getLogger("snuba.consumer")
 commit_codec = CommitCodec()
 
 _LAST_INVALID_MESSAGE: MutableMapping[str, float] = {}
+LOG_INVALID_MESSAGE_FREQ_SEC = 1
 
 
 class CommitLogConfig(NamedTuple):
@@ -534,8 +535,9 @@ def process_message(
         },
     )
 
-    validate_sample_rate = float(
-        state.get_config(f"validate_schema_{snuba_logical_topic.name}", 1.0) or 0.0
+    validate_sample_rate = (
+        state.get_float_config(f"validate_schema_{snuba_logical_topic.name}", 1.0)
+        or 0.0
     )
 
     assert isinstance(message.value, BrokerValue)
@@ -564,12 +566,9 @@ def process_message(
                         "schema_validation.failed",
                     )
 
-                    min_seconds_ago = (
-                        state.get_config("log_validate_schema_every_n_seconds", 1) or 1
-                    )
                     if (
                         _LAST_INVALID_MESSAGE.get(snuba_logical_topic.name, 0)
-                        < start - min_seconds_ago
+                        < start - LOG_INVALID_MESSAGE_FREQ_SEC
                     ):
                         _LAST_INVALID_MESSAGE[snuba_logical_topic.name] = start
                         sentry_sdk.set_tag("invalid_message_schema", "true")

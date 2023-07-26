@@ -1,16 +1,16 @@
 format_version: 10
 pipelines:
-  deploy-snuba-us:
-    display_order: 3
+  deploy-snuba-s4s:
+    display_order: 2
     environment_variables:
       GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
       GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
-      SENTRY_REGION: us
+      SENTRY_REGION: s4s
     group: snuba
     lock_behavior: unlockWhenFinished
     materials:
-      deploy-snuba-s4s-pipeline-complete:
-        pipeline: deploy-snuba-s4s
+      deploy-snuba-pipeline-complete:
+        pipeline: deploy-snuba
         stage: pipeline-complete
       snuba_repo:
         branch: master
@@ -49,6 +49,61 @@ pipelines:
                     deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"`
                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
               timeout: 1800
+      - st_migrate:
+          fetch_materials: true
+          jobs:
+            migrate:
+              elastic_profile_id: snuba
+              environment_variables:
+                SNUBA_SERVICE_NAME: snuba
+              tasks:
+                - script: |
+                    ##!/bin/bash
+
+                    ## At the time of writing (2023-06-28) the single tenant deployments
+                    ## have been using a different migration process compared to the
+                    ## US deployment of snuba.
+                    ## This script should be merged with migrate.sh if we can figure
+                    ## out a common migration script for all regions.
+
+                    eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                    /devinfra/scripts/k8s/k8stunnel
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-bootstrap" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba bootstrap --force --no-migrate
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-migrate" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba migrations migrate --force
+                - plugin:
+                    configuration:
+                      id: script-executor
+                      version: 1
+                    options:
+                      script: |
+                        ##!/bin/bash
+
+                        eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+                        /devinfra/scripts/k8s/k8stunnel
+
+                        /devinfra/scripts/k8s/k8s-spawn-job.py \
+                          --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                          --container-name="${SNUBA_SERVICE_NAME}" \
+                          "snuba-migrate-reverse" \
+                          "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                          -- \
+                          snuba migrations reverse-in-progress
+                    run_if: failed
+              timeout: 1200
       - deploy-canary:
           fetch_materials: true
           jobs:
@@ -153,56 +208,19 @@ pipelines:
 
                     eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
 
-                    /devinfra/scripts/k8s/k8stunnel \
-                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                    /devinfra/scripts/k8s/k8stunnel
+
+                    /devinfra/scripts/k8s/k8s-deploy.py \
                       --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                      --label-selector="${LABEL_SELECTOR}" \
+                      --label-selector="service=snuba" \
                       --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                      --container-name="api" \
-                      --container-name="consumer" \
-                      --container-name="errors-consumer" \
-                      --container-name="errors-replacer" \
-                      --container-name="events-subscriptions-executor" \
-                      --container-name="events-subscriptions-scheduler" \
-                      --container-name="generic-metrics-counters-consumer" \
-                      --container-name="generic-metrics-counters-subscriptions-executor" \
-                      --container-name="generic-metrics-counters-subscriptions-scheduler" \
-                      --container-name="generic-metrics-distributions-consumer" \
-                      --container-name="generic-metrics-distributions-subscriptions-executor" \
-                      --container-name="generic-metrics-distributions-subscriptions-scheduler" \
-                      --container-name="generic-metrics-sets-consumer" \
-                      --container-name="generic-metrics-sets-subscriptions-executor" \
-                      --container-name="generic-metrics-sets-subscriptions-scheduler" \
-                      --container-name="loadbalancer-outcomes-consumer" \
-                      --container-name="loadtest-errors-consumer" \
-                      --container-name="loadtest-loadbalancer-outcomes-consumer" \
-                      --container-name="loadtest-outcomes-consumer" \
-                      --container-name="loadtest-transactions-consumer" \
-                      --container-name="metrics-consumer" \
-                      --container-name="metrics-counters-subscriptions-scheduler" \
-                      --container-name="metrics-sets-subscriptions-scheduler" \
-                      --container-name="metrics-subscriptions-executor" \
-                      --container-name="outcomes-billing-consumer" \
-                      --container-name="outcomes-consumer" \
-                      --container-name="profiles-consumer" \
-                      --container-name="profiling-functions-consumer" \
-                      --container-name="querylog-consumer" \
-                      --container-name="replacer" \
-                      --container-name="replays-consumer" \
-                      --container-name="search-issues-consumer" \
-                      --container-name="snuba-admin" \
-                      --container-name="transactions-consumer-new" \
-                      --container-name="transactions-subscriptions-executor" \
-                      --container-name="transactions-subscriptions-scheduler" \
-                      --container-name="rust-querylog-consumer" \
-                      --container-name="spans-consumer" \
-                      --container-name="dlq-consumer" \
-                    && /devinfra/scripts/k8s/k8s-deploy.py \
-                      --label-selector="${LABEL_SELECTOR}" \
+                      --container-name="snuba"
+
+                    /devinfra/scripts/k8s/k8s-deploy.py \
+                      --label-selector="service=snuba" \
                       --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                       --type="cronjob" \
-                      --container-name="cleanup" \
-                      --container-name="optimize"
+                      --container-name="cleanup"
               timeout: 1200
       - migrate:
           fetch_materials: true
@@ -210,22 +228,35 @@ pipelines:
             migrate:
               elastic_profile_id: snuba
               environment_variables:
-                SNUBA_SERVICE_NAME: snuba-admin
+                SNUBA_SERVICE_NAME: snuba
               tasks:
                 - script: |
                     ##!/bin/bash
+
+                    ## At the time of writing (2023-06-28) the single tenant deployments
+                    ## have been using a different migration process compared to the
+                    ## US deployment of snuba.
+                    ## This script should be merged with migrate.sh if we can figure
+                    ## out a common migration script for all regions.
 
                     eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
                     /devinfra/scripts/k8s/k8stunnel
 
                     /devinfra/scripts/k8s/k8s-spawn-job.py \
-                      --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                      --label-selector="service=${SNUBA_SERVICE_NAME}" \
+                      --container-name="${SNUBA_SERVICE_NAME}" \
+                      "snuba-bootstrap" \
+                      "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                      -- \
+                      snuba bootstrap --force --no-migrate
+
+                    /devinfra/scripts/k8s/k8s-spawn-job.py \
                       --label-selector="service=${SNUBA_SERVICE_NAME}" \
                       --container-name="${SNUBA_SERVICE_NAME}" \
                       "snuba-migrate" \
                       "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                       -- \
-                      snuba migrations migrate -r complete -r partial
+                      snuba migrations migrate --force
                 - plugin:
                     configuration:
                       id: script-executor
