@@ -1,11 +1,10 @@
+local getsentry = import 'github.com/getsentry/gocd-jsonnet/libs/getsentry.libsonnet';
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
 // The return value of this function is the body of a GoCD pipeline.
 // More information on gocd-flavor YAML this is producing can be found here:
 // - https://github.com/tomzo/gocd-yaml-config-plugin#pipeline
 // - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
-
-local is_st(region) = (region == 'monitor' || std.startsWith(region, 'customer-'));
 
 local migrate_stage(stage_name, region) = [
   {
@@ -18,10 +17,10 @@ local migrate_stage(stage_name, region) = [
           environment_variables: {
             // ST deployments use 'snuba' for container and label selectors
             // in migrations, whereas the US region deployment uses snuba-admin.
-            SNUBA_SERVICE_NAME: if is_st(region) then 'snuba' else 'snuba-admin',
+            SNUBA_SERVICE_NAME: if getsentry.is_st(region) then 'snuba' else 'snuba-admin',
           },
           tasks: [
-            if is_st(region) then
+            if getsentry.is_st(region) then
               gocdtasks.script(importstr '../bash/migrate-st.sh')
             else
               gocdtasks.script(importstr '../bash/migrate.sh'),
@@ -48,7 +47,7 @@ local migrate_stage(stage_name, region) = [
 // This doesn't hold true for ST deployments today, so temporarily run an
 // early migration stage for ST deployments.
 local early_migrate(region) =
-  if is_st(region) then
+  if getsentry.is_st(region) then
     migrate_stage('st_migrate', region)
   else
     [];
@@ -142,7 +141,7 @@ function(region) {
               LABEL_SELECTOR: 'service=snuba',
             },
             tasks: [
-              if is_st(region) then
+              if getsentry.is_st(region) then
                 gocdtasks.script(importstr '../bash/deploy-st.sh')
               else
                 gocdtasks.script(importstr '../bash/deploy.sh'),
