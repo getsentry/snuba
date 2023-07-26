@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import pytest
 
 from snuba.datasets.storage import StorageKey
@@ -145,7 +146,6 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
     )
     with pytest.raises(AllocationPolicyViolation):
         policy._get_tenant_key_and_value({})
-
 
 
 OVERRIDE_TEST_CASES = [
