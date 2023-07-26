@@ -89,6 +89,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     ORDER BY count ASC
                     LIMIT 1000""",
+                    "referrer": "myreferrer",
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
