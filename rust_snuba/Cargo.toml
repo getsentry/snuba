@@ -25,7 +25,10 @@ env_logger = "0.10.0"
 serde = { version = "1.0", features = ["derive"]}
 serde_json = { version = "1.0" }
 glob = "0.3.1"
-pyo3 = { version = "0.18.1", features = ["chrono", "extension-module"] }
+pyo3 = { version = "0.18.1", features = ["chrono"] }
 ctrlc = "3.2.5"
 sentry = "0.31.0"
 reqwest = "0.11.11"
+
+[features]
+ffi = ["pyo3/extension-module"]
