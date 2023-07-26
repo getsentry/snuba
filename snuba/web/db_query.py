@@ -541,7 +541,6 @@ def db_query(
                 clickhouse_query_settings,
                 query_settings,
                 attribution_info,
-                dataset_name,
                 query_metadata_list,
                 formatted_query,
                 reader,
