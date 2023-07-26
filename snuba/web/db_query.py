@@ -521,6 +521,7 @@ def _get_cache_wait_timeout(
 
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
+    async_override: bool,
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config.
@@ -543,6 +544,11 @@ def _get_query_settings_from_config(
         for k, v in all_confs.items():
             if k.startswith(f"{override_prefix}/query_settings/"):
                 clickhouse_query_settings[k.split("/", 2)[2]] = v
+
+    if async_override:
+        for k, v in all_confs.items():
+            if k.startswith("async_query_settings/"):
+                clickhouse_query_settings[k.split("/", 1)[1]] = v
 
     return clickhouse_query_settings
 
@@ -567,7 +573,7 @@ def _raw_query(
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
     clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix()
+        reader.get_query_settings_prefix(), query_settings.get_asynchronous()
     )
 
     timer.mark("get_configs")
