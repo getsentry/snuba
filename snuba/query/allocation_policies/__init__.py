@@ -34,7 +34,7 @@ class QueryResultOrError:
     differently"""
 
     query_result: QueryResult | None
-    error: SerializableException | None
+    error: Exception | None
 
     def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None

@@ -716,8 +716,6 @@ def _raw_query(
     except Exception as e:
         error = e
     finally:
-        if error is not None and not isinstance(error, SerializableException):
-            error = SerializableException(str(error))
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
