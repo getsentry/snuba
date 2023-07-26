@@ -479,5 +479,5 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             assert raw_received is not None
             received = datetime.utcfromtimestamp(raw_received)
             return InsertBatch([processed], received)
-        except Exception:
+        except KeyError:
             raise KeyError("Missing received timestamp field in transaction")
