@@ -201,7 +201,7 @@ class ClickhouseQueryMetadata:
             "sql_anonymized": self.sql_anonymized,
             "start_timestamp": start,
             "end_timestamp": end,
-            "stats": self.stats,
+            "stats": self.stats,  # type: ignore
             "status": self.status.value,
             "request_status": self.request_status.status.value,
             "slo": self.request_status.slo.value,
