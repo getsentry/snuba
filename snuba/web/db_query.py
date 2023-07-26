@@ -469,6 +469,37 @@ def db_query(
     robust: bool = False,
     query_id: Optional[str] = None,
 ) -> QueryResult:
+    """
+    This is the entry point into the pipeline that ultimately returns the result for a query.
+
+    This function is responsible for:
+
+    * Checking the cache for existing results for this query (readthrough cache)
+    * Executing query on cache miss (_raw_query)
+
+    ** GOTCHAS **
+    --------------
+    * Whenever something goes wrong during the execution of this function, it is wrapped in a QueryException,
+        that exception needs to have whatever stats were collected during this function's execution
+        because the caller writes that information to the querylog. The cause of the QueryException
+        is also read at the very top level of this application (snuba/web/views.py) to decide
+        what status code to send back to the service caller. Changing that mechanism would mean
+        changing those layers as well.
+    * The readthrough cache accepts an arbitary function to run with a readthrough redis cache.
+        The layers look like this:
+            --> db_query
+                --> cache.get_readthrough
+                    ### READTHROUGH CACHE GOES HERE ###
+                    --> _raw_query (assuming a cache miss)
+                        --> allocation policy
+                        --> rate limits
+                        ...
+
+        The implication is that if a user hits the cache they will not be rate limited because the
+        request will simply be cached. That is the behavior at time of writing (26-07-2023) but there
+        is no specific reason it has to be that way. If the ordering needs to be changed as the application
+        evolves it can be changed.
+    """
     cache_partition = _get_cache_partition(reader)
     query_id = query_id or get_query_cache_key(formatted_query)
 
@@ -625,41 +656,14 @@ def _raw_query(
     trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
-    """This function is responsible for:
+    """
+    This function is responsible for:
 
     * Checking and updating the allocation policy (which exists on the query)
-    * Running the query on clickhouse with readthrough caching
     * applying rate limits which have been applied during the query pipeline
+        * rate limit applier executes the query on ClickHouse if query is not to be rate limited
     * collecting information about the query which will become part of the querylog entry for this request
         * this is done with the stats, and query_metadata_list parameters
-
-
-    ** GOTCHAS **
-    --------------
-
-    * Whenever something goes wrong during the running of this function, it is wrapped in a QueryException,
-        that exception neeeds to have whatever stats were collected during this function's execution
-        because the caller writes that information to the querylog. The cause of the QueryException
-        is also read at the very top level of this application (snuba/web/views.py) to decide
-        what status code to send back to the service caller. Changing that mechanism would mean
-        changing those layers as well
-    * The readthrough cache accepts an arbitary function to run with a readthrough redis cache. Currently
-        it is applied around the rate limiting function but not the allocation policy.
-        The layers look like this:
-
-            --> db_query
-                --> allocation policy
-                    --> ...irrelevant stuff
-                        --> execute_query_with_readthrough_caching
-                            ### READTHROUGH CACHE GOES HERE ###
-                                --> execute_query_with_rate_limits
-                                    --> execute_query
-
-        The implication is that if a user hits the cache they will not be rate limited because the
-        request will simply be cached. That is the behavior at time of writing (28-03-2023) but there
-        is no specific reason it has to be that way. If the ordering needs to be changed as the application
-        evolves it can be changed. The inconsistency was consciously chosen for expediency and to have
-        allocation policy be applied at the top level of the db_query process
     """
 
     allocation_policies = _get_allocation_policies(clickhouse_query)

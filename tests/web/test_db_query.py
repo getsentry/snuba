@@ -231,8 +231,6 @@ def test_db_query_fail() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_db_query_with_rejecting_allocation_policy() -> None:
-    # this test does not need the db or a query because the allocation policy
-    # should reject the query before it gets to execution
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
