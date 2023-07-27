@@ -171,6 +171,7 @@ def rate_limit_start_request(
     query_id: str,
     rate_history_sec: int,
     rate_limit_shard_factor: int,
+    rate_limit_prefix: str,
 ) -> RateLimitStats:
     """
     The first half of the rate limiting algorithm. This function is called before the thing
@@ -215,16 +216,16 @@ def rate_limit_start_request(
                                      now
 
     """
-
     now = time.time()
 
     # Compute the set shard to which we should add and remove the query_id
     bucket_shard = hash(query_id) % rate_limit_shard_factor
     query_bucket = _get_bucket_key(
-        state.ratelimit_prefix, rate_limit_params.bucket, bucket_shard
+        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
     )
 
     pipe = rds.pipeline(transaction=False)
+
     # cleanup old query timestamps past our retention window
     #
     # it is fine to only perform this cleanup for the shard of the current
@@ -285,7 +286,7 @@ def rate_limit_start_request(
         # count queries that have finished for the per-second rate
         for shard_i in range(rate_limit_shard_factor):
             bucket = _get_bucket_key(
-                state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                rate_limit_prefix, rate_limit_params.bucket, shard_i
             )
             pipe.zcount(bucket, now - state.rate_lookback_s, now)
 
@@ -294,7 +295,7 @@ def rate_limit_start_request(
         # of concurrent queries
         for shard_i in range(rate_limit_shard_factor):
             bucket = _get_bucket_key(
-                state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                rate_limit_prefix, rate_limit_params.bucket, shard_i
             )
             pipe.zcount(bucket, "({:f}".format(now), "+inf")
 
@@ -333,11 +334,12 @@ def rate_limit_finish_request(
     query_id: str,
     rate_limit_shard_factor: int,
     was_rate_limited: bool,
+    rate_limit_prefix: str,
 ) -> None:
     """Second half of rate limiting, called after the request is finished. See rate_limit_start_request for details"""
     bucket_shard = hash(query_id) % rate_limit_shard_factor
     query_bucket = _get_bucket_key(
-        state.ratelimit_prefix, rate_limit_params.bucket, bucket_shard
+        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
     )
     if was_rate_limited:
         try:
@@ -391,7 +393,11 @@ def rate_limit(
     query_id = str(query_id_uuid)
 
     rate_limit_stats = rate_limit_start_request(
-        rate_limit_params, query_id, rate_history_s, rate_limit_shard_factor
+        rate_limit_params,
+        query_id,
+        rate_history_s,
+        rate_limit_shard_factor,
+        state.ratelimit_prefix,
     )
 
     rate_limit_name = rate_limit_params.rate_limit_name
@@ -414,7 +420,11 @@ def rate_limit(
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
     if reason:
         rate_limit_finish_request(
-            rate_limit_params, query_id, rate_limit_shard_factor, True
+            rate_limit_params,
+            query_id,
+            rate_limit_shard_factor,
+            True,
+            state.ratelimit_prefix,
         )
 
         raise RateLimitExceeded(
@@ -434,11 +444,19 @@ def rate_limit(
             # If another rate limit was hit, we don't want to count this query
             # against this limit.
             rate_limit_finish_request(
-                rate_limit_params, query_id, rate_limit_shard_factor, True
+                rate_limit_params,
+                query_id,
+                rate_limit_shard_factor,
+                True,
+                state.ratelimit_prefix,
             )
     finally:
         rate_limit_finish_request(
-            rate_limit_params, query_id, rate_limit_shard_factor, False
+            rate_limit_params,
+            query_id,
+            rate_limit_shard_factor,
+            False,
+            state.ratelimit_prefix,
         )
 
 
