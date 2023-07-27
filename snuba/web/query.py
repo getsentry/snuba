@@ -330,7 +330,11 @@ def _format_storage_query_and_run(
         sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
         metrics.increment(
             "execute",
-            tags={"table": table_names, "referrer": attribution_info.referrer},
+            tags={
+                "table": table_names,
+                "referrer": attribution_info.referrer,
+                "data": query_metadata.dataset,
+            },
         )
 
     timer.mark("prepare_query")
