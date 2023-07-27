@@ -132,6 +132,7 @@ query_processors:
         - transaction_name
         - environment
         - project_id
+        - replay_id
   - processor: NullColumnCaster
     args:
       merge_table_sources:

@@ -188,7 +188,7 @@ query_processors:
           trace.span_id: span_id
   - processor: UUIDColumnProcessor
     args:
-      columns: [event_id, trace_id, profile_id]
+      columns: [event_id, trace_id, profile_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [span_id]

@@ -273,6 +273,7 @@ query_processors:
         primary_hash: null
         event_id: null
         trace_id: null
+        replay_id: null
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
