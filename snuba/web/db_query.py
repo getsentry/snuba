@@ -60,11 +60,9 @@ from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCach
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
-    PROJECT_RATE_LIMIT_NAME,
     TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
-    RateLimitStats,
     RateLimitStatsContainer,
 )
 from snuba.util import force_bytes
@@ -265,26 +263,6 @@ def _record_rate_limit_metrics(
         )
 
 
-def _apply_thread_quota_to_clickhouse_query_settings(
-    query_settings: QuerySettings,
-    clickhouse_query_settings: MutableMapping[str, Any],
-    project_rate_limit_stats: Optional[RateLimitStats],
-) -> None:
-    thread_quota = query_settings.get_resource_quota()
-    if "max_threads" in clickhouse_query_settings or thread_quota is not None:
-        maxt = (
-            clickhouse_query_settings["max_threads"]
-            if thread_quota is None
-            else thread_quota.max_threads
-        )
-        if project_rate_limit_stats:
-            clickhouse_query_settings["max_threads"] = max(
-                1, maxt - project_rate_limit_stats.concurrent + 1
-            )
-        else:
-            clickhouse_query_settings["max_threads"] = maxt
-
-
 @with_span(op="function")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -303,27 +281,6 @@ def execute_query_with_rate_limits(
     ) as rate_limit_stats_container:
         stats.update(rate_limit_stats_container.to_dict())
         timer.mark("rate_limit")
-
-        project_rate_limit_stats = rate_limit_stats_container.get_stats(
-            PROJECT_RATE_LIMIT_NAME
-        )
-        # -----------------------------------------------------------------
-        # HACK (Volo): This is a hack experiment to see if we can
-        # stop doing  concurrent throttling in production on a specific table
-        # and still survive.
-
-        # depending on the `stats` dict to be populated ahead of time
-        # is not great style, but it is done in _format_storage_query_and_run.
-        # This should be removed by 07-15-2023. Either the concurrent throttling becomes
-        # another allocation policy or we remove this mechanism entirely
-
-        table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-        if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
-            if state.get_config(f"use_project_concurrent_throttling.{table_name}", 1):
-                _apply_thread_quota_to_clickhouse_query_settings(
-                    query_settings, clickhouse_query_settings, project_rate_limit_stats
-                )
-        # -----------------------------------------------------------------
 
         _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 
