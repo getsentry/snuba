@@ -1,6 +1,7 @@
 use anyhow::Error;
 use pyo3::prelude::{PyModule, Python};
 
+#[allow(dead_code)]
 pub fn get_str_config(key: &str) -> Result<Option<String>, Error> {
     Python::with_gil(|py| {
         let snuba_state = PyModule::import(py, "snuba.state")?;
