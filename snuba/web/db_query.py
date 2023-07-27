@@ -511,6 +511,9 @@ def _raw_query(
     clickhouse_query_settings = _get_query_settings_from_config(
         reader.get_query_settings_prefix()
     )
+    clickhouse_query_settings[
+        "max_threads"
+    ] = query_settings.get_resource_quota().max_threads
 
     timer.mark("get_configs")
 
