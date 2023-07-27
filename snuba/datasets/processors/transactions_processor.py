@@ -479,6 +479,6 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             assert raw_received is not None
             received = datetime.utcfromtimestamp(raw_received)
             return InsertBatch([processed], received)
-        except KeyError as err:
-            logger.exception("Missing required field received in payload", err)
+        except (KeyError, AssertionError) as err:
+            logger.exception(err)
             return InsertBatch([processed], None)
