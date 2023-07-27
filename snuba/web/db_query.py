@@ -59,7 +59,6 @@ from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
-    ORGANIZATION_RATE_LIMIT_NAME,
     TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
@@ -215,20 +214,6 @@ def _record_rate_limit_metrics(
     reader: Reader,
     stats: MutableMapping[str, Any],
 ) -> None:
-    # This is a temporary metric that will be removed once the organization
-    # rate limit has been tuned.
-    org_rate_limit_stats = rate_limit_stats_container.get_stats(
-        ORGANIZATION_RATE_LIMIT_NAME
-    )
-    if org_rate_limit_stats is not None:
-        metrics.gauge(
-            name="org_concurrent",
-            value=org_rate_limit_stats.concurrent,
-        )
-        metrics.gauge(
-            name="org_per_second",
-            value=org_rate_limit_stats.rate,
-        )
     table_rate_limit_stats = rate_limit_stats_container.get_stats(TABLE_RATE_LIMIT_NAME)
     if table_rate_limit_stats is not None:
         metrics.gauge(
