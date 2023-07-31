@@ -99,6 +99,7 @@ class QueryResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
             and "data" in ret["result"]
         ):
             ret["extra"]["stats"]["cache_hit"] = 1
+            metrics.increment("cache_decoded", tags={"format": "Result"})
             return QueryResult(ret["result"], ret["extra"])
         elif "meta" in ret and "data" in ret:
             # HACK: Backwards compatibility introduced so existing cached data is
@@ -106,6 +107,7 @@ class QueryResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
             # be avoided altogether by disabling cache and waiting till data hits TTL,
             # however that requires changes to runtime configs pre/post deploy. This
             # is not yet easy to do without ops team for Single Tenant. (31/07/2023)
+            metrics.increment("cache_decoded", tags={"format": "QueryResult"})
             return QueryResult(
                 cast(Result, ret),
                 {"stats": {"cache_hit": 1}, "sql": "", "experiments": {}},
