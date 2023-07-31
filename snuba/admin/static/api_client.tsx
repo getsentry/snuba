@@ -52,6 +52,7 @@ interface Client {
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
+  getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
   debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
@@ -185,6 +186,11 @@ function Client() {
 
     getSnubaDatasetNames: () => {
       const url = baseUrl + "snuba_datasets";
+      return fetch(url).then((resp) => resp.json());
+    },
+
+    getAllowedProjects: () => {
+      const url = baseUrl + "allowed_projects";
       return fetch(url).then((resp) => resp.json());
     },
 
