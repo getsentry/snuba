@@ -82,7 +82,7 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 
-class ResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
+class QueryResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
     def encode(self, value: QueryResult) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict(), default=str)).encode("utf-8")
 
@@ -90,16 +90,28 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
         ret = rapidjson.loads(value)
         if ret.get("__type__", "DNE") == "SerializableException":
             raise SerializableException.from_dict(cast(SerializableExceptionDict, ret))
-        if (
-            not isinstance(ret, Mapping)
-            or "result" not in ret
-            or "extra" not in ret
-            or "meta" not in ret["result"]
-            or "data" not in ret["result"]
-        ):
+        if not isinstance(ret, Mapping):
             raise ValueError("Invalid value type in result cache")
-        ret["extra"]["stats"]["cache_hit"] = 1
-        return QueryResult(ret["result"], ret["extra"])
+        if (
+            "result" in ret
+            and "extra" in ret
+            and "meta" in ret["result"]
+            and "data" in ret["result"]
+        ):
+            ret["extra"]["stats"]["cache_hit"] = 1
+            return QueryResult(ret["result"], ret["extra"])
+        elif "meta" in ret and "data" in ret:
+            # HACK: Backwards compatibility introduced so existing cached data is
+            # still usable when the cache update (#4506) goes out. Ideally this would
+            # be avoided altogether by disabling cache and waiting till data hits TTL,
+            # however that requires changes to runtime configs pre/post deploy. This
+            # is not yet easy to do without ops team for Single Tenant. (31/07/2023)
+            return QueryResult(
+                cast(Result, ret),
+                {"stats": {"cache_hit": 1}, "sql": "", "experiments": {}},
+            )
+
+        raise ValueError("Invalid value type in result cache")
 
     def encode_exception(self, value: SerializableException) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
@@ -114,7 +126,7 @@ cache_partitions: MutableMapping[str, Cache[QueryResult]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_cache_client,
         "snuba-query-cache:",
-        ResultCacheCodec(),
+        QueryResultCacheCodec(),
         ThreadPoolExecutor(),
     )
 }
@@ -364,7 +376,7 @@ def _get_cache_partition(reader: Reader) -> Cache[QueryResult]:
                 cache_partitions[partition_id] = RedisCache(
                     redis_cache_client,
                     f"snuba-query-cache:{partition_id}:",
-                    ResultCacheCodec(),
+                    QueryResultCacheCodec(),
                     ThreadPoolExecutor(),
                 )
 
