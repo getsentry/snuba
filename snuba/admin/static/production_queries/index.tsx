@@ -3,10 +3,21 @@ import Client from "../api_client";
 import { Table } from "../table";
 import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
 import { executeActionsStyle, executeButtonStyle, selectStyle } from "./styles";
-import { Button, Loader, Select, Textarea } from "@mantine/core";
+import {
+  Box,
+  Button,
+  Collapse,
+  Group,
+  Loader,
+  Select,
+  Text,
+  Textarea,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
+  const [allowedProjects, setAllowedProjects] = useState<string[]>([]);
   const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
@@ -16,6 +27,12 @@ function ProductionQueries(props: { api: Client }) {
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
       setDatasets(res);
+    });
+  }, []);
+
+  useEffect(() => {
+    props.api.getAllowedProjects().then((res) => {
+      setAllowedProjects(res);
     });
   }, []);
 
@@ -73,7 +90,7 @@ function ProductionQueries(props: { api: Client }) {
     <div>
       <form>
         <h2>Run a SnQL Query</h2>
-        <p>Currently, we only support queries with project_id = 1</p>
+        <ProjectsList projects={allowedProjects} />
         <div>
           <Textarea
             value={snql_query.query || ""}
@@ -129,6 +146,22 @@ function ProductionQueries(props: { api: Client }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ProjectsList(props: { projects: string[] }) {
+  const [opened, { toggle }] = useDisclosure(false);
+
+  return (
+    <Box mb="xs" mx="auto">
+      <Group position="left" mb={5}>
+        <Button onClick={toggle}>View Allowed Projects</Button>
+      </Group>
+
+      <Collapse in={opened}>
+        <Text>{props.projects.join(", ")}</Text>
+      </Collapse>
+    </Box>
   );
 }
 
