@@ -325,9 +325,17 @@ def _format_storage_query_and_run(
         span.set_data(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)
         )  # To avoid the query being truncated
+        span.set_data("table", table_names)
         span.set_data("query_size_bytes", query_size_bytes)
         sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
-        metrics.increment("execute")
+        metrics.increment(
+            "execute",
+            tags={
+                "table": table_names,
+                "referrer": attribution_info.referrer,
+                "data": query_metadata.dataset,
+            },
+        )
 
     timer.mark("prepare_query")
 
