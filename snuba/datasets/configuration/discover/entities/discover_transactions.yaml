@@ -124,7 +124,8 @@ schema:
       args: { inner_type: { type: UInt, args: { size: 64 } } },
     },
     { name: app_start_type, type: String },
-    { name: profile_id, type: UUID, args: {schema_modifiers: [nullable]}}
+    { name: profile_id, type: UUID, args: {schema_modifiers: [nullable]}},
+    { name: replay_id, type: UUID, args: {schema_modifiers: [nullable]}}
   ]
 required_time_column: finish_ts
 storages:

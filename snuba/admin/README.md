@@ -30,8 +30,4 @@ this will start the yarn debug server and live reload your javascript changes. I
 
 # Releasing new javascript
 
-At time of writing, we check the compiled javscript bundle into source code (yes it's not great, if you want to fix it please do). Run this before checking in your JS changes:
-
-```
-make build-admin
-```
+The admin tool is automatically built as part of our normal CI flow.
