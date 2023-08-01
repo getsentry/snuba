@@ -176,16 +176,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         replay_event = rapidjson.loads(bytes(message["payload"]))
-
-        if isinstance(message["start_time"], int):
-            received = datetime.utcfromtimestamp(message["start_time"])
-        else:
-            received = None
-
+        received = datetime.utcfromtimestamp(message["start_time"])
         try:
             retention_days = enforce_retention(
                 message["retention_days"],
-                datetime.utcfromtimestamp(message["start_time"]),
+                received,
             )
         except EventTooOld:
             return None
