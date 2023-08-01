@@ -322,7 +322,7 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    @patch("snuba.web.db_query.execute_query_with_readthrough_caching")
+    @patch("snuba.web.db_query.execute_query_with_rate_limits")
     def test_record_queries_on_error(
         self, execute_query_mock: MagicMock, record_query_mock: MagicMock
     ) -> None:
