@@ -85,6 +85,13 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
         frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset(
+            {
+                StorageSetKey.EVENTS,
+                StorageSetKey.EVENTS_RO,
+                StorageSetKey.GROUP_ATTRIBUTES,
+            }
+        ),
     }
 )
 
