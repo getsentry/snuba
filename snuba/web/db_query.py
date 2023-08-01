@@ -540,15 +540,15 @@ def _get_query_settings_from_config(
         if k.startswith("query_settings/")
     }
 
-    if override_prefix:
-        for k, v in all_confs.items():
-            if k.startswith(f"{override_prefix}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 2)[2]] = v
-
     if async_override:
         for k, v in all_confs.items():
             if k.startswith("async_query_settings/"):
                 clickhouse_query_settings[k.split("/", 1)[1]] = v
+
+    if override_prefix:
+        for k, v in all_confs.items():
+            if k.startswith(f"{override_prefix}/query_settings/"):
+                clickhouse_query_settings[k.split("/", 2)[2]] = v
 
     return clickhouse_query_settings
 
