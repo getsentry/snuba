@@ -707,7 +707,20 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 raise
             return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
         if not allowance.can_run:
-            raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
+            self.metrics.increment(
+                "db_request_rejected",
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+            if self.is_enforced:
+                raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
+        if allowance.max_threads < self.max_threads:
+            self.metrics.increment(
+                "db_request_throttled",
+                tags={
+                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                    "max_threads": str(allowance.max_threads),
+                },
+            )
         return allowance
 
     @abstractmethod

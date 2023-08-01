@@ -55,13 +55,14 @@ def test_passthrough_allows_queries() -> None:
     )
 
 
-def test_raises_on_false_can_run() -> None:
-    class RejectingEverythingAllocationPolicy(PassthroughPolicy):
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(can_run=False, max_threads=1, explanation={})
+class RejectingEverythingAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(can_run=False, max_threads=1, explanation={})
 
+
+def test_raises_on_false_can_run() -> None:
     with pytest.raises(AllocationPolicyViolation):
         RejectingEverythingAllocationPolicy(
             StorageKey("something"), [], default_config_overrides={}
@@ -429,3 +430,24 @@ def test_is_not_active() -> None:
     # Should not error anymore since private methods are not called due to inactivity
     policy.get_quota_allowance(tenant_ids, "deadbeef")
     policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+
+
+@pytest.mark.redis_db
+def test_is_not_enforced() -> None:
+    # active policy
+    policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"my_param_config": 420, "is_active": 1, "is_enforced": 1},
+    )
+
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    with pytest.raises(AllocationPolicyViolation):
+        policy.get_quota_allowance(tenant_ids, "deadbeef")
+
+    policy.set_config_value(config_key="is_enforced", value=0)
+    # policy not enforced so we don't reject the query
+    policy.get_quota_allowance(tenant_ids, "deadbeef")
