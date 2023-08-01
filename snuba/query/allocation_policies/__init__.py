@@ -721,6 +721,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                     "max_threads": str(allowance.max_threads),
                 },
             )
+        if not self.is_enforced:
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
         return allowance
 
     @abstractmethod

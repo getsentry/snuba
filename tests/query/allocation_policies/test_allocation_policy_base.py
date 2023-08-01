@@ -17,6 +17,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.state import set_config
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
 
 
@@ -59,7 +60,14 @@ class RejectingEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=False, max_threads=1, explanation={})
+        return QuotaAllowance(can_run=False, max_threads=10, explanation={})
+
+
+class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
 
 
 def test_raises_on_false_can_run() -> None:
@@ -434,20 +442,48 @@ def test_is_not_active() -> None:
 
 @pytest.mark.redis_db
 def test_is_not_enforced() -> None:
-    # active policy
-    policy = RejectingEverythingAllocationPolicy(
+    reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
         [],
         {"my_param_config": 420, "is_active": 1, "is_enforced": 1},
     )
-
+    throttle_policy = ThrottleEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1, "max_threads": 10},
+    )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
     with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(tenant_ids, "deadbeef")
+        reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
 
-    policy.set_config_value(config_key="is_enforced", value=0)
+    reject_policy.set_config_value(config_key="is_enforced", value=0)
     # policy not enforced so we don't reject the query
-    policy.get_quota_allowance(tenant_ids, "deadbeef")
+    reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+
+    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
+    throttle_policy.set_config_value(config_key="is_enforced", value=0)
+    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 10
+
+    rejected_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_rejected"
+    )
+    assert len(rejected_metrics) == 2
+    assert (
+        rejected_metrics[0].tags["policy_class"]
+        == "RejectingEverythingAllocationPolicy"
+    )
+    assert rejected_metrics[0].tags["is_enforced"] == "True"
+    assert rejected_metrics[1].tags["is_enforced"] == "False"
+    throttled_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_throttled"
+    )
+    assert len(throttled_metrics) == 2
+    assert (
+        throttled_metrics[0].tags["policy_class"]
+        == "ThrottleEverythingAllocationPolicy"
+    )
+    assert throttled_metrics[0].tags["is_enforced"] == "True"
+    assert throttled_metrics[1].tags["is_enforced"] == "False"
