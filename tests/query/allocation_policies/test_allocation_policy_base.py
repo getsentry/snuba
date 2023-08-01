@@ -442,15 +442,21 @@ def test_is_not_active() -> None:
 
 @pytest.mark.redis_db
 def test_is_not_enforced() -> None:
+    MAX_THREADS = 100
     reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
         [],
-        {"my_param_config": 420, "is_active": 1, "is_enforced": 1},
+        {
+            "my_param_config": 420,
+            "is_active": 1,
+            "is_enforced": 1,
+            "max_threads": MAX_THREADS,
+        },
     )
     throttle_policy = ThrottleEverythingAllocationPolicy(
         StorageKey("some_storage"),
         [],
-        {"is_active": 1, "is_enforced": 1, "max_threads": 10},
+        {"is_active": 1, "is_enforced": 1, "max_threads": MAX_THREADS},
     )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
@@ -465,7 +471,10 @@ def test_is_not_enforced() -> None:
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
     throttle_policy.set_config_value(config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 10
+    assert (
+        throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads
+        == MAX_THREADS
+    )
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
@@ -480,7 +489,7 @@ def test_is_not_enforced() -> None:
     throttled_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_throttled"
     )
-    assert len(throttled_metrics) == 2
+    assert len(throttled_metrics) == 2, throttled_metrics
     assert (
         throttled_metrics[0].tags["policy_class"]
         == "ThrottleEverythingAllocationPolicy"

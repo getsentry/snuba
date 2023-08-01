@@ -713,7 +713,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             )
             if self.is_enforced:
                 raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
-        if allowance.max_threads < self.max_threads:
+        elif allowance.max_threads < self.max_threads:
+            # NOTE: The elif is very intentional here. Don't count the throttling
+            # if the request was rejected.
             self.metrics.increment(
                 "db_request_throttled",
                 tags={
@@ -722,7 +724,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 },
             )
         if not self.is_enforced:
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
+            return QuotaAllowance(True, self.max_threads, {})
         return allowance
 
     @abstractmethod
