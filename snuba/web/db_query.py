@@ -5,6 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
+from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -82,38 +83,17 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 
-class QueryResultCacheCodec(ExceptionAwareCodec[bytes, QueryResult]):
-    def encode(self, value: QueryResult) -> bytes:
-        return cast(str, rapidjson.dumps(value.to_dict(), default=str)).encode("utf-8")
+class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
+    def encode(self, value: Result) -> bytes:
+        return cast(str, rapidjson.dumps(value, default=str)).encode("utf-8")
 
-    def decode(self, value: bytes) -> QueryResult:
+    def decode(self, value: bytes) -> Result:
         ret = rapidjson.loads(value)
         if ret.get("__type__", "DNE") == "SerializableException":
             raise SerializableException.from_dict(cast(SerializableExceptionDict, ret))
-        if not isinstance(ret, Mapping):
+        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
             raise ValueError("Invalid value type in result cache")
-        if (
-            "result" in ret
-            and "extra" in ret
-            and "meta" in ret["result"]
-            and "data" in ret["result"]
-        ):
-            ret["extra"]["stats"]["cache_hit"] = 1
-            metrics.increment("cache_decoded", tags={"format": "QueryResult"})
-            return QueryResult(ret["result"], ret["extra"])
-        elif "meta" in ret and "data" in ret:
-            # HACK: Backwards compatibility introduced so existing cached data is
-            # still usable when the cache update (#4506) goes out. Ideally this would
-            # be avoided altogether by disabling cache and waiting till data hits TTL,
-            # however that requires changes to runtime configs pre/post deploy. This
-            # is not yet easy to do without ops team for Single Tenant. (31/07/2023)
-            metrics.increment("cache_decoded", tags={"format": "Result"})
-            return QueryResult(
-                cast(Result, ret),
-                {"stats": {"cache_hit": 1}, "sql": "", "experiments": {}},
-            )
-
-        raise ValueError("Invalid value type in result cache")
+        return cast(Result, ret)
 
     def encode_exception(self, value: SerializableException) -> bytes:
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
@@ -124,11 +104,11 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # We are not initializing all the cache partitions here and instead relying on lazy
 # initialization because this module only learn of cache partitions ids from the
 # reader when running a query.
-cache_partitions: MutableMapping[str, Cache[QueryResult]] = {
+cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_cache_client,
         "snuba-query-cache:",
-        QueryResultCacheCodec(),
+        ResultCacheCodec(),
         ThreadPoolExecutor(),
     )
 }
@@ -141,7 +121,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Query | CompositeQuery[Table],
+    query: Query,
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -164,7 +144,7 @@ def update_query_metadata_and_stats(
     if triggered_rate_limiter is not None:
         stats["triggered_rate_limiter"] = triggered_rate_limiter
     sql_anonymized = format_query_anonymized(query).get_sql()
-    start, end = get_time_range_estimate(query)  # type: ignore
+    start, end = get_time_range_estimate(query)
 
     query_metadata_list.append(
         ClickhouseQueryMetadata(
@@ -363,7 +343,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
-def _get_cache_partition(reader: Reader) -> Cache[QueryResult]:
+def _get_cache_partition(reader: Reader) -> Cache[Result]:
     enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
@@ -378,13 +358,143 @@ def _get_cache_partition(reader: Reader) -> Cache[QueryResult]:
                 cache_partitions[partition_id] = RedisCache(
                     redis_cache_client,
                     f"snuba-query-cache:{partition_id}:",
-                    QueryResultCacheCodec(),
+                    ResultCacheCodec(),
                     ThreadPoolExecutor(),
                 )
 
     return cache_partitions[
         partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
     ]
+
+
+@with_span(op="function")
+def execute_query_with_query_id(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
+    robust: bool,
+) -> Result:
+    query_id = get_query_cache_key(formatted_query)
+
+    try:
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+    except ClickhouseError as e:
+        if (
+            e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+            or not state.get_config("retry_duplicate_query_id", False)
+        ):
+            raise
+
+        logger.error(
+            "Query cache for query ID %s lost, retrying query with random ID", query_id
+        )
+        metrics.increment("query_cache_lost")
+
+        query_id = f"randomized-{uuid.uuid4().hex}"
+
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+
+
+@with_span(op="function")
+def execute_query_with_readthrough_caching(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
+    robust: bool,
+    query_id: str,
+) -> Result:
+    clickhouse_query_settings["query_id"] = query_id
+
+    span = Hub.current.scope.span
+    if span:
+        span.set_data("query_id", query_id)
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        span_tag = "cache_miss"
+        if hit_type == RESULT_VALUE:
+            stats["cache_hit"] = 1
+            span_tag = "cache_hit"
+        elif hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+            span_tag = "cache_wait"
+        sentry_sdk.set_tag("cache_status", span_tag)
+        if span:
+            span.set_data("cache_status", span_tag)
+
+    cache_partition = _get_cache_partition(reader)
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+
+    # -----------------------------------------------------------------
+    # HACK (Volo): This is a hack experiment to see if we can
+    # turn off the cache (but not all of it for everything at once).
+    # and still survive.
+
+    # depending on the `stats` dict to be populated ahead of time
+    # is not great style, but it is done in _format_storage_query_and_run.
+    # This should be removed by 07-05-2023
+    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
+    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
+        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
+        return execute_query_with_rate_limits(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+        )
+    # -----------------------------------------------------------------
+    else:
+        return cache_partition.get_readthrough(
+            query_id,
+            partial(
+                execute_query_with_rate_limits,
+                clickhouse_query,
+                query_settings,
+                formatted_query,
+                reader,
+                timer,
+                stats,
+                clickhouse_query_settings,
+                robust,
+            ),
+            record_cache_hit_type=record_cache_hit_type,
+            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+            timer=timer,
+        )
 
 
 def _get_cache_wait_timeout(
@@ -437,6 +547,116 @@ def _get_query_settings_from_config(
     return clickhouse_query_settings
 
 
+def _raw_query(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
+    formatted_query: FormattedQuery,
+    reader: Reader,
+    timer: Timer,
+    # NOTE: This variable is a piece of state which is updated and used outside this function
+    stats: MutableMapping[str, Any],
+    trace_id: Optional[str] = None,
+    robust: bool = False,
+) -> QueryResult:
+    """
+    this function is responsible for running the clickhouse query and if there is any error, constructing the
+    QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
+    """
+    clickhouse_query_settings = _get_query_settings_from_config(
+        reader.get_query_settings_prefix()
+    )
+
+    timer.mark("get_configs")
+
+    sql = formatted_query.get_sql()
+
+    update_with_status = partial(
+        update_query_metadata_and_stats,
+        query=clickhouse_query,
+        query_metadata_list=query_metadata_list,
+        sql=sql,
+        stats=stats,
+        query_settings=clickhouse_query_settings,
+        trace_id=trace_id,
+    )
+
+    try:
+        result = execute_query_with_query_id(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust=robust,
+        )
+    except Exception as cause:
+        error_code = None
+        trigger_rate_limiter = None
+        status = None
+        request_status = get_request_status(cause)
+        if isinstance(cause, RateLimitExceeded):
+            status = QueryStatus.RATE_LIMITED
+            trigger_rate_limiter = cause.extra_data.get("scope", "")
+        elif isinstance(cause, ClickhouseError):
+            error_code = cause.code
+            status = get_query_status_from_error_codes(error_code)
+
+            with configure_scope() as scope:
+                fingerprint = ["{{default}}", str(cause.code), dataset_name]
+                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                    fingerprint.append(attribution_info.referrer)
+                scope.fingerprint = fingerprint
+        elif isinstance(cause, TimeoutError):
+            status = QueryStatus.TIMEOUT
+        elif isinstance(cause, ExecutionTimeoutError):
+            status = QueryStatus.TIMEOUT
+
+        if request_status.slo == SLO.AGAINST:
+            logger.exception("Error running query: %s\n%s", sql, cause)
+
+        with configure_scope() as scope:
+            if scope.span:
+                sentry_sdk.set_tag("slo_status", request_status.status.value)
+
+        stats = update_with_status(
+            status=status or QueryStatus.ERROR,
+            request_status=request_status,
+            error_code=error_code,
+            triggered_rate_limiter=str(trigger_rate_limiter),
+        )
+        raise QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            cause.__class__.__name__,
+            str(cause),
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        ) from cause
+    else:
+        stats = update_with_status(
+            status=QueryStatus.SUCCESS,
+            request_status=get_request_status(),
+            profile_data=result["profile"],
+        )
+        return QueryResult(
+            result,
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
+
+
 def _get_allocation_policies(
     clickhouse_query: Union[Query, CompositeQuery[Table]]
 ) -> list[AllocationPolicy]:
@@ -481,202 +701,42 @@ def db_query(
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
     robust: bool = False,
-    query_id: Optional[str] = None,
 ) -> QueryResult:
-    """
-    This is the entry point into the pipeline that ultimately returns the result for a query.
+    """This function is responsible for:
 
-    This function is responsible for:
+    * Checking and updating the allocation policy (which exists on the query)
+    * Running the query on clickhouse with readthrough caching
+    * applying rate limits which have been applied during the query pipeline
+    * collecting information about the query which will become part of the querylog entry for this request
+        * this is done with the stats, and query_metadata_list parameters
 
-    * Checking the cache for existing results for this query (readthrough cache)
-    * Executing query on cache miss (_raw_query)
 
     ** GOTCHAS **
     --------------
-    * Whenever something goes wrong during the execution of this function, it is wrapped in a QueryException,
-        that exception needs to have whatever stats were collected during this function's execution
+
+    * Whenever something goes wrong during the running of this function, it is wrapped in a QueryException,
+        that exception neeeds to have whatever stats were collected during this function's execution
         because the caller writes that information to the querylog. The cause of the QueryException
         is also read at the very top level of this application (snuba/web/views.py) to decide
         what status code to send back to the service caller. Changing that mechanism would mean
-        changing those layers as well.
-    * The readthrough cache accepts an arbitary function to run with a readthrough redis cache.
+        changing those layers as well
+    * The readthrough cache accepts an arbitary function to run with a readthrough redis cache. Currently
+        it is applied around the rate limiting function but not the allocation policy.
         The layers look like this:
+
             --> db_query
-                --> cache.get_readthrough
-                    ### READTHROUGH CACHE GOES HERE ###
-                    --> _raw_query (assuming a cache miss)
-                        --> allocation policy
-                        --> rate limits
-                        ...
+                --> allocation policy
+                    --> ...irrelevant stuff
+                        --> execute_query_with_readthrough_caching
+                            ### READTHROUGH CACHE GOES HERE ###
+                                --> execute_query_with_rate_limits
+                                    --> execute_query
 
         The implication is that if a user hits the cache they will not be rate limited because the
-        request will simply be cached. That is the behavior at time of writing (26-07-2023) but there
+        request will simply be cached. That is the behavior at time of writing (28-03-2023) but there
         is no specific reason it has to be that way. If the ordering needs to be changed as the application
-        evolves it can be changed.
-    """
-    cache_partition = _get_cache_partition(reader)
-    query_id = query_id or get_query_cache_key(formatted_query)
-
-    clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix()
-    )
-    timer.mark("get_configs")
-
-    clickhouse_query_settings["query_id"] = query_id
-
-    span = Hub.current.scope.span
-    if span:
-        span.set_data("query_id", query_id)
-
-    def record_cache_hit_type(hit_type: int) -> None:
-        span_tag = "cache_miss"
-        if hit_type == RESULT_VALUE:
-            stats["cache_hit"] = 1
-            span_tag = "cache_hit"
-        elif hit_type == RESULT_WAIT:
-            stats["is_duplicate"] = 1
-            span_tag = "cache_wait"
-        sentry_sdk.set_tag("cache_status", span_tag)
-        if span:
-            span.set_data("cache_status", span_tag)
-
-    cache_partition = _get_cache_partition(reader)
-    metrics.increment(
-        "cache_partition_loaded",
-        tags={"partition_id": reader.cache_partition_id or "default"},
-    )
-
-    try:
-        return cache_partition.get_readthrough(
-            query_id,
-            partial(
-                _raw_query,
-                clickhouse_query,
-                clickhouse_query_settings,
-                query_settings,
-                attribution_info,
-                query_metadata_list,
-                formatted_query,
-                reader,
-                timer,
-                stats,
-                trace_id,
-                robust,
-            ),
-            record_cache_hit_type=record_cache_hit_type,
-            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
-            timer=timer,
-        )
-    except Exception as cause:
-        error_code = None
-        trigger_rate_limiter = None
-        status = None
-        request_status = get_request_status(cause)
-        if isinstance(cause, RateLimitExceeded):
-            status = QueryStatus.RATE_LIMITED
-            trigger_rate_limiter = cause.extra_data.get("scope", "")
-        elif isinstance(cause, AllocationPolicyViolations):
-            stats["quota_allowance"] = {
-                k: v.quota_allowance for k, v in cause.violations.items()
-            }
-        elif isinstance(cause, ClickhouseError):
-            if (
-                cause.code == ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
-                and state.get_config("retry_duplicate_query_id", False)
-            ):
-                logger.error(
-                    "Query cache for query ID %s lost, retrying query with random ID",
-                    query_id,
-                )
-                metrics.increment("query_cache_lost")
-
-                query_id = f"randomized-{uuid.uuid4().hex}"
-
-                return db_query(
-                    clickhouse_query,
-                    query_settings,
-                    attribution_info,
-                    dataset_name,
-                    query_metadata_list,
-                    formatted_query,
-                    reader,
-                    timer,
-                    stats,
-                    trace_id,
-                    robust,
-                    query_id,
-                )
-
-            error_code = cause.code
-            status = get_query_status_from_error_codes(error_code)
-
-            with configure_scope() as scope:
-                fingerprint = ["{{default}}", str(cause.code), dataset_name]
-                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
-                    fingerprint.append(attribution_info.referrer)
-                scope.fingerprint = fingerprint
-        elif isinstance(cause, TimeoutError):
-            status = QueryStatus.TIMEOUT
-        elif isinstance(cause, ExecutionTimeoutError):
-            status = QueryStatus.TIMEOUT
-
-        sql = formatted_query.get_sql()
-
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
-
-        with configure_scope() as scope:
-            if scope.span:
-                sentry_sdk.set_tag("slo_status", request_status.status.value)
-
-        stats = update_query_metadata_and_stats(
-            query=clickhouse_query,
-            query_metadata_list=query_metadata_list,
-            sql=sql,
-            stats=stats,
-            query_settings=clickhouse_query_settings,
-            trace_id=trace_id,
-            status=status or QueryStatus.ERROR,
-            request_status=request_status,
-            error_code=error_code,
-            triggered_rate_limiter=str(trigger_rate_limiter),
-        )
-        raise QueryException.from_args(
-            # This exception needs to have the message of the cause in it for sentry
-            # to pick it up properly
-            cause.__class__.__name__,
-            str(cause),
-            {
-                "stats": stats,
-                "sql": sql,
-                "experiments": clickhouse_query.get_experiments(),
-            },
-        ) from cause
-
-
-def _raw_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    query_settings: QuerySettings,
-    attribution_info: AttributionInfo,
-    # NOTE: This variable is a piece of state which is updated and used outside this function
-    query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    # NOTE: This variable is a piece of state which is updated and used outside this function
-    stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
-    robust: bool = False,
-) -> QueryResult:
-    """
-    This function is responsible for:
-
-    * Checking and updating the allocation policy (which exists on the query)
-    * applying rate limits which have been applied during the query pipeline
-        * rate limit applier executes the query on ClickHouse if query is not to be rate limited
-    * collecting information about the query which will become part of the querylog entry for this request
-        * this is done with the stats, and query_metadata_list parameters
+        evolves it can be changed. The inconsistency was consciously chosen for expediency and to have
+        allocation policy be applied at the top level of the db_query process
     """
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
@@ -685,50 +745,34 @@ def _raw_query(
     _apply_allocation_policies_quota(
         query_settings,
         attribution_info,
+        formatted_query,
         stats,
         allocation_policies,
         query_id,
     )
 
-    sql = formatted_query.get_sql()
-
     result = None
     error = None
     try:
-        raw_result = execute_query_with_rate_limits(
+        result = _raw_query(
             clickhouse_query,
             query_settings,
+            attribution_info,
+            dataset_name,
+            query_metadata_list,
             formatted_query,
             reader,
             timer,
             stats,
-            clickhouse_query_settings,
+            trace_id,
             robust,
         )
-
-        stats = update_query_metadata_and_stats(
-            query=clickhouse_query,
-            query_metadata_list=query_metadata_list,
-            sql=sql,
-            stats=stats,
-            query_settings=clickhouse_query_settings,
-            trace_id=trace_id,
-            status=QueryStatus.SUCCESS,
-            request_status=get_request_status(),
-            profile_data=raw_result["profile"],
-        )
-
-        result = QueryResult(
-            raw_result,
-            {
-                "stats": stats,
-                "sql": sql,
-                "experiments": clickhouse_query.get_experiments(),
-            },
-        )
-
-    except Exception as e:
+    except QueryException as e:
         error = e
+    except Exception as e:
+        # We count on _raw_query capturing all exceptions in a QueryException
+        # if it didn't do that, something is very wrong so we just panic out here
+        raise e
     finally:
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
@@ -746,6 +790,7 @@ def _raw_query(
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
+    formatted_query: FormattedQuery,
     stats: MutableMapping[str, Any],
     allocation_policies: list[AllocationPolicy],
     query_id: str,
@@ -767,7 +812,16 @@ def _apply_allocation_policies_quota(
         except AllocationPolicyViolation as e:
             violations[allocation_policy.config_key()] = e
     if violations:
-        raise AllocationPolicyViolations(
+        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
+        raise QueryException.from_args(
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
+            extra={
+                "stats": stats,
+                "sql": formatted_query.get_sql(),
+                "experiments": {},
+            },
+        ) from AllocationPolicyViolations(
             "Query cannot be run due to allocation policies", violations
         )
 

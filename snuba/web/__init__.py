@@ -63,9 +63,6 @@ class QueryResult(NamedTuple):
     result: Result
     extra: QueryExtraData
 
-    def to_dict(self) -> dict[str, Any]:
-        return {"result": self.result, "extra": self.extra}
-
 
 def transform_column_names(
     result: QueryResult, mapping: Mapping[str, list[str]]

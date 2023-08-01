@@ -15,7 +15,7 @@ from snuba.state import set_config as set_runtime_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
-from snuba.web import QueryResult
+from snuba.web import QueryException, QueryResult
 
 logger = logging.getLogger("snuba.query.allocation_policy_base")
 CAPMAN_PREFIX = "capman"
@@ -34,7 +34,7 @@ class QueryResultOrError:
     differently"""
 
     query_result: QueryResult | None
-    error: Exception | None
+    error: QueryException | None
 
     def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None
