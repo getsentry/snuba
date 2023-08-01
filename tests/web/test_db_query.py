@@ -130,7 +130,7 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.parametrize("query_config,expected,query_prefix,async_override", test_data)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
