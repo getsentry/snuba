@@ -9,7 +9,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
 
-def configure_celery() -> Celery:
+def init_celery() -> Celery:
     redis_node = settings.REDIS_CLUSTERS["async_queries"]
     if redis_node:
         password = redis_node["password"]
@@ -22,14 +22,17 @@ def configure_celery() -> Celery:
         port = settings.REDIS_PORT
         db_number = settings.REDIS_DB
 
-    redis_url = f"redis://:{password}@{host}:{port}/{db_number}"
+    if password:
+        redis_url = f"redis://:{password}@{host}:{port}/{db_number}"
+    else:
+        redis_url = f"redis://{host}:{port}/{db_number}"
     celery_app = Celery(__name__)
     celery_app.conf.broker_url = redis_url
     celery_app.conf.result_backend = redis_url
     return celery_app
 
 
-celery_app = configure_celery()
+celery_app = init_celery()
 
 
 @celery_app.task
