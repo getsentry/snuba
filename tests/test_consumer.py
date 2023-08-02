@@ -10,6 +10,7 @@ from unittest.mock import Mock, call
 import pytest
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from py._path.local import LocalPath
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -34,7 +35,7 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 from tests.fixtures import get_raw_error_message
 
 
-def test_streaming_consumer_strategy() -> None:
+def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
     messages = (
         Message(
             BrokerValue(
@@ -72,6 +73,7 @@ def test_streaming_consumer_strategy() -> None:
             ),
         )
 
+    health_check_file = tmpdir / "health.txt"
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
@@ -85,6 +87,7 @@ def test_streaming_consumer_strategy() -> None:
         processes=None,
         input_block_size=None,
         output_block_size=None,
+        health_check_file=health_check_file.strpath,
     )
 
     commit_function = Mock()
@@ -123,6 +126,8 @@ def test_streaming_consumer_strategy() -> None:
     ):
         strategy.close()
         strategy.join()
+
+    assert health_check_file.check()
 
 
 def test_json_row_batch_pickle_simple() -> None:

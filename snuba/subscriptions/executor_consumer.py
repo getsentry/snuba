@@ -15,6 +15,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit
 
 from snuba import state
@@ -80,6 +81,7 @@ def build_executor_consumer(
     strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
     stale_threshold_seconds: Optional[int],
+    health_check_file: Optional[str] = None,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -146,6 +148,7 @@ def build_executor_consumer(
             metrics,
             stale_threshold_seconds,
             result_topic_spec.topic_name,
+            health_check_file,
         ),
         commit_policy=ONCE_PER_SECOND,
         join_timeout=5.0,
@@ -163,6 +166,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         metrics: MetricsBackend,
         stale_threshold_seconds: Optional[int],
         result_topic: str,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__total_concurrent_queries = total_concurrent_queries
         self.__total_partition_count = total_partition_count
@@ -172,6 +176,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self.__metrics = metrics
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__result_topic = result_topic
+        self.__health_check_file = health_check_file
 
     def create_with_partitions(
         self,
@@ -188,7 +193,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             "calculated_max_concurrent_queries", calculated_max_concurrent_queries
         )
 
-        return ExecuteQuery(
+        strategy: ProcessingStrategy[KafkaPayload] = ExecuteQuery(
             self.__dataset,
             self.__entity_names,
             calculated_max_concurrent_queries,
@@ -196,6 +201,11 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
         )
+
+        if self.__health_check_file:
+            strategy = Healthcheck(self.__health_check_file, strategy)
+
+        return strategy
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
