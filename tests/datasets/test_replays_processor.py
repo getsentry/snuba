@@ -162,7 +162,9 @@ class ReplayEvent:
 
         return {
             "type": "replay_event",
-            "start_time": self.timestamp,
+            "start_time": self.timestamp
+            if isinstance(self.timestamp, (float, int))
+            else datetime.now().timestamp(),
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
