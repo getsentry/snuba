@@ -164,18 +164,24 @@ OVERRIDE_TEST_CASES = [
         id="non-matching tenant_id",
     ),
     pytest.param(
-        [("referrer_override", 1, {"referrer": "abcd"})],
+        [
+            (
+                "referrer_organization_override",
+                1,
+                {"referrer": "abcd", "organization_id": 456},
+            )
+        ],
         {"organization_id": 456, "referrer": "abcd"},
-        {"referrer_override": 1},
+        {"referrer_organization_override": 1},
         1,
     ),
     pytest.param(
         [
-            ("referrer_override", 1, {"referrer": "abcd"}),
+            ("referrer_project_override", 1, {"referrer": "abcd", "project_id": 134}),
             ("project_override", 4, {"project_id": 134}),
         ],
         {"organization_id": 456, "referrer": "abcd", "project_id": 134},
-        {"referrer_override": 1, "project_override": 4},
+        {"referrer_project_override": 1, "project_override": 4},
         1,
     ),
     pytest.param(

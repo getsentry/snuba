@@ -27,8 +27,6 @@ logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
 class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
-        # Define policy specific config definitions, these will be used along
-        # with the default definitions of the base class. (is_enforced, is_active)
         return [
             AllocationPolicyConfig(
                 name="concurrent_limit",
@@ -73,13 +71,6 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=-1,
                 param_types={"organization_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="referrer_override",
-                description="override concurrent limit for a specific referrer",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str},
             ),
         ]
 
