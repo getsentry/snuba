@@ -187,6 +187,9 @@ class TestEventsGroupAttributes(BaseApiTest):
             data_after["data"][0].items()
             == {
                 "e.event_id": self.event["event_id"],
+                # values joined from group_attributes below should be 'null' since we 'deleted' the
+                # existing group_attributes row that joins to the events but the projected values seems to
+                # take on some defaults that are non-null since the columns themselves are not nullable
                 "g.group_id": 0,  # 0 is a sentinel value indicating the left join on group_attributes returns no data
                 "g.group_status": 0,
                 "g.group_substatus": None,
