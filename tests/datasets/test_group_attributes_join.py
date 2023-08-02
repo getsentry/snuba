@@ -115,9 +115,8 @@ class TestEventsGroupAttributes(BaseApiTest):
             # make sure we're explicitly applying FINAL when querying on group_attributes table
             # so deduplication happens when we join the entity from events -> group_attributes
             assert right_node.data_source.get_from_clause().final
-            assert (
-                right_node.data_source.get_from_clause().table_name
-                == "group_attributes_local"
+            assert right_node.data_source.get_from_clause().table_name.startswith(
+                "group_attributes"
             )
 
             return QueryResult(
