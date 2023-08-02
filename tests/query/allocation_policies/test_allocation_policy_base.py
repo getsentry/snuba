@@ -17,6 +17,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.state import set_config
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
 
 
@@ -55,13 +56,21 @@ def test_passthrough_allows_queries() -> None:
     )
 
 
-def test_raises_on_false_can_run() -> None:
-    class RejectingEverythingAllocationPolicy(PassthroughPolicy):
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(can_run=False, max_threads=1, explanation={})
+class RejectingEverythingAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(can_run=False, max_threads=10, explanation={})
 
+
+class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+
+
+def test_raises_on_false_can_run() -> None:
     with pytest.raises(AllocationPolicyViolation):
         RejectingEverythingAllocationPolicy(
             StorageKey("something"), [], default_config_overrides={}
@@ -429,3 +438,61 @@ def test_is_not_active() -> None:
     # Should not error anymore since private methods are not called due to inactivity
     policy.get_quota_allowance(tenant_ids, "deadbeef")
     policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+
+
+@pytest.mark.redis_db
+def test_is_not_enforced() -> None:
+    MAX_THREADS = 100
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {
+            "my_param_config": 420,
+            "is_active": 1,
+            "is_enforced": 1,
+            "max_threads": MAX_THREADS,
+        },
+    )
+    throttle_policy = ThrottleEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1, "max_threads": MAX_THREADS},
+    )
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    with pytest.raises(AllocationPolicyViolation):
+        reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+
+    reject_policy.set_config_value(config_key="is_enforced", value=0)
+    # policy not enforced so we don't reject the query
+    reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+
+    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
+    throttle_policy.set_config_value(config_key="is_enforced", value=0)
+    assert (
+        throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads
+        == MAX_THREADS
+    )
+
+    rejected_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_rejected"
+    )
+    assert len(rejected_metrics) == 2
+    assert (
+        rejected_metrics[0].tags["policy_class"]
+        == "RejectingEverythingAllocationPolicy"
+    )
+    assert rejected_metrics[0].tags["is_enforced"] == "True"
+    assert rejected_metrics[1].tags["is_enforced"] == "False"
+    throttled_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_throttled"
+    )
+    assert len(throttled_metrics) == 2, throttled_metrics
+    assert (
+        throttled_metrics[0].tags["policy_class"]
+        == "ThrottleEverythingAllocationPolicy"
+    )
+    assert throttled_metrics[0].tags["is_enforced"] == "True"
+    assert throttled_metrics[1].tags["is_enforced"] == "False"

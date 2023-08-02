@@ -16,6 +16,7 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
+from py._path.local import LocalPath
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -37,7 +38,7 @@ commit_codec = CommitCodec()
 
 
 @pytest.mark.redis_db
-def test_scheduler_consumer() -> None:
+def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
@@ -92,6 +93,7 @@ def test_scheduler_consumer() -> None:
         None,
         None,
         metrics_backend,
+        health_check_file=(tmpdir / "health.txt").strpath,
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -133,6 +135,7 @@ def test_scheduler_consumer() -> None:
 
     scheduler._shutdown()
 
+    assert (tmpdir / "health.txt").check()
     assert mock_scheduler_producer.produce.call_count == 2
 
     settings.TOPIC_PARTITION_COUNTS = {}

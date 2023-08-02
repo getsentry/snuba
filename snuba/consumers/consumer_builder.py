@@ -76,6 +76,7 @@ class ConsumerBuilder:
         enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -146,6 +147,7 @@ class ConsumerBuilder:
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
+        self.health_check_file = health_check_file
 
         self.dlq_producer: Optional[KafkaProducer] = None
 
@@ -239,6 +241,7 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
+            health_check_file=self.health_check_file,
         )
 
         if self.__profile_path is not None:

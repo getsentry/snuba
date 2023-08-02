@@ -24,6 +24,7 @@ from snuba.processor import (
     InsertBatch,
     ProcessedMessage,
     _as_dict_safe,
+    _collapse_uint32,
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
@@ -141,6 +142,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             metrics.increment("group_ids_exceeded_limit")
 
         processed["group_ids"] = group_ids[:GROUP_IDS_LIMIT]
+
         return processed
 
     def _process_tags(
@@ -472,4 +474,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # the following operation modifies the event_dict and is therefore *not* order-independent
         self._process_contexts_and_user(processed, event_dict)
 
-        return InsertBatch([processed], None)
+        try:
+            raw_received = _collapse_uint32(int(event_dict["data"]["received"]))
+            assert raw_received is not None
+            received = datetime.utcfromtimestamp(raw_received)
+            return InsertBatch([processed], received)
+        except (KeyError, AssertionError) as err:
+            logger.exception(err)
+            return InsertBatch([processed], None)

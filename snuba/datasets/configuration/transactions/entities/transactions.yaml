@@ -126,6 +126,7 @@ schema:
     },
     { name: app_start_type, type: String },
     { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
   ]
 
 storages:
