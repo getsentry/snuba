@@ -106,19 +106,6 @@ query_processors:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
-  - processor: ReferrerRateLimiterProcessor
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
 
 validators:
   - validator: EntityRequiredColumnValidator
