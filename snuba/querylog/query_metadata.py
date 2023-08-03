@@ -108,6 +108,9 @@ ERROR_CODE_MAPPINGS = {
 
 
 def get_request_status(cause: Exception | None = None) -> Status:
+    import pdb
+
+    pdb.set_trace()
     slo_status: RequestStatus
     if cause is None:
         slo_status = RequestStatus.SUCCESS

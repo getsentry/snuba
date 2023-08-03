@@ -1,0 +1,83 @@
+Volo Kluev
+  1 day ago
+  Does anyone know where the snuba.api.query.count metric is emitted? https://app.datadoghq.com/s/FH6-Y3/39d-tig-cy8
+  allocation policy violations would currently be classified as against the SLO (which they should not be). I know this metric and the request_status tag is used to calculate the SLo but I'm not sure where I'm supposed to make the change to actually change it
+
+  Error Rate with Status by Dataset
+  Added by Datadog (24 kB)
+  https://app.datadoghq.com/s/FH6-Y3/39d-tig-cy8
+
+
+
+
+
+
+
+
+  Rahul Saini
+  :spiral_calendar_pad:  1 day ago
+  This metric is from a timer thing
+
+
+  Rahul Saini
+  :spiral_calendar_pad:  24 hours ago
+  I remember figuring this metric out once, lemme check
+
+
+  Rahul Saini
+  :spiral_calendar_pad:  24 hours ago
+  https://github.com/getsentry/snuba/blob/master/snuba/web/views.py#L402
+  views.py
+  @util.time_request("query")
+  <https://github.com/getsentry/snuba|getsentry/snuba>getsentry/snuba | Added by GitHub
+
+
+  Rahul Saini
+  :spiral_calendar_pad:  24 hours ago
+  ^This here spawns the timer object passed in (edited)
+
+
+  Rahul Saini
+  :spiral_calendar_pad:  24 hours ago
+  https://github.com/getsentry/snuba/blob/master/snuba/querylog/__init__.py#L65
+  __init__.py
+      timer.send_metrics_to(
+      <https://github.com/getsentry/snuba|getsentry/snuba>getsentry/snuba | Added by GitHub
+
+
+      Rahul Saini
+      :spiral_calendar_pad:  24 hours ago
+      ^After the timer object goes through the pipeline collecting timer.mark() stuff it finally sends ddog metric here (edited)
+
+
+      Rahul Saini
+      :spiral_calendar_pad:  24 hours ago
+      then ddog gives you all those functions like count, percentiles, etc
+      image.png
+
+       image.png
+
+
+
+
+       Volo Kluev
+         24 hours ago
+         awesome, thank you Rahul!
+         :hamster_break-dance:
+         1
+
+
+
+         Evan Hicks
+         :spiral_calendar_pad:  7 hours ago
+         It’s actually veneur that gives count, p75 etc. but otherwise that’s accurate. Also, I think you would want to add your error status here if you want your status to not be counted against the SLO: https://github.com/getsentry/snuba/blob/master/snuba/querylog/query_metadata.py#L87
+         query_metadata.py
+         SLO_FOR = {
+         <https://github.com/getsentry/snuba|getsentry/snuba>getsentry/snuba | Added by GitHub
+
+
+         Evan Hicks
+         :spiral_calendar_pad:  7 hours ago
+         This is where the statuses are parsed: https://github.com/getsentry/snuba/blob/master/snuba/querylog/query_metadata.py#L110
+         query_metadata.py
+         def get_request_status(cause: Exception | None = None) -> Status:
