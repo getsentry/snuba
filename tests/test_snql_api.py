@@ -536,6 +536,37 @@ class TestSnQLApi(BaseApiTest):
         assert data["meta"][1] == {"name": "tn", "type": "LowCardinality(String)"}
         assert data["meta"][2] == {"name": "equation[0]", "type": "UInt64"}
 
+    def test_transaction_alloc_policy(self) -> None:
+        from snuba.query.allocation_policies import AllocationPolicy
+
+        policy = AllocationPolicy.get_from_name(
+            "ConcurrentRateLimitAllocationPolicy"
+        ).from_kwargs(
+            storage_key="transactions", required_tenant_types=["organization_id"]
+        )
+        policy.set_config_value("is_enforced", True)
+        policy.set_config_value("concurrent_limit", 0)
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (transactions)
+                    SELECT count() AS `count`
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    AND finish_ts >= toDateTime('{self.base_time.isoformat()}')
+                    AND finish_ts < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 1 BY count""",
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert "LIMIT 1 BY _snuba_count" in data["sql"]
+
     def test_alias_limitby_aggregator(self) -> None:
         response = self.post(
             "/events/snql",
