@@ -1,6 +1,6 @@
 import click
 
-from snuba.celery import celery_app
+from snuba.workers import celery_app
 
 
 @click.command()

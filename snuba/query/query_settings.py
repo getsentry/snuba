@@ -60,6 +60,10 @@ class QuerySettings(ABC):
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         pass
 
+    @abstractmethod
+    def get_asynchronous(self) -> bool:
+        pass
+
 
 # TODO: I don't like that there are two different classes for the same thing
 # this could probably be replaces with a `source` attribute on the class
@@ -79,6 +83,7 @@ class HTTPQuerySettings(QuerySettings):
         # TODO: is this flag still relevant?
         legacy: bool = False,
         referrer: str = "unknown",
+        asynchronous: bool = False,
     ) -> None:
         super().__init__()
         self.__turbo = turbo
@@ -90,6 +95,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__resource_quota: Optional[ResourceQuota] = None
         self.__clickhouse_settings: MutableMapping[str, Any] = {}
         self.referrer = referrer
+        self.__asynchronous = asynchronous
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -123,6 +129,9 @@ class HTTPQuerySettings(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
+
+    def get_asynchronous(self) -> bool:
+        return self.__asynchronous
 
 
 class SubscriptionQuerySettings(QuerySettings):
@@ -187,3 +196,6 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
+
+    def get_asynchronous(self) -> bool:
+        return False

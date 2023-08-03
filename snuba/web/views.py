@@ -31,6 +31,7 @@ import sentry_sdk
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from celery.result import AsyncResult
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from werkzeug import Response as WerkzeugResponse
@@ -75,6 +76,7 @@ from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
+from snuba.workers.tasks import send_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -409,10 +411,31 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
+        if body["asynchronous"]:
+            result = send_query.delay(
+                dataset, body, timer, http_request.referrer or "<unknown>"
+            )
+            return Response(
+                json.dumps({"queryID": result.id}, default=str),
+                200,
+                {"Content-Type": "application/json"},
+            )
         _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
+
+
+@application.route("/poll_query/<query_id>")
+def poll_snql_query(query_id: str) -> Response:
+    query_result: AsyncResult[Any] = AsyncResult(query_id)
+    result = {
+        "task_id": query_id,
+        "task_status": query_result.status,
+        "task_result": query_result.result,
+    }
+
+    return Response(json.dumps(result), 200, {"Content-Type": "application/json"})
 
 
 @with_span()

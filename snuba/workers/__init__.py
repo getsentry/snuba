@@ -1,12 +1,6 @@
-from typing import Any, Dict
-
-from flask import Response
-
 from celery import Celery
+
 from snuba import settings
-from snuba.datasets.dataset import Dataset
-from snuba.utils.metrics.timer import Timer
-from snuba.web.views import dataset_query
 
 
 def init_celery() -> Celery:
@@ -29,12 +23,10 @@ def init_celery() -> Celery:
     celery_app = Celery(__name__)
     celery_app.conf.broker_url = redis_url
     celery_app.conf.result_backend = redis_url
+    celery_app.conf.task_track_started = True
+    celery_app.autodiscover_tasks(["snuba.workers"])
+    celery_app.conf.update(accept_content=["pickle", "json"])
     return celery_app
 
 
 celery_app = init_celery()
-
-
-@celery_app.task
-def send_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
-    return dataset_query(dataset, body, timer)
