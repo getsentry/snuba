@@ -35,6 +35,7 @@ schema:
     ]
   local_table_name: group_attributes_local
   dist_table_name: group_attributes_dist
+  not_deleted_mandatory_condition: deleted
 
 allocation_policies:
   - name: PassthroughPolicy
@@ -44,6 +45,7 @@ allocation_policies:
 
 query_processors:
   - processor: TableRateLimit
+  - processor: ConsistencyEnforcerProcessor
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
