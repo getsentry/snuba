@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 import pytest
 
@@ -100,7 +100,9 @@ class ReplayEvent:
             sdk_version="0.9.0",
         )
 
-    def serialize(self) -> Mapping[Any, Any]:
+    def serialize(
+        self, header_overrides: Optional[dict[Any, Any]] = None
+    ) -> Mapping[Any, Any]:
         replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
@@ -160,11 +162,12 @@ class ReplayEvent:
             "extra": {},
         }
 
+        start_time = datetime.now().timestamp()
+        if header_overrides and header_overrides["start_time"]:
+            start_time = header_overrides["start_time"]
         return {
             "type": "replay_event",
-            "start_time": self.timestamp
-            if isinstance(self.timestamp, (float, int))
-            else datetime.now().timestamp(),
+            "start_time": start_time,
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
@@ -247,7 +250,9 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        timestamp = int(datetime.now(tz=timezone.utc).timestamp())
+        header_overrides = {
+            "start_time": int(datetime.now(tz=timezone.utc).timestamp())
+        }
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
@@ -261,8 +266,8 @@ class TestReplaysProcessor:
                 "8bea4461d8b944f393c15a3cb1c4169a",
             ],
             segment_id=0,
-            timestamp=timestamp,
-            replay_start_timestamp=timestamp,
+            timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
+            replay_start_timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
             platform="python",
             dist="",
             urls=["http://127.0.0.1:8001"],
@@ -286,9 +291,10 @@ class TestReplaysProcessor:
             sdk_version="0.9.0",
         )
         assert ReplaysProcessor().process_message(
-            message.serialize(), meta
+            message.serialize(header_overrides), meta
         ) == InsertBatch(
-            [message.build_result(meta)], datetime.utcfromtimestamp(timestamp)
+            [message.build_result(meta)],
+            datetime.utcfromtimestamp(header_overrides["start_time"]),
         )
 
     def test_process_message_mismatched_types(self) -> None:
