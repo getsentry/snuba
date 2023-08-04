@@ -31,7 +31,7 @@ from snuba.processor import InsertBatch
 @dataclass
 class ReplayEvent:
     replay_id: str
-    replay_type: str
+    replay_type: str | None
     event_hash: str | None
     error_sample_rate: float | None
     session_sample_rate: float | None
@@ -67,18 +67,18 @@ class ReplayEvent:
     def empty_set(cls) -> ReplayEvent:
         return cls(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            replay_type="session",
+            timestamp=int(datetime.now(timezone.utc).timestamp()),
+            segment_id=None,
+            replay_type=None,
             event_hash=None,
-            error_sample_rate=0,
-            session_sample_rate=0,
+            error_sample_rate=None,
+            session_sample_rate=None,
             title=None,
             error_ids=[],
             trace_ids=[],
-            segment_id=None,
-            timestamp=int(datetime.now(timezone.utc).timestamp()),
             replay_start_timestamp=None,
             platform=None,
-            dist="",
+            dist=None,
             urls=[],
             is_archived=None,
             os_name=None,
@@ -94,10 +94,10 @@ class ReplayEvent:
             user_email=None,
             ipv4=None,
             ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
+            environment=None,
+            release=None,
+            sdk_name=None,
+            sdk_version=None,
         )
 
     def serialize(self) -> Mapping[Any, Any]:
@@ -297,8 +297,8 @@ class TestReplaysProcessor:
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="other",
             event_hash=None,
-            error_sample_rate=None,
-            session_sample_rate=None,
+            error_sample_rate=0,
+            session_sample_rate=0,
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
@@ -336,9 +336,9 @@ class TestReplaysProcessor:
         )
         assert isinstance(processed_message, InsertBatch)
         assert processed_message.rows[0]["urls"] == ["http://127.0.0.1:8001", "0"]
-        assert processed_message.rows[0]["replay_type"] is None
-        assert processed_message.rows[0]["error_sample_rate"] is None
-        assert processed_message.rows[0]["session_sample_rate"] is None
+        assert processed_message.rows[0]["replay_type"] == ""
+        assert processed_message.rows[0]["error_sample_rate"] == 0.0
+        assert processed_message.rows[0]["session_sample_rate"] == 0.0
         assert processed_message.rows[0]["platform"] == "0"
         assert processed_message.rows[0]["dist"] == "0"
         assert processed_message.rows[0]["user_name"] == "0"
@@ -437,10 +437,29 @@ class TestReplaysProcessor:
 
         expected = message.build_result(meta)
         assert isinstance(expected, dict)  # required for type checker
-        expected_event_hash = expected.pop("event_hash")
+        assert received_event_hash != expected.pop("event_hash")  # hash is random
 
-        assert received == expected  # all fields are identical except event_hash
-        assert received_event_hash != expected_event_hash  # hash is random
+        assert received["replay_type"] == ""
+        assert received["error_sample_rate"] == 0.0
+        assert received["session_sample_rate"] == 0.0
+        assert received["platform"] == ""
+        assert received["dist"] == ""
+        assert received["user_name"] == ""
+        assert received["user_id"] == ""
+        assert received["user_email"] == ""
+        assert received["os_name"] == ""
+        assert received["os_version"] == ""
+        assert received["browser_name"] == ""
+        assert received["browser_version"] == ""
+        assert received["device_name"] == ""
+        assert received["device_brand"] == ""
+        assert received["device_family"] == ""
+        assert received["device_model"] == ""
+        assert received["environment"] == ""
+        assert received["release"] == ""
+        assert received["sdk_name"] == ""
+        assert received["sdk_version"] == ""
+        assert received["replay_start_timestamp"] is None
 
     def test_process_message_invalid_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
