@@ -165,6 +165,7 @@ class ReplayEvent:
         headers = {
             "start_time": datetime.now().timestamp(),
             "type": "replay_event",
+            "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
         }
