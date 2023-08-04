@@ -144,3 +144,15 @@ def test_tenant_selection(policy):
     )
     with pytest.raises(AllocationPolicyViolation):
         policy._get_tenant_key_and_value({})
+
+
+def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+    ## should not be blocked because the subscriptions_executor referrer is not rate limited
+    try:
+        for i in range(MAX_CONCURRENT_QUERIES * 2):
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "subscriptions_executor", "project_id": 1234},
+                query_id=f"abc{i}",
+            )
+    except AllocationPolicyViolation:
+        pytest.fail("should not have been blocked")

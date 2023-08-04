@@ -24,6 +24,12 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
+_PASS_THROUGH_REFERRERS = set(
+    [
+        "subscriptions_executor",
+    ]
+)
+
 
 class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -118,6 +124,12 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
+        if tenant_ids.get("referrer", "no_referrer") in _PASS_THROUGH_REFERRERS:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "pass_through"},
+            )
         tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         within_rate_limit, why = self._is_within_rate_limit(
             query_id,
