@@ -248,6 +248,7 @@ def test_apply_overrides(
         )
     assert e.value.explanation["overrides"] == expected_overrides
 
+
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     ## should not be blocked because the subscriptions_executor referrer is not rate limited
     try:
@@ -258,4 +259,3 @@ def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
             )
     except AllocationPolicyViolation:
         pytest.fail("should not have been blocked")
-
