@@ -487,3 +487,9 @@ join_relationships:
     columns:
       - [project_id, project_id]
       - [group_id, group_id]
+  attributes:
+    rhs_entity: group_attributes
+    join_type: left
+    columns:
+      - [project_id, project_id]
+      - [group_id, group_id]
