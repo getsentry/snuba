@@ -149,6 +149,12 @@ logger = logging.getLogger(__name__)
     "--max-poll-interval-ms",
     type=int,
 )
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
 def consumer(
     *,
     storage_name: str,
@@ -176,6 +182,7 @@ def consumer(
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
+    health_check_file: Optional[str] = None,
 ) -> None:
 
     setup_logging(log_level)
@@ -238,6 +245,7 @@ def consumer(
         slice_id=slice_id,
         join_timeout=join_timeout,
         max_poll_interval_ms=max_poll_interval_ms,
+        health_check_file=health_check_file,
         enforce_schema=enforce_schema,
     )
 
