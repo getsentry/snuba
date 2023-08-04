@@ -8,7 +8,11 @@ readiness_state: complete
 schema:
   columns:
     [
-      { name: browser_name, type: String },
+      {
+        name: browser_name,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
       { name: browser_version, type: String },
       { name: click_alt, type: String },
       { name: click_aria_label, type: String },
@@ -24,20 +28,36 @@ schema:
       {
         name: click_role,
         type: String,
-        args: { schema_modifiers: [low_cardiality] },
+        args: { schema_modifiers: [low_cardinality] },
       },
       {
         name: click_tag,
         type: String,
-        args: { schema_modifiers: [low_cardiality] },
+        args: { schema_modifiers: [low_cardinality] },
       },
       { name: click_testid, type: String },
       { name: click_text, type: String },
       { name: click_title, type: String },
-      { name: device_brand, type: String },
-      { name: device_family, type: String },
-      { name: device_model, type: String },
-      { name: device_name, type: String },
+      {
+        name: device_brand,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
+      {
+        name: device_family,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
+      {
+        name: device_model,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
+      {
+        name: device_name,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
       { name: dist, type: String },
       { name: environment, type: String },
       { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
@@ -47,10 +67,18 @@ schema:
       { name: ip_address_v6, type: IPv6 },
       { name: is_archived, type: UInt, args: { size: 8 } },
       { name: offset, type: UInt, args: { size: 64 } },
-      { name: os_name, type: String },
+      {
+        name: os_name,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
       { name: os_version, type: String },
       { name: partition, type: UInt, args: { size: 16 } },
-      { name: platform, type: String },
+      {
+        name: platform,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
       { name: project_id, type: UInt, args: { size: 64 } },
       { name: release, type: String },
       { name: replay_id, type: UUID },
@@ -65,8 +93,16 @@ schema:
         args: { schema_modifiers: [low_cardinality] },
       },
       { name: retention_days, type: UInt, args: { size: 16 } },
-      { name: sdk_name, type: String },
-      { name: sdk_version, type: String },
+      {
+        name: sdk_name,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
+      {
+        name: sdk_version,
+        type: String,
+        args: { schema_modifiers: [low_cardinality] },
+      },
       {
         name: segment_id,
         type: UInt,
