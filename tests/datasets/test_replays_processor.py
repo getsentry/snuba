@@ -162,16 +162,16 @@ class ReplayEvent:
             "extra": {},
         }
 
-        start_time = datetime.now().timestamp()
-        if header_overrides and header_overrides["start_time"]:
-            start_time = header_overrides["start_time"]
-        return {
+        headers = {
+            "start_time": datetime.now().timestamp(),
             "type": "replay_event",
-            "start_time": start_time,
-            "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
-            "payload": list(bytes(json.dumps(replay_event).encode())),
+        }
+        headers.update(header_overrides or {})
+        return {
+            **headers,
+            **{"payload": list(bytes(json.dumps(replay_event).encode()))},
         }
 
     def _user_field(self) -> Any | None:
