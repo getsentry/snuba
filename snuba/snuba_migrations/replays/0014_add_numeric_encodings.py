@@ -51,8 +51,8 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 columns: List[Column[Modifiers]] = [
-    Column("count_dead_clicks", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
-    Column("count_rage_clicks", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
+    Column("click_is_dead", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
+    Column("click_is_rage", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
     Column("error_sample_rate", Float(64, Modifiers(codecs=["Gorilla", "LZ4"]))),
     Column("is_archived", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
     Column("offset", UInt(8, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
