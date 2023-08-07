@@ -65,18 +65,21 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["urls"] = self.__extract_urls(replay_event)
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
         processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
-        processed["release"] = maybe(to_string, replay_event.get("release"))
-        processed["environment"] = maybe(to_string, replay_event.get("environment"))
-        processed["dist"] = maybe(to_string, replay_event.get("dist"))
-        processed["platform"] = maybe(to_string, replay_event["platform"])
-        processed["replay_type"] = maybe(
-            to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
+        processed["release"] = default(
+            str, maybe(to_string, replay_event.get("release"))
         )
-
-        # Archived can only be 1 or null.
-        processed["is_archived"] = (
-            1 if replay_event.get("is_archived") is True else None
+        processed["environment"] = default(
+            str, maybe(to_string, replay_event.get("environment"))
         )
+        processed["dist"] = default(str, maybe(to_string, replay_event.get("dist")))
+        processed["platform"] = default(str, maybe(to_string, replay_event["platform"]))
+        processed["replay_type"] = default(
+            str,
+            maybe(
+                to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
+            ),
+        )
+        processed["is_archived"] = default(int, replay_event.get("is_archived"))
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -110,9 +113,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         # "extract_user" calls "_unicodify" so we can be reasonably sure it has coerced the
         # strings correctly.
         extract_user(user_data, user_dict)
-        processed["user_name"] = user_data["username"]
-        processed["user_id"] = user_data["user_id"]
-        processed["user_email"] = user_data["email"]
+        processed["user_name"] = default(str, user_data["username"])
+        processed["user_id"] = default(str, user_data["user_id"])
+        processed["user_email"] = default(str, user_data["email"])
 
         ip_address = _ensure_valid_ip(user_data["ip_address"])
         if ip_address:
@@ -130,32 +133,46 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if not contexts:
             return None
 
-        os_context = contexts.get("os", {})
-        processed["os_name"] = maybe(to_string, os_context.get("name"))
-        processed["os_version"] = maybe(to_string, os_context.get("version"))
-
         browser_context = contexts.get("browser", {})
-        processed["browser_name"] = maybe(to_string, browser_context.get("name"))
-        processed["browser_version"] = maybe(to_string, browser_context.get("version"))
-
         device_context = contexts.get("device", {})
-        processed["device_name"] = maybe(to_string, device_context.get("name"))
-        processed["device_brand"] = maybe(to_string, device_context.get("brand"))
-        processed["device_family"] = maybe(to_string, device_context.get("family"))
-        processed["device_model"] = maybe(to_string, device_context.get("model"))
-
+        os_context = contexts.get("os", {})
         replay = contexts.get("replay", {})
-        processed["error_sample_rate"] = maybe(float, replay.get("error_sample_rate"))
-        processed["session_sample_rate"] = maybe(
-            float, replay.get("session_sample_rate")
+
+        processed["os_name"] = default(str, maybe(to_string, os_context.get("name")))
+        processed["os_version"] = default(
+            str, maybe(to_string, os_context.get("version"))
+        )
+        processed["browser_name"] = default(
+            str, maybe(to_string, browser_context.get("name"))
+        )
+        processed["browser_version"] = default(
+            str, maybe(to_string, browser_context.get("version"))
+        )
+        processed["device_name"] = default(
+            str, maybe(to_string, device_context.get("name"))
+        )
+        processed["device_brand"] = default(
+            str, maybe(to_string, device_context.get("brand"))
+        )
+        processed["device_family"] = default(
+            str, maybe(to_string, device_context.get("family"))
+        )
+        processed["device_model"] = default(
+            str, maybe(to_string, device_context.get("model"))
+        )
+        processed["error_sample_rate"] = default(
+            float, maybe(float, replay.get("error_sample_rate"))
+        )
+        processed["session_sample_rate"] = default(
+            float, maybe(float, replay.get("session_sample_rate"))
         )
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         sdk = replay_event.get("sdk", None) or {}
-        processed["sdk_name"] = maybe(to_string, sdk.get("name"))
-        processed["sdk_version"] = maybe(to_string, sdk.get("version"))
+        processed["sdk_name"] = default(str, maybe(to_string, sdk.get("name")))
+        processed["sdk_version"] = default(str, maybe(to_string, sdk.get("version")))
 
     def _process_kafka_metadata(
         self, metadata: KafkaMessageMetadata, processed: MutableMapping[str, Any]

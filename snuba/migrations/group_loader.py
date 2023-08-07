@@ -172,6 +172,9 @@ class ReplaysLoader(DirectoryLoader):
             "0009_add_dom_index_columns",
             "0010_add_nullable_columns",
             "0011_add_is_dead_rage",
+            "0012_remove_nullabllity",
+            "0013_add_low_cardinality_codecs",
+            "0014_add_numeric_encodings",
         ]
 
 
