@@ -249,6 +249,27 @@ def test_apply_overrides(
     assert e.value.explanation["overrides"] == expected_overrides
 
 
+@pytest.mark.redis_db
+def test_override_isolation(
+    policy: ConcurrentRateLimitAllocationPolicy,
+) -> None:
+    override_concurrent_limit = MAX_CONCURRENT_QUERIES // 2
+    policy.set_config_value(
+        "referrer_project_override",
+        override_concurrent_limit,
+        {"project_id": 1234, "referrer": "test"},
+    )
+    for i in range(MAX_CONCURRENT_QUERIES):
+        policy.get_quota_allowance(
+            tenant_ids={"project_id": 1234, "referrer": "a_different_referrer"},
+            query_id=str(i),
+        )
+    # query the override referrer, it should not reject
+    policy.get_quota_allowance(
+        tenant_ids={"project_id": 1234, "referrer": "test"}, query_id="uniq_string"
+    )
+
+
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     ## should not be blocked because the subscriptions_executor referrer is not rate limited
     try:
