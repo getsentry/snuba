@@ -297,8 +297,8 @@ class TestReplaysProcessor:
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="other",
             event_hash=None,
-            error_sample_rate=0,
-            session_sample_rate=0,
+            error_sample_rate=None,
+            session_sample_rate=None,
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
