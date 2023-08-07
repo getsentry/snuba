@@ -173,7 +173,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         )
 
     def _get_rate_limit_params(
-        self, tenant_ids
+        self, tenant_ids: dict[str, str | int]
     ) -> tuple[RateLimitParameters, dict[str, int]]:
         tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         overrides = self._get_overrides(tenant_ids)
