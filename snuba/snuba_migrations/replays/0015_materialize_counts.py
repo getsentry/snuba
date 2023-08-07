@@ -55,10 +55,10 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
 columns: List[Tuple[str, Column[Modifiers]]] = [
     (
         "click_is_rage",
-        Column("count_errors", UInt(8, Modifiers(materialized="length(error_ids)"))),
+        Column("count_errors", UInt(16, Modifiers(materialized="length(error_ids)"))),
     ),
     (
         "count_errors",
-        Column("count_urls", UInt(8, Modifiers(materialized="length(urls)"))),
+        Column("count_urls", UInt(16, Modifiers(materialized="length(urls)"))),
     ),
 ]
