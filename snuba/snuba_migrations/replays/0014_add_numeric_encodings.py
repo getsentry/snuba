@@ -57,7 +57,7 @@ columns: List[Column[Modifiers]] = [
     Column("is_archived", UInt(8, Modifiers(codecs=["Delta", "LZ4"]))),
     Column("offset", UInt(8, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     Column("project_id", UInt(64, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
-    Column("segment_id", UInt(64, Modifiers(codecs=["Delta", "LZ4"]))),
+    Column("segment_id", UInt(64, Modifiers(codecs=["T64", "LZ4"]))),
     Column("session_sample_rate", Float(64, Modifiers(codecs=["Gorilla", "LZ4"]))),
     Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
 ]
