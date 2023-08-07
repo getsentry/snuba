@@ -175,6 +175,7 @@ class ReplaysLoader(DirectoryLoader):
             "0012_remove_nullabllity",
             "0013_add_low_cardinality_codecs",
             "0014_add_numeric_encodings",
+            "0015_materialize_counts",
         ]
 
 

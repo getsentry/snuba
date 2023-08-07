@@ -17,6 +17,8 @@ schema:
     { name: click_testid, type: String },
     { name: click_text, type: String },
     { name: click_title, type: String },
+    { name: count_errors, type: UInt, args: { size: 8 } },
+    { name: count_urls, type: UInt, args: { size: 8 } },
     { name: device_brand, type: String },
     { name: device_family, type: String },
     { name: device_model, type: String },
