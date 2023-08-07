@@ -172,6 +172,26 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             "Queries must have a project id or organization id"
         )
 
+    def _get_rate_limit_params(
+        self, tenant_ids
+    ) -> tuple[RateLimitParameters, dict[str, int]]:
+        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
+        overrides = self._get_overrides(tenant_ids)
+        concurrent_limit = self.get_config_value("concurrent_limit")
+        if overrides:
+            concurrent_limit = min(overrides.values())
+            tenant_value = min(overrides, key=overrides.get)  # type: ignore
+
+        return (
+            RateLimitParameters(
+                _RATE_LIMIT_NAME,
+                bucket=str(tenant_value),
+                per_second_limit=None,
+                concurrent_limit=concurrent_limit,
+            ),
+            overrides,
+        )
+
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -181,21 +201,8 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
             )
-        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
-        overrides = self._get_overrides(tenant_ids)
-        concurrent_limit = self.get_config_value("concurrent_limit")
-        if overrides:
-            concurrent_limit = min(overrides.values())
-            tenant_value = min(overrides, key=overrides.get)  # type: ignore
-        within_rate_limit, why = self._is_within_rate_limit(
-            query_id,
-            RateLimitParameters(
-                _RATE_LIMIT_NAME,
-                bucket=str(tenant_value),
-                per_second_limit=None,
-                concurrent_limit=concurrent_limit,
-            ),
-        )
+        rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
+        within_rate_limit, why = self._is_within_rate_limit(query_id, rate_limit_params)
         return QuotaAllowance(
             within_rate_limit, self.max_threads, {"reason": why, "overrides": overrides}
         )
@@ -206,18 +213,5 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
-        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
-        # TODO: put all this selection into its own function
-        overrides = self._get_overrides(tenant_ids)
-        concurrent_limit = self.get_config_value("concurrent_limit")
-        if overrides:
-            concurrent_limit = min(overrides.values())
-            tenant_value = min(overrides, key=overrides.get)  # type: ignore
-
-        rate_limit_params = RateLimitParameters(
-            _RATE_LIMIT_NAME,
-            bucket=str(tenant_value),
-            per_second_limit=None,
-            concurrent_limit=concurrent_limit,
-        )
+        rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
