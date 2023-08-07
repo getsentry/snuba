@@ -152,7 +152,7 @@ OVERRIDE_TEST_CASES = [
     pytest.param(
         [("organization_override", 1, {"organization_id": 123})],
         {"organization_id": 123},
-        {"organization_override": 1},
+        {"organization_id__123": 1},
         1,
         id="organization_override",
     ),
@@ -172,7 +172,7 @@ OVERRIDE_TEST_CASES = [
             )
         ],
         {"organization_id": 456, "referrer": "abcd"},
-        {"referrer_organization_override": 1},
+        {"organization_id__456|referrer__abcd": 1},
         1,
     ),
     pytest.param(
@@ -181,7 +181,7 @@ OVERRIDE_TEST_CASES = [
             ("project_override", 4, {"project_id": 134}),
         ],
         {"organization_id": 456, "referrer": "abcd", "project_id": 134},
-        {"referrer_project_override": 1, "project_override": 4},
+        {"project_id__134|referrer__abcd": 1, "project_id__134": 4},
         1,
     ),
     pytest.param(
@@ -193,7 +193,7 @@ OVERRIDE_TEST_CASES = [
             ),
         ],
         {"organization_id": 123, "referrer": "abcd", "project_id": 134},
-        {"referrer_organization_override": 1},
+        {"organization_id__123|referrer__abcd": 1},
         1,
         id="referrer_organization_override",
     ),
@@ -206,7 +206,7 @@ OVERRIDE_TEST_CASES = [
             ),
         ],
         {"organization_id": 123, "referrer": "abcd", "project_id": 456},
-        {"referrer_project_override": 1},
+        {"project_id__456|referrer__abcd": 1},
         1,
         id="referrer_organization_override",
     ),
@@ -219,7 +219,7 @@ OVERRIDE_TEST_CASES = [
             ),
         ],
         {"organization_id": 123, "referrer": "abcd", "project_id": 456},
-        {"referrer_project_override": MAX_CONCURRENT_QUERIES * 2},
+        {"project_id__456|referrer__abcd": MAX_CONCURRENT_QUERIES * 2},
         MAX_CONCURRENT_QUERIES * 2,
         id="override to a greater number",
     ),
@@ -253,21 +253,57 @@ def test_apply_overrides(
 def test_override_isolation(
     policy: ConcurrentRateLimitAllocationPolicy,
 ) -> None:
-    override_concurrent_limit = MAX_CONCURRENT_QUERIES // 2
+    override_concurrent_limit = 1
+    project_id = 1234
+    overridden_referrer = "overridden_referrer"
     policy.set_config_value(
         "referrer_project_override",
         override_concurrent_limit,
-        {"project_id": 1234, "referrer": "test"},
+        {"project_id": project_id, "referrer": overridden_referrer},
     )
     for i in range(MAX_CONCURRENT_QUERIES):
         policy.get_quota_allowance(
-            tenant_ids={"project_id": 1234, "referrer": "a_different_referrer"},
+            tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
             query_id=str(i),
         )
-    # query the override referrer, it should not reject
-    policy.get_quota_allowance(
-        tenant_ids={"project_id": 1234, "referrer": "test"}, query_id="uniq_string"
+    # query the override referrer, it should not reject because overrides are counted on their own
+    try:
+        policy.get_quota_allowance(
+            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+            query_id="uniq_string_1",
+        )
+    except AllocationPolicyViolation:
+        pytest.fail("overridden limits should not be affected by defaults")
+
+    # finish the overridden referrer query, make sure another one can run
+    policy.update_quota_balance(
+        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+        query_id="uniq_string_1",
+        result_or_error=_RESULT_SUCCESS,
     )
+    try:
+        policy.get_quota_allowance(
+            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+            query_id="uniq_string_2",
+        )
+    except Exception:
+        pytest.fail(
+            "overridden query was finished, another one should have been able to run"
+        )
+
+    # finish a non-overidden query
+    policy.update_quota_balance(
+        tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
+        query_id="1",
+        result_or_error=_RESULT_SUCCESS,
+    )
+
+    # our overridden referrer should still error because an update to the non-overridden limits shouldn't affect the overridden ones
+    with pytest.raises(AllocationPolicyViolation):
+        policy.get_quota_allowance(
+            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+            query_id="uniq_string_3",
+        )
 
 
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:

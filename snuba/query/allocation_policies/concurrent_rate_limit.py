@@ -30,6 +30,8 @@ _PASS_THROUGH_REFERRERS = set(
     ]
 )
 
+_RATE_LIMIT_NAME = "concurrent_limit_policy"
+
 
 class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -141,7 +143,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         available_tenant_ids = set(tenant_ids.keys())
         # get all overrides that can be retrieved with the tenant_ids
         # e.g. if organization_id and referrer are passed in, retrieve
-        # ('organization_override, 'referrer_organization_override', 'referrer_override')
+        # ('organization_override, 'referrer_organization_override')
         for config_definition in self._additional_config_definitions():
             if config_definition.name.endswith("_override"):
                 param_types = config_definition.param_types
@@ -149,7 +151,14 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                     params = {param: tenant_ids[param] for param in param_types}
                     config_value = self.get_config_value(config_definition.name, params)
                     if config_value != config_definition.default:
-                        overrides[config_definition.name] = config_value
+                        key = "|".join(
+                            [
+                                f"{param}__{tenant_id}"
+                                for param, tenant_id in sorted(params.items())
+                            ]
+                        )
+
+                        overrides[key] = config_value
         return overrides
 
     def _get_tenant_key_and_value(
@@ -177,10 +186,11 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         concurrent_limit = self.get_config_value("concurrent_limit")
         if overrides:
             concurrent_limit = min(overrides.values())
+            tenant_value = min(overrides, key=overrides.get)  # type: ignore
         within_rate_limit, why = self._is_within_rate_limit(
             query_id,
             RateLimitParameters(
-                tenant_key,
+                _RATE_LIMIT_NAME,
                 bucket=str(tenant_value),
                 per_second_limit=None,
                 concurrent_limit=concurrent_limit,
@@ -197,10 +207,17 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
+        # TODO: put all this selection into its own function
+        overrides = self._get_overrides(tenant_ids)
+        concurrent_limit = self.get_config_value("concurrent_limit")
+        if overrides:
+            concurrent_limit = min(overrides.values())
+            tenant_value = min(overrides, key=overrides.get)  # type: ignore
+
         rate_limit_params = RateLimitParameters(
-            tenant_key,
+            _RATE_LIMIT_NAME,
             bucket=str(tenant_value),
             per_second_limit=None,
-            concurrent_limit=self.get_config_value("concurrent_limit"),
+            concurrent_limit=concurrent_limit,
         )
         self._end_query(query_id, rate_limit_params, result_or_error)
