@@ -519,15 +519,7 @@ def _raw_query(
 
     sql = formatted_query.get_sql()
 
-    update_with_status = partial(
-        update_query_metadata_and_stats,
-        query=clickhouse_query,
-        query_metadata_list=query_metadata_list,
-        sql=sql,
-        stats=stats,
-        query_settings=clickhouse_query_settings,
-        trace_id=trace_id,
-    )
+
 
     try:
         result = execute_query_with_query_id(
@@ -561,8 +553,6 @@ def _raw_query(
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
 
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
 
         with configure_scope() as scope:
             if scope.span:
@@ -708,6 +698,15 @@ def db_query(
         # if it didn't do that, something is very wrong so we just panic out here
         raise e
     finally:
+        update_with_status = partial(
+            update_query_metadata_and_stats,
+            query=clickhouse_query,
+            query_metadata_list=query_metadata_list,
+            sql=sql,
+            stats=stats,
+            query_settings=clickhouse_query_settings,
+            trace_id=trace_id,
+        )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
@@ -715,6 +714,8 @@ def db_query(
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
         request_status = get_request_status(error.__cause__ if error else None)  # type: ignore
+        if request_status.slo == SLO.AGAINST:
+            logger.exception("Error running query: %s\n%s", sql, cause)
 
         stats = update_with_status(
             status=error.query_status if error else QueryStatus.SUCCESS
