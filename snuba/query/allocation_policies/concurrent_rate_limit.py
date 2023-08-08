@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Callable, cast
 
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -180,7 +181,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         concurrent_limit = self.get_config_value("concurrent_limit")
         if overrides:
             concurrent_limit = min(overrides.values())
-            tenant_value = min(overrides, key=overrides.get)  # type: ignore
+            tenant_value = min(overrides, key=cast(Callable[[str], int], overrides.get))
 
         return (
             RateLimitParameters(
