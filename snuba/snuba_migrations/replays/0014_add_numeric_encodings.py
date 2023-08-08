@@ -1,6 +1,6 @@
 from typing import Iterator, List, Sequence
 
-from snuba.clickhouse.columns import Column, DateTime, Float, UInt
+from snuba.clickhouse.columns import Column, Float, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -59,5 +59,4 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     Column("segment_id", UInt(64, Modifiers(codecs=["T64", "LZ4"]))),
     Column("session_sample_rate", Float(64, Modifiers(codecs=["Gorilla", "LZ4"]))),
-    Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
 ]
