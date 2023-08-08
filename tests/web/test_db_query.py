@@ -8,6 +8,7 @@ import pytest
 from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.querylog.query_metadata import RequestStatus
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.storage import Storage
@@ -149,6 +150,7 @@ def test_db_query_success() -> None:
         }
     }
     assert len(query_metadata_list) == 1
+    assert query_metadata_list[0].request_status.status == RequestStatus.SUCCESS
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
     assert set(result.result["profile"].keys()) == {  # type: ignore
@@ -229,6 +231,7 @@ def test_db_query_fail() -> None:
 
     assert len(query_metadata_list) == 1
     assert query_metadata_list[0].status.value == "error"
+    assert query_metadata_list[0].request_status.status == RequestStatus.ERROR
     assert excinfo.value.extra["stats"] == stats
     assert excinfo.value.extra["sql"] is not None
 
@@ -294,6 +297,8 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             == "policy rejects all queries"
         )
         cause = excinfo.value.__cause__
+        assert len(query_metadata_list) == 1
+        assert query_metadata_list[0].request_status.status == RequestStatus.RATE_LIMITED
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
 

@@ -544,7 +544,6 @@ def _raw_query(
         error_code = None
         trigger_rate_limiter = None
         status = None
-        request_status = get_request_status(cause)
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
@@ -569,12 +568,7 @@ def _raw_query(
             if scope.span:
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
-        stats = update_with_status(
-            status=status or QueryStatus.ERROR,
-            request_status=request_status,
-            error_code=error_code,
-            triggered_rate_limiter=str(trigger_rate_limiter),
-        )
+
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
@@ -587,11 +581,6 @@ def _raw_query(
             },
         ) from cause
     else:
-        stats = update_with_status(
-            status=QueryStatus.SUCCESS,
-            request_status=get_request_status(),
-            profile_data=result["profile"],
-        )
         return QueryResult(
             result,
             {
@@ -725,6 +714,15 @@ def db_query(
                 query_id=query_id,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
+        request_status = get_request_status(error.__cause__ if error else None)  # type: ignore
+
+        stats = update_with_status(
+            status=error.query_status if error else QueryStatus.SUCCESS
+            request_status=request_status,
+            error_code=error_code,
+            triggered_rate_limiter=str(trigger_rate_limiter),
+        )
+
         if result:
             return result
         raise error or Exception(
