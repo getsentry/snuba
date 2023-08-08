@@ -320,7 +320,11 @@ def execute_query_with_query_id(
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
-    query_id = get_query_cache_key(formatted_query)
+
+    if state.get_config("randomize_query_id", False):
+        query_id = uuid.uuid4().hex
+    else:
+        query_id = get_query_cache_key(formatted_query)
 
     try:
         return execute_query_with_readthrough_caching(
