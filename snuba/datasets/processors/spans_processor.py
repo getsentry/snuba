@@ -110,24 +110,26 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed: MutableMapping[str, Any],
         span_event: SpanEvent,
     ) -> None:
+        # process ids
         processed["trace_id"] = str(uuid.UUID(span_event["trace_id"]))
         processed["span_id"] = int(span_event["span_id"], 16)
         processed["segment_id"] = processed["span_id"]
         processed["is_segment"] = span_event["is_segment"]
-        parent_span_id: str = span_event.get("parent_span_id", "0")
-        processed["parent_span_id"] = int(parent_span_id, 16) if parent_span_id else 0
+        parent_span_id: Optional[str] = span_event.get("parent_span_id", None)
+        if parent_span_id:
+            processed["parent_span_id"] = int(parent_span_id, 16)
+        transaction_id: Optional[str] = span_event.get("event_id", None)
+        if transaction_id:
+            processed["transaction_id"] = str(uuid.UUID(transaction_id))
 
+        # descriptions
         processed["description"] = _unicodify(span_event.get("description", ""))
-        processed["op"] = _unicodify(span_event["sentry_tags"]["transaction.op"])
-        processed["transaction_op"] = processed["op"]
+        processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
 
-        span_hash_raw = span_event.get("group_raw", None)
-        processed["group_raw"] = 0 if not span_hash_raw else int(str(span_hash_raw), 16)
-
+        # timestamps
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
             span_event["start_timestamp_ms"] / 1000,
         )
-
         processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
             (span_event["start_timestamp_ms"] + span_event["duration_ms"]) / 1000,
         )
@@ -141,8 +143,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     ) -> None:
         tags: Mapping[str, Any] = _as_dict_safe(span_event.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-
-        # release = _unicodify(tags.get("sentry:release", span_event.get("release", "")))
         user = _unicodify(tags.get("sentry:user", ""))
         processed["user"] = user
 
@@ -190,22 +190,28 @@ class SpansMessageProcessor(DatasetMessageProcessor):
               values yet. For now lets just set them to their default values.
         """
         sentry_tags = span_event["sentry_tags"]
-        processed["module"] = sentry_tags["module"]
-        processed["action"] = sentry_tags["action"]
-        processed["domain"] = sentry_tags["domain"]
-        processed["status"] = sentry_tags["status"]
-        group = sentry_tags["group"]
-        processed["group"] = int(str(group), 16) if group else 0
+        processed["module"] = sentry_tags.get("module", "")
+        processed["action"] = sentry_tags.get("action", "")
+        processed["domain"] = sentry_tags.get("domain", "")
+        processed["group"] = int(sentry_tags.get("group", "0") or "0", 16)
         processed["span_kind"] = ""
-        processed["platform"] = sentry_tags["system"]
+        processed["platform"] = sentry_tags.get("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.get("transaction") or "")
 
         status = sentry_tags.get("status", None)
         if status:
+            processed["status"] = status
             int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
         else:
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status
+
+        transaction_op = sentry_tags.get("transaction_op", None)
+        if transaction_op:
+            processed["op"] = _unicodify(transaction_op)
+            processed["transaction_op"] = processed["op"]
+        else:
+            processed["op"] = ""
 
     def process_message(
         self,
