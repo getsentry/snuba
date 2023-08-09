@@ -141,7 +141,6 @@ def compare_types_and_values(dict1: Any, dict2: Any) -> bool:
         for key in dict1:
             if key not in dict2:
                 raise KeyError(f"Key {key} not found in dict2")
-            print(f"Comparing {key}: {dict1[key]} == {dict2[key]}")
             if not compare_types_and_values(dict1[key], dict2[key]):
                 return False
         return True
@@ -203,7 +202,6 @@ class TestSpansProcessor:
         )
         assert isinstance(actual_result, InsertBatch)
         rows = actual_result.rows
-        print(rows)
         expected_result = message.build_result(meta)
         assert len(rows) == len(expected_result)
 
@@ -230,7 +228,6 @@ class TestSpansProcessor:
 
         expected_result = message.build_result(meta)
         assert len(rows) == len(expected_result)
-        print(rows)
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
 

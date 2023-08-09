@@ -110,10 +110,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed: MutableMapping[str, Any],
         span_event: SpanEvent,
     ) -> None:
-        # not sure if we care about this
-        # processed["transaction_id"] = common_span_fields["transaction_id"] = str(
-        #     uuid.UUID(span_event["transaction_id"])
-        # )
         processed["trace_id"] = str(uuid.UUID(span_event["trace_id"]))
         processed["span_id"] = int(span_event["span_id"], 16)
         processed["segment_id"] = processed["span_id"]
