@@ -319,9 +319,15 @@ def execute_query_with_query_id(
     stats: MutableMapping[str, Any],
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
+    dataset_name: str,
 ) -> Result:
 
-    if state.get_config("randomize_query_id", False):
+    if (
+        datasets := state.get_config("datasets_with_randomized_query_ids", [])
+    ) and dataset_name in datasets:
+        # Randomizing the Query ID will disable Query cache hits for the query
+        # The same query executed multiple times will also go down the pipeline instead
+        # of waiting on cached result
         query_id = uuid.uuid4().hex
     else:
         query_id = get_query_cache_key(formatted_query)
@@ -542,7 +548,8 @@ def _raw_query(
             timer,
             stats,
             clickhouse_query_settings,
-            robust=robust,
+            robust,
+            dataset_name,
         )
     except Exception as cause:
         error_code = None
