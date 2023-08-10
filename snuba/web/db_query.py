@@ -322,9 +322,11 @@ def execute_query_with_query_id(
     dataset_name: str,
 ) -> Result:
 
-    if (
-        datasets := state.get_config("datasets_with_randomized_query_ids", [])
-    ) and dataset_name in datasets:
+    datasets_with_randomized_query_ids = (
+        state.get_config("datasets_with_randomized_query_ids") or "[]"
+    )[1:-1].split(",")
+
+    if dataset_name in datasets_with_randomized_query_ids:
         # Randomizing the Query ID will disable Query cache hits for the query
         # The same query executed multiple times will also go down the pipeline instead
         # of waiting on cached result
