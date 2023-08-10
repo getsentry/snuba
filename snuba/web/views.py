@@ -421,7 +421,6 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
                 {"Content-Type": "application/json"},
             )
         _trace_transaction(dataset)
-        raise Exception("lol")
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
