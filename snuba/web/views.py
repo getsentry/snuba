@@ -411,7 +411,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
-        if body["asynchronous"]:
+        if "asynchronous" in body and body["asynchronous"]:
             result = send_query.delay(
                 dataset, body, timer, http_request.referrer or "<unknown>"
             )
