@@ -43,6 +43,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         None,
+        False,
         id="no override when query settings prefix empty",
     ),
     pytest.param(
@@ -57,6 +58,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         "other-query-prefix",
+        False,
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -71,21 +73,69 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 100000,
         },
         "some-query-prefix",
+        False,
         id="override for same query prefix",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        None,
+        True,
+        id="no override when no async settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 20,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        "other-query-prefix",
+        True,
+        id="override for async settings with no prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        id="no override for async settings with prefix override",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.parametrize("query_config,expected,query_prefix,async_override", test_data)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
+    async_override: bool,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix) == expected
+    assert _get_query_settings_from_config(query_prefix, async_override) == expected
 
 
 def _build_test_query(
