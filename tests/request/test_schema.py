@@ -24,6 +24,7 @@ def test_split_request() -> None:
         "dry_run",
         "legacy",
         "referrer",
+        "asynchronous",
     }
     assert set(parts.attribution_info.keys()) == {
         "team",
