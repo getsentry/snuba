@@ -40,3 +40,4 @@ PyYAML==6.0
 sqlparse==0.4.2
 google-api-python-client==2.88.0
 celery==5.2.7
+celery-types==0.18.0
