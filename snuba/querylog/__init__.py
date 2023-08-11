@@ -4,11 +4,6 @@ import sentry_sdk
 from sentry_sdk import Hub
 
 from snuba import environment, settings, state
-from snuba.attribution.log import (
-    AttributionData,
-    QueryAttributionData,
-    record_attribution,
-)
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.exceptions import QueryPlanException
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
@@ -69,38 +64,6 @@ def _record_timer_metrics(
     )
 
 
-def _record_attribution_metrics(
-    request: Request, query_metadata: SnubaQueryMetadata, extra_data: Mapping[str, Any]
-) -> None:
-    timing_data = query_metadata.timer.for_json()
-    attr_data = AttributionData(
-        app_id=request.attribution_info.app_id,
-        referrer=request.referrer,
-        parent_api=request.attribution_info.parent_api or "none",
-        request_id=request.id,
-        dataset=query_metadata.dataset,
-        entity=query_metadata.entity,
-        timestamp=timing_data["timestamp"],
-        duration_ms=timing_data["duration_ms"],
-        queries=[],
-    )
-    query_id = ""
-    if "stats" in extra_data and "query_id" in extra_data["stats"]:
-        query_id = extra_data["stats"]["query_id"]
-
-    for q in query_metadata.query_list:
-        profile = q.result_profile
-        bytes_scanned = profile.get("bytes", 0.0) if profile else 0.0
-        attr_query = QueryAttributionData(
-            table=q.profile.table,
-            query_id=query_id,
-            bytes_scanned=bytes_scanned,
-        )
-        attr_data.queries.append(attr_query)
-
-    record_attribution(attr_data)
-
-
 def record_query(
     request: Request,
     timer: Timer,
@@ -122,7 +85,6 @@ def record_query(
         # QueryMetadata class
         state.record_query(query_metadata.to_dict())
         _record_timer_metrics(request, timer, query_metadata, result)
-        _record_attribution_metrics(request, query_metadata, extra_data)
         _add_tags(timer, extra_data.get("experiments"), query_metadata)
 
 
