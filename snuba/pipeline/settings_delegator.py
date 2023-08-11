@@ -77,3 +77,6 @@ class RateLimiterDelegate(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         return self.__delegate.set_clickhouse_settings(settings)
+
+    def get_asynchronous(self) -> bool:
+        return self.__delegate.get_asynchronous()

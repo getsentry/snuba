@@ -215,3 +215,11 @@ validators:
     args: {}
 
 required_time_column: timestamp
+
+join_relationships:
+  attributes:
+    rhs_entity: group_attributes
+    join_type: left
+    columns:
+      - [project_id, project_id]
+      - [group_id, group_id]
