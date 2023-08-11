@@ -333,7 +333,7 @@ def _format_storage_query_and_run(
             tags={
                 "table": table_names,
                 "referrer": attribution_info.referrer,
-                "data": query_metadata.dataset,
+                "dataset": query_metadata.dataset,
             },
         )
 
