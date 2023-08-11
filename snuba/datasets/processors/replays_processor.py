@@ -193,10 +193,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         replay_event = rapidjson.loads(bytes(message["payload"]))
+        received = datetime.utcfromtimestamp(message["start_time"])
         try:
             retention_days = enforce_retention(
                 message["retention_days"],
-                datetime.utcfromtimestamp(message["start_time"]),
+                received,
             )
         except EventTooOld:
             return None
@@ -208,7 +209,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
         if replay_event["type"] == "replay_actions":
             actions = process_replay_actions(replay_event, processed, metadata)
-            return InsertBatch(actions, None)
+            return InsertBatch(actions, received)
         else:
             # The following helper functions should be able to be applied in any order.
             # At time of writing, there are no reads of the values in the `processed`
@@ -224,7 +225,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
-            return InsertBatch([processed], None)
+            return InsertBatch([processed], received)
 
 
 def process_replay_actions(
