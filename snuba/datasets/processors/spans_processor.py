@@ -190,18 +190,18 @@ class SpansMessageProcessor(DatasetMessageProcessor):
               values yet. For now lets just set them to their default values.
         """
         sentry_tags = span_event["sentry_tags"]
-        processed["module"] = sentry_tags["module"]
-        processed["action"] = sentry_tags["action"]
-        processed["domain"] = sentry_tags["domain"]
-        processed["status"] = sentry_tags["status"]
+        processed["module"] = sentry_tags.get("module", "")
+        processed["action"] = sentry_tags.get("action", "")
+        processed["domain"] = sentry_tags.get("domain", "")
         group = sentry_tags["group"]
         processed["group"] = int(str(group), 16) if group else 0
         processed["span_kind"] = ""
-        processed["platform"] = sentry_tags["system"]
+        processed["platform"] = sentry_tags.get("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.get("transaction") or "")
 
         status = sentry_tags.get("status", None)
         if status:
+            processed["status"] = status
             int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
         else:
             int_status = UNKNOWN_SPAN_STATUS
