@@ -24,19 +24,19 @@ pipelines:
                 branch: gocd_tests # for non master image sha have to be hardcoded
                 destination: snuba
         stages:
-            - checks:
-                  approval:
-                      type: manual
-                  fetch_materials: true
-                  jobs:
-                      checks-migrations:
-                          timeout: 1800
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
-                                    (cd snuba && git fetch origin $deploy_sha) && \
-                                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
+            # - checks:
+            #       approval:
+            #           type: manual
+            #       fetch_materials: true
+            #       jobs:
+            #           checks-migrations:
+            #               timeout: 1800
+            #               elastic_profile_id: snuba
+            #               tasks:
+            #                   - script: |
+            #                         deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-sns-test"` && \
+            #                         (cd snuba && git fetch origin $deploy_sha) && \
+            #                         snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy:
                   fetch_materials: true
                   jobs:
