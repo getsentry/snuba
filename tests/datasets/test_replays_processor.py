@@ -451,9 +451,11 @@ class TestReplaysProcessor:
         assert isinstance(expected, dict)  # required for type checker
         assert received_event_hash != expected.pop("event_hash")  # hash is random
 
+        # Sample rates default to -1.0 which is an impossible state for the field.
+        assert received["error_sample_rate"] == -1.0
+        assert received["session_sample_rate"] == -1.0
+
         assert received["replay_type"] == ""
-        assert received["error_sample_rate"] == 0.0
-        assert received["session_sample_rate"] == 0.0
         assert received["platform"] == ""
         assert received["dist"] == ""
         assert received["user_name"] == ""

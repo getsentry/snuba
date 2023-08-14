@@ -160,11 +160,13 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["device_model"] = default(
             str, maybe(to_string, device_context.get("model"))
         )
+
+        # Sample rates default to -1.0 which is an impossible state for the field.
         processed["error_sample_rate"] = default(
-            float, maybe(float, replay.get("error_sample_rate"))
+            lambda: -1.0, maybe(float, replay.get("error_sample_rate"))
         )
         processed["session_sample_rate"] = default(
-            float, maybe(float, replay.get("session_sample_rate"))
+            lambda: -1.0, maybe(float, replay.get("session_sample_rate"))
         )
 
     def _process_sdk(
