@@ -23,7 +23,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -398,7 +398,9 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    if referrer in (state.get_config("avoid_cache_referrers") or "[]")[1:-1].split(","):
+    if referrer in settings.AVOID_CACHE_REFERRERS and state.get_config(
+        "enable_avoid_cache_referrers"
+    ):
         clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(
             clickhouse_query,
