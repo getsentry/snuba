@@ -349,8 +349,8 @@ class TestReplaysProcessor:
         assert isinstance(processed_message, InsertBatch)
         assert processed_message.rows[0]["urls"] == ["http://127.0.0.1:8001", "0"]
         assert processed_message.rows[0]["replay_type"] == ""
-        assert processed_message.rows[0]["error_sample_rate"] == 0.0
-        assert processed_message.rows[0]["session_sample_rate"] == 0.0
+        assert processed_message.rows[0]["error_sample_rate"] == -1.0
+        assert processed_message.rows[0]["session_sample_rate"] == -1.0
         assert processed_message.rows[0]["platform"] == "0"
         assert processed_message.rows[0]["dist"] == "0"
         assert processed_message.rows[0]["user_name"] == "0"
