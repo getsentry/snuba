@@ -5,7 +5,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -319,6 +318,7 @@ def execute_query_with_query_id(
     stats: MutableMapping[str, Any],
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
+    referrer: str,
 ) -> Result:
 
     if state.get_config("randomize_query_id", False):
@@ -337,6 +337,7 @@ def execute_query_with_query_id(
             clickhouse_query_settings,
             robust,
             query_id,
+            referrer,
         )
     except ClickhouseError as e:
         if (
@@ -362,6 +363,7 @@ def execute_query_with_query_id(
             clickhouse_query_settings,
             robust,
             query_id,
+            referrer,
         )
 
 
@@ -376,6 +378,7 @@ def execute_query_with_readthrough_caching(
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
     query_id: str,
+    referrer: str,
 ) -> Result:
     clickhouse_query_settings["query_id"] = query_id
 
@@ -395,22 +398,7 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    cache_partition = _get_cache_partition(reader)
-    metrics.increment(
-        "cache_partition_loaded",
-        tags={"partition_id": reader.cache_partition_id or "default"},
-    )
-
-    # -----------------------------------------------------------------
-    # HACK (Volo): This is a hack experiment to see if we can
-    # turn off the cache (but not all of it for everything at once).
-    # and still survive.
-
-    # depending on the `stats` dict to be populated ahead of time
-    # is not great style, but it is done in _format_storage_query_and_run.
-    # This should be removed by 07-05-2023
-    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
+    if referrer in (state.get_config("avoid_cache_referrers") or "[]")[1:-1].split(","):
         clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(
             clickhouse_query,
@@ -422,8 +410,12 @@ def execute_query_with_readthrough_caching(
             clickhouse_query_settings,
             robust,
         )
-    # -----------------------------------------------------------------
     else:
+        cache_partition = _get_cache_partition(reader)
+        metrics.increment(
+            "cache_partition_loaded",
+            tags={"partition_id": reader.cache_partition_id or "default"},
+        )
         return cache_partition.get_readthrough(
             query_id,
             partial(
@@ -549,6 +541,7 @@ def _raw_query(
             stats,
             clickhouse_query_settings,
             robust=robust,
+            referrer=attribution_info.referrer,
         )
     except Exception as cause:
         error_code = None
