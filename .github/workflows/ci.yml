@@ -260,7 +260,7 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   rust-tests:
-    needs: [snuba-image]
+    needs: [linting, snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
