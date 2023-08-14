@@ -334,9 +334,6 @@ jobs:
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run Rust tests
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
         run: |
           make test-rust
 
