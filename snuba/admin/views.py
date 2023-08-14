@@ -993,3 +993,9 @@ def production_snql_query() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+
+
+@application.route("/allowed_projects", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def get_allowed_projects() -> Response:
+    return make_response(jsonify(settings.ADMIN_ALLOWED_PROD_PROJECTS), 200)

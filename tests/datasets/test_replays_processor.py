@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 import pytest
 
@@ -100,7 +100,9 @@ class ReplayEvent:
             sdk_version="0.9.0",
         )
 
-    def serialize(self) -> Mapping[Any, Any]:
+    def serialize(
+        self, header_overrides: Optional[dict[Any, Any]] = None
+    ) -> Mapping[Any, Any]:
         replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
@@ -160,13 +162,17 @@ class ReplayEvent:
             "extra": {},
         }
 
-        return {
-            "type": "replay_event",
+        headers = {
             "start_time": datetime.now().timestamp(),
+            "type": "replay_event",
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
-            "payload": list(bytes(json.dumps(replay_event).encode())),
+        }
+        headers.update(header_overrides or {})
+        return {
+            **headers,
+            **{"payload": list(bytes(json.dumps(replay_event).encode()))},
         }
 
     def _user_field(self) -> Any | None:
@@ -245,6 +251,9 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
+        header_overrides = {
+            "start_time": int(datetime.now(tz=timezone.utc).timestamp())
+        }
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
@@ -283,8 +292,11 @@ class TestReplaysProcessor:
             sdk_version="0.9.0",
         )
         assert ReplaysProcessor().process_message(
-            message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+            message.serialize(header_overrides), meta
+        ) == InsertBatch(
+            [message.build_result(meta)],
+            datetime.utcfromtimestamp(header_overrides["start_time"]),
+        )
 
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(

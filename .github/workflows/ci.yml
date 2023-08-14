@@ -120,6 +120,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Get branch name
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
@@ -136,23 +139,34 @@ jobs:
       - name: Pull snuba CI images
         if: github.repository_owner == 'getsentry'
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
+        uses: docker/build-push-action@v4
         if: github.repository_owner == 'getsentry'
-        run: |
-          docker build . \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg SHOULD_BUILD_RUST=false \
-            -t ghcr.io/getsentry/snuba-ci:latest \
-            -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --target testing
+        with:
+          context: .
+          # push: true
+          load: true
+          build-args: |
+            SHOULD_BUILD_RUST=false
+          target: testing
+          tags: |
+            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            ghcr.io/getsentry/snuba-ci:latest
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
+          cache-to: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
@@ -181,21 +195,31 @@ jobs:
       - uses: actions/checkout@v2
         name: Checkout code
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
-        run: |
-          docker build . \
-            -t snuba-test \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --target testing
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: snuba-test
+          load: true
+          build-args: |
+            SHOULD_BUILD_RUST=false
+          target: testing
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
 
       - name: Docker set up
         run: |
@@ -247,9 +271,11 @@ jobs:
 
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
         run: |
@@ -333,21 +359,31 @@ jobs:
       - name: Checkout snuba
         uses: actions/checkout@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Pull snuba CI images
         run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
 
       - name: Build snuba docker image for CI
-        run: |
-          docker build . \
-            -t snuba-test \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --target testing
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: snuba-test
+          load: true
+          build-args: |
+            SHOULD_BUILD_RUST=false
+          target: testing
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
 
       # Checkout Sentry and run integration tests against latest snuba
       # Make sure this is after `docker build`, otherwise we'll break docker cache

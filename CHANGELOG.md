@@ -1,5 +1,33 @@
 # Changelog
 
+## 23.7.2
+
+### Various fixes & improvements
+
+- feat(group_attributes): add ability to join events -> group_attributes  (#4586) by @barkbarkimashark
+- cleanup(capman): remove project throttler (#4576) by @volokluev
+- feat(consumer): add health check step to consumers (#4508) by @dbanda
+- fix(capman): Bake in `is_enforced` behavior into every allocation policy (#4585) by @volokluev
+- Update gocd-jsonnet to v1.4.1 (#4579) by @mattgauntseo-sentry
+- Revert "feat(db_query): Readthrough Cache entire `db_query()` pipeline (#4506)" (946c90a5) by @getsentry-bot
+- ref: bump sentry-arroyo to 2.14.2 (#4569) by @getsentry-bot
+- turn on rate limit policy for transactions (#4572) by @volokluev
+- feat(db_query): Readthrough Cache entire `db_query()` pipeline (#4506) by @rahul-kumar-saini
+- ref(admin): Upload sourcemaps to Sentry for the admin tool (#4441) by @evanh
+- feat(oncall): break down query execution metrics by table and referrer (#4573) by @volokluev
+- feat(prod-queries): Add button to view all allowed projects (#4574) by @davidtsuk
+- feat(consumer): Add transactions consumer SLO (#4442) by @ayirr7
+- feat(schema): add replay_id to table entities and storages (#4565) by @JoshFerge
+- ref: bump sentry-kafka-schemas to 0.1.23 (#4571) by @getsentry-bot
+- feat(rust-consumer): Port querylog processor to Rust (#4562) by @lynnagara
+- feat(group-attributes): Change the readiness state for migration to partial (#4567) by @lynnagara
+- Revert back to snuba group for role access (#4550) by @mattgauntseo-sentry
+- feat(capman): ratelimit allocation policy (no overrides) (#4536) by @volokluev
+- Switch is ST check to library version (#4568) by @mattgauntseo-sentry
+- feat(clickhouse): Enable 23.3 (#4566) by @lynnagara
+- Add customer 1 and 2 to pipedream (#4564) by @mattgauntseo-sentry
+- meta: Bump new development version (24a00034)
+
 ## 23.7.1
 
 ### Various fixes & improvements

@@ -130,12 +130,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
-            self.metrics.increment(
-                "db_request_rejected",
-                tags={
-                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                },
-            )
             if self.is_enforced:
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
@@ -177,12 +171,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
-                self.metrics.increment(
-                    "db_request_throttled",
-                    tags={
-                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                    },
-                )
                 explanation[
                     "reason"
                 ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
@@ -26,14 +26,9 @@ from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import (
-    _apply_thread_quota_to_clickhouse_query_settings,
-    _get_query_settings_from_config,
-    db_query,
-)
+from snuba.web.db_query import _get_query_settings_from_config, db_query
 
 test_data = [
     pytest.param(
@@ -48,6 +43,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         None,
+        False,
         id="no override when query settings prefix empty",
     ),
     pytest.param(
@@ -62,6 +58,7 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         "other-query-prefix",
+        False,
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -76,53 +73,69 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 100000,
         },
         "some-query-prefix",
+        False,
         id="override for same query prefix",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        None,
+        True,
+        id="no override when no async settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 20,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        "other-query-prefix",
+        True,
+        id="override for async settings with no prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        id="no override for async settings with prefix override",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.parametrize("query_config,expected,query_prefix,async_override", test_data)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
+    async_override: bool,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix) == expected
-
-
-test_thread_quota_data = [
-    pytest.param(
-        [],
-        ResourceQuota(max_threads=5),
-        RateLimitStats(rate=1, concurrent=1),
-        {"max_threads": 5},
-        id="only thread quota",
-    )
-]
-
-
-@pytest.mark.parametrize(
-    "rate_limit_params,resource_quota,rate_limit_stats,expected_query_settings",
-    test_thread_quota_data,
-)
-def test_apply_thread_quota(
-    rate_limit_params: Sequence[RateLimitParameters],
-    resource_quota: ResourceQuota,
-    rate_limit_stats: RateLimitStats,
-    expected_query_settings: Mapping[str, Any],
-) -> None:
-    settings = HTTPQuerySettings()
-    for rlimit in rate_limit_params:
-        settings.add_rate_limit(rlimit)
-    settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings: dict[str, Any] = {}
-    _apply_thread_quota_to_clickhouse_query_settings(
-        settings, clickhouse_query_settings, rate_limit_stats
-    )
-    assert clickhouse_query_settings == expected_query_settings
+    assert _get_query_settings_from_config(query_prefix, async_override) == expected
 
 
 def _build_test_query(

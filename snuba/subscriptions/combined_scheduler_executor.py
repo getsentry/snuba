@@ -50,6 +50,7 @@ def build_scheduler_executor_consumer(
     stale_threshold_seconds: Optional[int],
     total_concurrent_queries: int,
     metrics: MetricsBackend,
+    health_check_file: Optional[str] = None,
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
 
@@ -104,6 +105,7 @@ def build_scheduler_executor_consumer(
         stale_threshold_seconds,
         result_topic.topic_name,
         schedule_ttl,
+        health_check_file,
     )
 
     return StreamProcessor(
@@ -136,6 +138,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         stale_threshold_seconds: Optional[int],
         result_topic: str,
         schedule_ttl: int,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__partitions = partitions
         self.__entity_names = entity_names
@@ -180,6 +183,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             metrics,
             stale_threshold_seconds,
             result_topic,
+            health_check_file,
         )
 
         modes = {

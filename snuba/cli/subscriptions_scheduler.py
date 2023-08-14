@@ -74,6 +74,12 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
 )
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
 def subscriptions_scheduler(
     *,
     entity_name: str,
@@ -88,6 +94,7 @@ def subscriptions_scheduler(
     log_level: Optional[str],
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
+    health_check_file: Optional[str],
 ) -> None:
     """
     The subscriptions scheduler's job is to schedule subscriptions for a single entity.
@@ -182,6 +189,7 @@ def subscriptions_scheduler(
         stale_threshold_seconds,
         metrics,
         slice_id,
+        health_check_file,
     )
 
     logger.info("Checking Clickhouse connections")
