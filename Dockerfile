@@ -137,6 +137,7 @@ CMD [ "api" ]
 FROM application AS testing
 
 USER 0
+COPY Makefile .
 RUN pip install -r requirements-test.txt
 RUN set -ex; \
     apt-get update; \
