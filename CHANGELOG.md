@@ -1,5 +1,28 @@
 # Changelog
 
+## 23.8.0
+
+### Various fixes & improvements
+
+- fix(Cache): Cache fail open on ValueError (#4615) by @rahul-kumar-saini
+- feat(replays): Add low cardinality encoding to select columns (#4601) by @cmanallen
+- feat: Group the validation warnings for each topic separately (#4570) by @lynnagara
+- fix(oncall): Query execution dataset metric tag (#4608) by @rahul-kumar-saini
+- feat(replays): Add materialized counts for array columns (#4603) by @cmanallen
+- search_issues -> group_attributes join relationship (#4588) by @barkbarkimashark
+- feat(async-queries): Add ability to override query settings for async queries (#4584) by @davidtsuk
+- ref: bump sentry-kafka-schemas to 0.1.25 (#4610) by @getsentry-bot
+- fix(ci): improve caching (#4521) by @dbanda
+- feat(replay): pass start_time as received header (#4548) by @bmckerry
+- fix(capman): rate limit overrides should not collide (#4604) by @volokluev
+- feat(db_query): Randomized Query IDs (#4605) by @rahul-kumar-saini
+- Remove the test regions from rollbacks (#4599) by @mattgauntseo-sentry
+- feat(capman): implement rate limit overrides (#4563) by @volokluev
+- pass through subscriptions for new concurrent rate limiter (#4587) by @volokluev
+- ci: only render gocd pipelines if relevant files are changed (#4591) by @joshuarli
+- bump readiness (#4590) by @barkbarkimashark
+- meta: Bump new development version (e7d99451)
+
 ## 23.7.2
 
 ### Various fixes & improvements
