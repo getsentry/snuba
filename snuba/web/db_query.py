@@ -5,7 +5,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from random import random
 from threading import Lock
 from typing import (
     Any,
@@ -24,7 +23,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -59,12 +58,9 @@ from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
-    ORGANIZATION_RATE_LIMIT_NAME,
-    PROJECT_RATE_LIMIT_NAME,
     TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
-    RateLimitStats,
     RateLimitStatsContainer,
 )
 from snuba.util import force_bytes
@@ -217,20 +213,6 @@ def _record_rate_limit_metrics(
     reader: Reader,
     stats: MutableMapping[str, Any],
 ) -> None:
-    # This is a temporary metric that will be removed once the organization
-    # rate limit has been tuned.
-    org_rate_limit_stats = rate_limit_stats_container.get_stats(
-        ORGANIZATION_RATE_LIMIT_NAME
-    )
-    if org_rate_limit_stats is not None:
-        metrics.gauge(
-            name="org_concurrent",
-            value=org_rate_limit_stats.concurrent,
-        )
-        metrics.gauge(
-            name="org_per_second",
-            value=org_rate_limit_stats.rate,
-        )
     table_rate_limit_stats = rate_limit_stats_container.get_stats(TABLE_RATE_LIMIT_NAME)
     if table_rate_limit_stats is not None:
         metrics.gauge(
@@ -265,26 +247,6 @@ def _record_rate_limit_metrics(
         )
 
 
-def _apply_thread_quota_to_clickhouse_query_settings(
-    query_settings: QuerySettings,
-    clickhouse_query_settings: MutableMapping[str, Any],
-    project_rate_limit_stats: Optional[RateLimitStats],
-) -> None:
-    thread_quota = query_settings.get_resource_quota()
-    if "max_threads" in clickhouse_query_settings or thread_quota is not None:
-        maxt = (
-            clickhouse_query_settings["max_threads"]
-            if thread_quota is None
-            else thread_quota.max_threads
-        )
-        if project_rate_limit_stats:
-            clickhouse_query_settings["max_threads"] = max(
-                1, maxt - project_rate_limit_stats.concurrent + 1
-            )
-        else:
-            clickhouse_query_settings["max_threads"] = maxt
-
-
 @with_span(op="function")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -303,27 +265,6 @@ def execute_query_with_rate_limits(
     ) as rate_limit_stats_container:
         stats.update(rate_limit_stats_container.to_dict())
         timer.mark("rate_limit")
-
-        project_rate_limit_stats = rate_limit_stats_container.get_stats(
-            PROJECT_RATE_LIMIT_NAME
-        )
-        # -----------------------------------------------------------------
-        # HACK (Volo): This is a hack experiment to see if we can
-        # stop doing  concurrent throttling in production on a specific table
-        # and still survive.
-
-        # depending on the `stats` dict to be populated ahead of time
-        # is not great style, but it is done in _format_storage_query_and_run.
-        # This should be removed by 07-15-2023. Either the concurrent throttling becomes
-        # another allocation policy or we remove this mechanism entirely
-
-        table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-        if state.get_config("use_project_concurrent_throttling.ALL_TABLES", 1):
-            if state.get_config(f"use_project_concurrent_throttling.{table_name}", 1):
-                _apply_thread_quota_to_clickhouse_query_settings(
-                    query_settings, clickhouse_query_settings, project_rate_limit_stats
-                )
-        # -----------------------------------------------------------------
 
         _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 
@@ -377,8 +318,13 @@ def execute_query_with_query_id(
     stats: MutableMapping[str, Any],
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
+    referrer: str,
 ) -> Result:
-    query_id = get_query_cache_key(formatted_query)
+
+    if state.get_config("randomize_query_id", False):
+        query_id = uuid.uuid4().hex
+    else:
+        query_id = get_query_cache_key(formatted_query)
 
     try:
         return execute_query_with_readthrough_caching(
@@ -391,6 +337,7 @@ def execute_query_with_query_id(
             clickhouse_query_settings,
             robust,
             query_id,
+            referrer,
         )
     except ClickhouseError as e:
         if (
@@ -416,6 +363,7 @@ def execute_query_with_query_id(
             clickhouse_query_settings,
             robust,
             query_id,
+            referrer,
         )
 
 
@@ -430,6 +378,7 @@ def execute_query_with_readthrough_caching(
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
     query_id: str,
+    referrer: str,
 ) -> Result:
     clickhouse_query_settings["query_id"] = query_id
 
@@ -449,22 +398,9 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    cache_partition = _get_cache_partition(reader)
-    metrics.increment(
-        "cache_partition_loaded",
-        tags={"partition_id": reader.cache_partition_id or "default"},
-    )
-
-    # -----------------------------------------------------------------
-    # HACK (Volo): This is a hack experiment to see if we can
-    # turn off the cache (but not all of it for everything at once).
-    # and still survive.
-
-    # depending on the `stats` dict to be populated ahead of time
-    # is not great style, but it is done in _format_storage_query_and_run.
-    # This should be removed by 07-05-2023
-    table_name = stats.get("clickhouse_table", "NON_EXISTENT_TABLE")
-    if state.get_config(f"bypass_readthrough_cache_probability.{table_name}", 0) > random():  # type: ignore
+    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
+        "enable_bypass_cache_referrers"
+    ):
         clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(
             clickhouse_query,
@@ -476,8 +412,12 @@ def execute_query_with_readthrough_caching(
             clickhouse_query_settings,
             robust,
         )
-    # -----------------------------------------------------------------
     else:
+        cache_partition = _get_cache_partition(reader)
+        metrics.increment(
+            "cache_partition_loaded",
+            tags={"partition_id": reader.cache_partition_id or "default"},
+        )
         return cache_partition.get_readthrough(
             query_id,
             partial(
@@ -521,6 +461,7 @@ def _get_cache_wait_timeout(
 
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
+    async_override: bool,
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config.
@@ -538,6 +479,11 @@ def _get_query_settings_from_config(
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
     }
+
+    if async_override:
+        for k, v in all_confs.items():
+            if k.startswith("async_query_settings/"):
+                clickhouse_query_settings[k.split("/", 1)[1]] = v
 
     if override_prefix:
         for k, v in all_confs.items():
@@ -567,9 +513,12 @@ def _raw_query(
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
     clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix()
+        reader.get_query_settings_prefix(), query_settings.get_asynchronous()
     )
-
+    resource_quota = query_settings.get_resource_quota()
+    max_threads = resource_quota.max_threads if resource_quota else None
+    if max_threads:
+        clickhouse_query_settings["max_threads"] = max_threads
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
@@ -594,6 +543,7 @@ def _raw_query(
             stats,
             clickhouse_query_settings,
             robust=robust,
+            referrer=attribution_info.referrer,
         )
     except Exception as cause:
         error_code = None

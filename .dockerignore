@@ -4,7 +4,6 @@ docs
 cloudbuild.*
 docker-compose.*
 CODEOWNERS
-Makefile
 conftest.py
 *.pyc
 *.swp

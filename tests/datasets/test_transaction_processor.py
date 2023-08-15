@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence, Tuple
+from unittest.mock import ANY
 
 import pytest
 
@@ -45,6 +46,7 @@ class TransactionEvent:
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
     replay_id: Optional[str] = None
+    received: Optional[float] = None
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -133,6 +135,7 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "received": self.received,
                     "measurements": {
                         "lcp": {"value": 32.129},
                         "lcp.elementSize": {"value": 4242},
@@ -305,6 +308,9 @@ class TestTransactionsProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
+            received=(
+                datetime.now(tz=timezone.utc) - timedelta(seconds=15)
+            ).timestamp(),
             platform="python",
             dist="",
             user_name="me",
@@ -364,7 +370,7 @@ class TestTransactionsProcessor:
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == InsertBatch([message.build_result(meta)], ANY)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_too_many_spans(self) -> None:
@@ -389,7 +395,7 @@ class TestTransactionsProcessor:
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
-        ) == InsertBatch([result], None)
+        ) == InsertBatch([result], ANY)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_missing_transaction_source(self) -> None:
@@ -433,7 +439,7 @@ class TestTransactionsProcessor:
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == InsertBatch([message.build_result(meta)], ANY)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_replay_id_as_tag(self) -> None:
@@ -463,7 +469,7 @@ class TestTransactionsProcessor:
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
-        ) == InsertBatch([result], None)
+        ) == InsertBatch([result], ANY)
 
     def test_replay_id_as_tag_and_context(self) -> None:
         """
@@ -493,7 +499,7 @@ class TestTransactionsProcessor:
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
-        ) == InsertBatch([result], None)
+        ) == InsertBatch([result], ANY)
 
     def test_replay_id_as_invalid_tag(self) -> None:
         """
@@ -520,4 +526,4 @@ class TestTransactionsProcessor:
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
-        ) == InsertBatch([result], None)
+        ) == InsertBatch([result], ANY)

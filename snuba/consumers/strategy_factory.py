@@ -13,6 +13,7 @@ from arroyo.processing.strategies import (
     RunTaskWithMultiprocessing,
 )
 from arroyo.processing.strategies.commit import CommitOffsets
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
@@ -70,6 +71,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         # is processed
         max_messages_to_process: Optional[int] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
@@ -96,6 +98,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__initialize_parallel_transform = initialize_parallel_transform
+        self.__health_check_file = health_check_file
 
     def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
@@ -164,5 +167,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = ExitAfterNMessages(
                 strategy, self.__max_messages_to_process, 10.0
             )
+
+        if self.__health_check_file is not None:
+            strategy = Healthcheck(self.__health_check_file, strategy)
 
         return strategy

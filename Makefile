@@ -71,17 +71,20 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
-	cd rust_snuba/ && cargo watch -s 'maturin develop'
+	. scripts/rust-envvars && \
+		cd rust_snuba/ && cargo watch -s 'maturin develop'
 .PHONY: watch-rust-snuba
 
 test-rust:
-	cd rust_snuba/rust_arroyo/ && cargo test
-	cd rust_snuba && cargo test
+	. scripts/rust-envvars && \
+		(cd rust_snuba/rust_arroyo/ && cargo test) && \
+		cd rust_snuba && cargo test
 .PHONY: test-rust
 
 lint-rust:
-	cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings
-	cd rust_snuba && cargo clippy -- -D warnings
+	. scripts/rust-envvars && \
+		(cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings) && \
+		(cd rust_snuba && cargo clippy -- -D warnings)
 
 .PHONY: lint-rust
 
@@ -91,6 +94,6 @@ gocd:
 	cd ./gocd/templates && jb install && jb update
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnetfmt -i
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnet-lint -J ./gocd/templates/vendor
-	cd ./gocd/templates && jsonnet -J vendor -m ../generated-pipelines ./snuba.jsonnet
+	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba.jsonnet
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd

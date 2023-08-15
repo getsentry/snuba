@@ -20,7 +20,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
 
 fn main() {
     let config = KafkaConfig::new_consumer_config(
-        vec!["localhost:9092".to_string()],
+        vec!["127.0.0.1:9092".to_string()],
         "my_group".to_string(),
         "latest".to_string(),
         false,

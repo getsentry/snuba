@@ -72,6 +72,12 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
 )
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
 @click.option("--log-level", help="Logging level to use.")
 def subscriptions_scheduler_executor(
     *,
@@ -85,6 +91,7 @@ def subscriptions_scheduler_executor(
     schedule_ttl: int,
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
+    health_check_file: Optional[str],
     log_level: Optional[str],
 ) -> None:
     """
@@ -137,6 +144,7 @@ def subscriptions_scheduler_executor(
         stale_threshold_seconds,
         total_concurrent_queries,
         metrics,
+        health_check_file,
     )
 
     def handler(signum: int, frame: Any) -> None:
