@@ -1,18 +1,24 @@
 import json
 import traceback
-from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Sequence, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseNode,
+)
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
+
+MIGRATIONS_CACHE: Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]] = {}
 
 
 def pytest_configure() -> None:
@@ -141,6 +147,44 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     yield
 
 
+def _build_migrations_cache() -> None:
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
+        nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+        for node in nodes:
+            if (cluster, node) not in MIGRATIONS_CACHE:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                rows = connection.execute(
+                    f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
+                )
+                for table_name, create_table_query in rows.results:
+                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
+                        table_name
+                    ] = create_table_query
+
+
+def _clear_db() -> None:
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
+
+        schema = storage.get_schema()
+        if isinstance(schema, WritableTableSchema):
+            table_name = schema.get_local_table_name()
+
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+
 @pytest.fixture
 def clickhouse_db(
     request: pytest.FixtureRequest, create_databases: None
@@ -153,26 +197,35 @@ def clickhouse_db(
 
     try:
         reset_dataset_factory()
-        Runner().run_all(force=True)
+        if not MIGRATIONS_CACHE or request.module.__name__ == "tests.migrations":
+
+            Runner().run_all(force=True)
+            _build_migrations_cache()
+        else:
+            # apply migrations from cache
+            assert (
+                "migrations" not in request.module.__name__
+            ), "dont use cache for migrations module"
+            applied_nodes = set()
+            for (cluster, node), tables in MIGRATIONS_CACHE.items():
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                for table_name, create_table_query in tables.items():
+                    if (node, table_name) in applied_nodes:
+                        continue
+                    create_table_query = create_table_query.replace(
+                        "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
+                    ).replace(
+                        "CREATE MATERIALIZED VIEW",
+                        "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+                    )
+                    print(f"Creating table {table_name} on {node}")
+                    connection.execute(create_table_query)
+                applied_nodes.add((node, table_name))
         yield
     finally:
-        for storage_key in get_all_storage_keys():
-            storage = get_storage(storage_key)
-            cluster = storage.get_cluster()
-            database = cluster.get_database()
-
-            schema = storage.get_schema()
-            if isinstance(schema, WritableTableSchema):
-                table_name = schema.get_local_table_name()
-
-                nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-                for node in nodes:
-                    connection = cluster.get_node_connection(
-                        ClickhouseClientSettings.MIGRATE, node
-                    )
-                    connection.execute(
-                        f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
-                    )
+        _clear_db()
 
 
 @pytest.fixture(autouse=True)
