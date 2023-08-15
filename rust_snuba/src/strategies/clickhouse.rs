@@ -152,7 +152,7 @@ mod tests {
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let client: ClickhouseClient =
-            ClickhouseClient::new("localhost", 8123, "querylog_local", "default");
+            ClickhouseClient::new("127.0.0.1", 8123, "querylog_local", "default");
 
         println!("{}", "running test");
         let res = client.send(b"[]".to_vec()).await;

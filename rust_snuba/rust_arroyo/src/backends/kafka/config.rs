@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn test_build_consumer_configuration() {
         let config = KafkaConfig::new_consumer_config(
-            vec!["localhost:9092".to_string()],
+            vec!["127.0.0.1:9092".to_string()],
             "my-group".to_string(),
             "error".to_string(),
             false,
