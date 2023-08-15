@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
-from redis.exceptions import RedisError, ResponseError
+from redis.exceptions import ResponseError
 from snuba import environment, settings
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -315,7 +315,7 @@ class RedisCache(Cache[TValue]):
             # Not a Redis Cache Error -> bubble up
             assert e.__cause__ is not None
             raise e.__cause__
-        except (RedisError, ValueError):
+        except Exception:
             # A Redis Cache Error -> run value generation directly
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
