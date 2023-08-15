@@ -375,3 +375,51 @@ jobs:
           docker_repo: getsentry/snuba
           image_url: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
           docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
+
+  clickhouse-21:
+    needs: [linting, snuba-image]
+    name: Tests on Clickhouse 21
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Pull snuba CI images
+        run: |
+          set +e # skip missing images
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+          set -e
+
+      - name: Build snuba docker image for CI
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: snuba-test
+          load: true
+          build-args: |
+            SHOULD_BUILD_RUST=false
+          target: testing
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
+
+      - name: Docker set up
+        run: |
+          docker network create --attachable cloudbuild
+
+      - name: Docker Snuba Test Clickhouse 21
+        run: |
+          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:21.8.13.1.altinitystable
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+
+      - name: Upload to codecov
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
