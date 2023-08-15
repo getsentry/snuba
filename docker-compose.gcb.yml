@@ -26,8 +26,8 @@ x-test-common: &test-common
 services:
   snuba-test-rust:
     <<: *test-common
-    entrypoint: bash
-    command: ["-c", "cd ${TEST_LOCATION:-tests} && make test-rust"]
+    entrypoint: make
+    command: [test-rust]
   snuba-test:
     <<: *test-common
     entrypoint: python
