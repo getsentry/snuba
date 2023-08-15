@@ -197,13 +197,9 @@ def clickhouse_db(
 
     try:
         reset_dataset_factory()
-        if not MIGRATIONS_CACHE or request.module.__name__.startswith(
-            "tests.migrations"
-        ):
+        if not MIGRATIONS_CACHE:
             Runner().run_all(force=True)
-            # build cache once
-            if not MIGRATIONS_CACHE:
-                _build_migrations_cache()
+            _build_migrations_cache()
         else:
             # apply migrations from cache
             applied_nodes = set()
