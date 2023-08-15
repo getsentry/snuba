@@ -197,15 +197,15 @@ def clickhouse_db(
 
     try:
         reset_dataset_factory()
-        if not MIGRATIONS_CACHE or request.module.__name__ == "tests.migrations":
-
+        if not MIGRATIONS_CACHE or request.module.__name__.startswith(
+            "tests.migrations"
+        ):
             Runner().run_all(force=True)
-            _build_migrations_cache()
+            # build cache once
+            if not MIGRATIONS_CACHE:
+                _build_migrations_cache()
         else:
             # apply migrations from cache
-            assert (
-                "migrations" not in request.module.__name__
-            ), "dont use cache for migrations module"
             applied_nodes = set()
             for (cluster, node), tables in MIGRATIONS_CACHE.items():
                 connection = cluster.get_node_connection(
