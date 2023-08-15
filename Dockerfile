@@ -115,6 +115,11 @@ RUN set -ex; \
     pip install -e .; \
     snuba --help
 
+USER snuba
+EXPOSE 1218 1219
+ENTRYPOINT [ "./docker_entrypoint.sh" ]
+CMD [ "api" ]
+
 FROM application_base as application
 RUN set -ex; \
     apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
@@ -131,10 +136,6 @@ ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
-USER snuba
-EXPOSE 1218 1219
-ENTRYPOINT [ "./docker_entrypoint.sh" ]
-CMD [ "api" ]
 
 FROM application_base AS testing
 
