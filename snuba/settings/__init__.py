@@ -270,6 +270,9 @@ RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 # the request will still be able to go through as if the cache did not exist
 RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 
+# List of referrers not to look in or cache results for. Queries with these referrers generally
+# require live and up to date data, so caching should be avoided entirely.
+BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
 # (logical topic name, # of partitions)
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}

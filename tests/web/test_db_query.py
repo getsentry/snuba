@@ -211,19 +211,32 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_db_query_bypass_cache() -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("bypass_readthrough_cache_probability.errors_local", 0.3)
+def test_bypass_cache_refferer() -> None:
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
 
-    # cache should not be used for the errors table
-    # so if the bypass does not work, the test will try to
-    # use a bad cache
-    with mock.patch("snuba.web.db_query._get_cache_partition"):
-        # random() is less than `bypass_readthrough_cache_probability` therefore we bypass the cache
-        with mock.patch("snuba.web.db_query.random", return_value=0.2):
+    state.set_config("enable_bypass_cache_referrers", 1)
+
+    attribution_info = AttributionInfo(
+        app_id=AppID(key="key"),
+        tenant_ids={
+            "referrer": "some_bypass_cache_referrer",
+            "organization_id": 1234,
+        },
+        referrer="some_bypass_cache_referrer",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
+
+    # cache should not be used for "some_bypass_cache_referrer" so if the
+    # bypass does not work, the test will try to use a bad cache
+    with mock.patch(
+        "snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]
+    ):
+        with mock.patch("snuba.web.db_query._get_cache_partition"):
             result = db_query(
                 clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
