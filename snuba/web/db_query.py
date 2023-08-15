@@ -380,9 +380,30 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    clickhouse_query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
+
+    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
+        "enable_bypass_cache_referrers"
+    ):
+        query_id = f"randomized-{uuid.uuid4().hex}"
+        clickhouse_query_settings["query_id"] = query_id
+        if span:
+            span.set_data("query_id", query_id)
+
+        return execute_query_with_rate_limits(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+        )
+
+    clickhouse_query_settings["query_id"] = query_id
+
     if span:
         span.set_data("query_id", query_id)
 
@@ -398,11 +419,15 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
-        "enable_bypass_cache_referrers"
-    ):
-        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
-        return execute_query_with_rate_limits(
+    cache_partition = _get_cache_partition(reader)
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+    return cache_partition.get_readthrough(
+        query_id,
+        partial(
+            execute_query_with_rate_limits,
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -411,30 +436,11 @@ def execute_query_with_readthrough_caching(
             stats,
             clickhouse_query_settings,
             robust,
-        )
-    else:
-        cache_partition = _get_cache_partition(reader)
-        metrics.increment(
-            "cache_partition_loaded",
-            tags={"partition_id": reader.cache_partition_id or "default"},
-        )
-        return cache_partition.get_readthrough(
-            query_id,
-            partial(
-                execute_query_with_rate_limits,
-                clickhouse_query,
-                query_settings,
-                formatted_query,
-                reader,
-                timer,
-                stats,
-                clickhouse_query_settings,
-                robust,
-            ),
-            record_cache_hit_type=record_cache_hit_type,
-            timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
-            timer=timer,
-        )
+        ),
+        record_cache_hit_type=record_cache_hit_type,
+        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+        timer=timer,
+    )
 
 
 def _get_cache_wait_timeout(
