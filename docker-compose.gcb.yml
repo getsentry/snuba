@@ -27,7 +27,7 @@ services:
   snuba-test-rust:
     <<: *test-common
     entrypoint: make
-    command: test-rust
+    command: ["-C", "${TEST_LOCATION:-tests}", "test-rust"]
   snuba-test:
     <<: *test-common
     entrypoint: python
