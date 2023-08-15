@@ -138,4 +138,5 @@ FROM application AS testing
 
 USER 0
 RUN pip install -r requirements-test.txt
+RUN apt-get install -y make --no-install-recommends
 USER snuba
