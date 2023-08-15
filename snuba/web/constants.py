@@ -18,6 +18,11 @@ ACCEPTABLE_CLICKHOUSE_ERROR_CODES = {
     ErrorCodes.MEMORY_LIMIT_EXCEEDED,
 }
 
+NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
+    ErrorCodes.MEMORY_LIMIT_EXCEEDED,
+    ErrorCodes.TOO_SLOW,
+}
+
 
 def get_http_status_for_clickhouse_error(cause: ClickhouseError) -> int:
     """
