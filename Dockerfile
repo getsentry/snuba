@@ -121,10 +121,12 @@ ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
 FROM application_base as application
+USER 0
 RUN set -ex; \
     apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
     rm /tmp/build-deps.txt; \
     rm -rf /var/lib/apt/lists/*;
+USER snuba
 
 ARG SOURCE_COMMIT
 ENV SNUBA_RELEASE=$SOURCE_COMMIT \
