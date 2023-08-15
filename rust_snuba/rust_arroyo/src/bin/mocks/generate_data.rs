@@ -42,7 +42,7 @@ fn main() {
                 .long("brokers")
                 .help("Broker list in kafka format")
                 .takes_value(true)
-                .default_value("localhost:9092"),
+                .default_value("127.0.0.1:9092"),
         )
         .arg(
             Arg::with_name("topic")
@@ -72,7 +72,7 @@ fn main() {
         name: topic.to_string(),
     };
     let destination = TopicOrPartition::Topic(topic);
-    let config = KafkaConfig::new_producer_config(vec!["localhost:9092".to_string()], None);
+    let config = KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);
 
     let mut producer = KafkaProducer::new(config);
 

@@ -328,7 +328,7 @@ mod tests {
         let mut config = ClientConfig::new();
         config.set(
             "bootstrap.servers".to_string(),
-            "localhost:9092".to_string(),
+            std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
         );
 
         config.create().unwrap()
@@ -357,7 +357,9 @@ mod tests {
     #[test]
     fn test_subscribe() {
         let configuration = KafkaConfig::new_consumer_config(
-            vec!["localhost:9092".to_string()],
+            vec![
+                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
+            ],
             "my-group".to_string(),
             "latest".to_string(),
             false,
@@ -375,7 +377,9 @@ mod tests {
     async fn test_tell() {
         create_topic("test", 1).await;
         let configuration = KafkaConfig::new_consumer_config(
-            vec!["localhost:9092".to_string()],
+            vec![
+                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
+            ],
             "my-group-1".to_string(),
             "latest".to_string(),
             false,
@@ -405,7 +409,9 @@ mod tests {
     async fn test_commit() {
         create_topic("test2", 1).await;
         let configuration = KafkaConfig::new_consumer_config(
-            vec!["localhost:9092".to_string()],
+            vec![
+                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
+            ],
             "my-group-2".to_string(),
             "latest".to_string(),
             false,

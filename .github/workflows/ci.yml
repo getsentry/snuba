@@ -190,7 +190,7 @@ jobs:
     strategy:
       matrix:
         snuba_settings:
-          ["test", "test_distributed", "test_distributed_migrations"]
+          ["test", "test_rust", "test_distributed", "test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -225,10 +225,15 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
+      - name: Docker Snuba Rust tests
+        run: |
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-        if: ${{ matrix.snuba_settings != 'test_distributed_migrations' }}
+        if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
@@ -258,84 +263,6 @@ jobs:
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
-
-  rust-tests:
-    needs: [snuba-image]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      # Checkout codebase
-      - name: Checkout snuba
-        uses: actions/checkout@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
-
-      - name: Build snuba docker image for CI
-        run: |
-          docker build . \
-            -t snuba-test \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --target testing
-
-      # Checkout Sentry and run integration tests against latest snuba
-      # Make sure this is after `docker build`, otherwise we'll break docker cache
-      - name: Checkout sentry
-        uses: actions/checkout@v2
-        with:
-          repository: getsentry/sentry
-          path: sentry
-
-      - name: Setup steps
-        id: setup
-        run: |
-          pip install --upgrade pip wheel
-          # We cannot execute actions that are not placed under .github of the main repo
-          mkdir -p .github/actions
-          cp -r sentry/.github/actions/* .github/actions
-
-      - name: Setup Sentry
-        id: setup-sentry
-        uses: ./.github/actions/setup-sentry
-        with:
-          workdir: sentry
-          cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.8
-          snuba: false
-          kafka: true
-          clickhouse: true
-
-      - name: Start snuba
-        run: |
-          docker run -d --rm \
-            -p 127.0.0.1:1218:1218 \
-            -e PYTHONUNBUFFERED=1 \
-            -e SNUBA_SETTINGS=docker \
-            -e DEBUG=1 \
-            -e DEFAULT_BROKERS=sentry_kafka:9092 \
-            -e CLICKHOUSE_HOST=sentry_clickhouse \
-            -e CLICKHOUSE_PORT=9000 \
-            -e CLICKHOUSE_HTTP_PORT=8123 \
-            -e REDIS_HOST=sentry_redis \
-            -e REDIS_PORT=6379 \
-            -e REDIS_DB=1 \
-            --name sentry_snuba \
-            --network sentry \
-            snuba-test
-          docker exec sentry_snuba snuba migrations migrate --force
-
-      - name: Run Rust tests
-        run: |
-          make test-rust
 
   sentry:
     needs: [snuba-image]

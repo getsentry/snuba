@@ -71,17 +71,20 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
-	cd rust_snuba/ && cargo watch -s 'maturin develop'
+	. scripts/rust-envvars && \
+		cd rust_snuba/ && cargo watch -s 'maturin develop'
 .PHONY: watch-rust-snuba
 
 test-rust:
-	cd rust_snuba/rust_arroyo/ && cargo test
-	cd rust_snuba && cargo test
+	. scripts/rust-envvars && \
+		(cd rust_snuba/rust_arroyo/ && cargo test) && \
+		cd rust_snuba && cargo test
 .PHONY: test-rust
 
 lint-rust:
-	cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings
-	cd rust_snuba && cargo clippy -- -D warnings
+	. scripts/rust-envvars && \
+		(cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings) && \
+		(cd rust_snuba && cargo clippy -- -D warnings)
 
 .PHONY: lint-rust
 

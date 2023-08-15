@@ -38,7 +38,7 @@ fn main() {
                 .long("brokers")
                 .help("Broker list in kafka format")
                 .takes_value(true)
-                .default_value("localhost:9092"),
+                .default_value("127.0.0.1:9092"),
         )
         .arg(
             Arg::with_name("group-id")

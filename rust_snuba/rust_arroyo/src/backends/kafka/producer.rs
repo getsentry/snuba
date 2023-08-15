@@ -79,7 +79,7 @@ mod tests {
         };
         let destination = TopicOrPartition::Topic(topic);
         let configuration =
-            KafkaConfig::new_producer_config(vec!["localhost:9092".to_string()], None);
+            KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);
 
         let mut producer = KafkaProducer::new(configuration);
 
