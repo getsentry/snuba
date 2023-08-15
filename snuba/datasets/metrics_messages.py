@@ -14,6 +14,10 @@ class OutputType(Enum):
     DIST = "distribution"
 
 
+class AggregationOption(Enum):
+    HIST = "hist"
+
+
 ILLEGAL_VALUE_IN_SET = "Illegal value in set."
 INT_EXPECTED = "Int expected"
 ILLEGAL_VALUE_IN_DIST = "Illegal value in distribution."
@@ -84,16 +88,25 @@ def aggregation_options_for_set_message(
 def aggregation_options_for_distribution_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    return {
+    aggregation_options = {
         "min_retention_days": retention_days,
         "materialization_version": 2,
-        "enable_histogram": 1,
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
     }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        if parsed_aggregation_setting is AggregationOption.HIST:
+            return {
+                **aggregation_options,
+                "enable_histogram": 1,
+            }
+
+    return aggregation_options
 
 
 def aggregation_options_for_counter_message(
