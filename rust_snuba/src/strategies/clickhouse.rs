@@ -1,7 +1,7 @@
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
-use reqwest::{Client, Error, Response};
+use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
@@ -39,6 +39,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
             log::debug!("performing write");
             let response = client.send(data).await.unwrap();
+
             log::debug!("response: {:?}", response);
             log::info!("Inserted {} rows", len);
             Ok(message)
@@ -132,8 +133,9 @@ impl ClickhouseClient {
         client
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> Result<Response, Error> {
-        self.client
+    pub async fn send(&self, body: Vec<u8>) -> Result<Response, anyhow::Error> {
+        let res = self
+            .client
             .post(self.url.clone())
             .headers(self.headers.clone())
             .body(body)
@@ -142,7 +144,13 @@ impl ClickhouseClient {
                 format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
             )])
             .send()
-            .await
+            .await?;
+
+        if res.status() != reqwest::StatusCode::OK {
+            return Err(anyhow::anyhow!("error writing to clickhouse: {:?}", res));
+        }
+
+        Ok(res)
     }
 }
 
@@ -151,8 +159,12 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
-        let client: ClickhouseClient =
-            ClickhouseClient::new(&std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()), 8123, "querylog_local", "default");
+        let client: ClickhouseClient = ClickhouseClient::new(
+            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
+            8123,
+            "querylog_local",
+            "default",
+        );
 
         println!("{}", "running test");
         let res = client.send(b"[]".to_vec()).await;
