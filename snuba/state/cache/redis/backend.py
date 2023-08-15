@@ -320,4 +320,5 @@ class RedisCache(Cache[TValue]):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
             metrics.increment("snuba.read_through_cache.fail_open")
+            logger.warning("Redis readthrough cache failed open", exc_info=True)
             return value_generation_function()
