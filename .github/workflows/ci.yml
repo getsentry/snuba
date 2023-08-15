@@ -190,7 +190,7 @@ jobs:
     strategy:
       matrix:
         snuba_settings:
-          ["test", "test_distributed", "test_distributed_migrations"]
+          ["test", "test_rust", "test_distributed", "test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -225,10 +225,15 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
+      - name: Docker Snuba Rust tests
+        run: |
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-        if: ${{ matrix.snuba_settings != 'test_distributed_migrations' }}
+        if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |

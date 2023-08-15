@@ -1,16 +1,36 @@
 ---
 version: '3.4'
+
+x-test-common: &test-common
+  depends_on:
+    - redis_cluster
+    - kafka
+    - clickhouse
+    - zookeeper
+  image: '$SNUBA_IMAGE'
+  profiles: ["run_test"]
+  volumes:
+    - '.artifacts:/.artifacts'
+  environment:
+    SNUBA_SETTINGS: '$SNUBA_SETTINGS'
+    CLICKHOUSE_HOST: clickhouse
+    USE_REDIS_CLUSTER: '1'
+    REDIS_HOST: 'redis1'
+    REDIS_PORT: 6379
+    REDIS_DB: 0
+    DEFAULT_BROKERS: 'kafka:9092'
+  # override the `snuba` user to write to the /.artifacts mount
+  user: root
+
+
 services:
+  snuba-test-rust:
+    <<: *test-common
+    entrypoint: make
+    command: test-rust
   snuba-test:
-    depends_on:
-      - redis_cluster
-      - kafka
-      - clickhouse
-      - zookeeper
-    image: '$SNUBA_IMAGE'
-    profiles: ["run_test"]
-    volumes:
-      - '.artifacts:/.artifacts'
+    <<: *test-common
+    entrypoint: python
     command:
       - '-m'
       - 'pytest'
@@ -23,17 +43,6 @@ services:
       - 'xml:/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/coverage.xml'
       - '--junit-xml'
       - '/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml'
-    environment:
-      SNUBA_SETTINGS: '$SNUBA_SETTINGS'
-      CLICKHOUSE_HOST: clickhouse
-      USE_REDIS_CLUSTER: '1'
-      REDIS_HOST: 'redis1'
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      DEFAULT_BROKERS: 'kafka:9092'
-    entrypoint: python
-    # override the `snuba` user to write to the /.artifacts mount
-    user: root
   zookeeper:
     image: 'confluentinc/cp-zookeeper:5.1.2'
     environment:
