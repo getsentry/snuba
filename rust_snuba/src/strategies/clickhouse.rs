@@ -147,7 +147,10 @@ impl ClickhouseClient {
             .await?;
 
         if res.status() != reqwest::StatusCode::OK {
-            return Err(anyhow::anyhow!("error writing to clickhouse: {:?}", res));
+            return Err(anyhow::anyhow!(
+                "error writing to clickhouse: {}",
+                res.text().await?
+            ));
         }
 
         Ok(res)
