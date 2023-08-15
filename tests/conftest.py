@@ -216,7 +216,6 @@ def clickhouse_db(
                         "CREATE MATERIALIZED VIEW",
                         "CREATE MATERIALIZED VIEW IF NOT EXISTS",
                     )
-                    print(f"Creating table {table_name} on {node}")
                     connection.execute(create_table_query)
                 applied_nodes.add((node, table_name))
         yield
