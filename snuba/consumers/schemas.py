@@ -19,10 +19,10 @@ def _get_codec_impl(topic: Topic) -> Optional[Codec[Any]]:
         return sentry_kafka_schemas.get_codec(topic.value)
     except sentry_kafka_schemas.SchemaNotFound:
         return None
-    except Exception as err:
+    except Exception:
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("snuba_logical_topic", topic.name)
-            logger.warning(err, exc_info=True)
+            logger.warning(f"Validation error - {topic.name}", exc_info=True)
         return None
 
 

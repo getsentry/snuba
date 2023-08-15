@@ -300,7 +300,7 @@ class RedisCache(Cache[TValue]):
             return self.__get_readthrough(
                 key, function, record_cache_hit_type, timeout, timer
             )
-        except (ConnectionError, ReadOnlyError, RedisTimeoutError):
+        except (ConnectionError, ReadOnlyError, RedisTimeoutError, ValueError):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
             metrics.increment("snuba.read_through_cache.fail_open")
