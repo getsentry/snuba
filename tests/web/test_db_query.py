@@ -211,6 +211,63 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+def test_bypass_cache_refferer() -> None:
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
+
+    state.set_config("enable_bypass_cache_referrers", 1)
+
+    attribution_info = AttributionInfo(
+        app_id=AppID(key="key"),
+        tenant_ids={
+            "referrer": "some_bypass_cache_referrer",
+            "organization_id": 1234,
+        },
+        referrer="some_bypass_cache_referrer",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
+
+    # cache should not be used for "some_bypass_cache_referrer" according to settings_test.py
+    # so if the bypass does not work, the test will try to use a bad cache
+
+    with mock.patch("snuba.web.db_query._get_cache_partition"):
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert stats["quota_allowance"] == {
+            "BytesScannedWindowAllocationPolicy": {
+                "can_run": True,
+                "explanation": {},
+                "max_threads": 10,
+            }
+        }
+        assert len(query_metadata_list) == 1
+        assert result.extra["stats"] == stats
+        assert result.extra["sql"] is not None
+        assert set(result.result["profile"].keys()) == {  # type: ignore
+            "elapsed",
+            "bytes",
+            "blocks",
+            "rows",
+        }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_db_query_fail() -> None:
     query, storage, attribution_info = _build_test_query("count(non_existent_column)")
 

@@ -398,8 +398,8 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    if referrer in settings.AVOID_CACHE_REFERRERS and state.get_config(
-        "enable_avoid_cache_referrers"
+    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
+        "enable_bypass_cache_referrers"
     ):
         clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
         return execute_query_with_rate_limits(

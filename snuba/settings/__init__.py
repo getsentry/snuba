@@ -272,7 +272,7 @@ RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 
 # List of referrers not to look in or cache results for. Queries with these referrers generally
 # require live and up to date data, so caching should be avoided entirely.
-AVOID_CACHE_REFERRERS = ["subscriptions_executor"]
+BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
 # (logical topic name, # of partitions)
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
