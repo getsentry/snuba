@@ -206,12 +206,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status
 
-        transaction_op = sentry_tags.get("transaction_op", None)
+        processed["op"] = sentry_tags.get("op", "")
+        transaction_op = sentry_tags.get("transaction.op", None)
         if transaction_op:
-            processed["op"] = _unicodify(transaction_op)
-            processed["transaction_op"] = processed["op"]
-        else:
-            processed["op"] = ""
+            processed["transaction_op"] = _unicodify(transaction_op)
 
     def process_message(
         self,

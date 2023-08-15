@@ -81,9 +81,6 @@ class SpanEventExample:
         }
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
-        # start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
-        # finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
-
         ret = [
             {
                 "project_id": 1,
@@ -104,7 +101,7 @@ class SpanEventExample:
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
                 "duration": self.duration_ms,
                 "exclusive_time": self.exclusive_time_ms,
-                "op": self.op,
+                "op": "http.client",
                 "group": int(self.group, 16),
                 "group_raw": int(self.group_raw, 16),
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
