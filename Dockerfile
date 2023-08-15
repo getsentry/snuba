@@ -138,6 +138,8 @@ FROM application AS testing
 
 USER 0
 RUN pip install -r requirements-test.txt
-RUN apt-get install -y make --no-install-recommends
+RUN set -ex; \
+    apt-get update; \
+    apt-get install -y make --no-install-recommends
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y
 USER snuba
