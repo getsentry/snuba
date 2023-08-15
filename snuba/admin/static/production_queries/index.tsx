@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
 import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
-import { executeActionsStyle, executeButtonStyle, selectStyle } from "./styles";
+import { executeActionsStyle } from "./styles";
 import {
   Box,
   Button,
@@ -10,10 +10,12 @@ import {
   Group,
   Loader,
   Select,
+  Space,
   Text,
   Textarea,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { CSV } from "../cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -135,6 +137,29 @@ function ProductionQueries(props: { api: Client }) {
               return (
                 <div>
                   <p>Execution Duration (ms): {queryResult.duration_ms}</p>
+                  <Button.Group>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        window.navigator.clipboard.writeText(
+                          JSON.stringify(queryResult)
+                        )
+                      }
+                    >
+                      Copy to clipboard (JSON)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        window.navigator.clipboard.writeText(
+                          CSV.sheet([queryResult.columns, ...queryResult.rows])
+                        )
+                      }
+                    >
+                      Copy to clipboard (CSV)
+                    </Button>
+                  </Button.Group>
+                  <Space h="md" />
                   <Table
                     headerData={queryResult.columns}
                     rowData={queryResult.rows}
@@ -155,7 +180,9 @@ function ProjectsList(props: { projects: string[] }) {
   return (
     <Box mb="xs" mx="auto">
       <Group position="left" mb={5}>
-        <Button onClick={toggle}>View Allowed Projects</Button>
+        <Button onClick={toggle}>
+          {opened ? "Hide" : "View"} Allowed Projects
+        </Button>
       </Group>
 
       <Collapse in={opened}>
@@ -164,5 +191,28 @@ function ProjectsList(props: { projects: string[] }) {
     </Box>
   );
 }
+
+// {queryResultHistory.length > 1 && <h2>Query History</h2>}
+//         {queryResultHistory.map((queryResult, idx) => {
+//           if (idx) {
+//             <QueryResultHistoryItem queryResult={queryResult} />;
+//           }
+//         })}
+//       </div>
+//     </div>
+//   );
+// }
+
+// function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
+//   const [opened, { toggle }] = useDisclosure(false);
+//   return (
+//     <Collapse in={opened}>
+//       <div>
+//         <p>Execution Duration (ms): {queryResult.duration_ms}</p>
+//         <Table headerData={queryResult.columns} rowData={queryResult.rows} />
+//       </div>
+//     </Collapse>
+//   );
+// }
 
 export default ProductionQueries;
