@@ -1,5 +1,5 @@
 ---
-version: '3.4'
+version: "3.4"
 
 x-test-common: &test-common
   depends_on:
@@ -7,63 +7,64 @@ x-test-common: &test-common
     - kafka
     - clickhouse
     - zookeeper
-  image: '$SNUBA_IMAGE'
+  image: "$SNUBA_IMAGE"
   profiles: ["run_test"]
   volumes:
-    - '.artifacts:/.artifacts'
+    - ".artifacts:/.artifacts"
   environment:
-    SNUBA_SETTINGS: '$SNUBA_SETTINGS'
+    SNUBA_SETTINGS: "$SNUBA_SETTINGS"
     CLICKHOUSE_HOST: clickhouse
-    USE_REDIS_CLUSTER: '1'
-    REDIS_HOST: 'redis1'
+    USE_REDIS_CLUSTER: "1"
+    REDIS_HOST: "redis1"
     REDIS_PORT: 6379
     REDIS_DB: 0
-    DEFAULT_BROKERS: 'kafka:9092'
+    DEFAULT_BROKERS: "kafka:9092"
   # override the `snuba` user to write to the /.artifacts mount
   user: root
-
 
 services:
   snuba-test-rust:
     <<: *test-common
-    entrypoint: make
-    command: [test-rust]
+    entrypoint: "/bin/sh"
+    command: >
+      bash -c "snuba migrations migrate --force
+      && make test-rust"
   snuba-test:
     <<: *test-common
     entrypoint: python
     command:
-      - '-m'
-      - 'pytest'
-      - '-x'
-      - '-vv'
-      - '${TEST_LOCATION:-tests}'
-      - '--cov'
-      - '.'
-      - '--cov-report'
-      - 'xml:/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/coverage.xml'
-      - '--junit-xml'
-      - '/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml'
+      - "-m"
+      - "pytest"
+      - "-x"
+      - "-vv"
+      - "${TEST_LOCATION:-tests}"
+      - "--cov"
+      - "."
+      - "--cov-report"
+      - "xml:/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/coverage.xml"
+      - "--junit-xml"
+      - "/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml"
   zookeeper:
-    image: 'confluentinc/cp-zookeeper:5.1.2'
+    image: "confluentinc/cp-zookeeper:5.1.2"
     environment:
-      ZOOKEEPER_CLIENT_PORT: '2181'
-      CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
-      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: 'WARN'
-      ZOOKEEPER_TOOLS_LOG4J_LOGLEVEL: 'WARN'
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: "WARN"
+      ZOOKEEPER_TOOLS_LOG4J_LOGLEVEL: "WARN"
   kafka:
     depends_on:
       - zookeeper
-    image: 'confluentinc/cp-kafka:5.1.2'
+    image: "confluentinc/cp-kafka:5.1.2"
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
-      CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
-      KAFKA_LOG4J_LOGGERS: 'kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,kafka.zookeeper=WARN,state.change.logger=WARN'
-      KAFKA_LOG4J_ROOT_LOGLEVEL: 'WARN'
-      KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+      KAFKA_LOG4J_LOGGERS: "kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,kafka.zookeeper=WARN,state.change.logger=WARN"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     volumes:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -77,7 +78,7 @@ services:
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -89,7 +90,7 @@ services:
   clickhouse-01:
     depends_on:
       - zookeeper
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -102,7 +103,7 @@ services:
   clickhouse-02:
     depends_on:
       - zookeeper
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -115,7 +116,7 @@ services:
   clickhouse-03:
     depends_on:
       - zookeeper
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -128,7 +129,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: "yandex/clickhouse-server:20.3.9.70"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -143,32 +144,31 @@ services:
     image: redis:5.0-alpine
     command:
       - redis-server
-      - '--appendonly'
-      - 'no'
-      - '--cluster-enabled'
-      - 'yes'
-      - '--cluster-config-file'
-      - '/data/redis_cluster.conf'
+      - "--appendonly"
+      - "no"
+      - "--cluster-enabled"
+      - "yes"
+      - "--cluster-config-file"
+      - "/data/redis_cluster.conf"
   redis2:
-    << : *redis_config
+    <<: *redis_config
   redis3:
-    << : *redis_config
+    <<: *redis_config
   redis_cluster:
-    << : *redis_config
+    <<: *redis_config
     command:
-     - '/bin/sh'
-     - '-c'
-     - >-
-      echo yes |
-      redis-cli --cluster create
-      $$(getent hosts redis1 | awk '{ print $$1 }'):6379
-      $$(getent hosts redis2 | awk '{ print $$1 }'):6379
-      $$(getent hosts redis3 | awk '{ print $$1 }'):6379
+      - "/bin/sh"
+      - "-c"
+      - >-
+        echo yes |
+        redis-cli --cluster create
+        $$(getent hosts redis1 | awk '{ print $$1 }'):6379
+        $$(getent hosts redis2 | awk '{ print $$1 }'):6379
+        $$(getent hosts redis3 | awk '{ print $$1 }'):6379
     depends_on:
-     - redis1
-     - redis2
-     - redis3
-
+      - redis1
+      - redis2
+      - redis3
 networks:
   default:
     external:
