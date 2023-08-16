@@ -19,6 +19,7 @@ from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit
 
 from snuba import state
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -41,6 +42,8 @@ from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.web import QueryException
+from snuba.web.constants import NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger(__name__)
@@ -330,17 +333,25 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             should_execute = False
 
         if should_execute:
-            self.__queue.append(
-                (
-                    message,
-                    SubscriptionTaskResultFuture(
-                        task,
-                        self.__executor.submit(
-                            self.__execute_query, task, tick_upper_offset
+            try:
+                self.__queue.append(
+                    (
+                        message,
+                        SubscriptionTaskResultFuture(
+                            task,
+                            self.__executor.submit(
+                                self.__execute_query, task, tick_upper_offset
+                            ),
                         ),
-                    ),
+                    )
                 )
-            )
+            except QueryException as exc:
+                cause = exc.__cause__
+                if isinstance(cause, ClickhouseError):
+                    if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                        logger.exception("Error running subscription query %r", exc)
+                    else:
+                        raise exc
         else:
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 
