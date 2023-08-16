@@ -25,10 +25,12 @@ x-test-common: &test-common
 services:
   snuba-test-rust:
     <<: *test-common
-    entrypoint: "/bin/sh"
-    command: >
-      bash -c "snuba migrations migrate --force
-      && make test-rust"
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - >-
+        snuba migrations migrate --force
+        && make test-rust
   snuba-test:
     <<: *test-common
     entrypoint: python
