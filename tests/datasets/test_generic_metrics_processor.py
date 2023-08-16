@@ -134,4 +134,4 @@ def test_aggregation_option_is_converted_to_column(
 
     insert_batch = dis_processor.process_message(message, None)
 
-    insert_batch.rows[0]["enable_histogram"] = 1
+    assert insert_batch.rows[0]["enable_histogram"] == 1
