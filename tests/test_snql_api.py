@@ -1251,7 +1251,7 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert (
-            response.status_code == 500
+            response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
     def test_allocation_policy_violation(self) -> None:
