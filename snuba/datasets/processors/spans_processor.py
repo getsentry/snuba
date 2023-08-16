@@ -200,8 +200,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         status = sentry_tags.get("status", None)
         if status:
-            processed["status"] = status
             int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+            processed["status"] = int_status
         else:
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status

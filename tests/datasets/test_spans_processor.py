@@ -107,7 +107,7 @@ class SpanEventExample:
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
                 "span_kind": "",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
-                "status": "ok",
+                "status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
                 "module": self.module,
                 "domain": "targetdomain.tld:targetport",
                 "platform": self.platform,
