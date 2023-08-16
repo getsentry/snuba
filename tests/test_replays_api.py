@@ -108,7 +108,7 @@ class TestReplaysApi(BaseApiTest):
             {
                 "title": None,
                 "user": None,
-                "sdk_name": None,
-                "sdk_version": None,
+                "sdk_name": "",
+                "sdk_version": "",
             }
         ]
