@@ -13,6 +13,7 @@ use rust_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 
+use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
@@ -153,4 +154,24 @@ pub fn consumer_impl(
     .expect("Error setting Ctrl-C handler");
 
     processor.run().unwrap();
+}
+
+#[pyfunction]
+pub fn process_message(name: &str, value: Vec<u8>) -> Option<Vec<u8>> {
+    // XXX: Currently only takes the message payload. This assumes
+    // key, headers and other metadata are not used for message processing
+    match processors::get_processing_function(name) {
+        None => return None,
+        Some(func) => {
+            let payload = KafkaPayload {
+                key: None,
+                headers: None,
+                payload: Some(value),
+            };
+            let res = func(payload);
+            println!("res {:?}", res);
+            let row = res.unwrap().rows[0].clone();
+            Some(row)
+        }
+    }
 }
