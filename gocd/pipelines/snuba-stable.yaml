@@ -13,6 +13,7 @@ pipelines:
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
         group: snuba
+        display_order: 100 # Ensure it's last pipeline in UI
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:

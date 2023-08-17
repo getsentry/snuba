@@ -17,6 +17,7 @@ pipelines:
             GKE_BASTION_ZONE: a
             MIGRATIONS_READINESS: complete
         group: snuba
+        display_order: 100 # Ensure it's last pipeline in UI
         lock_behavior: unlockWhenFinished
         materials:
             snuba_repo:
