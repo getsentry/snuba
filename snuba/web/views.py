@@ -411,19 +411,25 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
-        if "asynchronous" in body and body["asynchronous"]:
-            result = send_query.delay(
-                dataset, body, timer, http_request.referrer or "<unknown>"
-            )
-            return Response(
-                json.dumps({"queryID": result.id}, default=str),
-                200,
-                {"Content-Type": "application/json"},
-            )
         _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
+
+
+@application.route("/<dataset:dataset>/snql_async", methods=["POST"])
+@util.time_request("query")
+def snql_dataset_async_query(*, dataset: Dataset, timer: Timer) -> Response:
+    body = parse_request_body(http_request)
+    body["asynchronous"] = True
+    result = send_query.delay(
+        dataset, body, timer, http_request.referrer or "<unknown>"
+    )
+    return Response(
+        json.dumps({"queryID": result.id}, default=str),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/poll_query/<query_id>")
