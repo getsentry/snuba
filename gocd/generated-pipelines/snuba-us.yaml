@@ -3,8 +3,8 @@ pipelines:
   deploy-snuba-us:
     display_order: 3
     environment_variables:
-      GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}'
-      GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}'
+      GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+      GOCD_ACCESS_TOKEN: "{{SECRET:[devinfra][gocd_access_token]}}"
       SENTRY_REGION: us
     group: snuba
     lock_behavior: unlockWhenFinished
@@ -55,7 +55,7 @@ pipelines:
             create-sentry-release:
               elastic_profile_id: snuba
               environment_variables:
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}'
+                SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
                 SENTRY_ORG: sentry
                 SENTRY_PROJECT: snuba
               tasks:
@@ -120,6 +120,7 @@ pipelines:
                       --container-name="rust-querylog-consumer" \
                       --container-name="spans-consumer" \
                       --container-name="dlq-consumer" \
+                      --container-name="group-attributes-consumer" \
                     && /devinfra/scripts/k8s/k8s-deploy.py \
                       --label-selector="${LABEL_SELECTOR}" \
                       --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
@@ -133,7 +134,7 @@ pipelines:
             create-sentry-release:
               elastic_profile_id: snuba
               environment_variables:
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}'
+                SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
                 SENTRY_ORG: sentry
                 SENTRY_PROJECT: snuba
               tasks:
