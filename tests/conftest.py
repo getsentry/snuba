@@ -208,7 +208,7 @@ def clickhouse_db(
                     ClickhouseClientSettings.MIGRATE, node
                 )
                 for table_name, create_table_query in tables.items():
-                    if (node, table_name) in applied_nodes:
+                    if (node.host_name, node.port, table_name) in applied_nodes:
                         continue
                     create_table_query = create_table_query.replace(
                         "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
@@ -217,7 +217,7 @@ def clickhouse_db(
                         "CREATE MATERIALIZED VIEW IF NOT EXISTS",
                     )
                     connection.execute(create_table_query)
-                applied_nodes.add((node, table_name))
+                applied_nodes.add((node.host_name, node.port, table_name))
         yield
     finally:
         _clear_db()
