@@ -5,7 +5,13 @@ import pytest
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import (
+    LimitBy,
+    OrderBy,
+    OrderByDirection,
+    SelectDistinct,
+    SelectedExpression,
+)
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, unary_condition
 from snuba.query.data_source.join import (
@@ -75,6 +81,30 @@ test_cases = [
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
+            granularity=60,
+            condition=required_condition,
+            limit=1000,
+            offset=0,
+        ),
+        id="granularity on whole query",
+    ),
+    pytest.param(
+        f"MATCH (events) DISTINCT 4-5, c WHERE {added_condition} GRANULARITY 60",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=SelectDistinct(
+                [
+                    SelectedExpression(
+                        "4-5",
+                        FunctionCall(
+                            "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                        ),
+                    ),
+                    SelectedExpression("c", Column("_snuba_c", None, "c")),
+                ]
+            ),
             granularity=60,
             condition=required_condition,
             limit=1000,

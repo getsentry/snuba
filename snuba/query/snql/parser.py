@@ -31,7 +31,14 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import (
+    LimitBy,
+    OrderBy,
+    OrderByDirection,
+    Select,
+    SelectDistinct,
+    SelectedExpression,
+)
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
@@ -107,9 +114,10 @@ logger = logging.getLogger("snuba.snql.parser")
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
+    query_exp             = match_clause (distinct_clause / select_clause) group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
+    distinct_clause       = space+ "DISTINCT" space+ select_list
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
     arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
@@ -731,9 +739,17 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         visited_children: Tuple[Any, Any, Any, Sequence[SelectedExpression]],
-    ) -> Sequence[SelectedExpression]:
+    ) -> Select:
         _, _, _, selected_columns = visited_children
-        return selected_columns
+        return Select(selected_columns)
+
+    def visit_distinct_clause(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Sequence[SelectedExpression]],
+    ) -> SelectDistinct:
+        _, _, _, selected_columns = visited_children
+        return SelectDistinct(selected_columns)
 
     def visit_selected_expression(
         self,

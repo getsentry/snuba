@@ -9,6 +9,7 @@ from typing import (
     Callable,
     Generic,
     Iterable,
+    Iterator,
     MutableMapping,
     Optional,
     Sequence,
@@ -16,6 +17,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -56,6 +58,36 @@ class SelectedExpression:
     expression: Expression
 
 
+class IterableSelection:
+    def __init__(self, selection: Sequence[SelectedExpression]) -> None:
+        self.selection = selection
+
+    def __iter__(self) -> Iterator[SelectedExpression]:
+        return iter(self.selection)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({str(self.selection)})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.selection == other.selection
+
+    def __len__(self) -> int:
+        return len(self.selection)
+
+
+class Select(IterableSelection):
+    """SELECT keyword AST node."""
+
+
+class SelectDistinct(IterableSelection):
+    """SELECT DISTINCT keyword AST node."""
+
+
+SelectionType = Union[Select, SelectDistinct, Sequence[SelectedExpression]]
+
+
 TExp = TypeVar("TExp", bound=Expression)
 
 
@@ -90,7 +122,7 @@ class Query(DataSource, ABC):
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        selected_columns: Optional[SelectionType] = None,
         array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
@@ -103,7 +135,12 @@ class Query(DataSource, ABC):
         granularity: Optional[int] = None,
         experiments: Optional[MutableMapping[str, AnyType]] = None,
     ):
-        self.__selected_columns = selected_columns or []
+        if selected_columns is None:
+            selected_columns = Select([])
+        elif not isinstance(selected_columns, (Select, SelectDistinct)):
+            selected_columns = Select(selected_columns)
+
+        self.__selected_columns = selected_columns
         self.__array_join = array_join
         self.__condition = condition
         self.__groupby = groupby or []
@@ -145,13 +182,14 @@ class Query(DataSource, ABC):
 
     # TODO: Run a codemod to remove the "from_ast" from all these
     # methods.
-    def get_selected_columns(self) -> Sequence[SelectedExpression]:
+    def get_selected_columns(self) -> Union[Select, SelectDistinct]:
         return self.__selected_columns
 
-    def set_ast_selected_columns(
-        self, selected_columns: Sequence[SelectedExpression]
-    ) -> None:
-        self.__selected_columns = selected_columns
+    def set_ast_selected_columns(self, selected_columns: SelectionType) -> None:
+        if isinstance(selected_columns, IterableSelection):
+            self.__selected_columns = selected_columns
+        else:
+            self.__selected_columns = Select(selected_columns)
 
     def get_groupby(self) -> Sequence[Expression]:
         return self.__groupby
@@ -190,6 +228,12 @@ class Query(DataSource, ABC):
 
     def set_ast_orderby(self, orderby: Sequence[OrderBy]) -> None:
         self.__order_by = orderby
+
+    def get_distinct(self) -> bool:
+        return self.__distinct
+
+    def set_distinct(self, distinct: bool) -> None:
+        self.__distinct = distinct
 
     def get_limitby(self) -> Optional[LimitBy]:
         return self.__limitby
@@ -296,12 +340,14 @@ class Query(DataSource, ABC):
                 map(lambda exp: exp.transform(func), expressions),
             )
 
-        self.__selected_columns = list(
-            map(
-                lambda selected: replace(
-                    selected, expression=selected.expression.transform(func)
-                ),
-                self.__selected_columns,
+        self.__selected_columns = self.__selected_columns.__class__(
+            list(
+                map(
+                    lambda selected: replace(
+                        selected, expression=selected.expression.transform(func)
+                    ),
+                    self.__selected_columns,
+                )
             )
         )
         if not skip_array_join:
@@ -352,14 +398,19 @@ class Query(DataSource, ABC):
         The transformation happens in place.
         """
 
-        self.__selected_columns = list(
-            map(
-                lambda selected: replace(
-                    selected, expression=selected.expression.accept(visitor)
-                ),
-                self.__selected_columns,
+        self.__selected_columns = self.__selected_columns.__class__(
+            (
+                list(
+                    map(
+                        lambda selected: replace(
+                            selected, expression=selected.expression.accept(visitor)
+                        ),
+                        self.__selected_columns,
+                    )
+                )
             )
         )
+
         if self.__array_join is not None:
             self.__array_join = [
                 join_element.accept(visitor) for join_element in self.__array_join
@@ -495,7 +546,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        selected_columns: Optional[SelectionType] = None,
         array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,

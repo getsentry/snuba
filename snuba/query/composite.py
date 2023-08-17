@@ -7,7 +7,7 @@ from snuba.query import (
     OrderBy,
     ProcessableQuery,
     Query,
-    SelectedExpression,
+    SelectionType,
     TSimpleDataSource,
 )
 from snuba.query.data_source.join import JoinClause
@@ -36,7 +36,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        selected_columns: Optional[SelectionType] = None,
         array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,

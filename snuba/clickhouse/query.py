@@ -2,7 +2,7 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
-from snuba.query import SelectedExpression
+from snuba.query import SelectionType
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
@@ -17,7 +17,7 @@ class Query(AbstractQuery[Table]):
         self,
         from_clause: Optional[Table],
         # New data model to replace the one based on the dictionary
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        selected_columns: Optional[SelectionType] = None,
         array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         prewhere: Optional[Expression] = None,

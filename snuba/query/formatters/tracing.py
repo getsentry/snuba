@@ -1,6 +1,6 @@
 from typing import Any, List, Mapping, Sequence, Union
 
-from snuba.query import ProcessableQuery
+from snuba.query import ProcessableQuery, SelectDistinct
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import SimpleDataSource
@@ -27,13 +27,19 @@ def format_query(
 
     eformatter = StringifyVisitor(level=0, initial_indent=1)
 
+    _selected_columns = query.get_selected_columns()
+
     selects = ",\n".join(
         [
             f"{e.expression.accept(eformatter)} |> {e.name}"
-            for e in query.get_selected_columns()
+            for e in _selected_columns.selection
         ]
     )
-    select_str = f"SELECT\n{selects}" if selects else ""
+
+    if isinstance(_selected_columns, SelectDistinct):
+        select_str = f"SELECT DISTINCT\n{selects}" if selects else ""
+    else:
+        select_str = f"SELECT\n{selects}" if selects else ""
 
     from_strs = [
         "FROM",

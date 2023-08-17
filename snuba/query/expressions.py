@@ -17,6 +17,7 @@ TVisited = TypeVar("TVisited")
 # Sometimes however, we want the raw data, and this allows us to print that out
 _AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 
+
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class _Expression:
