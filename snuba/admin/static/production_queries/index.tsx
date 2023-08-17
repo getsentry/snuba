@@ -166,6 +166,13 @@ function ProductionQueries(props: { api: Client }) {
                   />
                 </div>
               );
+            } else {
+              return (
+                <div>
+                  <h1>Test</h1>
+                  <QueryResultHistoryItem queryResult={queryResult} />
+                </div>
+              );
             }
           })
         )}
@@ -191,28 +198,5 @@ function ProjectsList(props: { projects: string[] }) {
     </Box>
   );
 }
-
-// {queryResultHistory.length > 1 && <h2>Query History</h2>}
-//         {queryResultHistory.map((queryResult, idx) => {
-//           if (idx) {
-//             <QueryResultHistoryItem queryResult={queryResult} />;
-//           }
-//         })}
-//       </div>
-//     </div>
-//   );
-// }
-
-// function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
-//   const [opened, { toggle }] = useDisclosure(false);
-//   return (
-//     <Collapse in={opened}>
-//       <div>
-//         <p>Execution Duration (ms): {queryResult.duration_ms}</p>
-//         <Table headerData={queryResult.columns} rowData={queryResult.rows} />
-//       </div>
-//     </Collapse>
-//   );
-// }
 
 export default ProductionQueries;
