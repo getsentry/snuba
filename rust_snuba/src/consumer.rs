@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
+
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
@@ -16,7 +18,7 @@ use pyo3::prelude::*;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use crate::{config, setup_sentry};
 
 #[pyfunction]
@@ -157,9 +159,15 @@ pub fn consumer_impl(
 }
 
 #[pyfunction]
-pub fn process_message(name: &str, value: Vec<u8>) -> Option<Vec<u8>> {
-    // XXX: Currently only takes the message payload. This assumes
-    // key, headers and other metadata are not used for message processing
+pub fn process_message(
+    name: &str,
+    value: Vec<u8>,
+    partition: u16,
+    offset: u64,
+    millis_since_epoch: i64,
+) -> Option<Vec<u8>> {
+    // XXX: Currently only takes the message payload and metadata. This assumes
+    // key and headers are not used for message processing
     match processors::get_processing_function(name) {
         None => None,
         Some(func) => {
@@ -168,7 +176,18 @@ pub fn process_message(name: &str, value: Vec<u8>) -> Option<Vec<u8>> {
                 headers: None,
                 payload: Some(value),
             };
-            let res = func(payload);
+
+            let meta = KafkaMessageMetadata {
+                partition,
+                offset,
+                timestamp: DateTime::from_utc(
+                    NaiveDateTime::from_timestamp_millis(millis_since_epoch)
+                        .unwrap_or(NaiveDateTime::MIN),
+                    Utc,
+                ),
+            };
+
+            let res = func(payload, meta);
             println!("res {:?}", res);
             let row = res.unwrap().rows[0].clone();
             Some(row)

@@ -1,4 +1,4 @@
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{ser::Error, Deserialize, Serialize, Serializer};
@@ -7,7 +7,10 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use uuid::Uuid;
 
-pub fn process_message(payload: KafkaPayload) -> Result<BytesInsertBatch, InvalidMessage> {
+pub fn process_message(
+    payload: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+) -> Result<BytesInsertBatch, InvalidMessage> {
     if let Some(payload_bytes) = payload.payload {
         let msg: FromQuerylogMessage =
             serde_json::from_slice(&payload_bytes).map_err(|_| InvalidMessage)?;
