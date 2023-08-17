@@ -161,7 +161,7 @@ pub fn process_message(name: &str, value: Vec<u8>) -> Option<Vec<u8>> {
     // XXX: Currently only takes the message payload. This assumes
     // key, headers and other metadata are not used for message processing
     match processors::get_processing_function(name) {
-        None => return None,
+        None => None,
         Some(func) => {
             let payload = KafkaPayload {
                 key: None,
