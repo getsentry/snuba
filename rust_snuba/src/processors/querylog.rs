@@ -1,7 +1,7 @@
 use crate::types::BytesInsertBatch;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{Deserialize, Serialize};
+use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -29,9 +29,19 @@ struct RequestBody {
     fields: HashMap<String, Value>,
 }
 
+fn serialize_uuid<S>(input: &str, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let uuid = Uuid::parse_str(input)
+        .map_err(S::Error::custom)?
+        .to_string();
+    s.serialize_str(&uuid)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
-    #[serde(rename(serialize = "request_id"))]
+    #[serde(rename(serialize = "request_id"), serialize_with = "serialize_uuid")]
     id: String,
     #[serde(rename(serialize = "request_body"))]
     body: RequestBody,
