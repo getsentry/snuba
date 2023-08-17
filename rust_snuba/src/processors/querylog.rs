@@ -291,7 +291,9 @@ impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use std::time::SystemTime;
 
     #[test]
     fn test_querylog() {
@@ -395,6 +397,11 @@ mod tests {
             headers: None,
             payload: Some(data.as_bytes().to_vec()),
         };
-        process_message(payload).expect("The message should be processed");
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
     }
 }
