@@ -59,7 +59,6 @@ function(region) {
     GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}',
     GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}',
   },
-  group: 'snuba-next',
   lock_behavior: 'unlockWhenFinished',
   materials: {
     snuba_repo: {
