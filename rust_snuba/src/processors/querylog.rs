@@ -1,7 +1,7 @@
 use crate::types::BytesInsertBatch;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{ser::Error, Deserialize, Serialize, Serializer};
+use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -37,6 +37,14 @@ where
         .map_err(S::Error::custom)?
         .to_string();
     s.serialize_str(&uuid)
+}
+
+fn nullable_result_profile<'de, D>(deserializer: D) -> Result<ResultProfile, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_else(ResultProfile::default))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -116,7 +124,7 @@ struct FromQuery {
     trace_id: String,
     stats: Stats,
     profile: Profile,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_result_profile")]
     result_profile: ResultProfile,
 }
 
