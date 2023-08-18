@@ -359,7 +359,6 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
-        assert query_metadata_list[0]
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
