@@ -277,9 +277,11 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         if "groupby" in args:
             if "selected_columns" not in args:
-                args["selected_columns"] = args["groupby"]
+                args["selected_columns"] = Select(args["groupby"])
             else:
-                args["selected_columns"] = args["groupby"] + args["selected_columns"]
+                args["selected_columns"] = (
+                    Select(args["groupby"]) + args["selected_columns"]
+                )
 
             args["groupby"] = [gb.expression for gb in args["groupby"]]
 

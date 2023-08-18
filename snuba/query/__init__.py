@@ -60,7 +60,7 @@ class SelectedExpression:
 
 class IterableSelection:
     def __init__(self, selection: Sequence[SelectedExpression]) -> None:
-        self.selection = selection
+        self.selection = list(selection)
 
     def __iter__(self) -> Iterator[SelectedExpression]:
         return iter(self.selection)
@@ -68,10 +68,25 @@ class IterableSelection:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({str(self.selection)})"
 
+    def __add__(self, other: object) -> IterableSelection:
+        if isinstance(other, self.__class__):
+            self.selection.extend(other.selection)
+            return self
+        else:
+            raise ValueError(
+                f"Could not concatenate {self.__class__} and {other.__class__}."
+            )
+
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, self.__class__):
+        if isinstance(other, self.__class__):
+            return self.selection == other.selection
+        elif isinstance(other, list):
+            return self.selection == other
+        else:
             return False
-        return self.selection == other.selection
+
+    def __getitem__(self, index: int) -> SelectedExpression:
+        return self.selection[index]
 
     def __len__(self) -> int:
         return len(self.selection)
