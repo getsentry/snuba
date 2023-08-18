@@ -44,7 +44,7 @@ where
     D: Deserializer<'de>,
 {
     let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_else(ResultProfile::default))
+    Ok(opt.unwrap_or_default())
 }
 
 #[derive(Debug, Deserialize, Serialize)]
