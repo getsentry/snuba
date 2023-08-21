@@ -10,10 +10,13 @@ storage_set_name = StorageSetKey.SPANS
 local_table_name = "spans_local"
 dist_table_name = "spans_dist"
 
-
+# There an issue in Clickhouse where the arrayMap function passes
+# in Nothing type values for empty arrays. This causes the regex function to fail
+# without the toString function, unless a merge for the part is completed.
+# This is fixed in Clickhouse 22.
 SENTRY_TAGS_HASH_MAP_COLUMN = (
     "arrayMap((k, v) -> cityHash64(concat("
-    "replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', v)), "
+    "replaceRegexpAll(toString(k), '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', toString(v))), "
     "sentry_tags.key, sentry_tags.value)"
 )
 
