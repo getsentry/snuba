@@ -14,13 +14,13 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            return InvalidMessage;
+            InvalidMessage
         })?;
         let querylog_msg: QuerylogMessage = msg.try_into()?;
 
         let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
             log::error!("Failed to serialize message: {}", err);
-            return InvalidMessage;
+            InvalidMessage
         })?;
 
         return Ok(BytesInsertBatch {

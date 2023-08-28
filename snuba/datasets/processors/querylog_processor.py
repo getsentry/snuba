@@ -57,7 +57,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         bytes_scanned_columns = []
 
         for query in query_list:
-            if "sample" in query["stats"]:
+            if "sample" in query["stats"] and query["stats"]["sample"] is not None:
                 query["stats"]["sample"] = self.__get_sample(query["stats"]["sample"])
             sql.append(query["sql"])
             status.append(query["status"])
