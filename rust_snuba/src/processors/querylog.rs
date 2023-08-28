@@ -1,4 +1,4 @@
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -7,7 +7,10 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use uuid::Uuid;
 
-pub fn process_message(payload: KafkaPayload) -> Result<BytesInsertBatch, InvalidMessage> {
+pub fn process_message(
+    payload: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+) -> Result<BytesInsertBatch, InvalidMessage> {
     if let Some(payload_bytes) = payload.payload {
         let msg: FromQuerylogMessage =
             serde_json::from_slice(&payload_bytes).map_err(|_| InvalidMessage)?;
@@ -296,7 +299,9 @@ impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use std::time::SystemTime;
 
     #[test]
     fn test_querylog() {
@@ -400,6 +405,11 @@ mod tests {
             headers: None,
             payload: Some(data.as_bytes().to_vec()),
         };
-        process_message(payload).expect("The message should be processed");
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
     }
 }
