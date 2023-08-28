@@ -118,7 +118,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Query,
+    query: Union[Query, CompositeQuery[Table]],
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -141,7 +141,7 @@ def update_query_metadata_and_stats(
     if triggered_rate_limiter is not None:
         stats["triggered_rate_limiter"] = triggered_rate_limiter
     sql_anonymized = format_query_anonymized(query).get_sql()
-    start, end = get_time_range_estimate(query)
+    start, end = get_time_range_estimate(cast(ProcessableQuery[Table], query))
 
     query_metadata_list.append(
         ClickhouseQueryMetadata(
