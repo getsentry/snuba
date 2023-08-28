@@ -52,6 +52,7 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
         index_expression="_urls_hashed",
         index_type="bloom_filter()",
         granularity=1,
+        target=operations.OperationTarget.LOCAL,
     )
 
 
@@ -74,4 +75,5 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         StorageSetKey.REPLAYS,
         "replays_local",
         "bf_urls_hashed",
+        target=operations.OperationTarget.LOCAL,
     )
