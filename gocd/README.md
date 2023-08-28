@@ -1,6 +1,6 @@
 # Snuba Pipelines
 
-Relay is in the process of moving to a set of rendered jsonnet pipelines.
+Snuba uses Jsonnet for creating the pipedream pipelines.
 
 ## Dependencies
 
