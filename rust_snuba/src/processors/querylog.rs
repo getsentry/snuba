@@ -3,7 +3,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use uuid::Uuid;
 
@@ -12,11 +12,16 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, InvalidMessage> {
     if let Some(payload_bytes) = payload.payload {
-        let msg: FromQuerylogMessage =
-            serde_json::from_slice(&payload_bytes).map_err(|_| InvalidMessage)?;
+        let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+            log::error!("Failed to deserialize message: {}", err);
+            return InvalidMessage;
+        })?;
         let querylog_msg: QuerylogMessage = msg.try_into()?;
 
-        let serialized = serde_json::to_vec(&querylog_msg).map_err(|_| InvalidMessage)?;
+        let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
+            log::error!("Failed to serialize message: {}", err);
+            return InvalidMessage;
+        })?;
 
         return Ok(BytesInsertBatch {
             rows: vec![serialized],
@@ -29,7 +34,7 @@ pub fn process_message(
 #[derive(Debug, Deserialize, Serialize)]
 struct RequestBody {
     #[serde(flatten)]
-    fields: HashMap<String, Value>,
+    fields: BTreeMap<String, Value>,
 }
 
 fn serialize_uuid<S>(input: &str, s: S) -> Result<S::Ok, S::Error>
@@ -50,11 +55,22 @@ where
     Ok(opt.unwrap_or_default())
 }
 
+fn serialize_json_str<S>(input: &RequestBody, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let request_body = serde_json::to_string(input).map_err(S::Error::custom)?;
+    s.serialize_str(&request_body)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
     #[serde(rename(serialize = "request_id"), serialize_with = "serialize_uuid")]
     id: String,
-    #[serde(rename(serialize = "request_body"))]
+    #[serde(
+        rename(serialize = "request_body"),
+        serialize_with = "serialize_json_str"
+    )]
     body: RequestBody,
     referrer: String,
 }
@@ -65,26 +81,56 @@ struct Timing {
     duration_ms: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct Stats {
     #[serde(default)]
-    consistent: bool,
+    consistent: Option<bool>,
     #[serde(default)]
     r#final: bool,
     #[serde(default)]
-    cache_hit: u8,
+    cache_hit: Option<u8>,
     #[serde(default)]
     sample: Option<f32>,
     #[serde(default)]
-    max_threads: u8,
+    max_threads: Option<u8>,
     #[serde(default)]
     clickhouse_table: String,
     #[serde(default)]
     query_id: String,
     #[serde(default)]
-    is_duplicate: u8,
+    is_duplicate: Option<u8>,
     #[serde(flatten)]
-    extra: HashMap<String, Value>,
+    extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct SortedStats {
+    #[serde(flatten)]
+    stats: BTreeMap<String, Value>,
+}
+
+impl From<Stats> for SortedStats {
+    fn from(from: Stats) -> SortedStats {
+        // consistent, cache hit, max_threads and is_duplicated may not be present
+        let mut stats = from.extra;
+        if from.consistent.is_some() {
+            stats.insert("consistent".to_string(), from.consistent.into());
+        }
+        stats.insert("final".to_string(), from.r#final.into());
+        if from.cache_hit.is_some() {
+            stats.insert("cache_hit".to_string(), from.cache_hit.into());
+        }
+        stats.insert("sample".to_string(), from.sample.into());
+        if from.max_threads.is_some() {
+            stats.insert("max_threads".to_string(), from.max_threads.into());
+        }
+        stats.insert("clickhouse_table".to_string(), from.clickhouse_table.into());
+        stats.insert("query_id".to_string(), from.query_id.into());
+        if from.is_duplicate.is_some() {
+            stats.insert("is_duplicate".to_string(), from.is_duplicate.into());
+        }
+        Self { stats }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -210,16 +256,19 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
                     .map_err(|_| InvalidMessage)?
                     .to_string(),
             );
-            stats.push(serde_json::to_string(&q.stats).map_err(|_| InvalidMessage)?);
+            stats.push(
+                serde_json::to_string(&SortedStats::from(q.stats.clone()))
+                    .map_err(|_| InvalidMessage)?,
+            );
             r#final.push(q.stats.r#final as u8);
-            cache_hit.push(q.stats.cache_hit);
+            cache_hit.push(q.stats.cache_hit.unwrap_or(0));
             sample.push(q.stats.sample.unwrap_or(0.0));
-            max_threads.push(q.stats.max_threads);
+            max_threads.push(q.stats.max_threads.unwrap_or(0));
             num_days.push(q.profile.time_range.unwrap_or(0));
             clickhouse_table.push(q.stats.clickhouse_table);
             query_id.push(q.stats.query_id);
-            is_duplicate.push(q.stats.is_duplicate);
-            consistent.push(q.stats.consistent as u8);
+            is_duplicate.push(q.stats.is_duplicate.unwrap_or(0));
+            consistent.push(q.stats.consistent.unwrap_or(false) as u8);
             all_columns.push(q.profile.all_columns);
             or_conditions.push(q.profile.multi_level_condition as u8);
             where_columns.push(q.profile.where_profile.columns);
