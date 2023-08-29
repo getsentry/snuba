@@ -17,16 +17,51 @@ class Migration(migration.ClickhouseNodeMigration):
 
 
 def forward_columns_iter() -> Iterator[operations.SqlOperation]:
+    yield operations.AddColumn(
+        storage_set=StorageSetKey.REPLAYS,
+        table_name="replays_local",
+        column=Column(
+            "_urls_hashed",
+            Array(
+                UInt(64),
+                Modifiers(materialized="arrayMap(t -> cityHash64(t), urls)"),
+            ),
+        ),
+        after="urls",
+        target=operations.OperationTarget.LOCAL,
+    )
+
+    yield operations.AddColumn(
+        storage_set=StorageSetKey.REPLAYS,
+        table_name="replays_dist",
+        column=Column(
+            "_urls_hashed",
+            Array(
+                UInt(64),
+                Modifiers(materialized="arrayMap(t -> cityHash64(t), urls)"),
+            ),
+        ),
+        after="urls",
+        target=operations.OperationTarget.DISTRIBUTED,
+    )
+
+    yield operations.AddIndex(
+        storage_set=StorageSetKey.REPLAYS,
+        table_name="replays_local",
+        index_name="bf_urls_hashed",
+        index_expression="_urls_hashed",
+        index_type="bloom_filter()",
+        granularity=1,
+        target=operations.OperationTarget.LOCAL,
+    )
+
     for column in materialized_columns:
         yield operations.AddColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
             column=Column(
                 f"_{column}_hashed",
-                Array(
-                    UInt(64),
-                    Modifiers(materialized=f"arrayMap(t -> cityHash64(t), {column})"),
-                ),
+                UInt(64, Modifiers(materialized=f"cityHash64({column})")),
             ),
             after=column,
             target=operations.OperationTarget.LOCAL,
@@ -37,10 +72,7 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
             table_name="replays_dist",
             column=Column(
                 f"_{column}_hashed",
-                Array(
-                    UInt(64),
-                    Modifiers(materialized=f"arrayMap(t -> cityHash64(t), {column})"),
-                ),
+                UInt(64, Modifiers(materialized=f"cityHash64({column})")),
             ),
             after=column,
             target=operations.OperationTarget.DISTRIBUTED,
@@ -58,7 +90,7 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 def backward_columns_iter() -> Iterator[operations.SqlOperation]:
-    for column in materialized_columns:
+    for column in materialized_columns + ["urls"]:
         yield operations.DropColumn(
             StorageSetKey.REPLAYS,
             "replays_local",
@@ -81,4 +113,4 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         )
 
 
-materialized_columns = ["urls", "user_id", "user_name", "user_email", "ip_address_v4"]
+materialized_columns = ["user_id", "user_name", "user_email", "ip_address_v4"]
