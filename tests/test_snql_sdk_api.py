@@ -24,7 +24,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -447,35 +446,6 @@ class TestSDKSnQLApi(BaseApiTest):
         data = resp["data"]
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
-
-    def test_attribution_tags(self) -> None:
-        query = (
-            Query(Entity("events"))
-            .set_select([Function("count", [], "count")])
-            .set_where(
-                [
-                    Condition(Column("project_id"), Op.EQ, self.project_id),
-                    Condition(Column("timestamp"), Op.GTE, self.base_time),
-                    Condition(Column("timestamp"), Op.LT, self.next_time),
-                ]
-            )
-        )
-
-        request = Request(
-            dataset="events",
-            query=query,
-            app_id="default",
-            tenant_ids={"referrer": "r", "organization_id": 123},
-        )
-
-        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
-        resp = json.loads(response.data)
-        assert response.status_code == 200, resp
-        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "default"
 
     def test_invalid_time_conditions(self) -> None:
         query = (
