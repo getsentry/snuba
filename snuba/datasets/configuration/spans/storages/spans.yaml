@@ -126,4 +126,4 @@ mandatory_condition_checkers:
 stream_loader:
   processor:
     name: SpansMessageProcessor
-  default_topic: snuba-spans
+  default_topic: transactions
