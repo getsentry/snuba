@@ -299,6 +299,8 @@ def test_db_query_fail() -> None:
 def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
+
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
@@ -330,12 +332,12 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
             db_query(
-                clickhouse_query=mock.Mock(),
+                clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
                 attribution_info=mock.Mock(),
                 dataset_name="events",
                 query_metadata_list=query_metadata_list,
-                formatted_query=mock.Mock(),
+                formatted_query=format_query(query),
                 reader=mock.Mock(),
                 timer=Timer("foo"),
                 stats=stats,
@@ -356,6 +358,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             ]["reason"]
             == "policy rejects all queries"
         )
+        assert query_metadata_list[0].request_status.status.value == "rate-limited"
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
