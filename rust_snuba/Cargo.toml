@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.69"
-chrono = "0.4.11"
+chrono = { version = "0.4.11", features = ["serde"] }
 futures = "0.3.21"
 rust_arroyo = { path = "./rust_arroyo" }
 serde_yaml = "0.9.19"
@@ -31,6 +31,7 @@ ctrlc = "3.2.5"
 sentry = "0.31.0"
 reqwest = "0.11.11"
 uuid = "1.4.1"
+procspawn = "0.10.2"
 
 [features]
 ffi = ["pyo3/extension-module"]
