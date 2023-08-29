@@ -190,7 +190,12 @@ jobs:
     strategy:
       matrix:
         snuba_settings:
-          ["test", "test_rust", "test_distributed", "test_distributed_migrations"]
+          [
+            "test",
+            "test_rust",
+            "test_distributed",
+            "test_distributed_migrations",
+          ]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -404,7 +409,7 @@ jobs:
           tags: snuba-test
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
