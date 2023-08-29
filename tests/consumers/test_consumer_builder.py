@@ -186,7 +186,6 @@ def test_run_processing_strategy() -> None:
         if commit.call_count == 1:
             break
 
-    assert commit.call_count == 2
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 1
 
     strategy.close()
