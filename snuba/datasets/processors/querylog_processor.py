@@ -57,8 +57,6 @@ class QuerylogProcessor(DatasetMessageProcessor):
         bytes_scanned_columns = []
 
         for query in query_list:
-            if "sample" in query["stats"] and query["stats"]["sample"] is not None:
-                query["stats"]["sample"] = self.__get_sample(query["stats"]["sample"])
             sql.append(query["sql"])
             status.append(query["status"])
             trace_id.append(str(uuid.UUID(query["trace_id"])))
@@ -96,7 +94,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "clickhouse_queries.stats": stats,
             "clickhouse_queries.final": final,
             "clickhouse_queries.cache_hit": cache_hit,
-            "clickhouse_queries.sample": sample,
+            "clickhouse_queries.sample": [self.__get_sample(s) for s in sample],
             "clickhouse_queries.max_threads": max_threads,
             "clickhouse_queries.num_days": num_days,
             "clickhouse_queries.clickhouse_table": clickhouse_table,

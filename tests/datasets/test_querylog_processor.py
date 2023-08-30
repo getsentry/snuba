@@ -129,7 +129,7 @@ def test_simple() -> None:
                 "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
                 "clickhouse_queries.duration_ms": [42],
                 "clickhouse_queries.stats": [
-                    '{"error_code": 386, "sample": 10, "triggered_rate_limiter": "test_rate_limiter"}'
+                    '{"error_code":386,"sample":10,"triggered_rate_limiter":"test_rate_limiter"}'
                 ],
                 "clickhouse_queries.final": [0],
                 "clickhouse_queries.cache_hit": [0],

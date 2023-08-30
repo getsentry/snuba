@@ -90,7 +90,7 @@ struct Stats {
     #[serde(default)]
     cache_hit: Option<u8>,
     #[serde(default)]
-    sample: Option<f32>,
+    sample: Option<Value>,
     #[serde(default)]
     max_threads: Option<u8>,
     #[serde(default)]
@@ -262,7 +262,10 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             );
             r#final.push(q.stats.r#final as u8);
             cache_hit.push(q.stats.cache_hit.unwrap_or(0));
-            sample.push(q.stats.sample.unwrap_or(0.0));
+            sample.push(match q.stats.sample {
+                Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0) as f32,
+                _ => 0.0,
+            });
             max_threads.push(q.stats.max_threads.unwrap_or(0));
             num_days.push(q.profile.time_range.unwrap_or(0));
             clickhouse_table.push(q.stats.clickhouse_table);
