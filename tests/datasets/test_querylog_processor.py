@@ -114,7 +114,7 @@ def test_simple() -> None:
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),
-                "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
+                "request_body": '{"limit":100,"offset":50,"orderby":"event_id","project":1,"sample":0.1,"selected_columns":["event_id"]}',
                 "referrer": "search",
                 "dataset": "events",
                 "projects": [2],
@@ -141,7 +141,7 @@ def test_simple() -> None:
                 "clickhouse_queries.is_duplicate": [0],
                 "clickhouse_queries.consistent": [0],
                 "clickhouse_queries.all_columns": [["tags", "timestamp"]],
-                "clickhouse_queries.or_conditions": [False],
+                "clickhouse_queries.or_conditions": [0],
                 "clickhouse_queries.where_columns": [["timestamp"]],
                 "clickhouse_queries.where_mapping_columns": [["tags"]],
                 "clickhouse_queries.groupby_columns": [[]],

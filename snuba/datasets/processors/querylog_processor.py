@@ -72,7 +72,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             # XXX: ``is_duplicate`` is currently not set when using the
             # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
-            consistent.append(query["stats"].get("consistent", False) or False)
+            consistent.append(int(query["stats"].get("consistent", 0) or 0))
             profile = query["profile"]
             result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
