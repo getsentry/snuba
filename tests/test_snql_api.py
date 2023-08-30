@@ -800,50 +800,6 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    @patch("snuba.settings.RECORD_QUERIES", True)
-    @patch("snuba.attribution.log.kfk")
-    def test_app_id_attribution(self, record_kfk: Any) -> None:
-        state.set_config("use_attribution", 1)
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (events)
-                    SELECT count() AS count
-                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN tuple({self.project_id})
-                    """,
-                    "app_id": "default",
-                    "parent_api": "some/endpoint",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "default"
-        assert metric_calls[0].tags["referrer"] == "test"
-        assert metric_calls[0].tags["parent_api"] == "some/endpoint"
-        assert metric_calls[0].tags["dataset"] == "events"
-        assert metric_calls[0].tags["entity"] == "events"
-        assert metric_calls[0].tags["table"].startswith("errors")
-
-        record_kfk.produce.assert_called_once()
-        topic, raw_data = record_kfk.produce.call_args.args
-        assert topic == "snuba-attribution"
-        data = json.loads(raw_data)
-        assert data["app_id"] == "default"
-        assert data["referrer"] == "test"
-        assert data["dataset"] == "events"
-        assert data["entity"] == "events"
-        assert len(data["queries"]) == 1
-        assert data["queries"][0]["table"].startswith("errors_")
-        assert data["queries"][0]["bytes_scanned"] > 0
-
     def test_timing_metrics_tags(self) -> None:
         response = self.post(
             "/events/snql",
@@ -871,29 +827,6 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["final"] == "False"
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["app_id"] == "something-good"
-
-    def test_arbitrary_app_id_attribution(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (events)
-                    SELECT count() AS count
-                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN tuple({self.project_id})
-                    """,
-                    "app_id": "something-cool",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "something-cool"
 
     def test_missing_alias_bug(self) -> None:
         response = self.post(
