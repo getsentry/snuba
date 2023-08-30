@@ -48,6 +48,7 @@ from snuba.querylog.query_metadata import (
     SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
+    RequestStatus,
     Status,
     get_query_status_from_error_codes,
     get_request_status,
@@ -117,7 +118,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Query,
+    query: Union[Query, CompositeQuery[Table]],
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -140,7 +141,7 @@ def update_query_metadata_and_stats(
     if triggered_rate_limiter is not None:
         stats["triggered_rate_limiter"] = triggered_rate_limiter
     sql_anonymized = format_query_anonymized(query).get_sql()
-    start, end = get_time_range_estimate(query)
+    start, end = get_time_range_estimate(cast(ProcessableQuery[Table], query))
 
     query_metadata_list.append(
         ClickhouseQueryMetadata(
@@ -698,14 +699,39 @@ def db_query(
     allocation_policies = _get_allocation_policies(clickhouse_query)
     query_id = uuid.uuid4().hex
 
-    _apply_allocation_policies_quota(
-        query_settings,
-        attribution_info,
-        formatted_query,
-        stats,
-        allocation_policies,
-        query_id,
-    )
+    try:
+        _apply_allocation_policies_quota(
+            query_settings,
+            attribution_info,
+            formatted_query,
+            stats,
+            allocation_policies,
+            query_id,
+        )
+    except AllocationPolicyViolations as e:
+        update_query_metadata_and_stats(
+            query=clickhouse_query,
+            sql=formatted_query.get_sql(),
+            stats=stats,
+            query_metadata_list=query_metadata_list,
+            query_settings={},
+            trace_id=trace_id,
+            status=QueryStatus.RATE_LIMITED,
+            request_status=Status(RequestStatus.RATE_LIMITED),
+            profile_data=None,
+            error_code=None,
+            triggered_rate_limiter="AllocationPolicy",
+        )
+
+        raise QueryException.from_args(
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
+            extra={
+                "stats": stats,
+                "sql": "no sql run",
+                "experiments": {},
+            },
+        ) from e
 
     result = None
     error = None
@@ -769,15 +795,8 @@ def _apply_allocation_policies_quota(
             violations[allocation_policy.config_key()] = e
     if violations:
         stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
-        raise QueryException.from_args(
-            AllocationPolicyViolations.__name__,
-            "Query cannot be run due to allocation policies",
-            extra={
-                "stats": stats,
-                "sql": formatted_query.get_sql(),
-                "experiments": {},
-            },
-        ) from AllocationPolicyViolations(
+        # HACK: This is because our SLOs are calculated weirdly
+        raise AllocationPolicyViolations(
             "Query cannot be run due to allocation policies", violations
         )
 
