@@ -399,16 +399,7 @@ class ErrorEvent:
 @pytest.mark.redis_db
 class TestErrorsProcessor:
 
-    processor = ErrorsProcessor(
-        {
-            "environment": "environment",
-            "sentry:release": "release",
-            "sentry:dist": "dist",
-            "sentry:user": "user",
-            "transaction": "transaction_name",
-            "level": "level",
-        }
-    )
+    processor = ErrorsProcessor()
 
     def __get_timestamps(self) -> tuple[datetime, datetime]:
         timestamp = datetime.now() - timedelta(seconds=5)
