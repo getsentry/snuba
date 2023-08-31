@@ -10,11 +10,13 @@
 # importing this file at the outer subprocess will crash due to missing
 # environment variables
 
+
+import importlib
 import os
 
 import rapidjson
 
-module_object = __import__(os.environ["RUST_SNUBA_PROCESSOR_MODULE"])
+module_object = importlib.import_module(os.environ["RUST_SNUBA_PROCESSOR_MODULE"])
 Processor = getattr(module_object, os.environ["RUST_SNUBA_PROCESSOR_CLASSNAME"])
 
 processor = Processor.from_kwargs()

@@ -89,7 +89,6 @@ pub fn consumer_impl(
         }
     }
 
-    procspawn::init();
     env_logger::init();
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
@@ -107,6 +106,8 @@ pub fn consumer_impl(
             setup_sentry(dsn);
         }
     }
+
+    procspawn::init();
 
     let first_storage = &consumer_config.storages[0];
 

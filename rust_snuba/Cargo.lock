@@ -250,6 +250,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d2301688392eb071b0bf1a37be05c469d3cc4dbbd95df672fe28ab021e6a096"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1252,10 +1262,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c5a680d772408c77498b0339175746b5dae18724b26877b919e6ecabb680e83"
 dependencies = [
  "backtrace",
+ "ctor",
  "findshlibs",
  "ipc-channel",
  "libc",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

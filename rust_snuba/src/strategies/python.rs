@@ -2,7 +2,9 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
-use std::time::Duration;
+use std::collections::VecDeque;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use std::sync::Mutex;
 
 use anyhow::Error;
@@ -15,7 +17,7 @@ use crate::config::MessageProcessorConfig;
 
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
-    handles: Vec<(
+    handles: VecDeque<(
         Message<()>,
         Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>
     )>,
@@ -34,7 +36,7 @@ impl PythonTransformStep {
 
         Ok(PythonTransformStep {
             next_step,
-            handles: vec![],
+            handles: VecDeque::new(),
             message_carried_over: None,
             processing_pool: procspawn::Pool::builder(processes)
                 .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
@@ -42,10 +44,40 @@ impl PythonTransformStep {
                 .build().expect("failed to build procspawn pool"),
         })
     }
+
+    fn check_for_results(&mut self) {
+        // procspawn has no join() timeout that does not consume the handle on timeout.
+        //
+        // Additionally we have observed, at least on MacOS, that procspawn's active_count() only
+        // decreases when the handle is consumed. Therefore our count of actually saturated
+        // processes is `self.processing_pool.active_count() - self.handles.len()`.
+        //
+        // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
+        // are done and all handles can be joined and consumed without waiting.
+        while self.processing_pool.active_count() <= self.handles.len() && !self.handles.is_empty() {
+            let (original_message_meta, handle) = self.handles.pop_front().unwrap();
+            let handle = handle.into_inner().unwrap();
+            let result = handle.join().expect("procspawn failed");
+            match result {
+                Ok(data) => {
+                    if let Err(MessageRejected {
+                        message: transformed_message,
+                    }) = self.next_step.submit(original_message_meta.replace(data))
+                    {
+                        self.message_carried_over = Some(transformed_message);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Invalid message {:?}", e);
+                }
+            }
+        }
+    }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Option<CommitRequest> {
+        self.check_for_results();
         self.next_step.poll()
     }
 
@@ -53,6 +85,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         &mut self,
         message: Message<KafkaPayload>,
     ) -> Result<(), MessageRejected<KafkaPayload>> {
+        self.check_for_results();
+
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
         //
@@ -61,33 +95,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         // active_count() is that we allow for one pending message per process, so that procspawn
         // is able to keep CPU saturation high.
         if self.processing_pool.queued_count() > self.processing_pool.active_count() {
+            log::debug!("python strategy provides backpressure");
             return Err(MessageRejected { message });
         }
 
-        // procspawn has no join() timeout, but does give us the number of active tasks. if there
-        // are no tasks, we can conclude that there are either no handles or all handles are done.
-        //
-        // it's probably not hard to add join() timeout support to procspawn, but not sure if this
-        // will even cause any performance problems in practice.
-        if self.processing_pool.active_count() == 0 {
-            for (original_message_meta, handle) in self.handles.drain(..) {
-                let handle = handle.into_inner().unwrap();
-                let result = handle.join().expect("procspawn failed");
-                match result {
-                    Ok(data) => {
-                        if let Err(MessageRejected {
-                            message: transformed_message,
-                        }) = self.next_step.submit(original_message_meta.replace(data))
-                        {
-                            self.message_carried_over = Some(transformed_message);
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Invalid message {:?}", e);
-                    }
-                }
-            }
-        }
 
         log::debug!("processing message,  message={}", message);
 
@@ -107,7 +118,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     partition.index,
                     *timestamp,
                 );
+
                 let handle = self.processing_pool.spawn(args, |args| {
+                    log::debug!("processing message in subprocess,  args={:?}", args);
                     let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> = PyModule::import(py, "snuba.consumers.rust_processor")?
                             .getattr("process_rust_message")?
@@ -120,12 +133,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         })
                     });
 
-                    result.map_err(|pyerr| {
-                        pyerr.to_string()
-                    })
+                    Ok(result.unwrap())
                 });
 
-                self.handles.push((
+                self.handles.push_back((
                     message.clone().replace(()),
                     Mutex::new(handle)
                 ));
@@ -140,12 +151,68 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn terminate(&mut self) {
+        self.processing_pool.kill();
         self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+        let now = Instant::now();
+
+        let deadline = timeout.map(|x| now + x);
+
+        // while deadline has not yet passed
+        while deadline.map_or(true, |x| x.elapsed().is_zero()) && !self.handles.is_empty() {
+            self.check_for_results();
+            sleep(Duration::from_millis(10));
+        }
+
         // TODO: we need to shut down the python module properly in order to avoid dataloss in
         // sentry sdk or similar things that run in python's atexit
         self.next_step.join(timeout)
+    }
+}
+
+#[cfg(test)]
+procspawn::enable_test_support!();
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use chrono::Utc;
+
+    use rust_arroyo::{testutils::TestStrategy, types::{Topic, Partition}};
+
+    #[test]
+    fn test_basic() {
+        let sink = TestStrategy::new();
+
+        let mut step = PythonTransformStep::new(MessageProcessorConfig {
+            python_class_name: "IdentityProcessor".to_owned(),
+            python_module: "tests.rust_helpers".to_owned()
+        }, 1, sink.clone()).unwrap();
+
+        step.poll();
+        step.submit(Message::new_broker_message(
+            KafkaPayload {
+                key: None,
+                headers: None,
+                payload: Some(br#"{"hello": "world"}"#.to_vec()),
+            },
+            Partition {
+                topic: Topic {
+                    name: "test".to_owned(),
+                },
+                index: 1,
+            },
+            1,
+            Utc::now(),
+        )).unwrap();
+
+        step.join(Some(Duration::from_secs(10)));
+
+        assert_eq!(sink.messages.lock().unwrap().len(), 1);
     }
 }
