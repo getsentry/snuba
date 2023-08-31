@@ -65,8 +65,6 @@ query_processors:
 stream_loader:
   processor:
     name: GroupedMessageProcessor
-    args:
-      postgres_table: sentry_groupedmessage
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter

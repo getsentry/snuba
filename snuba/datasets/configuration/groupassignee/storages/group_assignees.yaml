@@ -53,8 +53,6 @@ query_processors:
 stream_loader:
   processor:
     name: GroupAssigneeProcessor
-    args:
-      postgres_table: sentry_groupasignee
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter
