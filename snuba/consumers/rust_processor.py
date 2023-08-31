@@ -13,6 +13,8 @@
 
 import importlib
 import os
+from datetime import datetime
+from typing import Optional, Sequence
 
 import rapidjson
 
@@ -26,7 +28,9 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch
 
 
-def process_rust_message(message, offset, partition, timestamp):
+def process_rust_message(
+    message: bytes, offset: int, partition: int, timestamp: datetime
+) -> Optional[Sequence[bytes]]:
     rv = processor.process_message(
         rapidjson.loads(bytearray(message)),
         KafkaMessageMetadata(offset=offset, partition=partition, timestamp=timestamp),
