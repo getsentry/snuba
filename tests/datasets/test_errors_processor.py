@@ -441,16 +441,7 @@ class TestErrorsProcessor:
         message = self.__get_error_event(timestamp, recieved)
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+        processor = ErrorsProcessor()
         assert processor.process_message(payload, meta) == InsertBatch(
             [message.build_result(meta)], ANY
         )
