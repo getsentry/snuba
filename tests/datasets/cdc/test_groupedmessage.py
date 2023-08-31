@@ -226,7 +226,7 @@ class TestGroupedMessage:
     }
 
     def test_messages(self) -> None:
-        processor = GroupedMessageProcessor("sentry_groupedmessage")
+        processor = GroupedMessageProcessor()
 
         metadata = KafkaMessageMetadata(
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
