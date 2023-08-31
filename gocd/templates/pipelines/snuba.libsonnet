@@ -46,9 +46,9 @@ local s4s_health_check(region) =
   if region == 's4s' then
     [
       {
-        sentry_health_check: {
+        health_check: {
           jobs: {
-            sentry_health_check: {
+            health_check: {
               environment_variables: {
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_st_datadog_api_key]}}',
@@ -59,7 +59,6 @@ local s4s_health_check(region) =
               tasks: [
                 gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
                 gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
-
               ],
             },
           },
