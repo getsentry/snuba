@@ -113,7 +113,7 @@ class GroupedMessageRow(CdcMessageRow):
 
 
 class GroupedMessageProcessor(CdcProcessor):
-    def __init__(self):
+    def __init__(self) -> None:
         postgres_table = "sentry_groupedmessage"
         super(GroupedMessageProcessor, self).__init__(
             pg_table=postgres_table,
