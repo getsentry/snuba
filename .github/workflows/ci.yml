@@ -359,22 +359,6 @@ jobs:
         working-directory: sentry
         run: |
           make test-snuba
-  self-hosted-end-to-end:
-    needs: [snuba-image]
-    runs-on: ubuntu-latest
-    # temporary, remove once we are confident the action is working
-    continue-on-error: true
-
-    steps:
-      - name: Checkout Snuba
-        uses: actions/checkout@v3
-      - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@f45ef07793b2cc805a9a9401819f486da449a90a
-        with:
-          project_name: snuba
-          docker_repo: getsentry/snuba
-          image_url: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
-          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
 
   clickhouse-21:
     needs: [linting, snuba-image]

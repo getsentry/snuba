@@ -49,7 +49,6 @@ class Topic(Enum):
     GENERIC_EVENTS = "generic-events"
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
     GROUP_ATTRIBUTES = "group-attributes"
-    SPANS = "snuba-spans"
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
@@ -62,6 +61,7 @@ class Topic(Enum):
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
+    SPANS = "snuba-spans"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:

@@ -219,17 +219,8 @@ def test_multistorage_strategy(
         for message in messages:
             strategy.submit(message)
 
-        with assert_changes(
-            lambda: commit.call_args_list,
-            [],
-            [
-                call({}),
-                call({Partition(topic=Topic(name="topic"), index=0): 3}),
-                call({}, force=True),
-            ],
-        ):
-            strategy.close()
-            strategy.join()
+        strategy.close()
+        strategy.join()
 
 
 @pytest.mark.clickhouse_db

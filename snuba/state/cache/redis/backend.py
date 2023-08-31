@@ -6,7 +6,8 @@ from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
-from redis.exceptions import ResponseError
+from redis.exceptions import ConnectionError, ReadOnlyError, ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -28,16 +29,6 @@ metrics = MetricsWrapper(environment.metrics, "read_through_cache")
 RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
-
-
-class ValueGenerationError(Exception):
-    """
-    Any exception raised by the attempt to execute the value generation function
-    should be wrapped by this exception. This makes it easy to distinguish between
-    Redis and value generation function errors.
-    """
-
-    pass
 
 
 class RedisCache(Cache[TValue]):
@@ -86,7 +77,7 @@ class RedisCache(Cache[TValue]):
     def __get_readthrough(
         self,
         key: str,
-        value_generation_function: Callable[[], TValue],
+        function: Callable[[], TValue],
         record_cache_hit_type: Callable[[int], None],
         timeout: int,
         timer: Optional[Timer] = None,
@@ -178,9 +169,7 @@ class RedisCache(Cache[TValue]):
             try:
                 # The task is run in a thread pool so that we can return
                 # control to the caller once the timeout is reached.
-                value = self.__executor.submit(value_generation_function).result(
-                    task_timeout
-                )
+                value = self.__executor.submit(function).result(task_timeout)
                 argv.extend(
                     [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
                 )
@@ -202,7 +191,7 @@ class RedisCache(Cache[TValue]):
                 # we want the result key to only store real query results in it as the TTL
                 # of a cached query can be fairly long (minutes).
                 redis_key_to_write_to = error_key
-                raise ValueGenerationError() from e
+                raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
@@ -297,7 +286,7 @@ class RedisCache(Cache[TValue]):
     def get_readthrough(
         self,
         key: str,
-        value_generation_function: Callable[[], TValue],
+        function: Callable[[], TValue],
         record_cache_hit_type: Callable[[int], None],
         timeout: int,
         timer: Optional[Timer] = None,
@@ -305,20 +294,14 @@ class RedisCache(Cache[TValue]):
         # in case something is wrong with redis, we want to be able to
         # disable the read_through_cache but still serve traffic.
         if get_config("read_through_cache.short_circuit", 0):
-            return value_generation_function()
+            return function()
 
         try:
             return self.__get_readthrough(
-                key, value_generation_function, record_cache_hit_type, timeout, timer
+                key, function, record_cache_hit_type, timeout, timer
             )
-        except ValueGenerationError as e:
-            # Not a Redis Cache Error -> bubble up
-            assert e.__cause__ is not None
-            raise e.__cause__
-        except Exception:
-            # A Redis Cache Error -> run value generation directly
+        except (ConnectionError, ReadOnlyError, RedisTimeoutError, ValueError):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise
             metrics.increment("snuba.read_through_cache.fail_open")
-            logger.warning("Redis readthrough cache failed open", exc_info=True)
-            return value_generation_function()
+            return function()

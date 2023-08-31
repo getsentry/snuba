@@ -188,7 +188,7 @@ pub fn process_message(
             let meta = KafkaMessageMetadata {
                 partition,
                 offset,
-                timestamp: DateTime::from_utc(
+                timestamp: DateTime::from_naive_utc_and_offset(
                     NaiveDateTime::from_timestamp_millis(millis_since_epoch)
                         .unwrap_or(NaiveDateTime::MIN),
                     Utc,
