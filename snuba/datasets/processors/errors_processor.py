@@ -50,7 +50,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
         self._promoted_tag_columns = {
             "sentry:release": "release",
             "sentry:dist": "dist",
-            "sentrY:user": "user",
+            "sentry:user": "user",
             "transaction": "transaction_name",
             "level": "level",
         }
