@@ -229,7 +229,7 @@ schema:
       {
         name: num_processing_errors,
         type: UInt,
-        args: { schema_modifiers: [ nullable ], size: 64 },
+        args: { schema_modifiers: [nullable], size: 64 },
       },
       { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
@@ -357,14 +357,6 @@ replacer_processor:
 stream_loader:
   processor:
     name: ErrorsProcessor
-    args:
-      promoted_tag_columns:
-        environment: environment
-        sentry:release: release
-        sentry:dist: dist
-        sentry:user: user
-        transaction: transaction_name
-        level: level
   default_topic: events
   replacement_topic: event-replacements
   commit_log_topic: snuba-commit-log

@@ -56,7 +56,6 @@ pub struct ClickhouseConfig {
 pub struct MessageProcessorConfig {
     pub python_class_name: String,
     pub python_module: String,
-    // TODO: args support
 }
 
 #[derive(Deserialize)]
