@@ -199,8 +199,8 @@ mod tests {
 
         let mut step = PythonTransformStep::new(
             MessageProcessorConfig {
-                python_class_name: "IdentityProcessor".to_owned(),
-                python_module: "tests.rust_helpers".to_owned(),
+                python_class_name: "OutcomesProcessor".to_owned(),
+                python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
             },
             1,
             sink.clone(),
@@ -212,7 +212,7 @@ mod tests {
             KafkaPayload {
                 key: None,
                 headers: None,
-                payload: Some(br#"{"hello": "world"}"#.to_vec()),
+                payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
             },
             Partition {
                 topic: Topic {
