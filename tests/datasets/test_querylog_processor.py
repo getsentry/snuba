@@ -114,7 +114,7 @@ def test_simple() -> None:
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),
-                "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
+                "request_body": '{"limit":100,"offset":50,"orderby":"event_id","project":1,"sample":0.1,"selected_columns":["event_id"]}',
                 "referrer": "search",
                 "dataset": "events",
                 "projects": [2],
@@ -129,7 +129,7 @@ def test_simple() -> None:
                 "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
                 "clickhouse_queries.duration_ms": [42],
                 "clickhouse_queries.stats": [
-                    '{"error_code": 386, "sample": 10, "triggered_rate_limiter": "test_rate_limiter"}'
+                    '{"error_code":386,"sample":10,"triggered_rate_limiter":"test_rate_limiter"}'
                 ],
                 "clickhouse_queries.final": [0],
                 "clickhouse_queries.cache_hit": [0],
@@ -141,7 +141,7 @@ def test_simple() -> None:
                 "clickhouse_queries.is_duplicate": [0],
                 "clickhouse_queries.consistent": [0],
                 "clickhouse_queries.all_columns": [["tags", "timestamp"]],
-                "clickhouse_queries.or_conditions": [False],
+                "clickhouse_queries.or_conditions": [0],
                 "clickhouse_queries.where_columns": [["timestamp"]],
                 "clickhouse_queries.where_mapping_columns": [["tags"]],
                 "clickhouse_queries.groupby_columns": [[]],

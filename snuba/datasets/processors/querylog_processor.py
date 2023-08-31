@@ -19,7 +19,7 @@ metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 class QuerylogProcessor(DatasetMessageProcessor):
     def __to_json_string(self, map: Mapping[str, Any]) -> str:
-        return json.dumps({k: v for k, v in sorted(map.items())})
+        return json.dumps({k: v for k, v in sorted(map.items())}, separators=(",", ":"))
 
     def __get_sample(self, sample: Union[int, float]) -> float:
         """
@@ -62,15 +62,15 @@ class QuerylogProcessor(DatasetMessageProcessor):
             trace_id.append(str(uuid.UUID(query["trace_id"])))
             stats.append(self.__to_json_string(query["stats"]))
             final.append(int(query["stats"].get("final") or 0))
-            cache_hit.append(int(query["stats"].get("cache_hit") or 0))
-            sample.append(query["stats"].get("sample") or 0)
+            cache_hit.append(int(query["stats"].get("cache_hit", 0) or 0))
+            sample.append(float(query["stats"].get("sample", 0.0) or 0.0))
             max_threads.append(query["stats"].get("max_threads") or 0)
             clickhouse_table.append(query["stats"].get("clickhouse_table") or "")
             query_id.append(query["stats"].get("query_id") or "")
             # XXX: ``is_duplicate`` is currently not set when using the
             # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
-            consistent.append(int(query["stats"].get("consistent") or 0))
+            consistent.append(int(query["stats"].get("consistent", 0) or 0))
             profile = query["profile"]
             result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
@@ -78,7 +78,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
                 time_range if time_range is not None and time_range >= 0 else 0
             )
             all_columns.append(profile["all_columns"])
-            or_conditions.append(profile["multi_level_condition"])
+            or_conditions.append(int(profile["multi_level_condition"]))
             where_columns.append(profile["where_profile"]["columns"])
             where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
             groupby_columns.append(profile["groupby_cols"])
