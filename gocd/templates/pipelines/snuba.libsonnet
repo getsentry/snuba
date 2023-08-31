@@ -73,8 +73,8 @@ local s4s_ddog_check(region) =
           jobs: {
             ddog_health_check: {
               environment_variables: {
-                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
-                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_st_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_st_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba',
               },
               elastic_profile_id: 'snuba',
