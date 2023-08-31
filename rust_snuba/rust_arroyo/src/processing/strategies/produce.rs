@@ -72,15 +72,12 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         None
     }
 
-    fn submit(
-        &mut self,
-        message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
         if self.queue.len() >= self.max_queue_size {
-            return Err(MessageRejected { message });
+            return Err(MessageRejected {message});
         }
 
         let produce_fut = ProduceFuture {
@@ -152,7 +149,9 @@ mod tests {
     #[tokio::test]
     async fn test_produce() {
         let config = KafkaConfig::new_consumer_config(
-            vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
+            vec![
+                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
+            ],
             "my_group".to_string(),
             "latest".to_string(),
             false,
@@ -171,10 +170,7 @@ mod tests {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(
-                &mut self,
-                _message: Message<KafkaPayload>,
-            ) -> Result<(), MessageRejected<KafkaPayload>> {
+            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}

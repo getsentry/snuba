@@ -84,14 +84,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default="info",
 )
 @click.option(
-    "--skip-write/--no-skip-write",
-    "skip_write",
-    help="Skip the write to clickhouse",
+    "--no-skip-write",
+    "no_skip_write",
+    is_flag=True,
+    help="Writes to ClickHouse.",
     default=False,
-)
-@click.option(
-    "--processes",
-    type=int,
 )
 def rust_consumer(
     *,
@@ -108,8 +105,7 @@ def rust_consumer(
     max_batch_size: int,
     max_batch_time_ms: int,
     log_level: str,
-    skip_write: bool,
-    processes: Optional[int],
+    no_skip_write: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -140,6 +136,5 @@ def rust_consumer(
         consumer_group,
         auto_offset_reset,
         consumer_config_raw,
-        skip_write,
-        processes or 1,
+        not no_skip_write,
     )
