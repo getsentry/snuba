@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 class ErrorsProcessor(DatasetMessageProcessor):
     def __init__(self) -> None:
         self._promoted_tag_columns = {
+            "environment": "environment",
             "sentry:release": "release",
             "sentry:dist": "dist",
             "sentry:user": "user",
