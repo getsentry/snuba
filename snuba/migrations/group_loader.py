@@ -174,6 +174,7 @@ class ReplaysLoader(DirectoryLoader):
             "0011_add_is_dead_rage",
             "0012_materialize_counts",
             "0013_add_low_cardinality_codecs",
+            "0014_add_id_event_columns",
         ]
 
 
