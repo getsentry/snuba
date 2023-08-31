@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::processing::strategies::{MessageRejected, CommitRequest, ProcessingStrategy};
+use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::Message;
 
 #[derive(Clone)]
@@ -11,7 +11,9 @@ pub struct TestStrategy<T> {
 
 impl<T> Default for TestStrategy<T> {
     fn default() -> Self {
-        TestStrategy { messages: Arc::new(Mutex::new(Vec::new())) }
+        TestStrategy {
+            messages: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 }
 

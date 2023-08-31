@@ -3,9 +3,9 @@ use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, Proces
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
 use std::collections::VecDeque;
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::sync::Mutex;
 
 use anyhow::Error;
 
@@ -15,18 +15,24 @@ use crate::types::BytesInsertBatch;
 
 use crate::config::MessageProcessorConfig;
 
+type TaskHandle = (
+    Message<()>,
+    Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+);
+
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
-    handles: VecDeque<(
-        Message<()>,
-        Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>
-    )>,
+    handles: VecDeque<TaskHandle>,
     message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: procspawn::Pool,
 }
 
 impl PythonTransformStep {
-    pub fn new<N>(processor_config: MessageProcessorConfig, processes: usize, next_step: N) -> Result<Self, Error>
+    pub fn new<N>(
+        processor_config: MessageProcessorConfig,
+        processes: usize,
+        next_step: N,
+    ) -> Result<Self, Error>
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
@@ -41,7 +47,8 @@ impl PythonTransformStep {
             processing_pool: procspawn::Pool::builder(processes)
                 .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
                 .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
-                .build().expect("failed to build procspawn pool"),
+                .build()
+                .expect("failed to build procspawn pool"),
         })
     }
 
@@ -54,7 +61,8 @@ impl PythonTransformStep {
         //
         // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
         // are done and all handles can be joined and consumed without waiting.
-        while self.processing_pool.active_count() <= self.handles.len() && !self.handles.is_empty() {
+        while self.processing_pool.active_count() <= self.handles.len() && !self.handles.is_empty()
+        {
             let (original_message_meta, handle) = self.handles.pop_front().unwrap();
             let handle = handle.into_inner().unwrap();
             let result = handle.join().expect("procspawn failed");
@@ -99,7 +107,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             return Err(MessageRejected { message });
         }
 
-
         log::debug!("processing message,  message={}", message);
 
         match &message.inner_message {
@@ -122,9 +129,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let handle = self.processing_pool.spawn(args, |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
                     let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
-                        let fun: Py<PyAny> = PyModule::import(py, "snuba.consumers.rust_processor")?
-                            .getattr("process_rust_message")?
-                            .into();
+                        let fun: Py<PyAny> =
+                            PyModule::import(py, "snuba.consumers.rust_processor")?
+                                .getattr("process_rust_message")?
+                                .into();
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
@@ -136,10 +144,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     Ok(result.unwrap())
                 });
 
-                self.handles.push_back((
-                    message.clone().replace(()),
-                    Mutex::new(handle)
-                ));
+                self.handles
+                    .push_back((message.clone().replace(()), Mutex::new(handle)));
             }
         };
 
@@ -175,7 +181,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 #[cfg(test)]
 procspawn::enable_test_support!();
 
-
 #[cfg(test)]
 mod tests {
 
@@ -183,16 +188,24 @@ mod tests {
 
     use chrono::Utc;
 
-    use rust_arroyo::{testutils::TestStrategy, types::{Topic, Partition}};
+    use rust_arroyo::{
+        testutils::TestStrategy,
+        types::{Partition, Topic},
+    };
 
     #[test]
     fn test_basic() {
         let sink = TestStrategy::new();
 
-        let mut step = PythonTransformStep::new(MessageProcessorConfig {
-            python_class_name: "IdentityProcessor".to_owned(),
-            python_module: "tests.rust_helpers".to_owned()
-        }, 1, sink.clone()).unwrap();
+        let mut step = PythonTransformStep::new(
+            MessageProcessorConfig {
+                python_class_name: "IdentityProcessor".to_owned(),
+                python_module: "tests.rust_helpers".to_owned(),
+            },
+            1,
+            sink.clone(),
+        )
+        .unwrap();
 
         step.poll();
         step.submit(Message::new_broker_message(
@@ -209,7 +222,8 @@ mod tests {
             },
             1,
             Utc::now(),
-        )).unwrap();
+        ))
+        .unwrap();
 
         step.join(Some(Duration::from_secs(10)));
 
