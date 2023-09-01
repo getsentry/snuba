@@ -36,7 +36,7 @@ pub enum TopicOrPartition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct BrokerMessage<T: Clone> {
+pub struct BrokerMessage<T> {
     pub payload: T,
     pub partition: Partition,
     pub offset: u64,
@@ -74,7 +74,7 @@ impl<T: Clone> fmt::Display for BrokerMessage<T> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AnyMessage<T: Clone> {
+pub struct AnyMessage<T> {
     pub payload: T,
     pub committable: BTreeMap<Partition, u64>,
 }
@@ -102,13 +102,13 @@ impl<T: Clone> fmt::Display for AnyMessage<T> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum InnerMessage<T: Clone> {
+pub enum InnerMessage<T> {
     BrokerMessage(BrokerMessage<T>),
     AnyMessage(AnyMessage<T>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Message<T: Clone> {
+pub struct Message<T> {
     pub inner_message: InnerMessage<T>,
 }
 
