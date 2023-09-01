@@ -87,7 +87,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--skip-write/--no-skip-write",
     "skip_write",
     help="Skip the write to clickhouse",
-    default=False,
+    default=True,
 )
 @click.option(
     "--processes",
