@@ -15,16 +15,22 @@ use crate::types::BytesInsertBatch;
 
 use crate::config::MessageProcessorConfig;
 
-type TaskHandle = (
-    Message<()>,
-    Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
-);
+enum TaskHandle {
+    Procspawn {
+        original_message_meta: Message<()>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>
+    },
+    Immediate {
+        original_message_meta: Message<()>,
+        result: Result<BytesInsertBatch, String>
+    },
+}
 
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     handles: VecDeque<TaskHandle>,
     message_carried_over: Option<Message<BytesInsertBatch>>,
-    processing_pool: procspawn::Pool,
+    processing_pool: Option<procspawn::Pool>,
 }
 
 impl PythonTransformStep {
@@ -40,15 +46,23 @@ impl PythonTransformStep {
         let python_module = &processor_config.python_module;
         let python_class_name = &processor_config.python_class_name;
 
+        let processing_pool = if processes <= 1 {
+            Some(procspawn::Pool::builder(processes)
+                .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
+                .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
+                .build()
+                .expect("failed to build procspawn pool"))
+        } else {
+            std::env::set_var("RUST_SNUBA_PROCESSOR_MODULE", python_module);
+            std::env::set_var("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name);
+            None
+        };
+
         Ok(PythonTransformStep {
             next_step,
             handles: VecDeque::new(),
             message_carried_over: None,
-            processing_pool: procspawn::Pool::builder(processes)
-                .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
-                .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
-                .build()
-                .expect("failed to build procspawn pool"),
+            processing_pool,
         })
     }
 
@@ -61,12 +75,22 @@ impl PythonTransformStep {
         //
         // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
         // are done and all handles can be joined and consumed without waiting.
-        while self.processing_pool.active_count() <= self.handles.len() && !self.handles.is_empty()
-        {
-            let (original_message_meta, handle) = self.handles.pop_front().unwrap();
-            let handle = handle.into_inner().unwrap();
-            let result = handle.join().expect("procspawn failed");
-            match result {
+        while {
+            let active_count = self.processing_pool.as_ref().map_or(0, |pool| pool.active_count());
+            let may_have_finished_handles = active_count <= self.handles.len();
+            may_have_finished_handles && !self.handles.is_empty()
+        } {
+            let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
+                TaskHandle::Procspawn { original_message_meta, join_handle } => {
+                    let handle = join_handle.into_inner().unwrap();
+                    let result = handle.join().expect("procspawn failed");
+                    (original_message_meta, result)
+                },
+                TaskHandle::Immediate { original_message_meta, result } => {
+                    (original_message_meta, result)
+                }
+            };
+            match message_result {
                 Ok(data) => {
                     if let Err(MessageRejected {
                         message: transformed_message,
@@ -102,9 +126,11 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         // check for queued_count() > 0 instead, but the rough idea of comparing with
         // active_count() is that we allow for one pending message per process, so that procspawn
         // is able to keep CPU saturation high.
-        if self.processing_pool.queued_count() > self.processing_pool.active_count() {
-            log::debug!("python strategy provides backpressure");
-            return Err(MessageRejected { message });
+        if let Some(ref processing_pool) = self.processing_pool {
+            if processing_pool.queued_count() > processing_pool.active_count() {
+                log::debug!("python strategy provides backpressure");
+                return Err(MessageRejected { message });
+            }
         }
 
         log::debug!("processing message,  message={}", message);
@@ -126,13 +152,13 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     *timestamp,
                 );
 
-                let handle = self.processing_pool.spawn(args, |args| {
+                let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
                     let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
-                                .getattr("process_rust_message")?
-                                .into();
+                            .getattr("process_rust_message")?
+                            .into();
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
@@ -142,10 +168,23 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     });
 
                     Ok(result.unwrap())
-                });
+                };
 
-                self.handles
-                    .push_back((message.clone().replace(()), Mutex::new(handle)));
+                let original_message_meta = message.clone().replace(());
+
+                if let Some(ref processing_pool) = self.processing_pool {
+                    let handle = processing_pool.spawn(args, process_message);
+
+                    self.handles.push_back(TaskHandle::Procspawn {
+                        original_message_meta,
+                        join_handle: Mutex::new(handle)
+                    });
+                } else {
+                    self.handles.push_back(TaskHandle::Immediate {
+                        original_message_meta,
+                        result: process_message(args)
+                    });
+                }
             }
         };
 
@@ -157,7 +196,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn terminate(&mut self) {
-        self.processing_pool.kill();
+        if let Some(ref processing_pool) = self.processing_pool {
+            processing_pool.kill();
+        }
         self.next_step.terminate();
     }
 
@@ -193,8 +234,7 @@ mod tests {
         types::{Partition, Topic},
     };
 
-    #[test]
-    fn test_basic() {
+    fn run_basic(processes: usize) {
         let sink = TestStrategy::new();
 
         let mut step = PythonTransformStep::new(
@@ -202,7 +242,7 @@ mod tests {
                 python_class_name: "OutcomesProcessor".to_owned(),
                 python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
             },
-            1,
+            processes,
             sink.clone(),
         )
         .unwrap();
@@ -228,5 +268,15 @@ mod tests {
         step.join(Some(Duration::from_secs(10)));
 
         assert_eq!(sink.messages.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_basic() {
+        run_basic(1);
+    }
+
+    #[test]
+    fn test_basic_two_processes() {
+        run_basic(2);
     }
 }
