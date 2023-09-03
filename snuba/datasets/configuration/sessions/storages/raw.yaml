@@ -34,8 +34,7 @@ mandatory_condition_checkers:
   - condition: OrgIdEnforcer
   - condition: ProjectIdEnforcer
 stream_loader:
-  processor:
-    name: SessionsProcessor
+  processor: SessionsProcessor
   default_topic: ingest-sessions
   commit_log_topic: snuba-sessions-commit-log
   subscription_result_topic: sessions-subscription-results

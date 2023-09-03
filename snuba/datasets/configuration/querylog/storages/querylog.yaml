@@ -164,7 +164,6 @@ schema:
 writer_options:
   input_format_skip_unknown_fields: 1
 stream_loader:
-  processor:
-    name: QuerylogProcessor
+  processor: QuerylogProcessor
   default_topic: snuba-queries
   dlq_topic: snuba-dead-letter-querylog

@@ -124,6 +124,5 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: SpansMessageProcessor
+  processor: SpansMessageProcessor
   default_topic: snuba-spans

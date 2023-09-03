@@ -63,8 +63,7 @@ query_processors:
         - id
   - processor: ConsistencyEnforcerProcessor
 stream_loader:
-  processor:
-    name: GroupedMessageProcessor
+  processor: GroupedMessageProcessor
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter

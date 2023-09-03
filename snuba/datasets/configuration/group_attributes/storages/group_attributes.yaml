@@ -51,7 +51,6 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: GroupAttributesMessageProcessor
+  processor: GroupAttributesMessageProcessor
   default_topic: group-attributes
   dlq_topic: snuba-dead-letter-group-attributes

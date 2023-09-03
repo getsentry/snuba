@@ -158,8 +158,8 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-    processor_config = loader_config["processor"]
-    processor = DatasetMessageProcessor.from_name(processor_config["name"])
+    processor_name = loader_config["processor"]
+    processor = DatasetMessageProcessor.from_name(processor_name)
     assert processor is not None
     default_topic = Topic(loader_config["default_topic"])
     # optionals

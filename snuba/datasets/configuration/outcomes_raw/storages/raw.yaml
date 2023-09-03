@@ -39,6 +39,5 @@ query_processors:
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
 stream_loader:
-  processor:
-    name: OutcomesProcessor
+  processor: OutcomesProcessor
   default_topic: outcomes

@@ -78,7 +78,6 @@ query_processors:
       column_name: tags
   - processor: TableRateLimit
 stream_loader:
-  processor:
-    name: DistributionsAggregateProcessor
+  processor: DistributionsAggregateProcessor
   default_topic: snuba-metrics
   dlq_topic: snuba-dead-letter-metrics-distributions

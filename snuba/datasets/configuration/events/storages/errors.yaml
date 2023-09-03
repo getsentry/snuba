@@ -355,8 +355,7 @@ replacer_processor:
     state_name: errors
     storage_key_str: errors
 stream_loader:
-  processor:
-    name: ErrorsProcessor
+  processor: ErrorsProcessor
   default_topic: events
   replacement_topic: event-replacements
   commit_log_topic: snuba-commit-log

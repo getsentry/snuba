@@ -71,6 +71,5 @@ mandatory_condition_checkers:
       field_name: organization_id
   - condition: ProjectIdEnforcer
 stream_loader:
-  processor:
-    name: ProfilesMessageProcessor
+  processor: ProfilesMessageProcessor
   default_topic: processed-profiles
