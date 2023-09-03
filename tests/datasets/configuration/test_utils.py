@@ -16,9 +16,7 @@ from snuba.utils.streams.topics import Topic
 def test_build_stream_loader() -> None:
     loader = build_stream_loader(
         {
-            "processor": {
-                "name": "GenericSetsMetricsProcessor",
-            },
+            "processor": "GenericSetsMetricsProcessor",
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
                 "type": "KafkaHeaderSelectFilter",
