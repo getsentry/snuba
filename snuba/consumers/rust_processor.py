@@ -25,7 +25,9 @@ from snuba.processor import InsertBatch
 processor = None
 
 
-def initialize_processor(module=None, classname=None):
+def initialize_processor(
+    module: Optional[str] = None, classname: Optional[str] = None
+) -> None:
     if not module or not classname:
         module = os.environ.get("RUST_SNUBA_PROCESSOR_MODULE")
         classname = os.environ.get("RUST_SNUBA_PROCESSOR_CLASSNAME")

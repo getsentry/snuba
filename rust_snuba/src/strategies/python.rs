@@ -18,11 +18,11 @@ use crate::config::MessageProcessorConfig;
 enum TaskHandle {
     Procspawn {
         original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>
+        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
     },
     Immediate {
         original_message_meta: Message<()>,
-        result: Result<BytesInsertBatch, String>
+        result: Result<BytesInsertBatch, String>,
     },
 }
 
@@ -47,11 +47,13 @@ impl PythonTransformStep {
         let python_class_name = &processor_config.python_class_name;
 
         let processing_pool = if processes <= 1 {
-            Some(procspawn::Pool::builder(processes)
-                .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
-                .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
-                .build()
-                .expect("failed to build procspawn pool"))
+            Some(
+                procspawn::Pool::builder(processes)
+                    .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
+                    .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
+                    .build()
+                    .expect("failed to build procspawn pool"),
+            )
         } else {
             Python::with_gil(|py| -> PyResult<()> {
                 let fun: Py<PyAny> = PyModule::import(py, "snuba.consumers.rust_processor")?
@@ -82,19 +84,26 @@ impl PythonTransformStep {
         // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
         // are done and all handles can be joined and consumed without waiting.
         while {
-            let active_count = self.processing_pool.as_ref().map_or(0, |pool| pool.active_count());
+            let active_count = self
+                .processing_pool
+                .as_ref()
+                .map_or(0, |pool| pool.active_count());
             let may_have_finished_handles = active_count <= self.handles.len();
             may_have_finished_handles && !self.handles.is_empty()
         } {
             let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
-                TaskHandle::Procspawn { original_message_meta, join_handle } => {
+                TaskHandle::Procspawn {
+                    original_message_meta,
+                    join_handle,
+                } => {
                     let handle = join_handle.into_inner().unwrap();
                     let result = handle.join().expect("procspawn failed");
                     (original_message_meta, result)
-                },
-                TaskHandle::Immediate { original_message_meta, result } => {
-                    (original_message_meta, result)
                 }
+                TaskHandle::Immediate {
+                    original_message_meta,
+                    result,
+                } => (original_message_meta, result),
             };
             match message_result {
                 Ok(data) => {
@@ -163,8 +172,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
-                            .getattr("process_rust_message")?
-                            .into();
+                                .getattr("process_rust_message")?
+                                .into();
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
@@ -183,12 +192,12 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                     self.handles.push_back(TaskHandle::Procspawn {
                         original_message_meta,
-                        join_handle: Mutex::new(handle)
+                        join_handle: Mutex::new(handle),
                     });
                 } else {
                     self.handles.push_back(TaskHandle::Immediate {
                         original_message_meta,
-                        result: process_message(args)
+                        result: process_message(args),
                     });
                 }
             }
