@@ -10,7 +10,9 @@ pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send +
     pub message_carried_over: Option<Message<TTransformed>>,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Transform<TPayload, TTransformed> {
+impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
+    Transform<TPayload, TTransformed>
+{
     pub fn new<N>(
         function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
         next_step: N,
@@ -31,7 +33,10 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
 {
     fn poll(&mut self) -> Option<CommitRequest> {
         if let Some(message) = self.message_carried_over.take() {
-            if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message) {
+            if let Err(MessageRejected {
+                message: transformed_message,
+            }) = self.next_step.submit(message)
+            {
                 self.message_carried_over = Some(transformed_message);
             }
         }
@@ -41,15 +46,16 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
 
     fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
         if self.message_carried_over.is_some() {
-            return Err(MessageRejected {
-                message,
-            });
+            return Err(MessageRejected { message });
         }
 
         // TODO: Handle InvalidMessage
         let transformed = (self.function)(message.payload()).unwrap();
 
-        if let Err(MessageRejected{message: transformed_message}) = self.next_step.submit(message.replace(transformed)) {
+        if let Err(MessageRejected {
+            message: transformed_message,
+        }) = self.next_step.submit(message.replace(transformed))
+        {
             self.message_carried_over = Some(transformed_message);
         }
         Ok(())
