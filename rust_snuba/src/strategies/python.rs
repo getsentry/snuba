@@ -53,8 +53,14 @@ impl PythonTransformStep {
                 .build()
                 .expect("failed to build procspawn pool"))
         } else {
-            std::env::set_var("RUST_SNUBA_PROCESSOR_MODULE", python_module);
-            std::env::set_var("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name);
+            Python::with_gil(|py| -> PyResult<()> {
+                let fun: Py<PyAny> = PyModule::import(py, "snuba.consumers.rust_processor")?
+                    .getattr("initialize_processor")?
+                    .into();
+
+                fun.call1(py, (python_module, python_class_name))?;
+                Ok(())
+            })?;
             None
         };
 

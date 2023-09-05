@@ -18,19 +18,36 @@ from typing import Optional, Sequence
 
 import rapidjson
 
-module_object = importlib.import_module(os.environ["RUST_SNUBA_PROCESSOR_MODULE"])
-Processor = getattr(module_object, os.environ["RUST_SNUBA_PROCESSOR_CLASSNAME"])
-
-processor = Processor.from_kwargs()
-
 from snuba.consumers.consumer import json_row_encoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch
+
+processor = None
+
+
+def initialize_processor(module=None, classname=None):
+    if not module or not classname:
+        module = os.environ.get("RUST_SNUBA_PROCESSOR_MODULE")
+        classname = os.environ.get("RUST_SNUBA_PROCESSOR_CLASSNAME")
+
+    if not module or not classname:
+        return
+
+    module_object = importlib.import_module(module)
+    Processor = getattr(module_object, classname)
+
+    global processor
+    processor = Processor.from_kwargs()
+
+
+initialize_processor()
 
 
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
 ) -> Optional[Sequence[bytes]]:
+    if processor is None:
+        raise RuntimeError("processor not yet initialized")
     rv = processor.process_message(
         rapidjson.loads(bytearray(message)),
         KafkaMessageMetadata(offset=offset, partition=partition, timestamp=timestamp),
