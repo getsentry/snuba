@@ -72,12 +72,15 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         None
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(
+        &mut self,
+        message: Message<KafkaPayload>,
+    ) -> Result<(), MessageRejected<KafkaPayload>> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
         if self.queue.len() >= self.max_queue_size {
-            return Err(MessageRejected {message});
+            return Err(MessageRejected { message });
         }
 
         let produce_fut = ProduceFuture {
@@ -104,11 +107,11 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = None;
+        let mut remaining: Option<Duration> = timeout;
 
         while !self.queue.is_empty() {
-            if let Some(timeout) = timeout {
-                remaining = Some(timeout - start.elapsed());
+            if let Some(t) = remaining {
+                remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
                     warn!("Timeout reached while waiting for the queue to be empty");
                     break;
@@ -149,9 +152,7 @@ mod tests {
     #[tokio::test]
     async fn test_produce() {
         let config = KafkaConfig::new_consumer_config(
-            vec![
-                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
-            ],
+            vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my_group".to_string(),
             "latest".to_string(),
             false,
@@ -170,7 +171,10 @@ mod tests {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
+            fn submit(
+                &mut self,
+                _message: Message<KafkaPayload>,
+            ) -> Result<(), MessageRejected<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}
