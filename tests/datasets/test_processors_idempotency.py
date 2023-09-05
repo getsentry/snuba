@@ -11,20 +11,10 @@ from snuba.datasets.processors.transactions_processor import (
 from snuba.processor import InsertEvent, MessageProcessor
 from tests.fixtures import get_raw_error_message, get_raw_transaction_message
 
-promoted_tag_columns = {
-    "environment": "environment",
-    "sentry:release": "release",
-    "sentry:dist": "dist",
-    "sentry:user": "user",
-    "transaction": "transaction_name",
-    "level": "level",
-}
-
-
 test_data = [
     pytest.param(
         get_raw_error_message(),
-        ErrorsProcessor(promoted_tag_columns),
+        ErrorsProcessor(),
         id="errors processor",
     ),
     pytest.param(

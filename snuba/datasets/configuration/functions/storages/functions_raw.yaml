@@ -39,6 +39,5 @@ schema:
   local_table_name: functions_raw_local
   dist_table_name: functions_raw_dist
 stream_loader:
-  processor:
-    name: FunctionsMessageProcessor
+  processor: FunctionsMessageProcessor
   default_topic: profiles-call-tree

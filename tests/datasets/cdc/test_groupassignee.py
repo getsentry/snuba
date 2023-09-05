@@ -161,7 +161,7 @@ class TestGroupassignee:
     }
 
     def test_messages(self) -> None:
-        processor = GroupAssigneeProcessor("sentry_groupasignee")
+        processor = GroupAssigneeProcessor()
 
         metadata = KafkaMessageMetadata(
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)

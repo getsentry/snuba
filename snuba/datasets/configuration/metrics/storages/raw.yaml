@@ -44,8 +44,7 @@ schema:
   local_table_name: metrics_raw_v2_local
   dist_table_name: metrics_raw_v2_dist
 stream_loader:
-  processor:
-    name: PolymorphicMetricsProcessor
+  processor: PolymorphicMetricsProcessor
   default_topic: snuba-metrics
   commit_log_topic: snuba-metrics-commit-log
   subscription_scheduler_mode: global

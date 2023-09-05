@@ -255,8 +255,7 @@ writer_options:
   input_format_skip_unknown_fields: 1
 
 stream_loader:
-  processor:
-    name: TransactionsMessageProcessor
+  processor: TransactionsMessageProcessor
   default_topic: transactions
   commit_log_topic: snuba-transactions-commit-log
   subscription_scheduler_mode: global

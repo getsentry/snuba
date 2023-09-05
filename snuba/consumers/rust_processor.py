@@ -14,15 +14,16 @@
 import importlib
 import os
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Type
 
 import rapidjson
 
 from snuba.consumers.consumer import json_row_encoder
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch
 
-processor = None
+processor: Optional[DatasetMessageProcessor] = None
 
 
 def initialize_processor(
@@ -36,10 +37,10 @@ def initialize_processor(
         return
 
     module_object = importlib.import_module(module)
-    Processor = getattr(module_object, classname)
+    Processor: Type[DatasetMessageProcessor] = getattr(module_object, classname)
 
     global processor
-    processor = Processor.from_kwargs()
+    processor = Processor()
 
 
 initialize_processor()

@@ -168,8 +168,7 @@ query_processors:
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 stream_loader:
-  processor:
-    name: ReplaysProcessor
+  processor: ReplaysProcessor
   default_topic: ingest-replay-events
   dlq_topic: snuba-dead-letter-replays
 allocation_policies:

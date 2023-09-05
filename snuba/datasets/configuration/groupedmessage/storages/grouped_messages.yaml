@@ -63,10 +63,7 @@ query_processors:
         - id
   - processor: ConsistencyEnforcerProcessor
 stream_loader:
-  processor:
-    name: GroupedMessageProcessor
-    args:
-      postgres_table: sentry_groupedmessage
+  processor: GroupedMessageProcessor
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter

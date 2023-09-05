@@ -51,10 +51,7 @@ query_processors:
         - project_id
   - processor: ConsistencyEnforcerProcessor
 stream_loader:
-  processor:
-    name: GroupAssigneeProcessor
-    args:
-      postgres_table: sentry_groupasignee
+  processor: GroupAssigneeProcessor
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter

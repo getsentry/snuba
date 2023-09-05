@@ -103,8 +103,7 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: SearchIssuesMessageProcessor
+  processor: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events
