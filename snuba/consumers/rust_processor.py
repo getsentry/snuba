@@ -40,7 +40,7 @@ def initialize_processor(
     Processor: Type[DatasetMessageProcessor] = getattr(module_object, classname)
 
     global processor
-    processor = Processor.from_kwargs()
+    processor = Processor()
 
 
 initialize_processor()
