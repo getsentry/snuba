@@ -1,7 +1,7 @@
 import json
 import logging
 import zlib
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
 from typing import (
     Any,
@@ -16,7 +16,7 @@ from typing import (
 
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
 
-from snuba.accountant import UsageUnit, accumulator
+from snuba.cogs.accountant import UsageUnit, accumulator
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
@@ -36,8 +36,6 @@ from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
-GEN_METRICS_RESOURCE_ID = "generic_metrics_processor"
-
 
 class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
     @abstractmethod
@@ -52,6 +50,10 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
     def _aggregation_options(
         self, message: Mapping[str, Any], retention_days: int
     ) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    @abstractproperty
+    def _resource_id(self) -> str:
         raise NotImplementedError
 
     #
@@ -164,7 +166,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             try:
                 if accumulator is not None:
                     accumulator.record(
-                        resource_id=GEN_METRICS_RESOURCE_ID,
+                        resource_id=self._resource_id,
                         app_feature=message["use_case_id"],
                         amount=len(json.dumps(message).encode("utf-8")),
                         usage_type=UsageUnit.BYTES,
@@ -185,6 +187,10 @@ class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
     ) -> Mapping[str, Any]:
         return aggregation_options_for_set_message(message, retention_days)
 
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_sets"
+
 
 class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -198,6 +204,10 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     ) -> Mapping[str, Any]:
         return aggregation_options_for_distribution_message(message, retention_days)
 
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_distributions"
+
 
 class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -210,3 +220,7 @@ class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
         self, message: Mapping[str, Any], retention_days: int
     ) -> Mapping[str, Any]:
         return aggregation_options_for_counter_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_counters"
