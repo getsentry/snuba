@@ -278,7 +278,12 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        run_basic(1);
+        let handle = procspawn::spawn((), |()| {
+            run_basic(1);
+        });
+        // on macos, this test is polluting something in the global process state causing
+        // test_basic_two_processes to hang, therefore isolate it in another subprocess of its own.
+        handle.join().unwrap();
     }
 
     #[test]
