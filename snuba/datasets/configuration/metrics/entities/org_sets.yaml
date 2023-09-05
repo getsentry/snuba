@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: org_metrics_sets
+name: __internal_org_metrics_sets
 schema:
   [
     { name: org_id, type: UInt, args: { size: 64 } },

@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: generic_org_metrics_sets
+name: __internal_generic_org_metrics_sets
 
 schema:
   [
