@@ -45,6 +45,7 @@ _ORG_LESS_REFERRERS = set(
         "https://snuba-admin.getsentry.net/",
         "http://localhost:1219/",
         "reprocessing2.start_group_reprocessing",
+        "metric_validation",
     ]
 )
 
