@@ -126,7 +126,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         let mut remaining: Option<Duration> = None;
 
         // Poll until there are no more messages or timeout is hit
-        while self.message_carried_over.is_some() || self.handles.len() > 0 {
+        while self.message_carried_over.is_some() || !self.handles.is_empty() {
             if let Some(t) = timeout {
                 remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
@@ -187,5 +187,6 @@ mod tests {
 
         strategy.submit(message).unwrap();
         strategy.poll();
+        strategy.join(None);
     }
 }
