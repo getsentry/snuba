@@ -5,7 +5,7 @@ use crate::types::Message;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
 pub type RunTaskFunc<TTransformed> =
@@ -114,13 +114,37 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     }
 
     fn terminate(&mut self) {
-        // TODO: Implement terminate
+        for handle in &self.handles {
+            handle.abort();
+        }
+        self.handles.clear();
         self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        // TODO: Implement join
-        self.next_step.join(timeout)
+        let start = Instant::now();
+        let mut remaining: Option<Duration> = None;
+
+        // Poll until there are no more messages or timeout is hit
+        while self.message_carried_over.is_some() || self.handles.len() > 0 {
+            if let Some(t) = timeout {
+                remaining = Some(t - start.elapsed());
+                if remaining.unwrap() <= Duration::from_secs(0) {
+                    log::warn!("Timeout reached while waiting for tasks to finish");
+                    break;
+                }
+            }
+
+            self.poll();
+        }
+
+        // Cancel remaining tasks if any
+        for handle in &self.handles {
+            handle.abort();
+        }
+        self.handles.clear();
+
+        self.next_step.join(remaining)
     }
 }
 
