@@ -30,10 +30,6 @@ class DatasetMessageProcessor(MessageProcessor, metaclass=RegisteredClass):
         return cast(Type["DatasetMessageProcessor"], cls.class_from_name(name))()
 
     @classmethod
-    def from_kwargs(cls, **kwargs: str) -> DatasetMessageProcessor:
-        return cls(**kwargs)
-
-    @classmethod
     def config_key(cls) -> str:
         return cls.__name__
 
