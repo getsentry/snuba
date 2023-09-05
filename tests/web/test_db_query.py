@@ -196,7 +196,12 @@ def test_db_query_success() -> None:
             "can_run": True,
             "explanation": {},
             "max_threads": 10,
-        }
+        },
+        "ConcurrentRateLimitAllocationPolicy": {
+            "can_run": True,
+            "explanation": {},
+            "max_threads": 10,
+        },
     }
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
@@ -255,7 +260,12 @@ def test_bypass_cache_refferer() -> None:
                     "can_run": True,
                     "explanation": {},
                     "max_threads": 10,
-                }
+                },
+                "ConcurrentRateLimitAllocationPolicy": {
+                    "can_run": True,
+                    "explanation": {},
+                    "max_threads": 10,
+                },
             }
             assert len(query_metadata_list) == 1
             assert result.extra["stats"] == stats
