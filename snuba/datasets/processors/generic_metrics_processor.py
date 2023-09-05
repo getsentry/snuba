@@ -1,3 +1,5 @@
+import json
+import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -14,6 +16,7 @@ from typing import (
 
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
 
+from snuba.accountant import UsageUnit, accumulator
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
@@ -29,6 +32,11 @@ from snuba.datasets.metrics_messages import (
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
+from snuba.state import get_config
+
+logger = logging.getLogger(__name__)
+
+GEN_METRICS_RESOURCE_ID = "generic_metrics_processor"
 
 
 class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
@@ -146,9 +154,23 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
                 message["sentry_received_timestamp"]
             )
 
+        self.__record_cogs(message)
         return InsertBatch(
             [processed], None, sentry_received_timestamp=sentry_received_timestamp
         )
+
+    def __record_cogs(self, message: GenericMetric) -> None:
+        if get_config("enable_gen_metrics_processor_cogs", 0):
+            try:
+                if accumulator is not None:
+                    accumulator.record(
+                        resource_id=GEN_METRICS_RESOURCE_ID,
+                        app_feature=message["use_case_id"],
+                        amount=len(json.dumps(message).encode("utf-8")),
+                        usage_type=UsageUnit.BYTES,
+                    )
+            except Exception as err:
+                logger.error(err, exc_info=True)
 
 
 class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
