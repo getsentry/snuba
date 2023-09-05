@@ -123,7 +123,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = None;
+        let mut remaining: Option<Duration> = timeout;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
