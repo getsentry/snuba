@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod querylog;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;

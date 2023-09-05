@@ -21,6 +21,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.69"
+cadence = "0.29.1"
 chrono = { version = "0.4.26", features = ["serde"] }
 futures = "0.3.21"
 rust_arroyo = { path = "./rust_arroyo" }
