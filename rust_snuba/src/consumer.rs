@@ -28,6 +28,7 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
+    processes: usize,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -35,6 +36,7 @@ pub fn consumer(
             auto_offset_reset,
             consumer_config_raw,
             skip_write,
+            processes,
         )
     });
 }
@@ -44,6 +46,7 @@ pub fn consumer_impl(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
+    processes: usize,
 ) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
@@ -52,6 +55,7 @@ pub fn consumer_impl(
         clickhouse_cluster_config: config::ClickhouseConfig,
         clickhouse_table_name: String,
         skip_write: bool,
+        processes: usize,
     }
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -65,6 +69,7 @@ pub fn consumer_impl(
 
             let transform_step = PythonTransformStep::new(
                 self.processor_config.clone(),
+                self.processes,
                 Reduce::new(
                     Box::new(ClickhouseWriterStep::new(
                         CommitOffsets::new(Duration::from_secs(1)),
@@ -101,6 +106,8 @@ pub fn consumer_impl(
             setup_sentry(dsn);
         }
     }
+
+    procspawn::init();
 
     let first_storage = &consumer_config.storages[0];
 
@@ -141,6 +148,7 @@ pub fn consumer_impl(
             clickhouse_cluster_config,
             clickhouse_table_name,
             skip_write,
+            processes,
         }),
     );
 

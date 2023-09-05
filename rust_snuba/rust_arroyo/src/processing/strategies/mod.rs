@@ -9,7 +9,7 @@ pub mod run_task_in_threads;
 pub mod transform;
 
 #[derive(Debug, Clone)]
-pub struct MessageRejected<T: Clone> {
+pub struct MessageRejected<T> {
     pub message: Message<T>,
 }
 
