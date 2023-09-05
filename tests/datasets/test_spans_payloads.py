@@ -133,10 +133,8 @@ expected_results: Sequence[Mapping[str, Any]] = [
 class TestSpansPayloads:
     @pytest.fixture()
     def setup_state(self, redis_db: None) -> Generator[None, None, None]:
-        state.set_config("spans_project_allowlist", [project_id])
         state.set_config("log_bad_span_message_percentage", 1)
         yield
-        state.delete_config("spans_project_allowlist")
         state.delete_config("log_bad_span_message_percentage")
 
     @pytest.mark.parametrize(

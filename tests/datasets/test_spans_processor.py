@@ -11,10 +11,8 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.spans_processor import (
     SpansMessageProcessor,
     clean_span_tags,
-    is_project_in_allowlist,
 )
 from snuba.processor import InsertBatch
-from snuba.state import delete_config, set_config
 
 
 @dataclass
@@ -188,7 +186,6 @@ class TestSpansProcessor:
         )
 
     def test_required_clickhouse_columns_are_present(self) -> None:
-        set_config("spans_project_allowlist", "[1]")
         message = self.__get_span_event()
 
         meta = KafkaMessageMetadata(
@@ -210,7 +207,6 @@ class TestSpansProcessor:
             assert len(rows[index]) == len(expected_result[index])
 
     def test_exact_results(self) -> None:
-        set_config("spans_project_allowlist", "[1]")
         message = self.__get_span_event()
 
         meta = KafkaMessageMetadata(
@@ -250,30 +246,3 @@ def test_clean_span_tags(
     tags: Mapping[str, Any], expected_output: Mapping[str, Any]
 ) -> None:
     assert clean_span_tags(tags) == expected_output
-
-
-@pytest.mark.parametrize(
-    "sample_rate, project_id, input_project_id, expected_result",
-    [
-        pytest.param(0, 100, 100, True, id="sample rate mismatch exact project match"),
-        pytest.param(0, 101, 100, False, id="sample rate mismatch project mismatch"),
-        pytest.param(1, 101, 100, True, id="sample rate match project mismatch"),
-        pytest.param(1, 101, 101, True, id="sample rate match project match"),
-        pytest.param(1, 101, 102, False, id="sample rate mismatch project mismatch"),
-        pytest.param(None, 100, 100, True, id="no sample rate exact project match"),
-        pytest.param(None, 101, 100, False, id="no sample rate project mismatch"),
-    ],
-)
-@pytest.mark.redis_db
-def test_is_project_in_allowlist(
-    sample_rate: int, project_id: int, input_project_id: int, expected_result: bool
-) -> None:
-    if sample_rate:
-        set_config("spans_sample_rate", sample_rate)
-    if project_id:
-        set_config("spans_project_allowlist", f"[{project_id}]")
-
-    assert is_project_in_allowlist(input_project_id) == expected_result
-
-    delete_config("spans_sample_rate")
-    delete_config("spans_project_allowlist")

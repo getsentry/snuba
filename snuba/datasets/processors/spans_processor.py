@@ -38,28 +38,6 @@ CommonSpanDict = MutableMapping[str, Any]
 RetentionDays = int
 
 
-def is_project_in_allowlist(project_id: int) -> bool:
-    """
-    Allow spans to be written to Clickhouse if the project falls into one of the following
-    categories in order of priority:
-    1. The project falls in the configured sample rate
-    2. The project is in the allowlist
-    """
-    spans_sample_rate = state.get_config("spans_sample_rate", None)
-    if spans_sample_rate and project_id % 100 <= spans_sample_rate:
-        return True
-
-    project_allowlist = state.get_config("spans_project_allowlist", None)
-    if project_allowlist:
-        # The expected format is [project,project,...]
-        project_allowlist = project_allowlist[1:-1]
-        if project_allowlist:
-            rolled_out_projects = [int(p.strip()) for p in project_allowlist.split(",")]
-            if project_id in rolled_out_projects:
-                return True
-    return False
-
-
 def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
     """
     A lot of metadata regarding spans is sent in spans.data. We do not want to store everything
@@ -232,10 +210,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         }
 
         processed["project_id"] = span_event["project_id"]
-
-        # Reject events from projects that are not in the allowlist
-        if not is_project_in_allowlist(processed["project_id"]):
-            return None
 
         try:
             # The following helper functions should be able to be applied in any order.
