@@ -1,0 +1,198 @@
+version: v1
+kind: entity
+name: org_metrics_distributions
+schema:
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: metric_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: bucketed_time, type: DateTime },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: UInt, args: { size: 64 } },
+              { name: value, type: UInt, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: percentiles,
+      type: AggregateFunction,
+      args:
+        {
+          func: "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)",
+          arg_types: [{ type: Float, args: { size: 64 } }],
+        },
+    },
+    {
+      name: min,
+      type: AggregateFunction,
+      args: { func: min, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: max,
+      type: AggregateFunction,
+      args: { func: max, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: avg,
+      type: AggregateFunction,
+      args: { func: avg, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: sum,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: count,
+      type: AggregateFunction,
+      args: { func: count, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: histogram_buckets,
+      type: AggregateFunction,
+      args:
+        {
+          func: histogram(250),
+          arg_types: [{ type: Float, args: { size: 64 } }],
+        },
+    },
+  ]
+required_time_column: timestamp
+storages:
+  - storage: metrics_distributions
+    is_writable: false
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+      functions:
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: min
+            to_name: minMerge
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: minIf
+            to_name: minMergeIf
+            aggr_col_name: min
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: max
+            to_name: maxMerge
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: maxIf
+            to_name: maxMergeIf
+            aggr_col_name: max
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avg
+            to_name: avgMerge
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: avgIf
+            to_name: avgMergeIf
+            aggr_col_name: avg
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sum
+            to_name: sumMerge
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sumIf
+            to_name: sumMergeIf
+            aggr_col_name: sum
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: count
+            to_name: countMerge
+            aggr_col_name: count
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: countIf
+            to_name: countMergeIf
+            aggr_col_name: count
+      curried_functions:
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantiles
+            to_name: quantilesMerge
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: quantilesIf
+            to_name: quantilesMergeIf
+            aggr_col_name: percentiles
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogram
+            to_name: histogramMerge
+            aggr_col_name: histogram_buckets
+        - mapper: AggregateCurriedFunctionMapper
+          args:
+            column_to_map: value
+            from_name: histogramIf
+            to_name: histogramMergeIf
+            aggr_col_name: histogram_buckets
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: metrics_distributions
+query_processors:
+  - processor: GranularityProcessor
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: ReferrerRateLimiterProcessor
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: org_id
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+  - processor: TagsTypeTransformer
+
+validators:
+  - validator: GranularityValidator
+    args:
+      minimum: 3600

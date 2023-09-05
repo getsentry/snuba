@@ -1,0 +1,87 @@
+version: v1
+kind: entity
+name: org_metrics_sets
+schema:
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: metric_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: bucketed_time, type: DateTime },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: UInt, args: { size: 64 } },
+              { name: value, type: UInt, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: value,
+      type: AggregateFunction,
+      args:
+        {
+          func: uniqCombined64,
+          arg_types: [{ type: UInt, args: { size: 64 } }],
+        },
+    },
+  ]
+required_time_column: timestamp
+storages:
+  - storage: metrics_sets
+    is_writable: false
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+      functions:
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniq
+            to_name: uniqCombined64Merge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniqIf
+            to_name: uniqCombined64MergeIf
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: metrics_sets
+query_processors:
+  - processor: GranularityProcessor
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: ReferrerRateLimiterProcessor
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: org_id
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+  - processor: TagsTypeTransformer
+
+validators:
+  - validator: GranularityValidator
+    args:
+      minimum: 3600
