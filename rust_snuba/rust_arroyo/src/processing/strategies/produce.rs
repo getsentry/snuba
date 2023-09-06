@@ -129,9 +129,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         }
 
         self.next_step.close();
-        self.next_step.join(remaining);
-        // TODO: Handle commit request
-        None
+        self.next_step.join(remaining)
     }
 }
 
