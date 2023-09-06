@@ -8,10 +8,7 @@ from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.spans_processor import (
-    SpansMessageProcessor,
-    clean_span_tags,
-)
+from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 
 
@@ -110,8 +107,16 @@ class SpanEventExample:
                 "domain": "targetdomain.tld:targetport",
                 "platform": self.platform,
                 "action": "SELECT",
-                "tags.key": ["sentry:user", "tag1", "tag2", "tag3"],
-                "tags.value": ["123", "value1", "123", "True"],
+                "tags.key": [
+                    "sentry:user",
+                    "tag1",
+                    "tag2",
+                    "tag3",
+                    "http.method",
+                    "status_code",
+                    "transaction.method",
+                ],
+                "tags.value": ["123", "value1", "123", "True", "GET", "200", "GET"],
                 "measurements.key": [],
                 "measurements.value": [],
                 "partition": meta.partition,
@@ -223,26 +228,3 @@ class TestSpansProcessor:
         assert len(rows) == len(expected_result)
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
-
-
-@pytest.mark.parametrize(
-    "tags, expected_output",
-    [
-        pytest.param(
-            {"span.example": 1, "environment": "prod", "span.data": 3},
-            {"environment": "prod"},
-        ),
-        pytest.param(
-            {"transaction": 1, "transaction.op": 2, "other": 3},
-            {},
-        ),
-        pytest.param(
-            {"environment": "value1", "release": "value2", "user": "value3"},
-            {"environment": "value1", "release": "value2", "user": "value3"},
-        ),
-    ],
-)
-def test_clean_span_tags(
-    tags: Mapping[str, Any], expected_output: Mapping[str, Any]
-) -> None:
-    assert clean_span_tags(tags) == expected_output

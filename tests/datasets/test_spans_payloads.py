@@ -100,6 +100,16 @@ payloads = [
             }
         },
     },
+    {
+        **required_fields,
+        **{
+            "sentry_tags": {
+                "transaction.method": "GET",
+                "user": "user1",
+                "release": "release1234",
+            }
+        },
+    },
 ]
 
 expected_results: Sequence[Mapping[str, Any]] = [
@@ -121,12 +131,35 @@ expected_results: Sequence[Mapping[str, Any]] = [
         **expected_for_required_fields,
         **{"user": "user1", "tags.key": ["sentry:user"], "tags.value": ["user1"]},
     },
-    {**expected_for_required_fields, **{"span_status": 0, "status": 0}},
     {
         **expected_for_required_fields,
-        **{"span_status": 0, "status": 0, "group": int("deadbeefdeadbeef", 16)},
+        **{
+            "span_status": 0,
+            "status": 0,
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
+    },
+    {
+        **expected_for_required_fields,
+        **{
+            "span_status": 0,
+            "status": 0,
+            "group": int("deadbeefdeadbeef", 16),
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
+    },
+    {
+        **expected_for_required_fields,
+        **{
+            "tags.key": ["release", "transaction.method", "user"],
+            "tags.value": ["release1234", "GET", "user1"],
+        },
     },
 ]
+
+assert len(payloads) == len(expected_results)
 
 
 @pytest.mark.redis_db

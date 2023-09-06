@@ -38,15 +38,6 @@ CommonSpanDict = MutableMapping[str, Any]
 RetentionDays = int
 
 
-def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
-    """
-    A lot of metadata regarding spans is sent in spans.data. We do not want to store everything
-    as tags in clickhouse. This method allows only a few pre defined keys to be stored as tags.
-    """
-    allowed_keys = {"environment", "release", "user", "transaction.method"}
-    return {k: v for k, v in tags.items() if k in allowed_keys}
-
-
 class SpansMessageProcessor(DatasetMessageProcessor):
     """
     Message processor for writing spans data to the spans table.
@@ -167,16 +158,17 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         TODO: For the top level span belonging to a transaction, we do not know how to fill these
               values yet. For now lets just set them to their default values.
         """
-        sentry_tags = span_event["sentry_tags"]
-        processed["module"] = sentry_tags.get("module", "")
-        processed["action"] = sentry_tags.get("action", "")
-        processed["domain"] = sentry_tags.get("domain", "")
-        processed["group"] = int(sentry_tags.get("group", "0") or "0", 16)
+        sentry_tags = span_event["sentry_tags"].copy()
+        processed["module"] = sentry_tags.pop("module", "")
+        processed["action"] = sentry_tags.pop("action", "")
+        processed["domain"] = sentry_tags.pop("domain", "")
+        processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
         processed["span_kind"] = ""
-        processed["platform"] = sentry_tags.get("system", "")
-        processed["segment_name"] = _unicodify(sentry_tags.get("transaction") or "")
+        processed["platform"] = sentry_tags.pop("system", "")
+        processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))
 
-        status = sentry_tags.get("status", None)
+        # TODO: handle status_code so it isn't stored in tags
+        status = sentry_tags.pop("status", None)
         if status:
             int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
             processed["status"] = int_status
@@ -184,10 +176,17 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status
 
-        processed["op"] = sentry_tags.get("op", "")
-        transaction_op = sentry_tags.get("transaction.op", None)
+        processed["op"] = sentry_tags.pop("op", "")
+        transaction_op = sentry_tags.pop("transaction.op", None)
         if transaction_op:
             processed["transaction_op"] = _unicodify(transaction_op)
+
+        # Remaining tags are dumped into the tags column. In future these will be moved
+        # to the sentry_tags column to avoid the danger of conflicting with other tags.
+        # This expects that processed_tags has already been called
+        leftover_tag_keys, leftover_tag_values = extract_extra_tags(sentry_tags)
+        processed["tags.key"].extend(leftover_tag_keys)
+        processed["tags.value"].extend(leftover_tag_values)
 
     def process_message(
         self,
