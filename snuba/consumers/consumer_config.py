@@ -44,6 +44,8 @@ class TopicConfig:
 @dataclass(frozen=True)
 class EnvConfig:
     sentry_dsn: Optional[str]
+    dogstatsd_host: Optional[str]
+    dogstatsd_port: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -90,9 +92,15 @@ def _resolve_topic_config(
     )
 
 
-def _resolve_env_config() -> Optional[EnvConfig]:
+def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
-    return EnvConfig(sentry_dsn=sentry_dsn)
+    dogstatsd_host = settings.DOGSTATSD_HOST
+    dogstatsd_port = settings.DOGSTATSD_PORT
+    return EnvConfig(
+        sentry_dsn=sentry_dsn,
+        dogstatsd_host=dogstatsd_host,
+        dogstatsd_port=dogstatsd_port,
+    )
 
 
 def resolve_consumer_config(
