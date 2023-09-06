@@ -24,7 +24,8 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
 
         profile_id = str(uuid.UUID(message["profile_id"]))
         now = datetime.utcnow().timestamp()
-        timestamp = datetime.utcfromtimestamp(message.get("timestamp", now) or now)
+        raw_timestamp = max(message.get("timestamp", 0), 0)
+        timestamp = datetime.utcfromtimestamp(raw_timestamp or now)
 
         if "call_trees" in message:
             functions = {}
