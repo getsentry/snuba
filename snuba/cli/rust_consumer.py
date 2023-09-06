@@ -93,6 +93,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--processes",
     type=int,
 )
+@click.option(
+    "--use-rust-processor",
+    "use_rust_processor",
+    is_flag=True,
+    help="Use the Rust instead of Python message processor (if available)",
+    default=False,
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -110,6 +117,7 @@ def rust_consumer(
     log_level: str,
     skip_write: bool,
     processes: Optional[int],
+    use_rust_processor: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -142,4 +150,5 @@ def rust_consumer(
         consumer_config_raw,
         skip_write,
         processes or 1,
+        use_rust_processor,
     )
