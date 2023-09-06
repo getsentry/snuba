@@ -62,7 +62,7 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba
-ARG RUST_TOOLCHAIN=1.68
+ARG RUST_TOOLCHAIN=1.72
 ARG SHOULD_BUILD_RUST=true
 
 COPY ./rust_snuba/ ./rust_snuba/
