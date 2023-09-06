@@ -49,19 +49,19 @@ impl ArroyoMetrics for StatsDBackend {
         if let Err(e) =
             self.send_with_tags(self.client.count_with_tags(key, value.unwrap_or(1)), tags)
         {
-            log::error!("Error sending metric: {}", e);
+            log::debug!("Error sending metric: {}", e);
         }
     }
 
     fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
-            log::error!("Error sending metric: {}", e);
+            log::debug!("Error sending metric: {}", e);
         }
     }
 
     fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
-            log::error!("Error sending metric: {}", e);
+            log::debug!("Error sending metric: {}", e);
         }
     }
 }
