@@ -16,9 +16,11 @@ use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Topic};
+use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
+use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
@@ -162,11 +164,32 @@ pub fn consumer_impl(
     assert!(consumer_config.commit_log_topic.is_none());
 
     // setup sentry
-    if let Some(env) = consumer_config.env {
-        if let Some(dsn) = env.sentry_dsn {
-            log::debug!("Using sentry dsn {:?}", dsn);
-            setup_sentry(dsn);
-        }
+    if let Some(dsn) = consumer_config.env.sentry_dsn {
+        log::debug!("Using sentry dsn {:?}", dsn);
+        setup_sentry(dsn);
+    }
+
+    // setup arroyo metrics
+    if let (Some(host), Some(port)) = (
+        consumer_config.env.dogstatsd_host,
+        consumer_config.env.dogstatsd_port,
+    ) {
+        let mut tags = HashMap::new();
+        let storage_name = consumer_config
+            .storages
+            .iter()
+            .map(|s| s.name.clone())
+            .collect::<Vec<_>>()
+            .join(",");
+        tags.insert("storage", storage_name.as_str());
+        tags.insert("consumer_group", consumer_group);
+
+        configure_metrics(Box::new(StatsDBackend::new(
+            &host,
+            port,
+            "snuba.rust_consumer",
+            tags,
+        )));
     }
 
     procspawn::init();
