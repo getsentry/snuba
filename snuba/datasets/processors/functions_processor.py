@@ -23,7 +23,8 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
         max_depth_reached = False
 
         profile_id = str(uuid.UUID(message["profile_id"]))
-        timestamp = datetime.utcfromtimestamp(message["timestamp"])
+        now = datetime.utcnow().timestamp()
+        timestamp = datetime.utcfromtimestamp(message.get("timestamp", now) or now)
 
         if "call_trees" in message:
             functions = {}
