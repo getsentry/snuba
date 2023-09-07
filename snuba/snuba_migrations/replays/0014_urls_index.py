@@ -56,33 +56,11 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
     )
 
     for column in materialized_columns:
-        yield operations.AddColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_local",
-            column=Column(
-                f"_{column}_hashed",
-                UInt(64, Modifiers(materialized=f"cityHash64({column})")),
-            ),
-            after=column,
-            target=operations.OperationTarget.LOCAL,
-        )
-
-        yield operations.AddColumn(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_dist",
-            column=Column(
-                f"_{column}_hashed",
-                UInt(64, Modifiers(materialized=f"cityHash64({column})")),
-            ),
-            after=column,
-            target=operations.OperationTarget.DISTRIBUTED,
-        )
-
         yield operations.AddIndex(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
-            index_name=f"bf_{column}_hashed",
-            index_expression=f"_{column}_hashed",
+            index_name=f"bf_{column}",
+            index_expression=column,
             index_type="bloom_filter()",
             granularity=1,
             target=operations.OperationTarget.LOCAL,
@@ -90,27 +68,34 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 def backward_columns_iter() -> Iterator[operations.SqlOperation]:
-    for column in materialized_columns + ["urls"]:
-        yield operations.DropColumn(
-            StorageSetKey.REPLAYS,
-            "replays_local",
-            f"_{column}_hashed",
-            operations.OperationTarget.LOCAL,
-        )
-
-        yield operations.DropColumn(
-            StorageSetKey.REPLAYS,
-            "replays_dist",
-            f"_{column}_hashed",
-            operations.OperationTarget.DISTRIBUTED,
-        )
-
+    for column in materialized_columns:
         yield operations.DropIndex(
             StorageSetKey.REPLAYS,
             "replays_local",
-            f"bf_{column}_hashed",
+            f"bf_{column}",
             target=operations.OperationTarget.LOCAL,
         )
+
+    yield operations.DropIndex(
+        StorageSetKey.REPLAYS,
+        "replays_local",
+        "bf_urls_hashed",
+        target=operations.OperationTarget.LOCAL,
+    )
+
+    yield operations.DropColumn(
+        StorageSetKey.REPLAYS,
+        "replays_dist",
+        "_urls_hashed",
+        operations.OperationTarget.DISTRIBUTED,
+    )
+
+    yield operations.DropColumn(
+        StorageSetKey.REPLAYS,
+        "replays_local",
+        "_urls_hashed",
+        operations.OperationTarget.LOCAL,
+    )
 
 
 materialized_columns = ["user_id", "user_name", "user_email", "ip_address_v4"]
