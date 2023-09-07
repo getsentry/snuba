@@ -807,7 +807,7 @@ def make_payload_for_event_link(severity: str) -> tuple[dict[str, Any], str, str
                         "type": "event_link",
                         "replay_id": replay_id,
                         severity + "_id": event_id,
-                        "timestamp": int(now.timestamp()),
+                        "timestamp": str(int(now.timestamp())),
                         "event_hash": md5(
                             (replay_id + event_id).encode("utf-8")
                         ).hexdigest(),
