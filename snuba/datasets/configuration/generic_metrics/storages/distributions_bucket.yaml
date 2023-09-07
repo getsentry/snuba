@@ -48,8 +48,7 @@ schema:
   local_table_name: generic_metric_distributions_raw_local
   dist_table_name: generic_metric_distributions_raw_dist
 stream_loader:
-  processor:
-    name: GenericDistributionsMetricsProcessor
+  processor: GenericDistributionsMetricsProcessor
   default_topic: snuba-generic-metrics
   pre_filter:
     type: KafkaHeaderSelectFilter

@@ -46,8 +46,15 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorsProcessor(DatasetMessageProcessor):
-    def __init__(self, promoted_tag_columns: Mapping[str, str]):
-        self._promoted_tag_columns = promoted_tag_columns
+    def __init__(self) -> None:
+        self._promoted_tag_columns = {
+            "environment": "environment",
+            "sentry:release": "release",
+            "sentry:dist": "dist",
+            "sentry:user": "user",
+            "transaction": "transaction_name",
+            "level": "level",
+        }
 
     def process_message(
         self,

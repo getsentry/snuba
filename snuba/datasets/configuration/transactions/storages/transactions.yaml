@@ -163,6 +163,14 @@ schema:
   partition_format: [retention_days, date]
 
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -172,14 +180,6 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 0
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
@@ -255,8 +255,7 @@ writer_options:
   input_format_skip_unknown_fields: 1
 
 stream_loader:
-  processor:
-    name: TransactionsMessageProcessor
+  processor: TransactionsMessageProcessor
   default_topic: transactions
   commit_log_topic: snuba-transactions-commit-log
   subscription_scheduler_mode: global

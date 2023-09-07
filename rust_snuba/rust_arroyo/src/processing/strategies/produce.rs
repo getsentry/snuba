@@ -1,7 +1,9 @@
 use crate::backends::kafka::producer::KafkaProducer;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy,
+};
 use crate::types::{Message, TopicOrPartition};
 use futures::Future;
 use log::warn;
@@ -54,6 +56,8 @@ impl Produce<KafkaPayload> {
 
 impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
     fn poll(&mut self) -> Option<CommitRequest> {
+        let mut commit_request = None;
+
         while !self.queue.is_empty() {
             let (message, handle) = self.queue.pop_front().unwrap();
 
@@ -62,22 +66,26 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
                 // block_on(async{
                 //     handle.await.unwrap();
                 // });
-                self.next_step.poll();
+                let next_commit = self.next_step.poll();
+                commit_request = merge_commit_request(commit_request, next_commit);
+
                 self.next_step.submit(new_message).unwrap()
             } else {
                 break;
             }
         }
-        // TODO: This needs to handle commit request
-        None
+        commit_request
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(
+        &mut self,
+        message: Message<KafkaPayload>,
+    ) -> Result<(), MessageRejected<KafkaPayload>> {
         if self.closed {
             panic!("Attempted to submit a message to a closed Produce strategy")
         }
         if self.queue.len() >= self.max_queue_size {
-            return Err(MessageRejected {message});
+            return Err(MessageRejected { message });
         }
 
         let produce_fut = ProduceFuture {
@@ -104,11 +112,12 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = None;
+        let mut remaining: Option<Duration> = timeout;
+        let mut commit_request = None;
 
         while !self.queue.is_empty() {
-            if let Some(timeout) = timeout {
-                remaining = Some(timeout - start.elapsed());
+            if let Some(t) = remaining {
+                remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
                     warn!("Timeout reached while waiting for the queue to be empty");
                     break;
@@ -117,7 +126,9 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
             let (message, handle) = self.queue.pop_front().unwrap();
             if handle.is_finished() {
                 let new_message = message.clone();
-                self.next_step.poll();
+                let next_commit = self.next_step.poll();
+                commit_request = merge_commit_request(commit_request, next_commit);
+
                 // TODO: Handle message rejected
                 self.next_step.submit(new_message).unwrap()
             } else {
@@ -126,9 +137,8 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         }
 
         self.next_step.close();
-        self.next_step.join(remaining);
-        // TODO: Handle commit request
-        None
+        let next_commit = self.next_step.join(remaining);
+        merge_commit_request(commit_request, next_commit)
     }
 }
 
@@ -149,9 +159,7 @@ mod tests {
     #[tokio::test]
     async fn test_produce() {
         let config = KafkaConfig::new_consumer_config(
-            vec![
-                std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())
-            ],
+            vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my_group".to_string(),
             "latest".to_string(),
             false,
@@ -170,7 +178,10 @@ mod tests {
             fn poll(&mut self) -> Option<CommitRequest> {
                 None
             }
-            fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), MessageRejected<KafkaPayload>> {
+            fn submit(
+                &mut self,
+                _message: Message<KafkaPayload>,
+            ) -> Result<(), MessageRejected<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}

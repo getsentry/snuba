@@ -25,6 +25,14 @@ schema:
   local_table_name: outcomes_raw_local
   dist_table_name: outcomes_raw_dist
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -39,6 +47,5 @@ query_processors:
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
 stream_loader:
-  processor:
-    name: OutcomesProcessor
+  processor: OutcomesProcessor
   default_topic: outcomes

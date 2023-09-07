@@ -49,7 +49,6 @@ query_processors:
       column_name: tags
   - processor: TableRateLimit
 stream_loader:
-  processor:
-    name: CounterAggregateProcessor
+  processor: CounterAggregateProcessor
   default_topic: snuba-metrics
   dlq_topic: snuba-dead-letter-metrics-counters

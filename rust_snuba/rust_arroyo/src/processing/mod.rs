@@ -2,10 +2,11 @@ pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -56,15 +57,26 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
+        let metrics = get_metrics();
+        let start = Instant::now();
+
         let mut stg = self.strategies.lock().unwrap();
         match stg.strategy.as_mut() {
             None => {}
             Some(s) => {
                 s.close();
-                s.join(None);
+                // TODO: We need to actually call consumer.commit() with the commit request.
+                // Right now we are never committing during consumer shutdown.
+                let _ = s.join(None);
             }
         }
         stg.strategy = None;
+
+        metrics.timing(
+            "arroyo.consumer.join.time",
+            start.elapsed().as_millis() as u64,
+            None,
+        );
     }
 }
 

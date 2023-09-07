@@ -153,7 +153,7 @@ jobs:
           # push: true
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           tags: |
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -190,7 +190,12 @@ jobs:
     strategy:
       matrix:
         snuba_settings:
-          ["test", "test_rust", "test_distributed", "test_distributed_migrations"]
+          [
+            "test",
+            "test_rust",
+            "test_distributed",
+            "test_distributed_migrations",
+          ]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -214,7 +219,7 @@ jobs:
           tags: snuba-test
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -359,22 +364,6 @@ jobs:
         working-directory: sentry
         run: |
           make test-snuba
-  self-hosted-end-to-end:
-    needs: [snuba-image]
-    runs-on: ubuntu-latest
-    # temporary, remove once we are confident the action is working
-    continue-on-error: true
-
-    steps:
-      - name: Checkout Snuba
-        uses: actions/checkout@v3
-      - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@f45ef07793b2cc805a9a9401819f486da449a90a
-        with:
-          project_name: snuba
-          docker_repo: getsentry/snuba
-          image_url: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
-          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
 
   clickhouse-21:
     needs: [linting, snuba-image]
@@ -404,7 +393,7 @@ jobs:
           tags: snuba-test
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import calendar
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, Generator, Tuple, Union
@@ -50,12 +49,12 @@ class TestSpansApi(BaseApiTest):
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
-        state.set_config("spans_project_allowlist", [1])
+        state.set_config("log_bad_span_message_percentage", 1)
         self.generate_fizzbuzz_events()
 
         yield
 
-        state.delete_config("spans_project_allowlist")
+        state.delete_config("log_bad_span_message_percentage")
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")
@@ -80,133 +79,70 @@ class TestSpansApi(BaseApiTest):
                         .get_stream_loader()
                         .get_processor()
                         .process_message(
-                            (
-                                2,
-                                "insert",
-                                {
-                                    "project_id": p,
-                                    "event_id": uuid.uuid4().hex,
-                                    "deleted": 0,
-                                    "datetime": (
+                            {
+                                "project_id": p,
+                                "event_id": uuid.uuid4().hex,
+                                "deleted": 0,
+                                "is_segment": False,
+                                "duration_ms": int(
+                                    1000 * timedelta(minutes=tick).total_seconds()
+                                ),
+                                "start_timestamp_ms": int(
+                                    1000
+                                    * datetime.timestamp(
                                         self.base_time + timedelta(minutes=tick)
-                                    ).isoformat(),
-                                    "platform": self.platforms[
+                                    )
+                                ),
+                                "exclusive_time_ms": int(1000 * 0.1234),
+                                "trace_id": self.trace_id,
+                                "span_id": span_id,
+                                "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                                "parent_span_id": span_id,
+                                "description": "GET /api/0/organizations/sentry/tags/?project=1",
+                                "measurements": {
+                                    "lcp": {"value": 32.129},
+                                    "lcp.elementSize": {"value": 4242},
+                                },
+                                "breakdowns": {
+                                    "span_ops": {
+                                        "ops.db": {"value": 62.512},
+                                        "ops.http": {"value": 109.774},
+                                        "total.time": {"value": 172.286},
+                                    }
+                                },
+                                "tags": {
+                                    # Sentry
+                                    "environment": self.environments[
+                                        (tock * p) % len(self.environments)
+                                    ],
+                                    "sentry:release": str(tick),
+                                    "sentry:dist": "dist1",
+                                    # User
+                                    "foo": "baz",
+                                    "foo.bar": "qux",
+                                    "os_name": "linux",
+                                },
+                                "sentry_tags": {
+                                    "system": self.platforms[
                                         (tock * p) % len(self.platforms)
                                     ],
-                                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                                    "data": {
-                                        # Project N sends every Nth (mod len(hashes)) hash (and platform)
-                                        "received": calendar.timegm(
-                                            (
-                                                self.base_time + timedelta(minutes=tick)
-                                            ).timetuple()
-                                        ),
-                                        "type": "transaction",
-                                        "transaction": "/api/do_things",
-                                        "start_timestamp": datetime.timestamp(
-                                            (self.base_time + timedelta(minutes=tick))
-                                        ),
-                                        "timestamp": datetime.timestamp(
-                                            (
-                                                self.base_time
-                                                + timedelta(minutes=tick, seconds=1)
-                                            )
-                                        ),
-                                        "tags": {
-                                            # Sentry
-                                            "environment": self.environments[
-                                                (tock * p) % len(self.environments)
-                                            ],
-                                            "sentry:release": str(tick),
-                                            "sentry:dist": "dist1",
-                                            # User
-                                            "foo": "baz",
-                                            "foo.bar": "qux",
-                                            "os_name": "linux",
-                                        },
-                                        "user": {
-                                            "email": "sally@example.org",
-                                            "ip_address": "8.8.8.8",
-                                        },
-                                        "contexts": {
-                                            "trace": {
-                                                "trace_id": self.trace_id,
-                                                "span_id": span_id,
-                                                "op": "http",
-                                                "status": "0",
-                                            },
-                                            "app": {"start_type": "warm"},
-                                        },
-                                        "measurements": {
-                                            "lcp": {"value": 32.129},
-                                            "lcp.elementSize": {"value": 4242},
-                                        },
-                                        "breakdowns": {
-                                            "span_ops": {
-                                                "ops.db": {"value": 62.512},
-                                                "ops.http": {"value": 109.774},
-                                                "total.time": {"value": 172.286},
-                                            }
-                                        },
-                                        "spans": [
-                                            {
-                                                "op": "http.client",
-                                                "trace_id": self.trace_id,
-                                                "span_id": str(int(span_id, 16) + 2),
-                                                "parent_span_id": span_id,
-                                                "same_process_as_parent": True,
-                                                "description": "GET /api/0/organizations/sentry/tags/?project=1",
-                                                "data": {},
-                                                "start_timestamp": calendar.timegm(
-                                                    (
-                                                        self.base_time
-                                                        + timedelta(minutes=tick)
-                                                    ).timetuple()
-                                                ),
-                                                "timestamp": calendar.timegm(
-                                                    (
-                                                        self.base_time
-                                                        + timedelta(minutes=tick + 2)
-                                                    ).timetuple()
-                                                ),
-                                                "hash": "b" * 16,
-                                                "exclusive_time": 0.1234,
-                                            },
-                                            {
-                                                "sampled": True,
-                                                "same_process_as_parent": None,
-                                                "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
-                                                "tags": None,
-                                                "start_timestamp": calendar.timegm(
-                                                    (
-                                                        self.base_time
-                                                        + timedelta(minutes=tick + 1)
-                                                    ).timetuple()
-                                                ),
-                                                "timestamp": calendar.timegm(
-                                                    (
-                                                        self.base_time
-                                                        + timedelta(minutes=tick + 2)
-                                                    ).timetuple()
-                                                ),
-                                                "parent_span_id": str(
-                                                    int(span_id, 16) + 1
-                                                ),
-                                                "trace_id": self.trace_id,
-                                                "span_id": str(int(span_id, 16) + 2),
-                                                "data": {},
-                                                "op": "db",
-                                                "hash": "c" * 16,
-                                                "exclusive_time": 0.4567,
-                                            },
-                                        ],
-                                    },
+                                    "transaction": "/api/do_things",
+                                    "transaction.op": "http",
+                                    "op": "http.client",
+                                    "status": "0",
+                                    "module": "sentry",
+                                    "action": "POST",
+                                    "domain": "sentry.io:1234",
+                                    "group": self.hashes[(tock * p) % len(self.hashes)][
+                                        :16
+                                    ],
                                 },
-                            ),
+                            },
                             KafkaMessageMetadata(0, 0, self.base_time),
                         )
                     )
-                    if processed:
+                    if p == 1:
+                        assert processed is not None
                         events.append(processed)
         write_processed_messages(self.storage, events)
 
@@ -248,22 +184,6 @@ class TestSpansApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert data["data"][0]["aggregate"] > 10, data
-
-        # No count for project 2 even though data was being sent to the processor because the
-        # allowlist does not allow the project
-        from_date = (self.base_time - self.skew).isoformat()
-        to_date = (self.base_time + self.skew).isoformat()
-        response = self._post_query(
-            f"""MATCH (spans)
-                SELECT count() AS aggregate
-                WHERE project_id = 2
-                AND timestamp >= toDateTime('{from_date}')
-                AND timestamp < toDateTime('{to_date}')
-            """
-        )
-        data = json.loads(response.data)
-        assert response.status_code == 200, response.data
-        assert data["data"][0]["aggregate"] == 0, data
 
     def test_get_group_sorted_by_exclusive_time(self) -> None:
         """

@@ -9,7 +9,7 @@ pub mod run_task_in_threads;
 pub mod transform;
 
 #[derive(Debug, Clone)]
-pub struct MessageRejected<T: Clone> {
+pub struct MessageRejected<T> {
     pub message: Message<T>,
 }
 
@@ -20,6 +20,35 @@ pub struct InvalidMessage;
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommitRequest {
     pub positions: HashMap<Partition, u64>,
+}
+
+impl CommitRequest {
+    pub fn merge(mut self, other: CommitRequest) -> Self {
+        // Merge commit requests, keeping the highest offset for each partition
+        for (partition, offset) in other.positions {
+            if self.positions.contains_key(&partition) {
+                if self.positions[&partition] < offset {
+                    self.positions.insert(partition, offset);
+                }
+            } else {
+                self.positions.insert(partition, offset);
+            }
+        }
+
+        self
+    }
+}
+
+pub fn merge_commit_request(
+    value: Option<CommitRequest>,
+    other: Option<CommitRequest>,
+) -> Option<CommitRequest> {
+    match (value, other) {
+        (None, None) => None,
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (Some(x), Some(y)) => Some(x.merge(y)),
+    }
 }
 
 /// A processing strategy defines how a stream processor processes messages
@@ -40,6 +69,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     ///
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
+    #[must_use]
     fn poll(&mut self) -> Option<CommitRequest>;
 
     /// Submit a message for processing.
@@ -78,6 +108,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// until this function exits, allowing any work in progress to be
     /// completed and committed before the continuing the rebalancing
     /// process.
+    #[must_use]
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
 }
 
@@ -87,4 +118,49 @@ pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {
     /// :param commit: A function that accepts a mapping of ``Partition``
     /// instances to offset values that should be committed.
     fn create(&self) -> Box<dyn ProcessingStrategy<TPayload>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Topic;
+
+    #[test]
+    fn merge() {
+        let partition = Partition {
+            topic: Topic {
+                name: "topic".to_string(),
+            },
+            index: 0,
+        };
+        let partition_2 = Partition {
+            topic: Topic {
+                name: "topic".to_string(),
+            },
+            index: 1,
+        };
+
+        let a = Some(CommitRequest {
+            positions: HashMap::from([(partition.clone(), 1)]),
+        });
+
+        let b = Some(CommitRequest {
+            positions: HashMap::from([(partition.clone(), 2)]),
+        });
+
+        let c = Some(CommitRequest {
+            positions: HashMap::from([(partition_2.clone(), 2)]),
+        });
+
+        assert_eq!(merge_commit_request(a.clone(), b.clone()), b.clone());
+
+        assert_eq!(
+            merge_commit_request(a.clone(), c.clone()),
+            Some(CommitRequest {
+                positions: HashMap::from([(partition.clone(), 1), (partition_2.clone(), 2)]),
+            })
+        );
+
+        assert_eq!(merge_commit_request(c.clone(), None), c.clone());
+    }
 }

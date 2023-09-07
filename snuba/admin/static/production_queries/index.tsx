@@ -2,18 +2,21 @@ import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
 import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
-import { executeActionsStyle, executeButtonStyle, selectStyle } from "./styles";
+import { executeActionsStyle } from "./styles";
 import {
+  Accordion,
   Box,
   Button,
   Collapse,
   Group,
   Loader,
   Select,
+  Space,
   Text,
   Textarea,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { CSV } from "../cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -114,10 +117,9 @@ function ProductionQueries(props: { api: Client }) {
           <div>
             <Button
               onClick={executeQuery}
+              loading={isExecuting}
               disabled={
-                isExecuting ||
-                snql_query.dataset == undefined ||
-                snql_query.query == undefined
+                snql_query.dataset == undefined || snql_query.query == undefined
               }
             >
               Execute Query
@@ -126,23 +128,68 @@ function ProductionQueries(props: { api: Client }) {
         </div>
       </form>
       <div>
-        <h2>Query results</h2>
-        {isExecuting ? (
-          <Loader />
-        ) : (
-          queryResultHistory.map((queryResult, idx) => {
-            if (idx === 0) {
-              return (
-                <div>
-                  <p>Execution Duration (ms): {queryResult.duration_ms}</p>
-                  <Table
-                    headerData={queryResult.columns}
-                    rowData={queryResult.rows}
-                  />
-                </div>
-              );
-            }
-          })
+        {queryResultHistory.length > 0 && (
+          <>
+            <h2>Query results</h2>
+            <div>
+              <p>
+                Execution Duration (ms): {queryResultHistory[0].duration_ms}
+              </p>
+              <Button.Group>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    window.navigator.clipboard.writeText(
+                      JSON.stringify(queryResultHistory[0])
+                    )
+                  }
+                >
+                  Copy to clipboard (JSON)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    window.navigator.clipboard.writeText(
+                      CSV.sheet([
+                        queryResultHistory[0].columns,
+                        ...queryResultHistory[0].rows,
+                      ])
+                    )
+                  }
+                >
+                  Copy to clipboard (CSV)
+                </Button>
+              </Button.Group>
+              <Space h="md" />
+              <Table
+                headerData={queryResultHistory[0].columns}
+                rowData={queryResultHistory[0].rows}
+              />
+            </div>
+          </>
+        )}
+      </div>
+      <div>
+        {queryResultHistory.length > 1 && (
+          <>
+            <h2>Query History</h2>
+            <Accordion multiple transitionDuration={0} chevronPosition="left">
+              {queryResultHistory.slice(1).map((queryResult, idx) => {
+                return (
+                  <Accordion.Item
+                    value={(queryResultHistory.length - idx).toString()}
+                  >
+                    <Accordion.Control>
+                      {queryResult.input_query}
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <QueryResultHistoryItem queryResult={queryResult} />
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                );
+              })}
+            </Accordion>
+          </>
         )}
       </div>
     </div>
@@ -155,13 +202,50 @@ function ProjectsList(props: { projects: string[] }) {
   return (
     <Box mb="xs" mx="auto">
       <Group position="left" mb={5}>
-        <Button onClick={toggle}>View Allowed Projects</Button>
+        <Button onClick={toggle}>
+          {opened ? "Hide" : "View"} Allowed Projects
+        </Button>
       </Group>
 
       <Collapse in={opened}>
         <Text>{props.projects.join(", ")}</Text>
       </Collapse>
     </Box>
+  );
+}
+
+function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
+  return (
+    <div>
+      <p>Execution Duration (ms): {props.queryResult.duration_ms}</p>
+      <Button.Group>
+        <Button
+          variant="outline"
+          onClick={() =>
+            window.navigator.clipboard.writeText(
+              JSON.stringify(props.queryResult)
+            )
+          }
+        >
+          Copy to clipboard (JSON)
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            window.navigator.clipboard.writeText(
+              CSV.sheet([props.queryResult.columns, ...props.queryResult.rows])
+            )
+          }
+        >
+          Copy to clipboard (CSV)
+        </Button>
+      </Button.Group>
+      <Space h="md" />
+      <Table
+        headerData={props.queryResult.columns}
+        rowData={props.queryResult.rows}
+      />
+    </div>
   );
 }
 

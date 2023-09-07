@@ -5,6 +5,11 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = [
+    "rust_arroyo",
+]
+
 [lib]
 # The name of the native library. This is the name which will be used in Python to import the
 # library (i.e. `import string_sum`). If you change this, you must also change the name of the
@@ -16,6 +21,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.69"
+cadence = "0.29.1"
+chrono = { version = "0.4.26", features = ["serde"] }
 futures = "0.3.21"
 rust_arroyo = { path = "./rust_arroyo" }
 serde_yaml = "0.9.19"
@@ -30,9 +37,11 @@ ctrlc = "3.2.5"
 sentry = "0.31.0"
 reqwest = "0.11.11"
 uuid = "1.4.1"
+procspawn = { version = "0.10.2", features = ["json"] }
 
 [features]
 ffi = ["pyo3/extension-module"]
 
 [dev-dependencies]
 pyo3 = { version = "*", features = ["auto-initialize"] }
+procspawn = { version = "0.10.2", features = ["test-support", "json"] }
