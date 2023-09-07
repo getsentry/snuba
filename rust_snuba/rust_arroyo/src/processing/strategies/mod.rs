@@ -22,6 +22,35 @@ pub struct CommitRequest {
     pub positions: HashMap<Partition, u64>,
 }
 
+impl CommitRequest {
+    pub fn merge(mut self, other: CommitRequest) -> Self {
+        // Merge commit requests, keeping the highest offset for each partition
+        for (partition, offset) in other.positions {
+            if self.positions.contains_key(&partition) {
+                if self.positions[&partition] < offset {
+                    self.positions.insert(partition, offset);
+                }
+            } else {
+                self.positions.insert(partition, offset);
+            }
+        }
+
+        self
+    }
+}
+
+pub fn merge_commit_request(
+    value: Option<CommitRequest>,
+    other: Option<CommitRequest>,
+) -> Option<CommitRequest> {
+    match (value, other) {
+        (None, None) => None,
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (Some(x), Some(y)) => Some(x.merge(y)),
+    }
+}
+
 /// A processing strategy defines how a stream processor processes messages
 /// during the course of a single assignment. The processor is instantiated
 /// when the assignment is received, and closed when the assignment is
@@ -89,4 +118,49 @@ pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {
     /// :param commit: A function that accepts a mapping of ``Partition``
     /// instances to offset values that should be committed.
     fn create(&self) -> Box<dyn ProcessingStrategy<TPayload>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Topic;
+
+    #[test]
+    fn merge() {
+        let partition = Partition {
+            topic: Topic {
+                name: "topic".to_string(),
+            },
+            index: 0,
+        };
+        let partition_2 = Partition {
+            topic: Topic {
+                name: "topic".to_string(),
+            },
+            index: 1,
+        };
+
+        let a = Some(CommitRequest {
+            positions: HashMap::from([(partition.clone(), 1)]),
+        });
+
+        let b = Some(CommitRequest {
+            positions: HashMap::from([(partition.clone(), 2)]),
+        });
+
+        let c = Some(CommitRequest {
+            positions: HashMap::from([(partition_2.clone(), 2)]),
+        });
+
+        assert_eq!(merge_commit_request(a.clone(), b.clone()), b.clone());
+
+        assert_eq!(
+            merge_commit_request(a.clone(), c.clone()),
+            Some(CommitRequest {
+                positions: HashMap::from([(partition.clone(), 1), (partition_2.clone(), 2)]),
+            })
+        );
+
+        assert_eq!(merge_commit_request(c.clone(), None), c.clone());
+    }
 }
