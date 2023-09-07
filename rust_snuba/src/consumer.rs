@@ -34,7 +34,7 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
-    processes: usize,
+    concurrency: usize,
     use_rust_processor: bool,
 ) {
     py.allow_threads(|| {
@@ -43,7 +43,7 @@ pub fn consumer(
             auto_offset_reset,
             consumer_config_raw,
             skip_write,
-            processes,
+            concurrency,
             use_rust_processor,
         )
     });
@@ -54,7 +54,7 @@ pub fn consumer_impl(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
-    processes: usize,
+    concurrency: usize,
     use_rust_processor: bool,
 ) {
     struct ConsumerStrategyFactory {
@@ -64,7 +64,7 @@ pub fn consumer_impl(
         clickhouse_cluster_config: config::ClickhouseConfig,
         clickhouse_table_name: String,
         skip_write: bool,
-        processes: usize,
+        concurrency: usize,
         use_rust_processor: bool,
     }
 
@@ -139,12 +139,16 @@ pub fn consumer_impl(
                     }
 
                     let task_runner = MessageProcessor { func };
-                    Box::new(RunTaskInThreads::new(next_step, Box::new(task_runner), 100))
+                    Box::new(RunTaskInThreads::new(
+                        next_step,
+                        Box::new(task_runner),
+                        self.concurrency,
+                    ))
                 }
                 _ => Box::new(
                     PythonTransformStep::new(
                         self.processor_config.clone(),
-                        self.processes,
+                        self.concurrency,
                         next_step,
                     )
                     .unwrap(),
@@ -233,7 +237,7 @@ pub fn consumer_impl(
             clickhouse_cluster_config,
             clickhouse_table_name,
             skip_write,
-            processes,
+            concurrency,
             use_rust_processor,
         }),
     );

@@ -90,6 +90,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=True,
 )
 @click.option(
+    "--concurrency",
+    type=int,
+)
+# To be deprecated in favor of concurrency
+@click.option(
     "--processes",
     type=int,
 )
@@ -116,6 +121,7 @@ def rust_consumer(
     max_batch_time_ms: int,
     log_level: str,
     skip_write: bool,
+    concurrency: Optional[int],
     processes: Optional[int],
     use_rust_processor: bool,
 ) -> None:
@@ -149,6 +155,6 @@ def rust_consumer(
         auto_offset_reset,
         consumer_config_raw,
         skip_write,
-        processes or 1,
+        concurrency or processes or 1,
         use_rust_processor,
     )
