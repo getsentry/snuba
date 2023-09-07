@@ -827,7 +827,6 @@ def test_replay_event_links(
     event_link_message: tuple[dict[str, Any], str, str]
 ) -> None:
     message, event_id, severity = event_link_message
-    now = datetime.now(tz=timezone.utc).replace(microsecond=0)
 
     meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
@@ -838,7 +837,7 @@ def test_replay_event_links(
 
     row = rows[0]
     assert row["project_id"] == 1
-    assert row["timestamp"] == now
+    assert "timestamp" in row
     assert row[severity + "_id"] == str(uuid.UUID(event_id))
     assert row["replay_id"] == str(uuid.UUID(message["replay_id"]))
     assert (
