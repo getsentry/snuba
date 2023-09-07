@@ -208,11 +208,11 @@ mod tests {
                 )),
             };
             strategy.submit(msg).unwrap();
-            strategy.poll();
+            let _ = strategy.poll();
         }
 
         strategy.close();
-        strategy.join(None);
+        let _ = strategy.join(None);
 
         // 2 batches were created
         assert_eq!(

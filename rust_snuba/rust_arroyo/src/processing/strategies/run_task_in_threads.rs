@@ -1,5 +1,5 @@
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
 use crate::types::Message;
 use std::collections::VecDeque;
@@ -124,6 +124,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
+        let mut commit_request = None;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
@@ -135,7 +136,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 }
             }
 
-            self.poll();
+            let next_commit = self.poll();
+            commit_request = merge_commit_request(commit_request, next_commit);
         }
 
         // Cancel remaining tasks if any
@@ -144,7 +146,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
         self.handles.clear();
 
-        self.next_step.join(remaining)
+        let next_commit = self.next_step.join(timeout);
+        merge_commit_request(commit_request, next_commit)
     }
 }
 
@@ -186,7 +189,7 @@ mod tests {
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
         strategy.submit(message).unwrap();
-        strategy.poll();
-        strategy.join(None);
+        let _ = strategy.poll();
+        let _ = strategy.join(None);
     }
 }

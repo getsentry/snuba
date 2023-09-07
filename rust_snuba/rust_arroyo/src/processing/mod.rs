@@ -65,7 +65,9 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                s.join(None);
+                // TODO: We need to actually call consumer.commit() with the commit request.
+                // Right now we are never committing during consumer shutdown.
+                let _ = s.join(None);
             }
         }
         stg.strategy = None;
