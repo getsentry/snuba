@@ -189,7 +189,7 @@ mod tests {
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
         strategy.submit(message).unwrap();
-        strategy.poll();
-        strategy.join(None);
+        let _ = strategy.poll();
+        let _ = strategy.join(None);
     }
 }
