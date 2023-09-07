@@ -90,8 +90,20 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=True,
 )
 @click.option(
+    "--concurrency",
+    type=int,
+)
+# To be deprecated in favor of concurrency
+@click.option(
     "--processes",
     type=int,
+)
+@click.option(
+    "--use-rust-processor",
+    "use_rust_processor",
+    is_flag=True,
+    help="Use the Rust instead of Python message processor (if available)",
+    default=False,
 )
 def rust_consumer(
     *,
@@ -109,7 +121,9 @@ def rust_consumer(
     max_batch_time_ms: int,
     log_level: str,
     skip_write: bool,
+    concurrency: Optional[int],
     processes: Optional[int],
+    use_rust_processor: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -141,5 +155,6 @@ def rust_consumer(
         auto_offset_reset,
         consumer_config_raw,
         skip_write,
-        processes or 1,
+        concurrency or processes or 1,
+        use_rust_processor,
     )

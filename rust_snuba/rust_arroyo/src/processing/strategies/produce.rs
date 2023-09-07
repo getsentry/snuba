@@ -107,11 +107,11 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = None;
+        let mut remaining: Option<Duration> = timeout;
 
         while !self.queue.is_empty() {
-            if let Some(timeout) = timeout {
-                remaining = Some(timeout - start.elapsed());
+            if let Some(t) = remaining {
+                remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
                     warn!("Timeout reached while waiting for the queue to be empty");
                     break;
@@ -129,9 +129,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce<KafkaPayload> {
         }
 
         self.next_step.close();
-        self.next_step.join(remaining);
-        // TODO: Handle commit request
-        None
+        self.next_step.join(remaining)
     }
 }
 
