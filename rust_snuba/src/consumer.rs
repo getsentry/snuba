@@ -9,9 +9,13 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    RunTaskFunc, RunTaskInThreads, TaskRunner,
+};
+use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::Topic;
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Topic};
 use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
@@ -30,7 +34,8 @@ pub fn consumer(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
-    processes: usize,
+    concurrency: usize,
+    use_rust_processor: bool,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -38,7 +43,8 @@ pub fn consumer(
             auto_offset_reset,
             consumer_config_raw,
             skip_write,
-            processes,
+            concurrency,
+            use_rust_processor,
         )
     });
 }
@@ -48,7 +54,8 @@ pub fn consumer_impl(
     auto_offset_reset: &str,
     consumer_config_raw: &str,
     skip_write: bool,
-    processes: usize,
+    concurrency: usize,
+    use_rust_processor: bool,
 ) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
@@ -57,7 +64,8 @@ pub fn consumer_impl(
         clickhouse_cluster_config: config::ClickhouseConfig,
         clickhouse_table_name: String,
         skip_write: bool,
-        processes: usize,
+        concurrency: usize,
+        use_rust_processor: bool,
     }
 
     impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -69,25 +77,83 @@ pub fn consumer_impl(
                 acc
             });
 
-            let transform_step = PythonTransformStep::new(
-                self.processor_config.clone(),
-                self.processes,
-                Reduce::new(
-                    Box::new(ClickhouseWriterStep::new(
-                        CommitOffsets::new(Duration::from_secs(1)),
-                        self.clickhouse_cluster_config.clone(),
-                        self.clickhouse_table_name.clone(),
-                        self.skip_write,
-                        2,
-                    )),
-                    accumulator,
-                    BytesInsertBatch { rows: vec![] },
-                    self.max_batch_size,
-                    self.max_batch_time,
+            let next_step = Reduce::new(
+                Box::new(ClickhouseWriterStep::new(
+                    CommitOffsets::new(Duration::from_secs(1)),
+                    self.clickhouse_cluster_config.clone(),
+                    self.clickhouse_table_name.clone(),
+                    self.skip_write,
+                    2,
+                )),
+                accumulator,
+                BytesInsertBatch { rows: vec![] },
+                self.max_batch_size,
+                self.max_batch_time,
+            );
+
+            match (
+                self.use_rust_processor,
+                processors::get_processing_function(&self.processor_config.python_class_name),
+            ) {
+                (true, Some(func)) => {
+                    struct MessageProcessor {
+                        func: fn(
+                            KafkaPayload,
+                            KafkaMessageMetadata,
+                        )
+                            -> Result<BytesInsertBatch, InvalidMessage>,
+                    }
+
+                    impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
+                        fn get_task(
+                            &self,
+                            message: Message<KafkaPayload>,
+                        ) -> RunTaskFunc<BytesInsertBatch> {
+                            let func = self.func;
+
+                            Box::pin(async move {
+                                let broker_message = match message.inner_message {
+                                    InnerMessage::BrokerMessage(msg) => msg,
+                                    _ => panic!("Unexpected message type"),
+                                };
+
+                                let metadata = KafkaMessageMetadata {
+                                    partition: broker_message.partition.index,
+                                    offset: broker_message.offset,
+                                    timestamp: broker_message.timestamp,
+                                };
+
+                                match func(broker_message.payload, metadata) {
+                                    Ok(transformed) => Ok(Message {
+                                        inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                                            payload: transformed,
+                                            partition: broker_message.partition,
+                                            offset: broker_message.offset,
+                                            timestamp: broker_message.timestamp,
+                                        }),
+                                    }),
+                                    Err(e) => Err(e),
+                                }
+                            })
+                        }
+                    }
+
+                    let task_runner = MessageProcessor { func };
+                    Box::new(RunTaskInThreads::new(
+                        next_step,
+                        Box::new(task_runner),
+                        self.concurrency,
+                    ))
+                }
+                _ => Box::new(
+                    PythonTransformStep::new(
+                        self.processor_config.clone(),
+                        self.concurrency,
+                        next_step,
+                    )
+                    .unwrap(),
                 ),
-            )
-            .unwrap();
-            Box::new(transform_step)
+            }
         }
     }
 
@@ -171,7 +237,8 @@ pub fn consumer_impl(
             clickhouse_cluster_config,
             clickhouse_table_name,
             skip_write,
-            processes,
+            concurrency,
+            use_rust_processor,
         }),
     );
 
