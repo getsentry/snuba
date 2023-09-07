@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from snuba.datasets.storage import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyViolation,
     AllocationPolicyViolations,
@@ -98,6 +98,7 @@ def test_rate_limit_concurrent_complete_query(
     policy.update_quota_balance(
         tenant_ids={"organization_id": 123},
         query_id="abc0",
+        dataset_name="dataset",
         result_or_error=_RESULT_SUCCESS,
     )
 
@@ -128,6 +129,7 @@ def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> No
         policy.update_quota_balance(
             tenant_ids={"organization_id": 123},
             query_id=f"abc{i}",
+            dataset_name="some_dataset",
             result_or_error=_RESULT_FAIL,
         )
 
@@ -279,6 +281,7 @@ def test_override_isolation(
     policy.update_quota_balance(
         tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
         query_id="uniq_string_1",
+        dataset_name="dataset",
         result_or_error=_RESULT_SUCCESS,
     )
     try:
@@ -295,6 +298,7 @@ def test_override_isolation(
     policy.update_quota_balance(
         tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
         query_id="1",
+        dataset_name="dataset",
         result_or_error=_RESULT_SUCCESS,
     )
 

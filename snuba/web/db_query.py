@@ -760,6 +760,7 @@ def db_query(
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
                 query_id=query_id,
+                dataset_name=dataset_name,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
         if result:

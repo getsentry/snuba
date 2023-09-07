@@ -20,6 +20,7 @@ MAX_THREAD_NUMBER = 400
 # This policy does not use the query_id for any of its operation,
 # but we need to pass it for the interface
 QUERY_ID = "deadbeef"
+DATASET_NAME = "some_dataset"
 
 
 @pytest.fixture(scope="function")
@@ -54,6 +55,7 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": ORG_SCAN_LIMIT}},
@@ -84,6 +86,7 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -111,6 +114,7 @@ def test_killswitch(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -134,6 +138,7 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -164,6 +169,7 @@ def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
         policy.update_quota_balance(
             tenant_ids,
             QUERY_ID,
+            DATASET_NAME,
             QueryResultOrError(
                 query_result=QueryResult(
                     result={"profile": {"bytes": ORG_SCAN_LIMIT}},
@@ -207,6 +213,7 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},
@@ -232,6 +239,7 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
+        DATASET_NAME,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},

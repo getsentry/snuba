@@ -189,6 +189,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         if result_or_error.error:
@@ -208,7 +209,10 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         self.metrics.increment(
             "bytes_scanned",
             bytes_scanned,
-            tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            tags={
+                "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                "dataset": dataset_name,
+            },
         )
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(

@@ -44,6 +44,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         return

@@ -440,6 +440,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             self,
             tenant_ids: dict[str, str | int],
             query_id: str,
+            dataset_name: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             pass

@@ -87,6 +87,7 @@ class BadlyWrittenAllocationPolicy(PassthroughPolicy):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         raise ValueError("you messed up AGAIN")
@@ -99,7 +100,7 @@ def test_passes_through_on_error() -> None:
         ).get_quota_allowance({}, query_id="deadbeef")
 
     with pytest.raises(ValueError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None, None)  # type: ignore
+        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None, None, None)  # type: ignore
 
     # should not raise even though the implementation is buggy (this is the production setting)
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
@@ -112,7 +113,7 @@ def test_passes_through_on_error() -> None:
         BadlyWrittenAllocationPolicy(
             StorageKey("something"), [], {}
         ).update_quota_balance(
-            None, None, None  # type: ignore
+            None, None, None, None  # type: ignore
         )
 
 
@@ -170,7 +171,11 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
         raise
 
     def _update_quota_balance(
-        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        dataset_name: str,
+        result_or_error: QueryResultOrError,
     ) -> None:
         pass
 
@@ -431,13 +436,15 @@ def test_is_not_active() -> None:
     with pytest.raises(AttributeError):
         policy.get_quota_allowance(tenant_ids, "deadbeef")
     with pytest.raises(ValueError):
-        policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+        policy.update_quota_balance(
+            tenant_ids, "deadbeef", "some_dataset", result_or_error
+        )
 
     policy.set_config_value(config_key="is_active", value=0)  # make policy inactive
 
     # Should not error anymore since private methods are not called due to inactivity
     policy.get_quota_allowance(tenant_ids, "deadbeef")
-    policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+    policy.update_quota_balance(tenant_ids, "deadbeef", "some_dataset", result_or_error)
 
 
 @pytest.mark.redis_db

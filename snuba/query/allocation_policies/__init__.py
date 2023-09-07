@@ -197,7 +197,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>     def _update_quota_balance(
         >>>         self,
         >>>         tenant_ids: dict[str, str | int],
-        >>>         query_id: str
+        >>>         query_id: str,
+        >>>         dataset_name: str,
         >>>         result_or_error: QueryResultOrError,
         >>>     ) -> None:
         >>>         # after the query has been run, update whatever this allocation policy
@@ -737,12 +738,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
             if not self.is_active:
                 return
-            return self._update_quota_balance(tenant_ids, query_id, result_or_error)
+            return self._update_quota_balance(
+                tenant_ids, query_id, dataset_name, result_or_error
+            )
         except Exception:
             # FIXME: Remove this
             logger.exception(
@@ -756,6 +760,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
@@ -776,6 +781,7 @@ class PassthroughPolicy(AllocationPolicy):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         pass

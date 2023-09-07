@@ -328,6 +328,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             self,
             tenant_ids: dict[str, str | int],
             query_id: str,
+            dataset_name: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             return
@@ -396,6 +397,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
             self,
             tenant_ids: dict[str, str | int],
             query_id: str,
+            dataset_name: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             return
@@ -468,6 +470,7 @@ def test_allocation_policy_updates_quota() -> None:
             self,
             tenant_ids: dict[str, str | int],
             query_id: str,
+            dataset_name: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run
@@ -497,6 +500,7 @@ def test_allocation_policy_updates_quota() -> None:
             self,
             tenant_ids: dict[str, str | int],
             query_id: str,
+            dataset_name: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run_duplicate

@@ -212,6 +212,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         self,
         tenant_ids: dict[str, str | int],
         query_id: str,
+        dataset_name: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
