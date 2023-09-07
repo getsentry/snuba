@@ -27,6 +27,8 @@ from snuba.datasets.processors.replays_processor import (
 )
 from snuba.processor import InsertBatch
 
+LOG_LEVELS = ["fatal", "error", "warning", "info", "debug"]
+
 
 @dataclass
 class ReplayEvent:
@@ -783,3 +785,82 @@ class TestReplaysActionProcessor:
         assert row["click_title"] == ""
         assert row["click_is_dead"] == 0
         assert row["click_is_rage"] == 1
+
+
+from hashlib import md5
+
+
+def make_payload_for_event_link(severity: str) -> tuple[dict[str, Any], str, str]:
+    now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+    replay_id = "bb570198b8f04f8bbe87077668530da7"
+    event_id = uuid.uuid4().hex
+    message = {
+        "type": "replay_event",
+        "start_time": datetime.now().timestamp(),
+        "replay_id": replay_id,
+        "project_id": 1,
+        "retention_days": 30,
+        "payload": list(
+            bytes(
+                json.dumps(
+                    {
+                        "type": "event_link",
+                        "replay_id": replay_id,
+                        severity + "_id": event_id,
+                        "timestamp": int(now.timestamp()),
+                        "event_hash": md5(
+                            (replay_id + event_id).encode("utf-8")
+                        ).hexdigest(),
+                    }
+                ).encode()
+            )
+        ),
+    }
+    return (message, event_id, severity)
+
+
+@pytest.mark.parametrize(
+    "event_link_message",
+    [pytest.param(make_payload_for_event_link(log_level)) for log_level in LOG_LEVELS],
+)
+def test_replay_event_links(
+    event_link_message: tuple[dict[str, Any], str, str]
+) -> None:
+    message, event_id, severity = event_link_message
+    now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+
+    meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
+
+    result = ReplaysProcessor().process_message(message, meta)
+    assert isinstance(result, InsertBatch)
+    rows = result.rows
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["project_id"] == 1
+    assert row["timestamp"] == now
+    assert row[severity + "_id"] == str(uuid.UUID(event_id))
+    assert row["replay_id"] == str(uuid.UUID(message["replay_id"]))
+    assert (
+        row["event_hash"]
+        == md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest()
+    )
+    assert row["segment_id"] is None
+    assert row["retention_days"] == 30
+    assert row["partition"] == 0
+    assert row["offset"] == 0
+
+
+@pytest.mark.parametrize(
+    "event_link_message",
+    [pytest.param(make_payload_for_event_link("not_valid"))],
+)
+def test_replay_event_links_invalid_severity(
+    event_link_message: tuple[dict[str, Any], str, str]
+) -> None:
+    message, _, _ = event_link_message
+
+    meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
+
+    with pytest.raises(ValueError):
+        ReplaysProcessor().process_message(message, meta)
