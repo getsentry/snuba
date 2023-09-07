@@ -15,7 +15,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
 
 def forward_columns_iter() -> Iterator[operations.SqlOperation]:
-    for column in materialized_columns:
+    for column in columns:
         yield operations.AddIndex(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
@@ -28,7 +28,7 @@ def forward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 def backward_columns_iter() -> Iterator[operations.SqlOperation]:
-    for column in materialized_columns:
+    for column in columns:
         yield operations.DropIndex(
             StorageSetKey.REPLAYS,
             "replays_local",
@@ -37,4 +37,4 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         )
 
 
-materialized_columns = ["urls", "user_id", "user_name", "user_email", "ip_address_v4"]
+columns = ["user_id", "user_email", "ip_address_v4"]
