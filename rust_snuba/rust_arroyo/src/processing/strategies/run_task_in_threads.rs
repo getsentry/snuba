@@ -40,6 +40,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
             task_runner,
             concurrency,
             runtime: tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(concurrency)
                 .enable_all()
                 .build()
                 .unwrap(),
