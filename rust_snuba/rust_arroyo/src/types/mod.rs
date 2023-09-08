@@ -76,28 +76,25 @@ impl<T: Clone> fmt::Display for BrokerMessage<T> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnyMessage<T> {
     pub payload: T,
-    pub committable: BTreeMap<Partition, u64>,
+    pub offsets: BTreeMap<Partition, u64>,
 }
 
 impl<T: Clone> AnyMessage<T> {
-    pub fn new(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
-        Self {
-            payload,
-            committable,
-        }
+    pub fn new(payload: T, offsets: BTreeMap<Partition, u64>) -> Self {
+        Self { payload, offsets }
     }
 
     pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
         AnyMessage {
             payload: replacement,
-            committable: self.committable,
+            offsets: self.offsets,
         }
     }
 }
 
 impl<T: Clone> fmt::Display for AnyMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AnyMessage(committable={:?})", self.committable)
+        write!(f, "AnyMessage(offsets={:?})", self.offsets)
     }
 }
 
@@ -129,12 +126,9 @@ impl<T: Clone> Message<T> {
         }
     }
 
-    pub fn new_any_message(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
+    pub fn new_any_message(payload: T, offsets: BTreeMap<Partition, u64>) -> Self {
         Self {
-            inner_message: InnerMessage::AnyMessage(AnyMessage {
-                payload,
-                committable,
-            }),
+            inner_message: InnerMessage::AnyMessage(AnyMessage { payload, offsets }),
         }
     }
 
@@ -155,7 +149,13 @@ impl<T: Clone> Message<T> {
                 map.insert(partition.clone(), offset + 1);
                 map
             }
-            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),
+            InnerMessage::AnyMessage(AnyMessage { offsets, .. }) => {
+                let mut map = BTreeMap::new();
+                for (k, v) in offsets {
+                    map.insert(k.clone(), v + 1);
+                }
+                map
+            }
         }
     }
 
@@ -185,12 +185,12 @@ impl<T: Clone> fmt::Display for Message<T> {
                     &offset
                 )
             }
-            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
+            InnerMessage::AnyMessage(AnyMessage { offsets, .. }) => {
                 write!(
                     f,
-                    "Message<{}>(committable={})",
+                    "Message<{}>(offsets={})",
                     type_name::<T>(),
-                    &committable
+                    &offsets
                         .iter()
                         .map(|(k, v)| format!("{}:{}", k, v))
                         .collect::<Vec<_>>()
