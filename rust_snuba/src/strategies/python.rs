@@ -169,7 +169,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
-                    let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -180,9 +180,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         Ok(BytesInsertBatch {
                             rows: result_decoded,
                         })
-                    });
-
-                    Ok(result.unwrap())
+                    })
                 };
 
                 let original_message_meta = message.clone().replace(());
