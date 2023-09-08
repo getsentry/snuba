@@ -260,7 +260,7 @@ mod tests {
         )
         .unwrap();
 
-        step.poll();
+        let _ = step.poll();
         step.submit(Message::new_broker_message(
             KafkaPayload {
                 key: None,
@@ -278,7 +278,7 @@ mod tests {
         ))
         .unwrap();
 
-        step.join(Some(Duration::from_secs(10)));
+        let _ = step.join(Some(Duration::from_secs(10)));
 
         assert_eq!(sink.messages.lock().unwrap().len(), 1);
     }
