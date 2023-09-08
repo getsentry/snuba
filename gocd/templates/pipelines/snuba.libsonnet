@@ -78,6 +78,42 @@ local early_migrate(region) =
   else
     [];
 
+local deploy_canary_stage(region) =
+  if region == 'us' then
+    [
+      {
+        'deploy-canary': {
+          fetch_materials: true,
+          jobs: {
+            'create-sentry-release': {
+              environment_variables: {
+                SENTRY_ORG: 'sentry',
+                SENTRY_PROJECT: 'snuba',
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+              },
+              timeout: 300,
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
+              ],
+            },
+            'deploy-canary': {
+              timeout: 1200,
+              elastic_profile_id: 'snuba',
+              environment_variables: {
+                LABEL_SELECTOR: 'service=snuba,is_canary=true',
+              },
+              tasks: [
+                gocdtasks.script(importstr '../bash/deploy.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
+
 function(region) {
   environment_variables: {
     SENTRY_REGION: region,
@@ -95,59 +131,33 @@ function(region) {
     },
   },
   stages: [
-    {
-      checks: {
-        jobs: {
-          checks: {
-            timeout: 1800,
-            elastic_profile_id: 'snuba',
-            tasks: [
-              gocdtasks.script(importstr '../bash/check-github.sh'),
-              gocdtasks.script(importstr '../bash/check-cloud-build.sh'),
-              gocdtasks.script(importstr '../bash/check-migrations.sh'),
-            ],
-          },
-        },
-      },
-    },
-
-  ] + early_migrate(region) + [
-
-    {
-      'deploy-canary': {
-        fetch_materials: true,
-        jobs: {
-          'create-sentry-release': {
-            environment_variables: {
-              SENTRY_ORG: 'sentry',
-              SENTRY_PROJECT: 'snuba',
-              SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+            {
+              checks: {
+                jobs: {
+                  checks: {
+                    timeout: 1800,
+                    elastic_profile_id: 'snuba',
+                    tasks: [
+                      gocdtasks.script(importstr '../bash/check-github.sh'),
+                      gocdtasks.script(importstr '../bash/check-cloud-build.sh'),
+                      gocdtasks.script(importstr '../bash/check-migrations.sh'),
+                    ],
+                  },
+                },
+              },
             },
-            timeout: 300,
-            elastic_profile_id: 'snuba',
-            tasks: [
-              gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
-            ],
-          },
-          'deploy-canary': {
-            timeout: 1200,
-            elastic_profile_id: 'snuba',
-            environment_variables: {
-              LABEL_SELECTOR: 'service=snuba,is_canary=true',
-            },
-            tasks: [
-              gocdtasks.script(importstr '../bash/deploy.sh'),
-            ],
-          },
-        },
-      },
-    },
+
+          ] + early_migrate(region) +
+          deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
         fetch_materials: true,
         jobs: {
-          'create-sentry-release': {
+          // NOTE: sentry-release-primary relies on the sentry-release-canary
+          // script being run first. So any changes here should account for
+          // this and update deploy_canary_stage accordingly
+          [if region == 'us' then 'create-sentry-release' else null]: {
             environment_variables: {
               SENTRY_ORG: 'sentry',
               SENTRY_PROJECT: 'snuba',
