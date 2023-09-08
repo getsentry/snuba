@@ -48,7 +48,7 @@ initialize_processor()
 
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
-) -> Optional[Sequence[bytes]]:
+) -> Sequence[bytes]:
     if processor is None:
         raise RuntimeError("processor not yet initialized")
     rv = processor.process_message(
@@ -57,7 +57,7 @@ def process_rust_message(
     )
 
     if rv is None:
-        return rv
+        return []
 
     assert isinstance(rv, InsertBatch), "this consumer does not support replacements"
 
