@@ -1655,13 +1655,11 @@ test_cases = [
                 get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "tn", Column("_snuba_transaction_name", None, "transaction_name")
-                ),
+                SelectedExpression("tn", Column("_snuba_tn", None, "transaction_name")),
                 SelectedExpression(
                     "tr",
                     SubscriptableReference(
-                        "_snuba_tags[release]",
+                        "_snuba_tr",
                         Column("_snuba_tags", None, "tags"),
                         Literal(None, "release"),
                     ),
@@ -1669,7 +1667,7 @@ test_cases = [
                 SelectedExpression(
                     "cti",
                     SubscriptableReference(
-                        "_snuba_contexts[trace_id]",
+                        "_snuba_cti",
                         Column("_snuba_contexts", None, "contexts"),
                         Literal(None, "trace_id"),
                     ),
@@ -1692,15 +1690,13 @@ test_cases = [
                 get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "tn", Column("_snuba_transaction_name", None, "transaction_name")
-                ),
+                SelectedExpression("tn", Column("_snuba_tn", None, "transaction_name")),
                 SelectedExpression(
                     "count",
                     FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
-            groupby=[Column("_snuba_transaction_name", None, "transaction_name")],
+            groupby=[Column("_snuba_tn", None, "transaction_name")],
             limit=1000,
             condition=required_condition,
             offset=0,

@@ -137,8 +137,8 @@ test_cases = [
         """,
         (
             "MATCH Entity(discover_events) "
-            "SELECT transaction_name, (count() AS count) "
-            "GROUP BY transaction_name "
+            "SELECT (transaction_name AS tn), (count() AS count) "
+            "GROUP BY tn "
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "

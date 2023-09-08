@@ -1101,7 +1101,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": f"""MATCH (discover)
-                    SELECT count() AS `count`
+                    SELECT count() AS `thecount`
                     BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
                     WHERE ifNull(tags[user_flow], '') = 'buy'
                     AND timestamp >= toDateTime('{self.base_time.isoformat()}')
@@ -1133,6 +1133,37 @@ class TestSnQLApi(BaseApiTest):
                 {
                     "query": f"""MATCH (discover)
                     SELECT count() AS `count`
+                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                    WHERE ifNull(tags[user_flow], '') = 'buy'
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment = 'www.something.com'
+                    AND tags[error_code] = '2300'
+                    AND tags[count] = 419
+                    ORDER BY time ASC LIMIT 10000
+                    GRANULARITY 3600""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 400
+        data = response.json
+        assert data["error"]["type"] == "invalid_query"
+        assert (
+            data["error"]["message"]
+            == "Shadowing aliases detected for alias: count. Expressions: tags[count] AS `count`"
+        )
+
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS `thecount`
                     BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
                     WHERE ifNull(tags[user_flow], '') = 'buy'
                     AND timestamp >= toDateTime('{self.base_time.isoformat()}')
@@ -1237,6 +1268,34 @@ class TestSnQLApi(BaseApiTest):
                     "tenant_ids": {
                         "organization_id": self.org_id,
                         "referrer": "tagstore.__get_tag_keys",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
+    def test_tag_alias_expansion(self) -> None:
+        response = self.post(
+            "/generic_metrics/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (generic_metrics_counters)
+                    SELECT project_id, tags[11235813] AS `transaction_name`, count() AS `count`
+                    BY project_id, transaction_name
+                    WHERE org_id IN array({self.org_id})
+                    AND project_id IN array({self.project_id})
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND metric_id = 12491625
+                    ORDER BY count DESC LIMIT 100 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "testing.tester",
                     },
                     "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
                 }
