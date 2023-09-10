@@ -9,57 +9,6 @@ from snuba.processor import InsertBatch
 
 
 @dataclass
-class SampleProfileEvent:
-    device: dict
-    environment: Optional[str]
-    offset: int
-    organization_id: int
-    os: dict
-    partition: int
-    platform: str
-    event_id: str
-    project_id: int
-    received: int
-    release: str
-    retention_days: int
-    timestamp: str
-    transactions: list
-    version: str
-
-    def serialize(self) -> Mapping[str, Any]:
-        return asdict(self)
-
-    def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
-        transaction = self.transactions[0]
-        return {
-            "android_api_level": None,
-            "offset": meta.offset,
-            "partition": meta.partition,
-            "received": datetime.utcfromtimestamp(self.received),
-            "architecture": "arm64e",
-            "device_classification": "high",
-            "device_locale": "fr_FR",
-            "device_manufacturer": "Pierre",
-            "device_model": "ThePierrePhone",
-            "device_os_build_number": "13",
-            "device_os_name": "PierreOS",
-            "device_os_version": "47",
-            "duration_ns": 1234567890,
-            "environment": "production",
-            "organization_id": 123456789,
-            "platform": "cocoa",
-            "profile_id": self.event_id,
-            "project_id": 987654321,
-            "retention_days": 30,
-            "trace_id": transaction["trace_id"],
-            "transaction_id": transaction["id"],
-            "transaction_name": transaction["name"],
-            "version_code": "",
-            "version_name": "v42.0.0 (999)",
-        }
-
-
-@dataclass
 class ProfileEvent:
     organization_id: int
     project_id: int
@@ -98,52 +47,7 @@ class ProfileEvent:
 
 
 class TestProfilesProcessor:
-    def test_sample_profile_message(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
-        message = SampleProfileEvent(
-            organization_id=123456789,
-            project_id=987654321,
-            transactions=[
-                {
-                    "id": str(uuid.uuid4()),
-                    "name": "lets-get-ready-to-party",
-                    "trace_id": str(uuid.uuid4()),
-                    "relative_start_ns": 0,
-                    "relative_end_ns": 1234567890,
-                }
-            ],
-            device={
-                "classification": "high",
-                "locale": "fr_FR",
-                "manufacturer": "Pierre",
-                "model": "ThePierrePhone",
-                "architecture": "arm64e",
-            },
-            os={
-                "build_number": "13",
-                "name": "PierreOS",
-                "version": "47",
-            },
-            timestamp=datetime.utcnow().isoformat(),
-            received=datetime.utcnow().timestamp(),
-            event_id=str(uuid.uuid4()),
-            environment="production",
-            platform="cocoa",
-            release="v42.0.0 (999)",
-            version="1",
-            retention_days=30,
-            partition=meta.partition,
-            offset=meta.offset,
-        )
-        assert ProfilesMessageProcessor().process_message(
-            message.serialize(), meta
-        ) == InsertBatch(
-            [message.build_result(meta)], datetime.utcfromtimestamp(message.received)
-        )
-
-    def test_missing_symbols(self) -> None:
+    def test_missing_profile_id(self) -> None:
         meta = KafkaMessageMetadata(
             offset=1, partition=0, timestamp=datetime(1970, 1, 1)
         )
@@ -165,7 +69,7 @@ class TestProfilesProcessor:
             platform="pierre",
             profile_id=str(uuid.uuid4()),
             project_id=987654321,
-            received=datetime.utcnow().timestamp(),
+            received=int(datetime.utcnow().timestamp()),
             retention_days=30,
             trace_id=str(uuid.uuid4()),
             transaction_id=str(uuid.uuid4()),
@@ -178,7 +82,7 @@ class TestProfilesProcessor:
         processor = ProfilesMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
-    def test_process_message(self) -> None:
+    def test_valid_message(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
@@ -200,7 +104,7 @@ class TestProfilesProcessor:
             platform="pierre",
             profile_id=str(uuid.uuid4()),
             project_id=987654321,
-            received=datetime.utcnow().timestamp(),
+            received=int(datetime.utcnow().timestamp()),
             retention_days=30,
             trace_id=str(uuid.uuid4()),
             transaction_id=str(uuid.uuid4()),
@@ -209,7 +113,9 @@ class TestProfilesProcessor:
             version_name="v42.0.0",
         )
         assert ProfilesMessageProcessor().process_message(
-            message.serialize(), meta
+            message.serialize(),
+            meta,
         ) == InsertBatch(
-            [message.build_result(meta)], datetime.utcfromtimestamp(message.received)
+            [message.build_result(meta)],
+            datetime.utcfromtimestamp(message.received),
         )
