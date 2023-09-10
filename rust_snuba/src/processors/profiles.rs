@@ -1,12 +1,9 @@
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
-use chrono::Utc;
-use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryFrom;
-use uuid::Uuid;
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -52,9 +49,9 @@ struct FromProfileMessage {
     duration_ns: u64,
     #[serde(default)]
     environment: Option<String>,
-    id: String,
     organization_id: u64,
     platform: String,
+    profile_id: String,
     project_id: u64,
     received: u64,
     retention_days: u32,
@@ -65,7 +62,7 @@ struct FromProfileMessage {
     version_name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Default, Debug, Serialize)]
 struct ProfileMessage {
     #[serde(default)]
     android_api_level: Option<u32>,
@@ -82,11 +79,11 @@ struct ProfileMessage {
     duration_ns: u64,
     #[serde(default)]
     environment: Option<String>,
-    id: String,
     offset: u64,
     organization_id: u64,
-    partition: u64,
+    partition: u16,
     platform: String,
+    profile_id: String,
     project_id: u64,
     received: DateTime<Utc>,
     retention_days: u32,
@@ -100,30 +97,31 @@ struct ProfileMessage {
 impl TryFrom<FromProfileMessage> for ProfileMessage {
     type Error = InvalidMessage;
     fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, InvalidMessage> {
-        let received = Utc.timestamp_opt(timestamp_u64 as i64, 0).unwrap();
+        let received = Utc.timestamp_opt(from.received as i64, 0).unwrap();
         Ok(Self {
             android_api_level: from.android_api_level,
             architecture: from.architecture,
             device_classification: from.device_classification,
-            device_locale: from.device.locale,
-            device_manufacturer: from.device.manufacturer,
+            device_locale: from.device_locale,
+            device_manufacturer: from.device_manufacturer,
             device_model: from.device_model,
             device_os_build_number: from.device_os_build_number,
             device_os_name: from.device_os_name,
             device_os_version: from.device_os_version,
             duration_ns: from.duration_ns,
             environment: from.environment,
-            id: from.id,
             organization_id: from.organization_id,
             platform: from.platform,
+            profile_id: from.profile_id,
             project_id: from.project_id,
-            received: received,
+            received,
             retention_days: from.retention_days,
             trace_id: from.trace_id,
             transaction_id: from.transaction_id,
             transaction_name: from.transaction_name,
             version_code: from.version_code,
             version_name: from.version_name,
+            ..Default::default()
         })
     }
 }
