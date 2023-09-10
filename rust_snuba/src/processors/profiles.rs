@@ -12,6 +12,7 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
+            println!("{:#?}", err);
             InvalidMessage
         })?;
         let mut profile_msg: ProfileMessage = msg.try_into()?;
@@ -147,17 +148,17 @@ mod tests {
             "device_os_version": "47",
             "duration_ns": 50000000000,
             "environment": "production",
-            "organization_id: 1,
+            "organization_id": 1,
             "platform": "python",
             "profile_id": "a6cd859435584c3391412390168dcb93",
             "project_id": 1,
             "received": 1694357860,
-            "retention_days: 30,
+            "retention_days": 30,
             "trace_id": "40300eb2e77c46908de27f4603befa45",
             "transaction_id": "b716a5ee27db49dcbb534dcca61a9df8",
             "transaction_name": "lets-get-ready-to-party",
             "version_code": "1337",
-            "version_name": "v42.0.0",
+            "version_name": "v42.0.0"
         }"#;
         let payload = KafkaPayload {
             key: None,
