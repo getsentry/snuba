@@ -12,7 +12,6 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            println!("{:#?}", err);
             InvalidMessage
         })?;
         let mut profile_msg: ProfileMessage = msg.try_into()?;
