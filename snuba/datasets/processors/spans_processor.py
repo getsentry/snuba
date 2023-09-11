@@ -187,6 +187,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         leftover_tag_keys, leftover_tag_values = extract_extra_tags(sentry_tags)
         processed["tags.key"].extend(leftover_tag_keys)
         processed["tags.value"].extend(leftover_tag_values)
+        processed["sentry_tags.key"].extend(leftover_tag_keys)
+        processed["sentry_tags.value"].extend(leftover_tag_values)
 
     def process_message(
         self,
