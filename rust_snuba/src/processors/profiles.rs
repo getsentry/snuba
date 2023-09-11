@@ -2,7 +2,6 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryFrom;
 use uuid::Uuid;
 
@@ -86,7 +85,7 @@ struct ProfileMessage {
     platform: String,
     profile_id: String,
     project_id: u64,
-    received: DateTime<Utc>,
+    received: i64,
     retention_days: u32,
     trace_id: String,
     transaction_id: String,
@@ -99,7 +98,6 @@ impl TryFrom<FromProfileMessage> for ProfileMessage {
     type Error = InvalidMessage;
     fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, InvalidMessage> {
         let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
-        let received = Utc.timestamp_opt(from.received, 0).unwrap();
         let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
         let transaction_id = Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
         Ok(Self {
@@ -118,7 +116,7 @@ impl TryFrom<FromProfileMessage> for ProfileMessage {
             platform: from.platform,
             profile_id: profile_id.simple().to_string(),
             project_id: from.project_id,
-            received,
+            received: from.received,
             retention_days: from.retention_days,
             trace_id: trace_id.simple().to_string(),
             transaction_id: transaction_id.simple().to_string(),
