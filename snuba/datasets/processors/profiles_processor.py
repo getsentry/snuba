@@ -22,11 +22,15 @@ class ProfilesMessageProcessor(DatasetMessageProcessor):
 
             if "version" in message:
                 processed = _normalize_sample_format(
-                    message, metadata, retention_days, received
+                    message,
+                    metadata,
+                    retention_days,
                 )
             else:
                 processed = _normalize_legacy_format(
-                    message, metadata, retention_days, received
+                    message,
+                    metadata,
+                    retention_days,
                 )
         except EventTooOld:
             metrics.increment("event_too_old")
@@ -47,7 +51,6 @@ def _normalize_legacy_format(
     message: Mapping[str, Any],
     metadata: KafkaMessageMetadata,
     retention_days: int,
-    received: datetime,
 ) -> Mapping[str, Any]:
     return {
         "android_api_level": message.get("android_api_level"),
@@ -81,7 +84,6 @@ def _normalize_sample_format(
     message: Mapping[str, Any],
     metadata: KafkaMessageMetadata,
     retention_days: int,
-    received: datetime,
 ) -> Mapping[str, Any]:
     transaction = message["transactions"][0]
     device = message["device"]
@@ -106,7 +108,7 @@ def _normalize_sample_format(
         "platform": message["platform"],
         "profile_id": str(UUID(message["event_id"])),
         "project_id": message["project_id"],
-        "received": received,
+        "received": message["received"],
         "retention_days": retention_days,
         "trace_id": str(UUID(transaction["trace_id"])),
         "transaction_id": str(UUID(transaction["id"])),
