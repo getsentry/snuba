@@ -15,7 +15,7 @@ from snuba.processor import InsertBatch
     "topic,processor_name",
     [
         ("snuba-queries", "QuerylogProcessor"),
-        ("profile-metadata", "ProfilesMessageProcessor"),
+        ("processed-profiles", "ProfilesMessageProcessor"),
     ],
 )
 def test_message_processors(topic: str, processor_name: str) -> None:
