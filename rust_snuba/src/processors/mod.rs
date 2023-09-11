@@ -1,5 +1,6 @@
-mod querylog;
+mod functions;
 mod profiles;
+mod querylog;
 
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -12,6 +13,7 @@ pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
     match name {
         "QuerylogProcessor" => Some(querylog::process_message),
         "ProfilesMessageProcessor" => Some(profiles::process_message),
+        "FunctionsMessageProcessor" => Some(functions::process_message),
         _ => None,
     }
 }
