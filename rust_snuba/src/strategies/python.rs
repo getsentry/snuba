@@ -83,21 +83,25 @@ impl PythonTransformStep {
         //
         // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
         // are done and all handles can be joined and consumed without waiting.
-        while {
-            let active_count = self
-                .processing_pool
-                .as_ref()
-                .map_or(0, |pool| pool.active_count());
-            let may_have_finished_handles = active_count <= self.handles.len();
-            may_have_finished_handles && !self.handles.is_empty()
-        } {
-            let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
+        while let Some(handle) = self.handles.pop_front() {
+            let (original_message_meta, message_result) = match handle {
                 TaskHandle::Procspawn {
                     original_message_meta,
                     join_handle,
                 } => {
-                    let handle = join_handle.into_inner().unwrap();
-                    let result = handle.join().expect("procspawn failed");
+                    let mut handle = join_handle.into_inner().unwrap();
+                    let result = match handle.join_timeout(Duration::ZERO) {
+                        Ok(result) => result,
+                        Err(e) if e.is_timeout() => {
+                            self.handles.push_front(TaskHandle::Procspawn {
+                                original_message_meta, join_handle: Mutex::new(handle)
+                            });
+                            return;
+                        }
+                        Err(e) => {
+                            panic!("procspawn failed: {}", e);
+                        }
+                    };
                     (original_message_meta, result)
                 }
                 TaskHandle::Immediate {
@@ -105,6 +109,7 @@ impl PythonTransformStep {
                     result,
                 } => (original_message_meta, result),
             };
+
             match message_result {
                 Ok(data) => {
                     if let Err(MessageRejected {
@@ -292,6 +297,7 @@ mod tests {
         // test_basic_two_processes to hang, therefore isolate it in another subprocess of its own.
         handle.join().unwrap();
     }
+
 
     #[test]
     fn test_basic_two_processes() {
