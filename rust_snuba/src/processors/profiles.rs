@@ -64,12 +64,9 @@ struct FromProfileMessage {
 
 #[derive(Default, Debug, Serialize)]
 struct ProfileMessage {
-    #[serde(default)]
     android_api_level: Option<u32>,
-    #[serde(default)]
     architecture: Option<String>,
-    #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,
@@ -77,7 +74,6 @@ struct ProfileMessage {
     device_os_name: String,
     device_os_version: String,
     duration_ns: u64,
-    #[serde(default)]
     environment: Option<String>,
     offset: u64,
     organization_id: u64,
@@ -103,7 +99,7 @@ impl TryFrom<FromProfileMessage> for ProfileMessage {
         Ok(Self {
             android_api_level: from.android_api_level,
             architecture: from.architecture,
-            device_classification: from.device_classification,
+            device_classification: from.device_classification.unwrap_or_default(),
             device_locale: from.device_locale,
             device_manufacturer: from.device_manufacturer,
             device_model: from.device_model,
