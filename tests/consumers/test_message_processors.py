@@ -15,11 +15,11 @@ from snuba.processor import InsertBatch
     "topic,processor_name",
     [
         ("snuba-queries", "QuerylogProcessor"),
-        ("processed-profiles", "ProfilesMessageProcessor"),
+        ("profile-metadata", "ProfilesMessageProcessor"),
         ("profile-functions", "FunctionsMessageProcessor"),
     ],
 )
-def test_message_processors(topic, processor_name) -> None:
+def test_message_processors(topic: str, processor_name: str) -> None:
     """
     Tests the output of Python and Rust message processors is the same
     """
