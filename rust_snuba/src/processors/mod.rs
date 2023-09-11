@@ -11,7 +11,7 @@ type ProcessingFunction =
 pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
     match name {
         "QuerylogProcessor" => Some(querylog::process_message),
-        "ProfilesProcessor" => Some(profiles::process_message),
+        "ProfilesMessageProcessor" => Some(profiles::process_message),
         _ => None,
     }
 }
