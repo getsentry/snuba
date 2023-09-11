@@ -9,9 +9,9 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
-from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.processor import InsertBatch
 
 
