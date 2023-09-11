@@ -41,7 +41,9 @@ def test_message_processors(
         python_processed_message = processor().process_message(
             data_json,
             KafkaMessageMetadata(
-                partition, offset, datetime.utcfromtimestamp(millis_since_epoch / 1000)
+                offset=offset,
+                partition=partition,
+                timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
             ),
         )
         assert isinstance(python_processed_message, InsertBatch)
