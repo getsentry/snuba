@@ -2,6 +2,7 @@ import json
 import time
 from datetime import datetime
 
+import pytest
 import rust_snuba
 import sentry_kafka_schemas
 
@@ -10,13 +11,17 @@ from snuba.datasets.processors.querylog_processor import QuerylogProcessor
 from snuba.processor import InsertBatch
 
 
-def test_message_processors() -> None:
+@pytest.mark.parametrize(
+    "topic,processor_name",
+    [
+        ("snuba-queries", "QuerylogProcessor"),
+        ("processed-profiles", "ProfilesMessageProcessor"),
+    ],
+)
+def test_message_processors(topic, processor_name) -> None:
     """
     Tests the output of Python and Rust message processors is the same
     """
-    topic = "snuba-queries"
-    processor_name = "QuerylogProcessor"
-
     for ex in sentry_kafka_schemas.iter_examples(topic):
         data_json = ex.load()
         data_bytes = json.dumps(data_json).encode("utf-8")
