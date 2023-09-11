@@ -147,7 +147,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
         self.handles.clear();
 
-        let next_commit = self.next_step.join(timeout);
+        let next_commit = self.next_step.join(remaining);
         merge_commit_request(commit_request, next_commit)
     }
 }
