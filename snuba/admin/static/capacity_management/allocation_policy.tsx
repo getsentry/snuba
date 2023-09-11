@@ -18,6 +18,7 @@ function AllocationPolicyConfigs(props: {
   const [configs, setConfigs] = useState<AllocationPolicyConfig[]>([]);
 
   useEffect(() => {
+    policy.configs.sort();
     setConfigs(policy.configs);
   }, [policy]);
 
