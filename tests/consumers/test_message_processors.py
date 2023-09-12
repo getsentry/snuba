@@ -24,7 +24,7 @@ from snuba.processor import InsertBatch
     ],
 )
 def test_message_processors(
-    topic: str, processor_name: str, processor: Type[DatasetMessageProcessor]
+    topic: str, processor: Type[DatasetMessageProcessor]
 ) -> None:
     """
     Tests the output of Python and Rust message processors is the same
