@@ -159,6 +159,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
               values yet. For now lets just set them to their default values.
         """
         sentry_tags = span_event["sentry_tags"].copy()
+        sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
+        processed["sentry_tags.key"] = sentry_tag_keys
+        processed["sentry_tags.value"] = sentry_tag_values
+
         processed["module"] = sentry_tags.pop("module", "")
         processed["action"] = sentry_tags.pop("action", "")
         processed["domain"] = sentry_tags.pop("domain", "")
