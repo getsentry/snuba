@@ -1205,7 +1205,9 @@ dependencies = [
 
 [[package]]
 name = "procspawn"
-version = "0.10.3"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d59f115c63b1eed96002d9df8dfe022ba07e0d70b42890d34bc34f4342bae6b"
 dependencies = [
  "backtrace",
  "ctor",
