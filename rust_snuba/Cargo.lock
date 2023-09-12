@@ -1205,9 +1205,8 @@ dependencies = [
 
 [[package]]
 name = "procspawn"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c5a680d772408c77498b0339175746b5dae18724b26877b919e6ecabb680e83"
+version = "1.0.0"
+source = "git+https://github.com/getsentry/procspawn?branch=fix/join-timeout-pool#d3c91e199ed60a07dda1c19739f649e77dd96419"
 dependencies = [
  "backtrace",
  "ctor",
@@ -1216,6 +1215,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "winapi 0.3.9",
 ]
 
 [[package]]
