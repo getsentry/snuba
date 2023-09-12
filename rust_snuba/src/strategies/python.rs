@@ -75,14 +75,6 @@ impl PythonTransformStep {
     }
 
     fn check_for_results(&mut self) {
-        // procspawn has no join() timeout that does not consume the handle on timeout.
-        //
-        // Additionally we have observed, at least on MacOS, that procspawn's active_count() only
-        // decreases when the handle is consumed. Therefore our count of actually saturated
-        // processes is `self.processing_pool.active_count() - self.handles.len()`.
-        //
-        // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
-        // are done and all handles can be joined and consumed without waiting.
         while let Some(handle) = self.handles.pop_front() {
             let (original_message_meta, message_result) = match handle {
                 TaskHandle::Procspawn {
