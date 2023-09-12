@@ -209,6 +209,7 @@ def test_db_query_success() -> None:
     assert set(result.result["profile"].keys()) == {  # type: ignore
         "elapsed",
         "bytes",
+        "progress_bytes",
         "blocks",
         "rows",
     }
@@ -216,7 +217,7 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_bypass_cache_refferer() -> None:
+def test_bypass_cache_referrer() -> None:
     query, storage, _ = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -273,6 +274,7 @@ def test_bypass_cache_refferer() -> None:
             assert set(result.result["profile"].keys()) == {  # type: ignore
                 "elapsed",
                 "bytes",
+                "progress_bytes",
                 "blocks",
                 "rows",
             }
