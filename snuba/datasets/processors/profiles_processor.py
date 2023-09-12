@@ -26,7 +26,6 @@ class ProfilesMessageProcessor(DatasetMessageProcessor):
                 message,
                 metadata,
                 retention_days,
-                received,
             )
         except EventTooOld:
             metrics.increment("event_too_old")
@@ -47,7 +46,6 @@ def _normalize(
     message: Mapping[str, Any],
     metadata: KafkaMessageMetadata,
     retention_days: int,
-    received: datetime,
 ) -> Mapping[str, Any]:
     return {
         "android_api_level": message.get("android_api_level"),
@@ -67,7 +65,7 @@ def _normalize(
         "platform": message["platform"],
         "profile_id": str(UUID(message["profile_id"])),
         "project_id": message["project_id"],
-        "received": received,
+        "received": message["received"],
         "retention_days": retention_days,
         "trace_id": str(UUID(message["trace_id"])),
         "transaction_id": str(UUID(message["transaction_id"])),

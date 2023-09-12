@@ -40,7 +40,7 @@ class ProfileEvent:
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         result = asdict(self)
-        result["received"] = datetime.utcfromtimestamp(self.received)
+        result["received"] = int(self.received)
         result["offset"] = meta.offset
         result["partition"] = meta.partition
         return result
