@@ -93,7 +93,11 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         # descriptions
         processed["description"] = _unicodify(span_event.get("description", ""))
-        processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+
+        try:
+            processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+        except ValueError:
+            processed["group_raw"] = 0
 
         # timestamps
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
@@ -166,7 +170,12 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["module"] = sentry_tags.pop("module", "")
         processed["action"] = sentry_tags.pop("action", "")
         processed["domain"] = sentry_tags.pop("domain", "")
-        processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
+
+        try:
+            processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
+        except ValueError:
+            processed["group"] = 0
+
         processed["span_kind"] = ""
         processed["platform"] = sentry_tags.pop("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))
