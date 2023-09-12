@@ -16,11 +16,11 @@ from snuba.processor import InsertBatch
 
 
 @pytest.mark.parametrize(
-    "topic,processor_name,processor",
+    "topic,processor",
     [
-        ("snuba-queries", "QuerylogProcessor", QuerylogProcessor),
-        ("processed-profiles", "ProfilesMessageProcessor", ProfilesMessageProcessor),
-        ("profiles-call-tree", "FunctionsMessageProcessor", FunctionsMessageProcessor),
+        ("snuba-queries", QuerylogProcessor),
+        ("processed-profiles", ProfilesMessageProcessor),
+        ("profiles-call-tree", FunctionsMessageProcessor),
     ],
 )
 def test_message_processors(
@@ -33,6 +33,7 @@ def test_message_processors(
         data_json = ex.load()
         data_bytes = json.dumps(data_json).encode("utf-8")
 
+        processor_name = type(processor).__name__
         partition = 0
         offset = 1
         millis_since_epoch = int(time.time() * 1000)
