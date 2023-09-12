@@ -2,8 +2,8 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryFrom;
+use uuid::Uuid;
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -53,7 +53,7 @@ struct FromProfileMessage {
     platform: String,
     profile_id: String,
     project_id: u64,
-    received: u64,
+    received: i64,
     retention_days: u32,
     trace_id: String,
     transaction_id: String,
@@ -64,12 +64,9 @@ struct FromProfileMessage {
 
 #[derive(Default, Debug, Serialize)]
 struct ProfileMessage {
-    #[serde(default)]
     android_api_level: Option<u32>,
-    #[serde(default)]
     architecture: Option<String>,
-    #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,
@@ -77,7 +74,6 @@ struct ProfileMessage {
     device_os_name: String,
     device_os_version: String,
     duration_ns: u64,
-    #[serde(default)]
     environment: Option<String>,
     offset: u64,
     organization_id: u64,
@@ -85,7 +81,7 @@ struct ProfileMessage {
     platform: String,
     profile_id: String,
     project_id: u64,
-    received: DateTime<Utc>,
+    received: i64,
     retention_days: u32,
     trace_id: String,
     transaction_id: String,
@@ -97,11 +93,13 @@ struct ProfileMessage {
 impl TryFrom<FromProfileMessage> for ProfileMessage {
     type Error = InvalidMessage;
     fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, InvalidMessage> {
-        let received = Utc.timestamp_opt(from.received as i64, 0).unwrap();
+        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
+        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
+        let transaction_id = Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
         Ok(Self {
             android_api_level: from.android_api_level,
             architecture: from.architecture,
-            device_classification: from.device_classification,
+            device_classification: from.device_classification.unwrap_or_default(),
             device_locale: from.device_locale,
             device_manufacturer: from.device_manufacturer,
             device_model: from.device_model,
@@ -112,12 +110,12 @@ impl TryFrom<FromProfileMessage> for ProfileMessage {
             environment: from.environment,
             organization_id: from.organization_id,
             platform: from.platform,
-            profile_id: from.profile_id,
+            profile_id: profile_id.to_string(),
             project_id: from.project_id,
-            received,
+            received: from.received,
             retention_days: from.retention_days,
-            trace_id: from.trace_id,
-            transaction_id: from.transaction_id,
+            trace_id: trace_id.to_string(),
+            transaction_id: transaction_id.to_string(),
             transaction_name: from.transaction_name,
             version_code: from.version_code,
             version_name: from.version_name,

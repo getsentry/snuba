@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
+from snuba import settings, state
 from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 
@@ -150,11 +150,17 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level
 
+    # XXX: Temporary way to quickly test different values for concurrency
+    # Should be removed before this is put into  prod
+    concurrency_override = state.get_int_config(
+        f"rust_consumer.{storage_names[0]}.concurrency"
+    )
+
     rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         consumer_config_raw,
         skip_write,
-        concurrency or processes or 1,
+        concurrency_override or concurrency or processes or 1,
         use_rust_processor,
     )

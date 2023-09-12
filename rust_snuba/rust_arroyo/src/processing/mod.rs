@@ -95,6 +95,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
+    paused_timestamp: Option<Instant>,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -114,6 +115,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
+            paused_timestamp: None,
         }
     }
 
@@ -182,16 +184,21 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             // accepted, at which point we can resume consuming.
                             let partitions =
                                 self.consumer.tell().unwrap().keys().cloned().collect();
+                            // If a message is carried over, pause the consumer until it is accepted
                             if message_carried_over {
                                 let res = self.consumer.pause(partitions);
                                 match res {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        self.paused_timestamp = Some(Instant::now());
+                                    }
                                     Err(_) => return Err(RunError::PauseError),
                                 }
-                            } else {
+                            } else if self.paused_timestamp.is_some() {
                                 let res = self.consumer.resume(partitions);
                                 match res {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        self.paused_timestamp = None;
+                                    }
                                     Err(_) => return Err(RunError::PauseError),
                                 }
                             }
