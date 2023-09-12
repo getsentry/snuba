@@ -31,7 +31,7 @@ pub fn process_message(
             let function = Function{
                 // Profile metadata
                 browser_name: msg.browser_name.clone(),
-                device_classification: device_classification,
+                device_classification,
                 dist: msg.dist.clone(),
                 environment: msg.environment.clone(),
                 http_method: msg.http_method.clone(),
