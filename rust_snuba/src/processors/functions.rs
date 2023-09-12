@@ -12,7 +12,6 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            println!("{:#?}", err);
             InvalidMessage
         })?;
 
@@ -62,9 +61,7 @@ pub fn process_message(
             rows.push(serialized);
         }
 
-        return Ok(BytesInsertBatch {
-            rows,
-        });
+        return Ok(BytesInsertBatch{rows});
     }
     Err(InvalidMessage)
 }
@@ -229,7 +226,7 @@ mod tests {
     fn test_functions() {
         let data = r#"{
             "project_id": 22,
-            "profile_id": "",
+            "profile_id": "7329158c39964fbb9ec57c20cf4a2bb8",
             "transaction_name": "vroom-vroom",
             "timestamp": 1694447692,
             "functions": [
