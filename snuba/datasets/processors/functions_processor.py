@@ -20,7 +20,6 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        profile_id = str(uuid.UUID(message["profile_id"]))
         status = message.get("transaction_status")
         if status:
             int_status = SPAN_STATUS_NAME_TO_CODE.get(
@@ -58,7 +57,7 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
                 "os_version": "",  # deprecated
                 "retention_days": message["retention_days"],
                 "durations": function["self_times_ns"],
-                "profile_id": profile_id,
+                "profile_id": str(uuid.UUID(message["profile_id"])),
                 "materialization_version": 0,
             }
             for function in message["functions"]
