@@ -93,9 +93,9 @@ struct ProfileMessage {
 impl TryFrom<FromProfileMessage> for ProfileMessage {
     type Error = InvalidMessage;
     fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, InvalidMessage> {
-        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
-        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
-        let transaction_id = Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| InvalidMessage).unwrap();
+        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
+        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| InvalidMessage)?;
+        let transaction_id = Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| InvalidMessage)?;
         Ok(Self {
             android_api_level: from.android_api_level,
             architecture: from.architecture,

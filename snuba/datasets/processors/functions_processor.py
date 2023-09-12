@@ -21,10 +21,6 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         profile_id = str(uuid.UUID(message["profile_id"]))
-        now = datetime.utcnow().timestamp()
-        raw_timestamp = max(message.get("timestamp", 0), 0)
-        timestamp = datetime.utcfromtimestamp(raw_timestamp or now)
-
         status = message.get("transaction_status")
         if status:
             int_status = SPAN_STATUS_NAME_TO_CODE.get(
@@ -33,12 +29,13 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
             )
         else:
             int_status = UNKNOWN_SPAN_STATUS
-
         functions_list = [
             {
                 "project_id": message["project_id"],
                 "transaction_name": message["transaction_name"],
-                "timestamp": timestamp,
+                "timestamp": int(
+                    message.get("timestamp", datetime.utcnow().timestamp())
+                ),
                 "depth": 0,  # deprecated
                 "parent_fingerprint": 0,  # deprecated
                 "fingerprint": function["fingerprint"],

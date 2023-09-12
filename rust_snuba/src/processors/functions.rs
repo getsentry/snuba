@@ -2,8 +2,8 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, TimeZone, Utc};
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -12,41 +12,46 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
+            println!("{:#?}", err);
             InvalidMessage
         })?;
 
+        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
         let timestamp = match msg.timestamp {
-            Some(timestamp) => Utc.timestamp_opt(timestamp, 0).unwrap(),
-            _ => DateTime::from(SystemTime::now()),
+            Some(timestamp) => timestamp,
+            _ => SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_err| InvalidMessage)?.as_secs(),
         };
-
+        let device_classification = match msg.device_class {
+            Some(device_classification) => device_classification,
+            _ => 0,
+        };
         let mut rows = Vec::with_capacity(msg.functions.len());
 
         for from in &msg.functions {
             let function = Function{
                 // Profile metadata
                 browser_name: msg.browser_name.clone(),
-                device_classification: msg.device_class,
+                device_classification: device_classification,
                 dist: msg.dist.clone(),
                 environment: msg.environment.clone(),
                 http_method: msg.http_method.clone(),
                 platform: msg.platform.clone(),
-                profile_id: msg.profile_id.clone(),
+                profile_id: profile_id.to_string(),
                 project_id: msg.project_id,
                 release: msg.release.clone(),
                 retention_days: msg.retention_days,
                 timestamp,
                 transaction_name: msg.transaction_name.clone(),
                 transaction_op: msg.transaction_op.clone(),
-                transaction_status: msg.transaction_status.clone(),
+                transaction_status: msg.transaction_status as u8,
 
                 // Function metadata
                 fingerprint: from.fingerprint,
-                durations: from.self_time_ns.clone(),
+                durations: from.self_times_ns.clone(),
                 function: from.function.clone(),
                 package: from.package.clone(),
                 name: from.function.clone(),
-                is_application: from.in_app,
+                is_application: from.in_app as u8,
 
                 ..Default::default()
             };
@@ -66,11 +71,11 @@ pub fn process_message(
 
 #[derive(Debug, Deserialize)]
 struct FromFunction {
-    fingerprint: u32,
+    fingerprint: u64,
     function: String,
     in_app: bool,
     package: String,
-    self_time_ns: Vec<u64>,
+    self_times_ns: Vec<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,7 +98,7 @@ struct FromFunctionsMessage {
     release: Option<String>,
     retention_days: u32,
     #[serde(default)]
-    timestamp: Option<i64>,
+    timestamp: Option<u64>,
     transaction_name: String,
     transaction_op: String,
     transaction_status: SpanStatus,
@@ -101,20 +106,15 @@ struct FromFunctionsMessage {
 
 #[derive(Default, Debug, Serialize)]
 struct Function {
-    #[serde(default)]
     browser_name: Option<String>,
-    #[serde(default)]
-    device_classification: Option<u32>,
-    #[serde(default)]
+    device_classification: u32,
     dist: Option<String>,
     durations: Vec<u64>,
-    #[serde(default)]
     environment: Option<String>,
-    fingerprint: u32,
+    fingerprint: u64,
     function: String,
-    #[serde(default)]
     http_method: Option<String>,
-    is_application: bool,
+    is_application: u8,
     materialization_version: u8,
     module: String,
     name: String,
@@ -122,13 +122,12 @@ struct Function {
     platform: String,
     profile_id: String,
     project_id: u64,
-    #[serde(default)]
     release: Option<String>,
     retention_days: u32,
-    timestamp: DateTime<Utc>,
+    timestamp: u64,
     transaction_name: String,
     transaction_op: String,
-    transaction_status: SpanStatus,
+    transaction_status: u8,
 
     // Deprecated fields
     depth: u8,
@@ -138,7 +137,7 @@ struct Function {
     path: String,
 }
 
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)] // size limit in clickhouse
 pub enum SpanStatus {
@@ -239,14 +238,14 @@ mod tests {
                     "function": "foo",
                     "package": "bar",
                     "in_app": true,
-                    "self_time_ns": [1, 2, 3]
+                    "self_times_ns": [1, 2, 3]
                 },
                 {
                     "fingerprint": 456,
                     "function": "baz",
                     "package": "qux",
                     "in_app": false,
-                    "self_time_ns": [4, 5, 6]
+                    "self_times_ns": [4, 5, 6]
                 }
             ],
             "platform": "python",

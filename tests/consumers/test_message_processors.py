@@ -33,7 +33,7 @@ def test_message_processors(
         data_json = ex.load()
         data_bytes = json.dumps(data_json).encode("utf-8")
 
-        processor_name = type(processor).__name__
+        processor_name = processor.__qualname__
         partition = 0
         offset = 1
         millis_since_epoch = int(time.time() * 1000)
