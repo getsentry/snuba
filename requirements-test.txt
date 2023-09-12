@@ -1,6 +1,6 @@
 --index-url https://pypi.devinfra.sentry.io/simple
 
-snuba-sdk==1.0.5
+snuba-sdk==2.0.0
 freezegun==1.2.2
 
 # for typing

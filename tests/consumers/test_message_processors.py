@@ -18,9 +18,9 @@ from snuba.processor import InsertBatch
 @pytest.mark.parametrize(
     "topic,processor",
     [
-        ("snuba-queries", QuerylogProcessor),
         ("processed-profiles", ProfilesMessageProcessor),
         ("profiles-call-tree", FunctionsMessageProcessor),
+        ("snuba-queries", QuerylogProcessor),
     ],
 )
 def test_message_processors(
