@@ -20,10 +20,10 @@ pub fn process_message(
             _ => DateTime::from(SystemTime::now()),
         };
 
-        let mut list = Vec::with_capacity(msg.functions.len());
+        let mut rows = Vec::with_capacity(msg.functions.len());
 
         for from in &msg.functions {
-            list.push(Function{
+            let function = Function{
                 // Profile metadata
                 browser_name: msg.browser_name.clone(),
                 device_classification: msg.device_class,
@@ -49,17 +49,16 @@ pub fn process_message(
                 is_application: from.in_app,
 
                 ..Default::default()
-            });
+            };
+            let serialized = serde_json::to_vec(&function).map_err(|err| {
+                log::error!("Failed to serialize message: {}", err);
+                InvalidMessage
+            })?;
+            rows.push(serialized);
         }
 
-        let serialized = serde_json::to_vec(&list).map_err(|err| {
-            log::error!("Failed to serialize message: {}", err);
-            println!("{:#?}", err);
-            InvalidMessage
-        })?;
-
         return Ok(BytesInsertBatch {
-            rows: vec![serialized],
+            rows,
         });
     }
     Err(InvalidMessage)
