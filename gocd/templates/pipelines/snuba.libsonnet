@@ -51,13 +51,14 @@ local s4s_health_check(region) =
             health_check: {
               environment_variables: {
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
-                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
-                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][st_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][st_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba',
               },
               elastic_profile_id: 'snuba',
               tasks: [
-                gocdtasks.script(importstr '../bash/s4s_health_check.sh'),
+                gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
+                gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
               ],
             },
           },

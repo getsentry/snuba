@@ -46,7 +46,7 @@ impl PythonTransformStep {
         let python_module = &processor_config.python_module;
         let python_class_name = &processor_config.python_class_name;
 
-        let processing_pool = if processes <= 1 {
+        let processing_pool = if processes > 1 {
             Some(
                 procspawn::Pool::builder(processes)
                     .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
