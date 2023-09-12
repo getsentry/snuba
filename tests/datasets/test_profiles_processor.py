@@ -35,7 +35,7 @@ class SampleProfileEvent:
             "android_api_level": None,
             "offset": meta.offset,
             "partition": meta.partition,
-            "received": datetime.utcfromtimestamp(self.received),
+            "received": int(self.received),
             "architecture": "arm64e",
             "device_classification": "high",
             "device_locale": "fr_FR",
@@ -91,7 +91,7 @@ class ProfileEvent:
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         result = asdict(self)
-        result["received"] = datetime.utcfromtimestamp(self.received)
+        result["received"] = int(self.received)
         result["offset"] = meta.offset
         result["partition"] = meta.partition
         return result
@@ -127,7 +127,7 @@ class TestProfilesProcessor:
                 "version": "47",
             },
             timestamp=datetime.utcnow().isoformat(),
-            received=datetime.utcnow().timestamp(),
+            received=int(datetime.utcnow().timestamp()),
             event_id=str(uuid.uuid4()),
             environment="production",
             platform="cocoa",
@@ -165,7 +165,7 @@ class TestProfilesProcessor:
             platform="pierre",
             profile_id=str(uuid.uuid4()),
             project_id=987654321,
-            received=datetime.utcnow().timestamp(),
+            received=int(datetime.utcnow().timestamp()),
             retention_days=30,
             trace_id=str(uuid.uuid4()),
             transaction_id=str(uuid.uuid4()),
@@ -200,7 +200,7 @@ class TestProfilesProcessor:
             platform="pierre",
             profile_id=str(uuid.uuid4()),
             project_id=987654321,
-            received=datetime.utcnow().timestamp(),
+            received=int(datetime.utcnow().timestamp()),
             retention_days=30,
             trace_id=str(uuid.uuid4()),
             transaction_id=str(uuid.uuid4()),
