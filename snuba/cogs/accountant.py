@@ -161,7 +161,6 @@ class UsageAccumulator:
                 self.__last_log = now
                 logger.error("Buffer overflow in the usage accountant. Max length")
                 self.flush()
-                print("Clear")
             return
 
         if self.__first_timestamp is None:
