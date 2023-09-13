@@ -222,6 +222,9 @@ class UsageAccumulator:
             logger.exception(e)
 
 
+# TODO: Remove almost everything above once https://github.com/getsentry/usage-accountant
+# is published and import the UsageAccumulator from there instead
+
 accumulator: UsageAccumulator | None = None
 
 
