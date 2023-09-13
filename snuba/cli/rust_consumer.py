@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
+from snuba import settings, state
 from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 
@@ -90,8 +90,20 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=True,
 )
 @click.option(
+    "--concurrency",
+    type=int,
+)
+# To be deprecated in favor of concurrency
+@click.option(
     "--processes",
     type=int,
+)
+@click.option(
+    "--use-rust-processor",
+    "use_rust_processor",
+    is_flag=True,
+    help="Use the Rust instead of Python message processor (if available)",
+    default=False,
 )
 def rust_consumer(
     *,
@@ -109,7 +121,9 @@ def rust_consumer(
     max_batch_time_ms: int,
     log_level: str,
     skip_write: bool,
+    concurrency: Optional[int],
     processes: Optional[int],
+    use_rust_processor: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -136,10 +150,17 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level
 
+    # XXX: Temporary way to quickly test different values for concurrency
+    # Should be removed before this is put into  prod
+    concurrency_override = state.get_int_config(
+        f"rust_consumer.{storage_names[0]}.concurrency"
+    )
+
     rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         consumer_config_raw,
         skip_write,
-        processes or 1,
+        concurrency_override or concurrency or processes or 1,
+        use_rust_processor,
     )

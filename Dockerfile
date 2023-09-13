@@ -62,7 +62,7 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba
-ARG RUST_TOOLCHAIN=1.68
+ARG RUST_TOOLCHAIN=1.72
 ARG SHOULD_BUILD_RUST=true
 
 COPY ./rust_snuba/ ./rust_snuba/
@@ -144,7 +144,7 @@ FROM application_base AS testing
 USER 0
 RUN pip install -r requirements-test.txt
 
-ARG RUST_TOOLCHAIN=1.68
+ARG RUST_TOOLCHAIN=1.72
 COPY ./rust_snuba/ ./rust_snuba/
 RUN bash -c "set -o pipefail && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y"
 ENV PATH="${PATH}:/root/.cargo/bin/"

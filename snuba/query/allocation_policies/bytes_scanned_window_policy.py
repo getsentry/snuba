@@ -45,6 +45,7 @@ _ORG_LESS_REFERRERS = set(
         "https://snuba-admin.getsentry.net/",
         "http://localhost:1219/",
         "reprocessing2.start_group_reprocessing",
+        "metric_validation",
     ]
 )
 
@@ -204,6 +205,11 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
+        self.metrics.increment(
+            "bytes_scanned",
+            bytes_scanned,
+            tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+        )
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
                 tenant_ids.get("organization_id")

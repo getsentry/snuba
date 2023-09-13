@@ -46,7 +46,7 @@ impl PythonTransformStep {
         let python_module = &processor_config.python_module;
         let python_class_name = &processor_config.python_class_name;
 
-        let processing_pool = if processes <= 1 {
+        let processing_pool = if processes > 1 {
             Some(
                 procspawn::Pool::builder(processes)
                     .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
@@ -75,29 +75,25 @@ impl PythonTransformStep {
     }
 
     fn check_for_results(&mut self) {
-        // procspawn has no join() timeout that does not consume the handle on timeout.
-        //
-        // Additionally we have observed, at least on MacOS, that procspawn's active_count() only
-        // decreases when the handle is consumed. Therefore our count of actually saturated
-        // processes is `self.processing_pool.active_count() - self.handles.len()`.
-        //
-        // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
-        // are done and all handles can be joined and consumed without waiting.
-        while {
-            let active_count = self
-                .processing_pool
-                .as_ref()
-                .map_or(0, |pool| pool.active_count());
-            let may_have_finished_handles = active_count <= self.handles.len();
-            may_have_finished_handles && !self.handles.is_empty()
-        } {
-            let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
+        while let Some(handle) = self.handles.pop_front() {
+            let (original_message_meta, message_result) = match handle {
                 TaskHandle::Procspawn {
                     original_message_meta,
                     join_handle,
                 } => {
-                    let handle = join_handle.into_inner().unwrap();
-                    let result = handle.join().expect("procspawn failed");
+                    let mut handle = join_handle.into_inner().unwrap();
+                    let result = match handle.join_timeout(Duration::ZERO) {
+                        Ok(result) => result,
+                        Err(e) if e.is_timeout() => {
+                            self.handles.push_front(TaskHandle::Procspawn {
+                                original_message_meta, join_handle: Mutex::new(handle)
+                            });
+                            return;
+                        }
+                        Err(e) => {
+                            panic!("procspawn failed: {}", e);
+                        }
+                    };
                     (original_message_meta, result)
                 }
                 TaskHandle::Immediate {
@@ -105,6 +101,7 @@ impl PythonTransformStep {
                     result,
                 } => (original_message_meta, result),
             };
+
             match message_result {
                 Ok(data) => {
                     if let Err(MessageRejected {
@@ -169,7 +166,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
-                    let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -180,9 +177,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         Ok(BytesInsertBatch {
                             rows: result_decoded,
                         })
-                    });
-
-                    Ok(result.unwrap())
+                    }).map_err(|pyerr| pyerr.to_string())
                 };
 
                 let original_message_meta = message.clone().replace(());
@@ -262,7 +257,7 @@ mod tests {
         )
         .unwrap();
 
-        step.poll();
+        let _ = step.poll();
         step.submit(Message::new_broker_message(
             KafkaPayload {
                 key: None,
@@ -280,7 +275,7 @@ mod tests {
         ))
         .unwrap();
 
-        step.join(Some(Duration::from_secs(10)));
+        let _ = step.join(Some(Duration::from_secs(10)));
 
         assert_eq!(sink.messages.lock().unwrap().len(), 1);
     }
@@ -294,6 +289,7 @@ mod tests {
         // test_basic_two_processes to hang, therefore isolate it in another subprocess of its own.
         handle.join().unwrap();
     }
+
 
     #[test]
     fn test_basic_two_processes() {

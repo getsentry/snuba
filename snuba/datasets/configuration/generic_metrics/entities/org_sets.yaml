@@ -1,0 +1,101 @@
+version: v1
+kind: entity
+name: __internal_generic_org_metrics_sets
+
+schema:
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: metric_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: bucketed_time, type: DateTime },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: UInt, args: { size: 64 } },
+              { name: value, type: UInt, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: value,
+      type: AggregateFunction,
+      args:
+        {
+          func: "uniqCombined64",
+          arg_types: [{ type: UInt, args: { size: 64 } }],
+        },
+    },
+  ]
+
+storages:
+  - storage: generic_metrics_sets
+    translation_mappers:
+      functions:
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniq
+            to_name: uniqCombined64Merge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniqIf
+            to_name: uniqCombined64MergeIf
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags_raw
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: raw_value
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: indexed_value
+
+required_time_column: timestamp
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: generic_metrics_sets
+
+query_processors:
+  - processor: TagsTypeTransformer
+  - processor: MappedGranularityProcessor
+    args:
+      accepted_granularities:
+        60: 1
+        3600: 2
+        86400: 3
+      default_granularity: 1
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns: [timestamp]
+  - processor: ReferrerRateLimiterProcessor
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: org_id
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+
+validators:
+  - validator: GranularityValidator
+    args:
+      minimum: 60

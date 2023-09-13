@@ -2,10 +2,11 @@ pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
 use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -56,15 +57,26 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
+        let metrics = get_metrics();
+        let start = Instant::now();
+
         let mut stg = self.strategies.lock().unwrap();
         match stg.strategy.as_mut() {
             None => {}
             Some(s) => {
                 s.close();
-                s.join(None);
+                // TODO: We need to actually call consumer.commit() with the commit request.
+                // Right now we are never committing during consumer shutdown.
+                let _ = s.join(None);
             }
         }
         stg.strategy = None;
+
+        metrics.timing(
+            "arroyo.consumer.join.time",
+            start.elapsed().as_millis() as u64,
+            None,
+        );
     }
 }
 
@@ -83,6 +95,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
+    paused_timestamp: Option<Instant>,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -102,6 +115,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
+            paused_timestamp: None,
         }
     }
 
@@ -125,7 +139,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         } else {
             // Otherwise, we need to try fetch a new message from the consumer,
             // even if there is no active assignment and/or processing strategy.
-            let msg = self.consumer.poll(Some(Duration::ZERO));
+            let msg = self.consumer.poll(Some(Duration::from_secs(1)));
             //TODO: Support errors properly
             match msg {
                 Ok(None) => {
@@ -170,16 +184,21 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             // accepted, at which point we can resume consuming.
                             let partitions =
                                 self.consumer.tell().unwrap().keys().cloned().collect();
+                            // If a message is carried over, pause the consumer until it is accepted
                             if message_carried_over {
                                 let res = self.consumer.pause(partitions);
                                 match res {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        self.paused_timestamp = Some(Instant::now());
+                                    }
                                     Err(_) => return Err(RunError::PauseError),
                                 }
-                            } else {
+                            } else if self.paused_timestamp.is_some() {
                                 let res = self.consumer.resume(partitions);
                                 match res {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        self.paused_timestamp = None;
+                                    }
                                     Err(_) => return Err(RunError::PauseError),
                                 }
                             }

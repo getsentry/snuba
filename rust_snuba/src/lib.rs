@@ -1,5 +1,6 @@
 mod config;
 mod consumer;
+mod metrics;
 mod processors;
 mod runtime_config;
 mod strategies;

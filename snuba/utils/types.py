@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, MutableMapping, Protocol, Tuple, TypeVar
 
 TComparable = TypeVar("TComparable", contravariant=True)
 
@@ -62,3 +62,6 @@ class Interval(Generic[T]):
     def __post_init__(self) -> None:
         if not self.upper >= self.lower:
             raise InvalidRangeError(self.lower, self.upper)
+
+
+ColumnStatesMapType = MutableMapping[Tuple[str, int, str, str], str]
