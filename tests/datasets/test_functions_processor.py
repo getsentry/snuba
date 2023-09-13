@@ -34,7 +34,7 @@ class ProfileFunctionsEvent:
     project_id: int
     profile_id: str
     transaction_name: str
-    timestamp: float
+    timestamp: int
     functions: Sequence[Function]
     platform: str
     environment: Optional[str]
@@ -46,7 +46,7 @@ class ProfileFunctionsEvent:
     browser_name: Optional[str]
     device_class: Optional[int]
     retention_days: int
-    received: Optional[float]
+    received: Optional[int]
 
     def serialize(self) -> Mapping[str, Any]:
         return {
@@ -75,13 +75,13 @@ class TestFunctionsProcessor:
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
 
-        now = datetime.now(timezone.utc)
+        now = int(datetime.now(timezone.utc).timestamp())
         message = ProfileFunctionsEvent(
             project_id=22,
             profile_id="a" * 32,
             transaction_name="vroom-vroom",
-            timestamp=now.timestamp(),
-            received=now.timestamp(),
+            timestamp=now,
+            received=now,
             functions=[
                 Function(123, "foo", "", "bar", True, [1, 2, 3]),
                 Function(456, "baz", "qux", "", False, [4, 5, 6]),
@@ -102,7 +102,7 @@ class TestFunctionsProcessor:
             "profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "project_id": 22,
             "transaction_name": "vroom-vroom",
-            "timestamp": now.replace(tzinfo=None),
+            "timestamp": now,
             "platform": "python",
             "environment": "prod",
             "release": "foo@1.0.0",

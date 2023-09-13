@@ -9,20 +9,22 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
 from snuba.processor import InsertBatch
 
 
 @pytest.mark.parametrize(
-    "topic,processor_name,processor",
+    "topic,processor",
     [
-        ("snuba-queries", "QuerylogProcessor", QuerylogProcessor),
-        ("processed-profiles", "ProfilesMessageProcessor", ProfilesMessageProcessor),
+        ("processed-profiles", ProfilesMessageProcessor),
+        ("profiles-call-tree", FunctionsMessageProcessor),
+        ("snuba-queries", QuerylogProcessor),
     ],
 )
 def test_message_processors(
-    topic: str, processor_name: str, processor: Type[DatasetMessageProcessor]
+    topic: str, processor: Type[DatasetMessageProcessor]
 ) -> None:
     """
     Tests the output of Python and Rust message processors is the same
@@ -31,6 +33,7 @@ def test_message_processors(
         data_json = ex.load()
         data_bytes = json.dumps(data_json).encode("utf-8")
 
+        processor_name = processor.__qualname__
         partition = 0
         offset = 1
         millis_since_epoch = int(time.time() * 1000)
