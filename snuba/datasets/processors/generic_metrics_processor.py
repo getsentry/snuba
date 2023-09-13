@@ -16,7 +16,7 @@ from typing import (
 
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
 
-from snuba.cogs.accountant import UsageUnit, accumulator
+from snuba.cogs.accountant import UsageUnit, record_cogs
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
@@ -163,16 +163,12 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
 
     def __record_cogs(self, message: GenericMetric) -> None:
         if get_config("enable_gen_metrics_processor_cogs", 0):
-            try:
-                if accumulator is not None:
-                    accumulator.record(
-                        resource_id=self._resource_id,
-                        app_feature=message["use_case_id"],
-                        amount=len(json.dumps(message).encode("utf-8")),
-                        usage_type=UsageUnit.BYTES,
-                    )
-            except Exception as err:
-                logger.error(err, exc_info=True)
+            record_cogs(
+                resource_id=self._resource_id,
+                app_feature=message["use_case_id"],
+                amount=len(json.dumps(message).encode("utf-8")),
+                usage_type=UsageUnit.BYTES,
+            )
 
 
 class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):

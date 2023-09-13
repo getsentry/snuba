@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import time
 from collections import deque
@@ -11,6 +13,9 @@ from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka.configuration import build_kafka_configuration
 from arroyo.backends.kafka.consumer import KafkaPayload, KafkaProducer
 from arroyo.types import BrokerValue, Topic
+
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.topics import Topic as StreamTopic
 
 
 class UsageUnit(Enum):
@@ -218,11 +223,26 @@ class UsageAccumulator:
             logger.exception(e)
 
 
-accumulator = None
-try:
-    # TODO: Fix servers / params
-    accumulator = UsageAccumulator(
-        kafka_config=KafkaConfig(bootstrap_servers=[], config_params={})
-    )
-except Exception as err:
-    logger.error(err, exc_info=True)
+accumulator: UsageAccumulator | None = None
+
+
+def _accumulator() -> UsageAccumulator:
+    global accumulator
+    if accumulator is None:
+        producer = KafkaProducer(
+            build_kafka_producer_configuration(
+                StreamTopic.COGS_SHARED_RESOURCES_USAGE, None
+            )
+        )
+        accumulator = UsageAccumulator(producer=producer)
+    return accumulator
+
+
+def record_cogs(
+    resource_id: str, app_feature: str, amount: int, usage_type: UsageUnit
+) -> None:
+    try:
+        accumulator = _accumulator()
+        accumulator.record(resource_id, app_feature, amount, usage_type)
+    except Exception as err:
+        logger.warning("Could not record COGS due to error: %r", err, exc_info=True)
