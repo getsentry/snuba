@@ -133,6 +133,10 @@ class QuerylogProcessor(DatasetMessageProcessor):
                 continue
             valid_project_ids.append(pid)
         processed["projects"] = valid_project_ids
+        org_id = processed["organization"]
+        if org_id is not None and org_id <= 0:
+            logger.warning(f"Invalid Org ID in Querylog message: {org_id}", processed)
+            processed["organization"] = 0
 
     def process_message(
         self, message: Querylog, metadata: KafkaMessageMetadata
