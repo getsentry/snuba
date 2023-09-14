@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -14,6 +15,8 @@ from snuba.request import Request
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
+
+logger = logging.getLogger(__name__)
 
 
 class QueryStatus(Enum):
@@ -252,9 +255,12 @@ class SnubaQueryMetadata:
             "snql_anonymized": self.snql_anonymized,
         }
         # TODO: Remove check once Org IDs are required
-        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
-            if isinstance(org_id, int):
-                request_dict["organization"] = max(org_id, 0)
+        org_id = self.request.attribution_info.tenant_ids.get("organization_id")
+        if org_id is not None and isinstance(org_id, int):
+            if org_id <= 0:
+                logger.warning(f"Invalid Org ID in tenant_ids: {org_id}")
+                org_id = 0
+            request_dict["organization"] = org_id
         return request_dict
 
     @property
