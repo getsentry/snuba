@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -15,8 +14,6 @@ from snuba.request import Request
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
-
-logger = logging.getLogger(__name__)
 
 
 class QueryStatus(Enum):
