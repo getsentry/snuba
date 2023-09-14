@@ -258,7 +258,7 @@ class SnubaQueryMetadata:
         org_id = self.request.attribution_info.tenant_ids.get("organization_id")
         if org_id is not None and isinstance(org_id, int):
             if org_id <= 0:
-                logger.warning(f"Invalid Org ID in tenant_ids: {org_id}")
+                logger.warning(f"Invalid Org ID in tenant_ids: {org_id}", request_dict)
                 org_id = 0
             request_dict["organization"] = org_id
         return request_dict
