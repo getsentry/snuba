@@ -272,15 +272,9 @@ jobs:
   sentry:
     needs: [snuba-image]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-
-    strategy:
-      matrix:
-        instance: [0]
+    timeout-minutes: 20
 
     env:
-      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
-      MATRIX_INSTANCE_TOTAL: 1
       MIGRATIONS_TEST_MIGRATE: 1
 
     steps:
