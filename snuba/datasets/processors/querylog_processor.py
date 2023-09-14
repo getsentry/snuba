@@ -135,7 +135,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         processed["projects"] = valid_project_ids
         org_id = processed["organization"]
         if not org_id or org_id <= 0:
-            logger.warning(f"Invalid Org ID in Querylog message: {org_id}")
+            logger.warning(f"Invalid Org ID in Querylog message: {org_id}", processed)
             processed["organization"] = 0
 
     def process_message(
