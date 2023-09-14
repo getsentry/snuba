@@ -254,7 +254,7 @@ class SnubaQueryMetadata:
         # TODO: Remove check once Org IDs are required
         if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
             if isinstance(org_id, int):
-                request_dict["organization"] = org_id
+                request_dict["organization"] = max(org_id, 0)
         return request_dict
 
     @property
