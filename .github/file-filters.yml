@@ -1,0 +1,4 @@
+# Based off https://github.com/getsentry/sentry/blob/master/.github/file-filters.yml
+
+datasets:
+  - "snuba/datasets/**/*.yaml"

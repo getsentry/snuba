@@ -6,6 +6,27 @@ on:
   pull_request:
 
 jobs:
+  files-changed:
+    name: detect what files changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Map a step output to a job output
+    outputs:
+      datasets: ${{ steps.changes.outputs.datasets }}
+      backend_dependencies: ${{ steps.changes.outputs.backend_dependencies }}
+      backend_any_type: ${{ steps.changes.outputs.backend_any_type }}
+      migration_lockfile: ${{ steps.changes.outputs.migration_lockfile }}
+      plugins: ${{ steps.changes.outputs.plugins }}
+    steps:
+      - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
+
+      - name: Check for backend file changes
+        uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
+        id: changes
+        with:
+          token: ${{ github.token }}
+          filters: .github/file-filters.yml
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
