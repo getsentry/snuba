@@ -32,6 +32,27 @@ _RATE_LIMIT_NAME = "concurrent_limit_policy"
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
+    in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
+
+    ```yaml
+        - name: CrossOrgQueryAllocationPolicy
+          args:
+            required_tenant_types:
+              - referrer
+            default_config_overrides:
+              is_enforced: 0
+              is_active: 0
+            cross_org_referrer_limits:
+              dynamic_sampling.counters.get_org_transaction_volumes:
+                max_threads: 4
+                concurrent_limit: 10
+    ```
+
+    Each referrer gets a concurrent limit (applied per referrer) and a max_threads limit (applied to every query made by that referrer).
+    Both limits are static but changeable at runtime
+    """
+
     @property
     def rate_limit_name(self) -> str:
         return "cross_org_query_policy"
