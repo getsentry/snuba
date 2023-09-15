@@ -118,16 +118,6 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
             ),
             AllocationPolicyConfig(
-                name="rate_limit_shard_factor",
-                description="""number of shards that each redis set is supposed to have.
-                 increasing this value multiplies the number of redis keys by that
-                 factor, and (on average) reduces the size of each redis set. You probably don't need to change this
-                 unless you're scaling out redis for some reason
-                 """,
-                value_type=int,
-                default=1,
-            ),
-            AllocationPolicyConfig(
                 name="referrer_project_override",
                 description="override concurrent limit for a specific project, referrer combo",
                 value_type=int,
