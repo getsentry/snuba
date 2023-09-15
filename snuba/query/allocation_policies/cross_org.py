@@ -87,13 +87,24 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        if tenant_ids.get("referrer", None) not in self._registered_cross_org_referrers:
+        referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        referrer_is_registered = referrer in self._registered_cross_org_referrers
+
+        if not referrer_is_registered and tenant_ids.get("cross_org_query", False):
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation={
+                    "reason": f"cross_org_query is passed as a tenant but referrer {referrer} is not registered, update the {self._storage_key.value} yaml config to register this referrer"
+                },
+            )
+        elif not referrer_is_registered:
+            # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
             )
-        referrer = str(tenant_ids.get("referrer", "no_referrer"))
 
         thread_override = self.get_config_value(
             "referrer_max_threads_override", {"referrer": referrer}
@@ -131,10 +142,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     ) -> None:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
         rate_limit_params = RateLimitParameters(
-            # limit number does not matter for ending a query so I just picked 22
             self.rate_limit_name,
             referrer,
             None,
+            # limit number does not matter for ending a query so I just picked 22
             22,
         )
         self._end_query(query_id, rate_limit_params, result_or_error)

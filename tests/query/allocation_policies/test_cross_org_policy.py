@@ -129,3 +129,23 @@ class TestCrossOrgQueryAllocationPolicy:
             policy.get_quota_allowance(
                 tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
             )
+
+    @pytest.mark.redis_db
+    def test_reject_cross_org_query_with_unregistered_referrer(self):
+        policy = CrossOrgQueryAllocationPolicy.from_kwargs(
+            **{
+                "storage_key": "generic_metrics_distributions",
+                "required_tenant_types": ["referrer"],
+                "cross_org_referrer_limits": {
+                    "statistical_detectors": {
+                        "concurrent_limit": 1,
+                        "max_threads": 1,
+                    },
+                },
+            }
+        )
+        with pytest.raises(AllocationPolicyViolation):
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "unregistered", "cross_org_query": 1},
+                query_id="1",
+            )
