@@ -287,7 +287,7 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
-    needs: [snuba-image]
+    needs: [snuba-image, files-changed]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -380,7 +380,7 @@ jobs:
         if: needs.files-changed.outputs.datasets == 'true'
         working-directory: sentry
         run: |
-          make test-full
+          make test-snuba-full
 
   clickhouse-21:
     needs: [linting, snuba-image]
