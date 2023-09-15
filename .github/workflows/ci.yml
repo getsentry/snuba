@@ -377,6 +377,7 @@ jobs:
           make test-snuba
 
       - name: Run full tests
+        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.datasets == 'true'
         working-directory: sentry
         run: |
