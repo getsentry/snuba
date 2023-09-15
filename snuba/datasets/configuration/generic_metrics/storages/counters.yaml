@@ -87,6 +87,16 @@ allocation_policies:
         dynamic_sampling.counters.get_org_transaction_volumes:
           max_threads: 4
           concurrent_limit: 10
+        dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes:
+            max_threads: 4
+            concurrent_limit: 10
+        dynamic_sampling.counters.fetch_projects_with_transaction_totals:
+            max_threads: 4
+            concurrent_limit: 10
+        dynamic_sampling.counters.get_active_orgs:
+            max_threads: 4
+            concurrent_limit: 10
+
 query_processors:
   - processor: TableRateLimit
   - processor: TupleUnaliaser
