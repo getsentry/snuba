@@ -214,5 +214,5 @@ function(region) {
       },
     },
 
-  ] + migrate_stage('migrate', region) + s4s_health_check(region),
+  ] + migrate_stage('migrate', region) + s4s_health_check(region) + saas_health_check(region),
 }
