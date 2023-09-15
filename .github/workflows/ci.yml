@@ -290,9 +290,13 @@ jobs:
     needs: [snuba-image, files-changed]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
+    strategy:
+      matrix:
+        instance: [0, 1, 2]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
+      # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
+      MATRIX_INSTANCE_TOTAL: 3
 
     steps:
       # Checkout codebase
@@ -372,6 +376,7 @@ jobs:
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
+        if: needs.files-changed.outputs.datasets == 'false'
         working-directory: sentry
         run: |
           make test-snuba
