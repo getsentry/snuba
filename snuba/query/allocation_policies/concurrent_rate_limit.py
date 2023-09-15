@@ -48,7 +48,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         ]
 
     @property
-    def rate_limit_name(self):
+    def rate_limit_name(self) -> str:
         raise NotImplementedError
 
     def _is_within_rate_limit(
