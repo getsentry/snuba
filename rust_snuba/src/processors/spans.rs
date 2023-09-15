@@ -172,7 +172,19 @@ impl TryFrom<FromSpanMessage> for Span {
         let status = from.sentry_tags.status as u8;
         let transaction_op = from.sentry_tags.transaction_op.clone();
         let mut tag_keys: Vec<String> = from.tags.clone().into_keys().collect();
-        let mut tag_values: Vec<Value> = from.tags.into_values().collect();
+        let mut tag_values: Vec<Value> = from
+            .tags
+            .into_values()
+            .map(|v| match v {
+                Value::String(v) => Value::String(v),
+                Value::Bool(b) => {
+                    let mut v: Vec<char> = b.to_string().as_str().chars().collect();
+                    v[0] = v[0].to_uppercase().nth(0).unwrap();
+                    Value::String(v.into_iter().collect())
+                }
+                _ => Value::String(v.to_string()),
+            })
+            .collect();
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
