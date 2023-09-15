@@ -100,12 +100,14 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed["group_raw"] = 0
 
         # timestamps
-        processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
-            span_event["start_timestamp_ms"] / 1000,
-        )
-        processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
-            (span_event["start_timestamp_ms"] + span_event["duration_ms"]) / 1000,
-        )
+        start_timestamp_sec = span_event["start_timestamp_ms"] / 1000
+        processed["start_timestamp"] = int(start_timestamp_sec)
+        _, processed["start_ms"] = self.__extract_timestamp(start_timestamp_sec)
+        end_timestamp_sec = (
+            span_event["start_timestamp_ms"] + span_event["duration_ms"]
+        ) / 1000
+        processed["end_timestamp"] = int(end_timestamp_sec)
+        _, processed["end_ms"] = self.__extract_timestamp(end_timestamp_sec)
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = span_event["exclusive_time_ms"]
 
@@ -175,7 +177,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
         except ValueError:
             processed["group"] = 0
-
         processed["span_kind"] = ""
         processed["platform"] = sentry_tags.pop("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))
