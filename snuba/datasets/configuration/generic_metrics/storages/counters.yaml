@@ -77,7 +77,16 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
-
+  - name: CrossOrgQueryAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+      cross_org_referrer_limits:
+        dynamic_sampling.counters.get_org_transaction_volumes:
+          max_threads: 4
+          concurrent_limit: 10
 query_processors:
   - processor: TableRateLimit
   - processor: TupleUnaliaser
