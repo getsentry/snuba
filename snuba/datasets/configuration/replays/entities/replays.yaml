@@ -129,6 +129,9 @@ query_processors:
         time: timestamp
       time_parse_columns:
         - timestamp
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
 validators:
   - validator: EntityRequiredColumnValidator
     args:
