@@ -13,10 +13,6 @@ jobs:
     # Map a step output to a job output
     outputs:
       datasets: ${{ steps.changes.outputs.datasets }}
-      backend_dependencies: ${{ steps.changes.outputs.backend_dependencies }}
-      backend_any_type: ${{ steps.changes.outputs.backend_any_type }}
-      migration_lockfile: ${{ steps.changes.outputs.migration_lockfile }}
-      plugins: ${{ steps.changes.outputs.plugins }}
     steps:
       - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
 
