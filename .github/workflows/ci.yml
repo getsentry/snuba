@@ -380,6 +380,15 @@ jobs:
         run: |
           make test-snuba
 
+  sentry-full:
+    if: needs.files-changed.outputs.datasets == 'true'
+    needs: [sentry]
+    steps:
+      - name: Run tests
+        working-directory: sentry
+        run: |
+          make test-snuba-full
+
   clickhouse-21:
     needs: [linting, snuba-image]
     name: Tests on Clickhouse 21
