@@ -2,7 +2,7 @@ import logging
 import numbers
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
@@ -46,14 +46,15 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     from the transactions topic and de-normalize it into the spans table.
     """
 
-    def __extract_timestamp(self, timestamp_sec: float) -> Tuple[datetime, int]:
+    def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec))
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_ms / 1000))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
-        return timestamp, milliseconds
+        unix_timestamp = int(timestamp.replace(tzinfo=timezone.utc).timestamp())
+        return unix_timestamp, milliseconds
 
     @staticmethod
     def _structure_and_validate_message(
@@ -100,14 +101,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed["group_raw"] = 0
 
         # timestamps
-        start_timestamp_sec = span_event["start_timestamp_ms"] / 1000
-        processed["start_timestamp"] = int(start_timestamp_sec)
-        _, processed["start_ms"] = self.__extract_timestamp(start_timestamp_sec)
-        end_timestamp_sec = (
-            span_event["start_timestamp_ms"] + span_event["duration_ms"]
-        ) / 1000
-        processed["end_timestamp"] = int(end_timestamp_sec)
-        _, processed["end_ms"] = self.__extract_timestamp(end_timestamp_sec)
+        processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
+            span_event["start_timestamp_ms"],
+        )
+        processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
+            span_event["start_timestamp_ms"] + span_event["duration_ms"],
+        )
+
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = span_event["exclusive_time_ms"]
 
@@ -177,6 +177,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
         except ValueError:
             processed["group"] = 0
+
         processed["span_kind"] = ""
         processed["platform"] = sentry_tags.pop("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))
