@@ -52,7 +52,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
     start_timestamp_ms: u64,
-    tags: BTreeMap<String, Value>,
+    tags: BTreeMap<String, String>,
     trace_id: Uuid,
 }
 
@@ -158,7 +158,7 @@ struct Span {
     #[serde(rename(serialize = "tags.key"))]
     tag_keys: Vec<String>,
     #[serde(rename(serialize = "tags.value"))]
-    tag_values: Vec<Value>,
+    tag_values: Vec<String>,
     trace_id: Uuid,
     transaction_id: Uuid,
     transaction_op: String,
@@ -172,19 +172,7 @@ impl TryFrom<FromSpanMessage> for Span {
         let status = from.sentry_tags.status as u8;
         let transaction_op = from.sentry_tags.transaction_op.clone();
         let mut tag_keys: Vec<String> = from.tags.clone().into_keys().collect();
-        let mut tag_values: Vec<Value> = from
-            .tags
-            .into_values()
-            .map(|v| match v {
-                Value::String(v) => Value::String(v),
-                Value::Bool(b) => {
-                    let mut v: Vec<char> = b.to_string().as_str().chars().collect();
-                    v[0] = v[0].to_uppercase().nth(0).unwrap();
-                    Value::String(v.into_iter().collect())
-                }
-                _ => Value::String(v.to_string()),
-            })
-            .collect();
+        let mut tag_values: Vec<String> = from.tags.into_values().collect();
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
