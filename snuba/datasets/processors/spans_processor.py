@@ -1,8 +1,9 @@
 import logging
 import numbers
 import random
+import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
@@ -49,12 +50,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_ms / 1000))
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-        milliseconds = int(timestamp.microsecond / 1000)
-        unix_timestamp = int(timestamp.replace(tzinfo=timezone.utc).timestamp())
-        return unix_timestamp, milliseconds
+        timestamp_sec = timestamp_ms / 1000
+        if _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec)) is None:
+            timestamp_sec = int(time.time())
+        return int(timestamp_sec), int(timestamp_ms % 1000)
 
     @staticmethod
     def _structure_and_validate_message(
