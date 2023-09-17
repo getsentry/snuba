@@ -2,7 +2,6 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
@@ -32,20 +31,20 @@ pub fn process_message(
     Err(InvalidMessage)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
     #[serde(default)]
     description: String,
-    duration_ms: u64,
+    duration_ms: u32,
     event_id: Uuid,
-    exclusive_time_ms: u64,
+    exclusive_time_ms: f64,
     #[serde(deserialize_with = "hex_to_u64")]
     group_raw: u64,
     is_segment: bool,
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     project_id: u64,
-    retention_days: u32,
+    retention_days: u16,
     #[serde(deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: SentryTags,
@@ -56,7 +55,7 @@ struct FromSpanMessage {
     trace_id: Uuid,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 struct SentryTags {
     #[serde(default)]
     action: String,
@@ -73,7 +72,7 @@ struct SentryTags {
     #[serde(skip_serializing)]
     status: SpanStatus,
     #[serde(skip_serializing)]
-    status_code: Option<u32>,
+    status_code: Option<String>,
     #[serde(default, skip_serializing)]
     system: String,
     #[serde(default, skip_serializing)]
@@ -85,76 +84,79 @@ struct SentryTags {
 }
 
 impl SentryTags {
-    fn to_keys(&self) -> Vec<String> {
-        vec![
-            "action".into(),
-            "domain".into(),
-            "group".into(),
-            "http.method".into(),
-            "module".into(),
-            "op".into(),
-            "status".into(),
-            "status_code".into(),
-            "system".into(),
-            "transaction".into(),
-            "transaction.method".into(),
-            "transaction.op".into(),
-        ]
-    }
+    fn to_keys_values(&self) -> (Vec<String>, Vec<String>) {
+        let mut tags: BTreeMap<String, String> = BTreeMap::new();
 
-    fn to_values(&self) -> Vec<Value> {
-        vec![
-            self.action.clone().into(),
-            self.domain.clone().into(),
-            self.group.clone().into(),
-            self.http_method.clone().into(),
-            self.module.clone().into(),
-            self.op.clone().into(),
-            self.status.clone().as_str().into(),
-            self.status_code.unwrap_or(0).to_string().into(),
-            self.system.clone().into(),
-            self.transaction.clone().into(),
-            self.transaction_method.clone().into(),
-            self.transaction_op.clone().into(),
-        ]
+        tags.insert("action".into(), self.action.clone());
+        tags.insert("domain".into(), self.domain.clone());
+        tags.insert("group".into(), self.group.clone());
+        tags.insert("module".into(), self.module.clone());
+        tags.insert("op".into(), self.op.clone());
+        tags.insert("status".into(), self.status.as_str().to_string());
+        tags.insert("system".into(), self.system.clone());
+        tags.insert("transaction".into(), self.transaction.clone());
+        tags.insert("transaction.op".into(), self.transaction_op.clone());
+
+        if let Some(http_method) = &self.http_method {
+            tags.insert("http.method".into(), http_method.into());
+        }
+
+        if let Some(transaction_method) = &self.transaction_method {
+            tags.insert("transaction.method".into(), transaction_method.into());
+        }
+
+        if let Some(status_code) = &self.status_code {
+            tags.insert("status_code".into(), status_code.into());
+        }
+
+        (
+            tags.keys().cloned().collect(),
+            tags.values().cloned().collect(),
+        )
     }
 }
 
 #[derive(Debug, Default, Serialize)]
 struct Span {
+    #[serde(default)]
+    action: String,
     deleted: u8,
     description: String,
-    duration: u64,
-    end_ms: u64,
+    #[serde(default)]
+    domain: String,
+    duration: u32,
+    end_ms: u16,
     end_timestamp: u64,
-    exclusive_time: u64,
+    exclusive_time: f64,
     group: u64,
     group_raw: u64,
-    is_segment: bool,
+    is_segment: u8,
+    #[serde(default)]
+    module: String,
     #[serde(rename(serialize = "measurements.key"))]
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
-    measurement_values: Vec<Value>,
+    measurement_values: Vec<f64>,
     offset: u64,
+    op: String,
     parent_span_id: u64,
     partition: u16,
     platform: String,
     project_id: u64,
-    retention_days: u32,
+    retention_days: u16,
     segment_id: u64,
     segment_name: String,
-    #[serde(flatten)]
     sentry_tags: SentryTags,
     #[serde(rename(serialize = "sentry_tags.key"))]
     sentry_tag_keys: Vec<String>,
     #[serde(rename(serialize = "sentry_tags.value"))]
-    sentry_tag_values: Vec<Value>,
+    sentry_tag_values: Vec<String>,
     span_id: u64,
     span_kind: String,
     span_status: u8,
-    start_ms: u64,
+    start_ms: u16,
     start_timestamp: u64,
-    status: u8,
+    status: u32,
     #[serde(rename(serialize = "tags.key"))]
     tag_keys: Vec<String>,
     #[serde(rename(serialize = "tags.value"))]
@@ -168,50 +170,51 @@ struct Span {
 impl TryFrom<FromSpanMessage> for Span {
     type Error = InvalidMessage;
     fn try_from(from: FromSpanMessage) -> Result<Span, InvalidMessage> {
-        let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms;
+        let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let status = from.sentry_tags.status as u8;
         let transaction_op = from.sentry_tags.transaction_op.clone();
+        let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let mut tag_keys: Vec<String> = from.tags.clone().into_keys().collect();
         let mut tag_values: Vec<String> = from.tags.into_values().collect();
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
-            tag_values.push(http_method.into());
+            tag_values.push(http_method);
         }
 
-        if let Some(status_code) = from.sentry_tags.status_code {
+        if let Some(status_code) = &from.sentry_tags.status_code {
             tag_keys.push("status_code".into());
-            tag_values.push(status_code.to_string().into());
+            tag_values.push(status_code.into());
         }
 
         if let Some(transaction_method) = from.sentry_tags.transaction_method.clone() {
             tag_keys.push("transaction.method".into());
-            tag_values.push(transaction_method.into());
+            tag_values.push(transaction_method);
         }
 
         Ok(Self {
             description: from.description,
             duration: from.duration_ms,
-            end_ms: end_timestamp_ms % 1000,
+            end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
             exclusive_time: from.exclusive_time_ms,
             group: u64::from_str_radix(&from.sentry_tags.group, 16).map_err(|_| InvalidMessage)?,
             group_raw: from.group_raw,
-            is_segment: from.is_segment,
+            is_segment: if from.is_segment { 1 } else { 0 },
             parent_span_id: from.parent_span_id,
             platform: from.sentry_tags.system.clone(),
             project_id: from.project_id,
             retention_days: from.retention_days,
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.clone(),
-            sentry_tag_keys: from.sentry_tags.to_keys(),
-            sentry_tag_values: from.sentry_tags.to_values(),
+            sentry_tag_keys,
+            sentry_tag_values,
             sentry_tags: from.sentry_tags,
             span_id: from.span_id,
             span_status: status,
-            start_ms: from.start_timestamp_ms % 1000,
+            start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
-            status,
+            status: status.into(),
             tag_keys,
             tag_values,
             trace_id: from.trace_id,
@@ -346,37 +349,37 @@ mod tests {
     #[test]
     fn test_spans() {
         let data = r#"{
+            "duration_ms": 1000,
             "event_id": "dcc403b73ef548648188bbfa6012e9dc",
-            "organization_id": 69,
-            "project_id": 1,
-            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
-            "span_id": "deadbeefdeadbeef",
-            "parent_span_id": "deadbeefdeadbeef",
-            "segment_id": "deadbeefdeadbeef",
+            "exclusive_time_ms": 1000,
             "group_raw": "b640a0ce465fa2a4",
             "is_segment": false,
-            "start_timestamp_ms": 1691105878720,
-            "duration_ms": 1000,
-            "exclusive_time_ms": 1000,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "project_id": 1,
             "retention_days": 90,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
             "tags": {
               "tag1": "value1",
-              "tag2": 123,
-              "tag3": true
+              "tag2": "123",
+              "tag3": "true"
             },
             "sentry_tags": {
-              "http.method": "GET",
               "action": "GET",
               "domain": "targetdomain.tld:targetport",
-              "module": "http",
               "group": "deadbeefdeadbeef",
-              "status": "ok",
-              "system": "python",
-              "status_code": 200,
-              "transaction": "/organizations/:orgId/issues/",
-              "transaction.op": "navigation",
+              "http.method": "GET",
+              "module": "http",
               "op": "http.client",
-              "transaction.method": "GET"
+              "status": "ok",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
             }
           }"#;
         let payload = KafkaPayload {
