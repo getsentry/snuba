@@ -222,6 +222,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
 
 [[package]]
+name = "crc32fast"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
+dependencies = [
+ "cfg-if 1.0.0",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -321,19 +330,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071a31f4ee85403370b58aca746f01041ede6f0da2730960ad001edc2b71b394"
 dependencies = [
  "cfg-if 1.0.0",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -1458,7 +1454,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
- "env_logger 0.9.3",
+ "env_logger",
  "futures",
  "log",
  "rdkafka",
@@ -1477,7 +1473,7 @@ dependencies = [
  "cadence",
  "chrono",
  "ctrlc",
- "env_logger 0.10.0",
+ "env_logger",
  "futures",
  "glob",
  "log",
@@ -1489,6 +1485,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "statsdproxy",
  "tokio",
  "uuid 1.4.1",
 ]
@@ -1768,6 +1765,18 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "statsdproxy"
+version = "0.1.0"
+source = "git+https://github.com/getsentry/statsdproxy#1a862915c326807df4ec58ea318675383759ae4b"
+dependencies = [
+ "anyhow",
+ "cadence",
+ "crc32fast",
+ "env_logger",
+ "log",
+]
 
 [[package]]
 name = "strsim"

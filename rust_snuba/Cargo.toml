@@ -39,6 +39,8 @@ reqwest = "0.11.11"
 uuid = "1.4.1"
 # running on procspawn fork because it's unclear https://github.com/mitsuhiko/procspawn/pull/48 is safe
 procspawn = { version = "1.0.0", features = ["json"], git = "https://github.com/getsentry/procspawn", branch = "fix/join-timeout-pool" }
+statsdproxy = { version = "0.1.0", features = ["cadence"], git = "https://github.com/getsentry/statsdproxy", default-features = false }
+
 
 [features]
 ffi = ["pyo3/extension-module"]

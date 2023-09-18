@@ -108,8 +108,11 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = None
-DOGSTATSD_PORT: int | None = None
+# DOGSTATSD_HOST: str | None = None
+# DOGSTATSD_PORT: int | None = None
+DOGSTATSD_HOST = "127.0.0.1"
+DOGSTATSD_PORT = 8080
+
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,

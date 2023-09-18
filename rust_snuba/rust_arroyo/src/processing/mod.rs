@@ -126,6 +126,9 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
+        let metrics = get_metrics();
+        metrics.increment("arroyo.consumer.run_once", Some(1), None);
+
         let message_carried_over = self.message.is_some();
 
         if message_carried_over {
