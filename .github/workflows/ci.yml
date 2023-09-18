@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 3
     # Map a step output to a job output
     outputs:
-      datasets: ${{ steps.changes.outputs.datasets }}
+      api_changes: ${{ steps.changes.outputs.api_changes }}
     steps:
       - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
 
@@ -376,14 +376,14 @@ jobs:
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
-        if: needs.files-changed.outputs.datasets == 'false'
+        if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
           make test-snuba
 
       - name: Run full tests
         # TODO: Adjust which changed files we care about
-        if: needs.files-changed.outputs.datasets == 'true'
+        if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
           make test-snuba-full
