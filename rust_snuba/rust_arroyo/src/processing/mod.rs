@@ -78,6 +78,8 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             start.elapsed().as_millis() as u64,
             None,
         );
+
+        // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
 }
 
