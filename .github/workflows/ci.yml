@@ -6,6 +6,23 @@ on:
   pull_request:
 
 jobs:
+  files-changed:
+    name: detect what files changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Map a step output to a job output
+    outputs:
+      datasets: ${{ steps.changes.outputs.datasets }}
+    steps:
+      - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
+
+      - name: Check for backend file changes
+        uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
+        id: changes
+        with:
+          token: ${{ github.token }}
+          filters: .github/file-filters.yml
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
@@ -270,12 +287,16 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
-    needs: [snuba-image]
+    needs: [snuba-image, files-changed]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        instance: [0, 1]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
+      # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
+      MATRIX_INSTANCE_TOTAL: 2
 
     steps:
       # Checkout codebase
@@ -355,9 +376,17 @@ jobs:
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
+        if: needs.files-changed.outputs.datasets == 'false'
         working-directory: sentry
         run: |
           make test-snuba
+
+      - name: Run full tests
+        # TODO: Adjust which changed files we care about
+        if: needs.files-changed.outputs.datasets == 'true'
+        working-directory: sentry
+        run: |
+          make test-snuba-full
 
   clickhouse-21:
     needs: [linting, snuba-image]
