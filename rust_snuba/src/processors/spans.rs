@@ -47,7 +47,7 @@ struct FromSpanMessage {
     retention_days: u16,
     #[serde(deserialize_with = "hex_to_u64")]
     segment_id: u64,
-    sentry_tags: SentryTags,
+    sentry_tags: FromSentryTags,
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
     start_timestamp_ms: u64,
@@ -55,35 +55,33 @@ struct FromSpanMessage {
     trace_id: Uuid,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-struct SentryTags {
+#[derive(Debug, Default, Deserialize)]
+struct FromSentryTags {
     #[serde(default)]
     action: String,
     #[serde(default)]
     domain: String,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     group: String,
-    #[serde(skip_serializing, rename = "http.method")]
+    #[serde(rename(deserialize = "http.method"))]
     http_method: Option<String>,
     #[serde(default)]
     module: String,
     #[serde(default)]
     op: String,
-    #[serde(skip_serializing)]
     status: SpanStatus,
-    #[serde(skip_serializing)]
     status_code: Option<String>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     system: String,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     transaction: String,
-    #[serde(skip_serializing, rename = "transaction.method")]
+    #[serde(rename(deserialize = "transaction.method"))]
     transaction_method: Option<String>,
-    #[serde(default, skip_serializing, rename = "transaction.op")]
+    #[serde(default, rename(deserialize = "transaction.op"))]
     transaction_op: String,
 }
 
-impl SentryTags {
+impl FromSentryTags {
     fn to_keys_values(&self) -> (Vec<String>, Vec<String>) {
         let mut tags: BTreeMap<String, String> = BTreeMap::new();
 
@@ -146,7 +144,6 @@ struct Span {
     retention_days: u16,
     segment_id: u64,
     segment_name: String,
-    sentry_tags: SentryTags,
     #[serde(rename(serialize = "sentry_tags.key"))]
     sentry_tag_keys: Vec<String>,
     #[serde(rename(serialize = "sentry_tags.value"))]
@@ -169,6 +166,7 @@ struct Span {
 
 impl TryFrom<FromSpanMessage> for Span {
     type Error = InvalidMessage;
+
     fn try_from(from: FromSpanMessage) -> Result<Span, InvalidMessage> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let status = from.sentry_tags.status as u8;
@@ -193,7 +191,9 @@ impl TryFrom<FromSpanMessage> for Span {
         }
 
         Ok(Self {
+            action: from.sentry_tags.action.clone(),
             description: from.description,
+            domain: from.sentry_tags.domain.clone(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
@@ -201,6 +201,8 @@ impl TryFrom<FromSpanMessage> for Span {
             group: u64::from_str_radix(&from.sentry_tags.group, 16).map_err(|_| InvalidMessage)?,
             group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
+            module: from.sentry_tags.module.clone(),
+            op: from.sentry_tags.op.clone(),
             parent_span_id: from.parent_span_id,
             platform: from.sentry_tags.system.clone(),
             project_id: from.project_id,
@@ -209,7 +211,6 @@ impl TryFrom<FromSpanMessage> for Span {
             segment_name: from.sentry_tags.transaction.clone(),
             sentry_tag_keys,
             sentry_tag_values,
-            sentry_tags: from.sentry_tags,
             span_id: from.span_id,
             span_status: status,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
