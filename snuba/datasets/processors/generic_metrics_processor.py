@@ -1,5 +1,5 @@
-import json
 import logging
+import pickle
 import zlib
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
@@ -168,7 +168,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             record_cogs(
                 resource_id=self._resource_id,
                 app_feature=f"genericmetrics_{message['use_case_id']}",
-                amount=len(json.dumps(message).encode("utf-8")),
+                amount=len(pickle.dumps(message)),
                 usage_type=UsageUnit.BYTES,
             )
 
