@@ -60,6 +60,7 @@ impl Default for MetricsBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     #[test]
     fn metrics_buffer() {
         #[derive(Debug)]
