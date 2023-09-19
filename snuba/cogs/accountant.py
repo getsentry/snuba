@@ -11,9 +11,6 @@ from snuba.utils.streams.topics import Topic as StreamTopic
 logger = logging.getLogger("usageaccountant")
 
 
-# TODO: Remove almost everything above once https://github.com/getsentry/usage-accountant
-# is published and import the UsageAccumulator from there instead
-
 accumulator: UsageAccumulator | None = None
 
 
