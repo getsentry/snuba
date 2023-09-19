@@ -167,7 +167,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         if random() < (get_config("gen_metrics_processor_cogs_probability") or 0):
             record_cogs(
                 resource_id=self._resource_id,
-                app_feature=message["use_case_id"],
+                app_feature=f"genericmetrics_{message['use_case_id']}",
                 amount=len(json.dumps(message).encode("utf-8")),
                 usage_type=UsageUnit.BYTES,
             )
