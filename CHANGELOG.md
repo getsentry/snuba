@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.9.0
+
+### Various fixes & improvements
+
+- feat(rust): Add processor metrics for Rust consumer (#4737) by @lynnagara
+- feat: metrics.increment() no longer supports option (#4738) by @lynnagara
+- ref: bump sentry-kafka-schemas to 0.1.27 (#4739) by @getsentry-bot
+- Update snuba-sdk version to latest 2.0.1 (#4735) by @enochtangg
+- make sure possible API changes are tested against sentry (#4736) by @volokluev
+- test: Run different Sentry tests depending on files changed (#4727) by @lynnagara
+- fix(ci): no more sentry shards (#4725) by @joshuarli
+- fix(CI): Unblock deploys as they hard check for sentry matrix'd tests (#4724) by @rahul-kumar-saini
+- fix(on-call): Negative org ID in Tenant IDs crashes Querylog consumer (#4722) by @rahul-kumar-saini
+- ref: bump sentry-kafka-schemas to 0.1.26 (#4721) by @getsentry-bot
+- test: No need to run Sentry CI in a matrix (#4720) by @lynnagara
+- Use snuba-admin spec for ST and SaaS (#4716) by @dbanda
+- feat(rust-arroyo): Processor calls consumer.poll() with timeout of 1 second (#4719) by @lynnagara
+- experiment(on-call): Profile bytes scanned potentially incorrect (#4714) by @rahul-kumar-saini
+- feat(reduce): Avoid clone and ensure all messages are processed in join (#4718) by @lynnagara
+- improvement(visibility): make the replacer log project_ids for slow replacements (#4717) by @onewland
+- feat(profiling): Add a functions processor in Rust (#4705) by @phacops
+- fix(spans): Handle bad group and group_raw values (#4715) by @phacops
+- feat(profiling): Add a profiles processor in Rust (#4698) by @phacops
+- Remove canary deploys in non-US regions (#4696) by @mattgauntseo-sentry
+- feat(spans): write tags to sentry_tags col (#4706) by @dbanda
+- sort lists before compare (#4711) by @dbanda
+- fix(rust-arroyo): Fix timeout in RunTaskInThreads::join() (#4704) by @lynnagara
+- ref(rust): Rewrite check_for_results to use better way of joining process pool (#4703) by @untitaker
+
+_Plus 78 more_
+
 ## 23.8.0
 
 ### Various fixes & improvements
