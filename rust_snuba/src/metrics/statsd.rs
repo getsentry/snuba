@@ -51,13 +51,13 @@ impl ArroyoMetrics for StatsDBackend {
         }
     }
 
-    fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn gauge(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
             log::debug!("Error sending metric: {}", e);
         }
     }
 
-    fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn timing(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
             log::debug!("Error sending metric: {}", e);
         }
@@ -71,7 +71,8 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
+        let mut backend =
+            StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
 
         backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
         backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));
