@@ -3,6 +3,7 @@ import logging
 import zlib
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
+from random import random
 from typing import (
     Any,
     Iterable,
@@ -15,8 +16,9 @@ from typing import (
 )
 
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
+from usageaccountant import UsageUnit
 
-from snuba.cogs.accountant import UsageUnit, record_cogs
+from snuba.cogs.accountant import record_cogs
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
@@ -162,7 +164,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         )
 
     def __record_cogs(self, message: GenericMetric) -> None:
-        if get_config("enable_gen_metrics_processor_cogs", 0):
+        if random() < (get_config("gen_metrics_processor_cogs_probability") or 0):
             record_cogs(
                 resource_id=self._resource_id,
                 app_feature=message["use_case_id"],
