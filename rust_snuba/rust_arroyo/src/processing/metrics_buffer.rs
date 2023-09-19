@@ -56,33 +56,3 @@ impl Default for MetricsBuffer {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-    #[test]
-    fn metrics_buffer() {
-        #[derive(Debug)]
-        struct Test {
-            data: Vec<String>,
-        }
-
-        impl Metrics for Test {
-            fn increment(
-                &mut self,
-                _key: &str,
-                _value: Option<i64>,
-                _tags: Option<HashMap<&str, &str>>,
-            ) {
-            }
-
-            fn gauge(&mut self, _key: &str, _value: u64, _tags: Option<HashMap<&str, &str>>) {}
-
-            fn timing(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-                // self.data.append((key.into(), value.into(), tags.into()))
-                self.data.push("asdf".to_string());
-            }
-        }
-    }
-}
