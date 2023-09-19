@@ -15,9 +15,8 @@ local migrate_stage(stage_name, region) = [
           timeout: 1200,
           elastic_profile_id: 'snuba',
           environment_variables: {
-            // ST deployments use 'snuba' for container and label selectors
-            // in migrations, whereas the US region deployment uses snuba-admin.
-            SNUBA_SERVICE_NAME: if getsentry.is_st(region) then 'snuba' else 'snuba-admin',
+            // Use snuba-admin pod spec for running migrations
+            SNUBA_SERVICE_NAME: 'snuba-admin',
           },
           tasks: [
             if getsentry.is_st(region) then

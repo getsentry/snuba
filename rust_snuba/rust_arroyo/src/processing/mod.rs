@@ -139,7 +139,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         } else {
             // Otherwise, we need to try fetch a new message from the consumer,
             // even if there is no active assignment and/or processing strategy.
-            let msg = self.consumer.poll(Some(Duration::ZERO));
+            let msg = self.consumer.poll(Some(Duration::from_secs(1)));
             //TODO: Support errors properly
             match msg {
                 Ok(None) => {
