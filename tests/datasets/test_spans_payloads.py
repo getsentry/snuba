@@ -45,9 +45,13 @@ expected_for_required_fields = {
     "is_segment": True,
     "description": "",
     "group_raw": 0,
-    "start_timestamp": datetime.datetime(2100, 4, 11, 7, 18, 31, 111000),
+    "start_timestamp": int(
+        datetime.datetime(2100, 4, 11, 7, 18, 31, 111000).timestamp()
+    ),
     "start_ms": 111,
-    "end_timestamp": datetime.datetime(2100, 4, 25, 14, 14, 31, 234000),
+    "end_timestamp": int(
+        datetime.datetime(2100, 4, 25, 14, 14, 31, 234000).timestamp()
+    ),
     "end_ms": 234,
     "duration": 1234560123,
     "exclusive_time": 1234567890123,

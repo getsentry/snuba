@@ -7,4 +7,5 @@
   "Tests and code coverage (test_distributed)" \
   "Tests and code coverage (test_distributed_migrations)" \
   "Dataset Config Validation" \
-  "sentry"
+  "sentry (0)" \
+  "sentry (1)"

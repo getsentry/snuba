@@ -55,8 +55,8 @@ class SpanEventExample:
             "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
             "tags": {
                 "tag1": "value1",
-                "tag2": 123,
-                "tag3": True,
+                "tag2": "123",
+                "tag3": "True",
                 "sentry:user": self.user_id or "",
             },
             "sentry_tags": {
@@ -67,7 +67,7 @@ class SpanEventExample:
                 "group": self.group,
                 "status": "ok",
                 "system": "python",
-                "status_code": 200,
+                "status_code": "200",
                 "transaction": self.transaction_name,
                 "transaction.op": self.op,
                 "op": "http.client",
@@ -86,12 +86,16 @@ class SpanEventExample:
                 "segment_id": int(self.span_id, 16),
                 "is_segment": 0,
                 "segment_name": self.transaction_name,
-                "start_timestamp": datetime.utcfromtimestamp(
-                    self.start_timestamp_ms / 1000
+                "start_timestamp": int(
+                    datetime.utcfromtimestamp(
+                        self.start_timestamp_ms / 1000
+                    ).timestamp()
                 ),
                 "start_ms": self.start_timestamp_ms % 1000,
-                "end_timestamp": datetime.utcfromtimestamp(
-                    (self.start_timestamp_ms + self.duration_ms) / 1000
+                "end_timestamp": int(
+                    datetime.utcfromtimestamp(
+                        (self.start_timestamp_ms + self.duration_ms) / 1000
+                    ).timestamp()
                 ),
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
                 "duration": self.duration_ms,

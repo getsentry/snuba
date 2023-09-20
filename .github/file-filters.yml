@@ -1,0 +1,6 @@
+# Based off https://github.com/getsentry/sentry/blob/master/.github/file-filters.yml
+
+api_changes:
+  - "snuba/datasets/configuration/**/*.yaml"
+  - "snuba/web/*.py"
+  - "snuba/query/**/*.py"
