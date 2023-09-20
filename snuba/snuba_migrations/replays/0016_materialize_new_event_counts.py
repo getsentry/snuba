@@ -57,21 +57,21 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
         "debug_id",
         Column(
             "count_info_events",
-            UInt(16, Modifiers(materialized="(debug_id > 0) + (info_id > 0)")),
+            UInt(8, Modifiers(materialized="(debug_id > 0) + (info_id > 0)")),
         ),
     ),
     (
         "count_info_events",
         Column(
             "count_warning_events",
-            UInt(16, Modifiers(materialized="warning_id > 0")),
+            UInt(8, Modifiers(materialized="warning_id > 0")),
         ),
     ),
     (
         "count_warning_events",
         Column(
             "count_error_events",
-            UInt(16, Modifiers(materialized="(error_id > 0) + (fatal_id > 0)")),
+            UInt(8, Modifiers(materialized="(error_id > 0) + (fatal_id > 0)")),
         ),
     ),
 ]
