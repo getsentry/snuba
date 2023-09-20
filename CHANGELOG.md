@@ -1,5 +1,12 @@
 # Changelog
 
+## 23.9.1
+
+### Various fixes & improvements
+
+- feat(spans): Port the processor to Rust (#4712) by @john-z-yang
+- meta: Bump new development version (2432b27d)
+
 ## 23.9.0
 
 ### Various fixes & improvements
