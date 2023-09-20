@@ -1,6 +1,7 @@
 import logging
 import numbers
 import random
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
@@ -46,14 +47,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     from the transactions topic and de-normalize it into the spans table.
     """
 
-    def __extract_timestamp(self, timestamp_sec: float) -> Tuple[datetime, int]:
+    def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec))
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-        milliseconds = int(timestamp.microsecond / 1000)
-        return timestamp, milliseconds
+        timestamp_sec = timestamp_ms / 1000
+        if _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec)) is None:
+            timestamp_sec = int(time.time())
+        return int(timestamp_sec), int(timestamp_ms % 1000)
 
     @staticmethod
     def _structure_and_validate_message(
@@ -101,11 +101,12 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         # timestamps
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
-            span_event["start_timestamp_ms"] / 1000,
+            span_event["start_timestamp_ms"],
         )
         processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
-            (span_event["start_timestamp_ms"] + span_event["duration_ms"]) / 1000,
+            span_event["start_timestamp_ms"] + span_event["duration_ms"],
         )
+
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = span_event["exclusive_time_ms"]
 

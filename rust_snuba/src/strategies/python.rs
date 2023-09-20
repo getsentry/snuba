@@ -86,7 +86,8 @@ impl PythonTransformStep {
                         Ok(result) => result,
                         Err(e) if e.is_timeout() => {
                             self.handles.push_front(TaskHandle::Procspawn {
-                                original_message_meta, join_handle: Mutex::new(handle)
+                                original_message_meta,
+                                join_handle: Mutex::new(handle),
                             });
                             return;
                         }
@@ -177,7 +178,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         Ok(BytesInsertBatch {
                             rows: result_decoded,
                         })
-                    }).map_err(|pyerr| pyerr.to_string())
+                    })
+                    .map_err(|pyerr| pyerr.to_string())
                 };
 
                 let original_message_meta = message.clone().replace(());
@@ -289,7 +291,6 @@ mod tests {
         // test_basic_two_processes to hang, therefore isolate it in another subprocess of its own.
         handle.join().unwrap();
     }
-
 
     #[test]
     fn test_basic_two_processes() {
