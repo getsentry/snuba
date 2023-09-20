@@ -60,7 +60,7 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
             UInt(
                 8,
                 Modifiers(
-                    materialized="(toInt128(debug_id) > 0) + (toInt128(info_id) > 0)"
+                    materialized="(debug_id != '00000000-0000-0000-0000-000000000000') + (info_id != '00000000-0000-0000-0000-000000000000')"
                 ),
             ),
         ),
@@ -69,7 +69,12 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
         "count_info_events",
         Column(
             "count_warning_events",
-            UInt(8, Modifiers(materialized="toInt128(warning_id) > 0")),
+            UInt(
+                8,
+                Modifiers(
+                    materialized="warning_id != '00000000-0000-0000-0000-000000000000'"
+                ),
+            ),
         ),
     ),
     (
@@ -79,7 +84,7 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
             UInt(
                 8,
                 Modifiers(
-                    materialized="(toInt128(error_id) > 0) + (toInt128(fatal_id) > 0)"
+                    materialized="(error_id != '00000000-0000-0000-0000-000000000000') + (fatal_id != '00000000-0000-0000-0000-000000000000')"
                 ),
             ),
         ),
