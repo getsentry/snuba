@@ -25,7 +25,8 @@ use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
-use crate::{config, setup_sentry};
+use crate::config;
+use crate::logging::{setup_sentry, setup_logging};
 
 #[pyfunction]
 pub fn consumer(
@@ -157,7 +158,8 @@ pub fn consumer_impl(
         }
     }
 
-    env_logger::init();
+    setup_logging();
+
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
