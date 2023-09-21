@@ -110,6 +110,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=1,
             ),
+            AllocationPolicyConfig(
+                name="use_progress_bytes_scanned",
+                description="whether to use the progress.bytes scanned metric to determine the number of bytes scanned in a query, this option should be removed once this metric is used across policies",
+                value_type=int,
+                default=0,
+            ),
         ]
 
     def _are_tenant_ids_valid(
@@ -185,6 +191,11 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, self.max_threads, {})
 
+    def _get_bytes_scanned_in_query(self, result_or_error: QueryResultOrError) -> int:
+        if self.get_config_value("use_progress_bytes_scanned"):
+            return result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None)  # type: ignore
+        return result_or_error.query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
+
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
@@ -197,9 +208,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if not ids_are_valid:
             # we already logged the reason before the query
             return
+        bytes_scanned = self._get_bytes_scanned_in_query(result_or_error)
         query_result = result_or_error.query_result
         assert query_result is not None
-        bytes_scanned = query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
         if bytes_scanned is None:
             logging.error("No bytes scanned in query_result %s", query_result)
             return

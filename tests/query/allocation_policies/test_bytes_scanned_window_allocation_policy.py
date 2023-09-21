@@ -185,6 +185,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "is_active",
         "is_enforced",
         "max_threads",
+        "use_progress_bytes_scanned",
     }
     assert policy.get_config_value("org_limit_bytes_scanned") == ORG_SCAN_LIMIT
     policy.set_config_value("org_limit_bytes_scanned", 100)
@@ -240,6 +241,63 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
             error=None,
         ),
     )
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == 1
+    )
+
+
+@pytest.mark.redis_db
+def test_use_progress_bytes(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "organization_id": 1,
+    }
+    policy.set_config_value("use_progress_bytes_scanned", 0)
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={
+                    "profile": {
+                        "bytes": ORG_SCAN_LIMIT // 200,
+                        "progress_bytes": ORG_SCAN_LIMIT * 2,
+                    }
+                },
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+    # progress bytes was over the limit but was not being used by the policy, so the query is not throttled
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == MAX_THREAD_NUMBER
+    )
+    policy.set_config_value("use_progress_bytes_scanned", 1)
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == MAX_THREAD_NUMBER
+    )
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={
+                    "profile": {
+                        "bytes": ORG_SCAN_LIMIT // 200,
+                        "progress_bytes": ORG_SCAN_LIMIT * 2,
+                    }
+                },
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+    # now that we are using progress_bytes and it went over the limit, the query is throttled
     assert (
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
         == 1
