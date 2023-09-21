@@ -46,6 +46,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="rust-querylog-consumer" \
   --container-name="spans-consumer" \
   --container-name="rust-spans-consumer" \
+  --container-name="rust-spans-pure-consumer" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
