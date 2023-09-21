@@ -6,4 +6,6 @@
   --release="${GO_REVISION_SNUBA_REPO}" \
   --duration=5 \
   --error-events-limit=500 \
-  # --skip-check=${SKIP_CANARY_CHECKS}
+
+
+# --skip-check=${SKIP_CANARY_CHECKS}
