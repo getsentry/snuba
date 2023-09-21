@@ -196,7 +196,7 @@ def _run_query_pipeline(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
 
-    record_missing_tenant_ids(request)
+    record_missing_use_case_id(request, dataset)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -205,20 +205,20 @@ def _run_query_pipeline(
     )
 
 
-def record_missing_tenant_ids(request: Request) -> None:
+def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
     """
-    Used to track how often the new `tenant_ids` field is not included in
-    a Snuba Request. Ideally, all requests contain this information and this
-    metric will be removed once all API calls from Sentry do include this info.
+    Used to track how often the new `use_case_id` Tenant ID is not included in
+    a Generic Metrics request.
     """
-    if (
-        not (tenant_ids := request.attribution_info.tenant_ids)
-        or tenant_ids.get("referrer") is None
-        or tenant_ids.get("organization_id") is None
-    ):
-        metrics.increment(
-            "request_without_tenant_ids", tags={"referrer": request.referrer}
-        )
+    if get_dataset_name(dataset) == "generic_metrics":
+        if (
+            not (tenant_ids := request.attribution_info.tenant_ids)
+            or tenant_ids.get("use_case_id") is None
+        ):
+            metrics.increment(
+                "gen_metrics_request_without_use_case_id",
+                tags={"referrer": request.referrer},
+            )
 
 
 def _dry_run_query_runner(
