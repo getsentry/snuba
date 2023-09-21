@@ -16,6 +16,7 @@ class OutputType(Enum):
 
 class AggregationOption(Enum):
     HIST = "hist"
+    TEN_SECOND = "ten_second"
 
 
 ILLEGAL_VALUE_IN_SET = "Illegal value in set."
@@ -25,6 +26,7 @@ ILLEGAL_VALUE_IN_COUNTER = "Illegal value in counter."
 INT_FLOAT_EXPECTED = "Int or Float expected"
 
 # These are the hardcoded values from the materialized view
+GRANULARITY_TEN_SECONDS = 0
 GRANULARITY_ONE_MINUTE = 1
 GRANULARITY_ONE_HOUR = 2
 GRANULARITY_ONE_DAY = 3
@@ -91,11 +93,6 @@ def aggregation_options_for_distribution_message(
     aggregation_options = {
         "min_retention_days": retention_days,
         "materialization_version": 2,
-        "granularities": [
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ],
     }
 
     if aggregation_setting := message.get("aggregation_option"):
@@ -103,7 +100,22 @@ def aggregation_options_for_distribution_message(
         if parsed_aggregation_setting is AggregationOption.HIST:
             return {
                 **aggregation_options,
+                "granularities": [
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
                 "enable_histogram": 1,
+            }
+        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
+            return {
+                **aggregation_options,
+                "granularities": [
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                    GRANULARITY_TEN_SECONDS,
+                ],
             }
 
     return aggregation_options
