@@ -5,4 +5,6 @@
   --project-slug=snuba \
   --release="${GO_REVISION_SNUBA_REPO}" \
   --new-issues-limit=0 \
-  --skip-check=${SKIP_CANARY_CHECKS}
+
+
+# --skip-check=${SKIP_CANARY_CHECKS}
