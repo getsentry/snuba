@@ -213,11 +213,19 @@ def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
     if get_dataset_name(dataset) == "generic_metrics":
         if (
             not (tenant_ids := request.attribution_info.tenant_ids)
-            or tenant_ids.get("use_case_id") is None
+            or (use_case_id := tenant_ids.get("use_case_id")) is None
         ):
             metrics.increment(
                 "gen_metrics_request_without_use_case_id",
                 tags={"referrer": request.referrer},
+            )
+        else:
+            metrics.increment(
+                "gen_metrics_request_with_use_case_id",
+                tags={
+                    "referrer": request.referrer,
+                    "use_case_id": str(use_case_id),
+                },
             )
 
 
