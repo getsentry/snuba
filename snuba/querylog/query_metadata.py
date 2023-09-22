@@ -252,9 +252,9 @@ class SnubaQueryMetadata:
             "snql_anonymized": self.snql_anonymized,
         }
         # TODO: Remove check once Org IDs are required
-        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
-            if isinstance(org_id, int):
-                request_dict["organization"] = org_id
+        org_id = self.request.attribution_info.tenant_ids.get("organization_id")
+        if org_id is not None and isinstance(org_id, int):
+            request_dict["organization"] = org_id
         return request_dict
 
     @property

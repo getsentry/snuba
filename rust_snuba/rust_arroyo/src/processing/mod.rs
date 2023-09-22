@@ -1,3 +1,4 @@
+mod metrics_buffer;
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
@@ -57,7 +58,7 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
-        let metrics = get_metrics();
+        let mut metrics = get_metrics();
         let start = Instant::now();
 
         let mut stg = self.strategies.lock().unwrap();
@@ -77,6 +78,8 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             start.elapsed().as_millis() as u64,
             None,
         );
+
+        // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
 }
 
@@ -96,6 +99,7 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
     paused_timestamp: Option<Instant>,
+    metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -116,6 +120,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
             paused_timestamp: None,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }
     }
 
@@ -132,6 +137,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             // If a message was carried over from the previous run, the consumer
             // should be paused and not returning any messages on ``poll``.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
+
             match res {
                 None => {}
                 Some(_) => return Err(RunError::InvalidState),
@@ -139,16 +145,15 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
         } else {
             // Otherwise, we need to try fetch a new message from the consumer,
             // even if there is no active assignment and/or processing strategy.
-            let msg = self.consumer.poll(Some(Duration::from_secs(1)));
+            let poll_start = Instant::now();
             //TODO: Support errors properly
-            match msg {
-                Ok(None) => {
-                    self.message = None;
-                }
-                Ok(Some(inner)) => {
-                    self.message = Some(Message {
+            match self.consumer.poll(Some(Duration::from_secs(1))) {
+                Ok(msg) => {
+                    self.message = msg.map(|inner| Message {
                         inner_message: InnerMessage::BrokerMessage(inner),
                     });
+                    self.metrics_buffer
+                        .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
                 Err(e) => {
                     log::error!("poll error: {}", e);
@@ -175,7 +180,12 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
                 let msg = self.message.take();
                 if let Some(msg_s) = msg {
+                    let processing_start = Instant::now();
                     let ret = strategy.submit(msg_s);
+                    self.metrics_buffer.incr_timing(
+                        "arroyo.consumer.processing.time",
+                        processing_start.elapsed(),
+                    );
                     match ret {
                         Ok(()) => {}
                         Err(_) => {
@@ -197,6 +207,10 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                 let res = self.consumer.resume(partitions);
                                 match res {
                                     Ok(()) => {
+                                        self.metrics_buffer.incr_timing(
+                                            "arroyo.consumer.paused.time",
+                                            self.paused_timestamp.unwrap().elapsed(),
+                                        );
                                         self.paused_timestamp = None;
                                     }
                                     Err(_) => return Err(RunError::PauseError),

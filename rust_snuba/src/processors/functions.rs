@@ -1,3 +1,4 @@
+use crate::processors::spans::SpanStatus;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::InvalidMessage;
@@ -18,7 +19,10 @@ pub fn process_message(
         let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
         let timestamp = match msg.timestamp {
             Some(timestamp) => timestamp,
-            _ => SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_err| InvalidMessage)?.as_secs(),
+            _ => SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_err| InvalidMessage)?
+                .as_secs(),
         };
         let device_classification = match msg.device_class {
             Some(device_classification) => device_classification,
@@ -27,7 +31,7 @@ pub fn process_message(
         let mut rows = Vec::with_capacity(msg.functions.len());
 
         for from in &msg.functions {
-            let function = Function{
+            let function = Function {
                 // Profile metadata
                 browser_name: msg.browser_name.clone(),
                 device_classification,
@@ -61,7 +65,7 @@ pub fn process_message(
             rows.push(serialized);
         }
 
-        return Ok(BytesInsertBatch{rows});
+        return Ok(BytesInsertBatch { rows });
     }
     Err(InvalidMessage)
 }
@@ -132,87 +136,6 @@ struct Function {
     os_version: String,
     parent_fingerprint: u8,
     path: String,
-}
-
-#[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[repr(u8)] // size limit in clickhouse
-pub enum SpanStatus {
-    /// The operation completed successfully.
-    ///
-    /// HTTP status 100..299 + successful redirects from the 3xx range.
-    Ok = 0,
-
-    /// The operation was cancelled (typically by the user).
-    Cancelled = 1,
-
-    /// Unknown. Any non-standard HTTP status code.
-    ///
-    /// "We do not know whether the transaction failed or succeeded"
-    #[default]
-    Unknown = 2,
-
-    /// Client specified an invalid argument. 4xx.
-    ///
-    /// Note that this differs from FailedPrecondition. InvalidArgument indicates arguments that
-    /// are problematic regardless of the state of the system.
-    InvalidArgument = 3,
-
-    /// Deadline expired before operation could complete.
-    ///
-    /// For operations that change the state of the system, this error may be returned even if the
-    /// operation has been completed successfully.
-    ///
-    /// HTTP redirect loops and 504 Gateway Timeout
-    DeadlineExceeded = 4,
-
-    /// 404 Not Found. Some requested entity (file or directory) was not found.
-    NotFound = 5,
-
-    /// Already exists (409)
-    ///
-    /// Some entity that we attempted to create already exists.
-    AlreadyExists = 6,
-
-    /// 403 Forbidden
-    ///
-    /// The caller does not have permission to execute the specified operation.
-    PermissionDenied = 7,
-
-    /// 429 Too Many Requests
-    ///
-    /// Some resource has been exhausted, perhaps a per-user quota or perhaps the entire file
-    /// system is out of space.
-    ResourceExhausted = 8,
-
-    /// Operation was rejected because the system is not in a state required for the operation's
-    /// execution
-    FailedPrecondition = 9,
-
-    /// The operation was aborted, typically due to a concurrency issue.
-    Aborted = 10,
-
-    /// Operation was attempted past the valid range.
-    OutOfRange = 11,
-
-    /// 501 Not Implemented
-    ///
-    /// Operation is not implemented or not enabled.
-    Unimplemented = 12,
-
-    /// Other/generic 5xx.
-    InternalError = 13,
-
-    /// 503 Service Unavailable
-    Unavailable = 14,
-
-    /// Unrecoverable data loss or corruption
-    DataLoss = 15,
-
-    /// 401 Unauthorized (actually does mean unauthenticated according to RFC 7235)
-    ///
-    /// Prefer PermissionDenied if a user is logged in.
-    Unauthenticated = 16,
 }
 
 #[cfg(test)]

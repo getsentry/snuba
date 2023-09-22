@@ -28,17 +28,17 @@ rust_arroyo = { path = "./rust_arroyo" }
 serde_yaml = "0.9.19"
 tokio = { version = "1.19.2", features = ["full"] }
 log = "0.4"
-env_logger = "0.10.0"
 serde = { version = "1.0", features = ["derive"]}
 serde_json = { version = "1.0" }
 glob = "0.3.1"
 pyo3 = { version = "0.18.1", features = ["chrono"] }
 ctrlc = "3.2.5"
-sentry = "0.31.0"
+sentry = { version = "0.31.0", features = ["log"] }
 reqwest = "0.11.11"
 uuid = "1.4.1"
 # running on procspawn fork because it's unclear https://github.com/mitsuhiko/procspawn/pull/48 is safe
 procspawn = { version = "1.0.0", features = ["json"], git = "https://github.com/getsentry/procspawn", branch = "fix/join-timeout-pool" }
+pretty_env_logger = "0.5.0"
 
 [features]
 ffi = ["pyo3/extension-module"]
