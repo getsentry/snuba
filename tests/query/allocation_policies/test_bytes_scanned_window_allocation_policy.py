@@ -302,3 +302,27 @@ def test_use_progress_bytes(policy: AllocationPolicy) -> None:
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
         == 1
     )
+
+
+@pytest.mark.redis_db
+def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "organization_id": 1,
+    }
+    no_bytes_scanned_info_result = QueryResultOrError(
+        query_result=QueryResult(
+            result={
+                "profile": {
+                    # bytes scanned info is missing
+                }
+            },
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+        error=None,
+    )
+    policy.set_config_value("use_progress_bytes_scanned", 0)
+    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+    policy.set_config_value("use_progress_bytes_scanned", 1)
+    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
