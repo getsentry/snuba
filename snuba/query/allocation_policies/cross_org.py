@@ -22,13 +22,9 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 logger = logging.getLogger("snuba.query.allocation_policy_cross_org")
 
-_PASS_THROUGH_REFERRERS = set(
-    [
-        "subscriptions_executor",
-    ]
-)
-
 _RATE_LIMIT_NAME = "concurrent_limit_policy"
+_UNREGISTERED_REFERRER_MAX_THREADS = 1
+_UNREGISTERED_REFERRER_CONCURRENT_QUERIES = 1
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -50,7 +46,9 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     ```
 
     Each referrer gets a concurrent limit (applied per referrer) and a max_threads limit (applied to every query made by that referrer).
-    Both limits are static but changeable at runtime
+    Both limits are static but changeable at runtime.
+
+    unregistered referrers are assigned a default concurrent limit and max_threads limit of 1.
     """
 
     @property
@@ -105,21 +103,41 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         )
         self._validate_cross_org_referrer_limits(self._registered_cross_org_referrers)
 
+    def _get_max_threads(self, referrer: str) -> int:
+        if not self._referrer_is_registered(referrer):
+            return _UNREGISTERED_REFERRER_MAX_THREADS
+        thread_override = self.get_config_value(
+            "referrer_max_threads_override", {"referrer": referrer}
+        )
+        return (
+            thread_override
+            if thread_override != -1
+            else int(self._registered_cross_org_referrers[referrer]["max_threads"])
+        )
+
+    def _get_concurrent_limit(self, referrer: str) -> int:
+        if not self._referrer_is_registered(referrer):
+            return _UNREGISTERED_REFERRER_CONCURRENT_QUERIES
+        concurrent_override = self.get_config_value(
+            "referrer_concurrent_override", {"referrer": referrer}
+        )
+        return (
+            concurrent_override
+            if concurrent_override != -1
+            else int(self._registered_cross_org_referrers[referrer]["concurrent_limit"])
+        )
+
+    def _referrer_is_registered(self, referrer: str) -> bool:
+        return referrer in self._registered_cross_org_referrers
+
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        referrer_is_registered = referrer in self._registered_cross_org_referrers
 
-        if not referrer_is_registered and tenant_ids.get("cross_org_query", False):
-            return QuotaAllowance(
-                can_run=False,
-                max_threads=0,
-                explanation={
-                    "reason": f"cross_org_query is passed as a tenant but referrer {referrer} is not registered, update the {self._storage_key.value} yaml config to register this referrer"
-                },
-            )
-        elif not referrer_is_registered:
+        if not self._referrer_is_registered(referrer) and not tenant_ids.get(
+            "cross_org_query", False
+        ):
             # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
                 can_run=True,
@@ -127,31 +145,14 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 explanation={"reason": "pass_through"},
             )
 
-        thread_override = self.get_config_value(
-            "referrer_max_threads_override", {"referrer": referrer}
-        )
-
-        max_threads = (
-            thread_override
-            if thread_override != -1
-            else int(self._registered_cross_org_referrers[referrer]["max_threads"])
-        )
-
-        concurrent_override = self.get_config_value(
-            "referrer_concurrent_override", {"referrer": referrer}
-        )
-        concurrent_limit = (
-            concurrent_override
-            if concurrent_override != -1
-            else int(self._registered_cross_org_referrers[referrer]["concurrent_limit"])
-        )
+        concurrent_limit = self._get_concurrent_limit(referrer)
         can_run, explanation = self._is_within_rate_limit(
             query_id,
             RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
         )
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=max_threads,
+            max_threads=self._get_max_threads(referrer),
             explanation={"reason": explanation},
         )
 

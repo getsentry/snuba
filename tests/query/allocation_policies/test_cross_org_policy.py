@@ -131,7 +131,7 @@ class TestCrossOrgQueryAllocationPolicy:
             )
 
     @pytest.mark.redis_db
-    def test_reject_cross_org_query_with_unregistered_referrer(self):
+    def test_throttle_cross_org_query_with_unregistered_referrer(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_distributions",
@@ -144,8 +144,15 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             }
         )
+        allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "unregistered", "cross_org_query": 1},
+            query_id="1",
+        )
+        assert allowance.can_run is True
+        assert allowance.max_threads == 1
+
         with pytest.raises(AllocationPolicyViolation):
-            policy.get_quota_allowance(
+            allowance = policy.get_quota_allowance(
                 tenant_ids={"referrer": "unregistered", "cross_org_query": 1},
-                query_id="1",
+                query_id="2",
             )
