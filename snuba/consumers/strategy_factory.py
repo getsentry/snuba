@@ -16,6 +16,7 @@ from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
+from snuba.cogs.close_accountant import CloseCOGSProducer
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
 from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
@@ -157,6 +158,10 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 output_block_size=self.__output_block_size,
                 initializer=self.__initialize_parallel_transform,
             )
+
+        # Ensures any COGS recording Producer gets signaled shut down when consumer closes
+        # No-op if no such producer exists
+        strategy = CloseCOGSProducer(strategy)
 
         if self.__prefilter is not None:
             strategy = FilterStep(
