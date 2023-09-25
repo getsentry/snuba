@@ -106,8 +106,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def _get_max_threads(self, referrer: str) -> int:
         if not self._referrer_is_registered(referrer):
             return _UNREGISTERED_REFERRER_MAX_THREADS
-        thread_override = self.get_config_value(
-            "referrer_max_threads_override", {"referrer": referrer}
+        thread_override = int(
+            self.get_config_value(
+                "referrer_max_threads_override", {"referrer": referrer}
+            )
         )
         return (
             thread_override
@@ -118,8 +120,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def _get_concurrent_limit(self, referrer: str) -> int:
         if not self._referrer_is_registered(referrer):
             return _UNREGISTERED_REFERRER_CONCURRENT_QUERIES
-        concurrent_override = self.get_config_value(
-            "referrer_concurrent_override", {"referrer": referrer}
+        concurrent_override = int(
+            self.get_config_value(
+                "referrer_concurrent_override", {"referrer": referrer}
+            )
         )
         return (
             concurrent_override
