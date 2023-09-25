@@ -67,6 +67,34 @@ local s4s_health_check(region) =
   else
     [];
 
+// Snuba deploy to ST is blocked till SaaS deploy is healthy
+local saas_health_check(region) =
+  if region == 'us' then
+    [
+      {
+        health_check: {
+          jobs: {
+            health_check: {
+              environment_variables: {
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                LABEL_SELECTOR: 'service=snuba',
+              },
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/saas-sentry-health-check.sh'),
+                gocdtasks.script(importstr '../bash/saas-sentry-error-check.sh'),
+                gocdtasks.script(importstr '../bash/saas-ddog-health-check.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
+
 // Snuba relies on checks to prevent folks from writing migrations and code
 // at the same time, this means there is a requirement that folks MUST deploy
 // the migration before merge code changes relying on that migration.
@@ -186,5 +214,5 @@ function(region) {
       },
     },
 
-  ] + migrate_stage('migrate', region) + s4s_health_check(region),
+  ] + migrate_stage('migrate', region) + s4s_health_check(region) + saas_health_check(region),
 }

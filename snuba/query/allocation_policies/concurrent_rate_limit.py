@@ -31,18 +31,10 @@ _PASS_THROUGH_REFERRERS = set(
     ]
 )
 
-_RATE_LIMIT_NAME = "concurrent_limit_policy"
 
-
-class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
+class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
-            AllocationPolicyConfig(
-                name="concurrent_limit",
-                description="maximum amount of concurrent queries per tenant",
-                value_type=int,
-                default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
-            ),
             AllocationPolicyConfig(
                 name="rate_limit_shard_factor",
                 description="""number of shards that each redis set is supposed to have.
@@ -53,35 +45,11 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=1,
             ),
-            AllocationPolicyConfig(
-                name="referrer_project_override",
-                description="override concurrent limit for a specific project, referrer combo",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str, "project_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="referrer_organization_override",
-                description="override concurrent limit for a specific organization_id, referrer combo",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str, "organization_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="project_override",
-                description="override concurrent limit for a specific project_id",
-                value_type=int,
-                default=-1,
-                param_types={"project_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="organization_override",
-                description="override concurrent limit for a specific organization_id",
-                value_type=int,
-                default=-1,
-                param_types={"organization_id": int},
-            ),
         ]
+
+    @property
+    def rate_limit_name(self) -> str:
+        raise NotImplementedError
 
     def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
@@ -139,6 +107,46 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_prefix,
         )
 
+
+class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return super()._additional_config_definitions() + [
+            AllocationPolicyConfig(
+                name="concurrent_limit",
+                description="maximum amount of concurrent queries per tenant",
+                value_type=int,
+                default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
+            ),
+            AllocationPolicyConfig(
+                name="referrer_project_override",
+                description="override concurrent limit for a specific project, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "project_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="referrer_organization_override",
+                description="override concurrent limit for a specific organization_id, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "organization_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="project_override",
+                description="override concurrent limit for a specific project_id",
+                value_type=int,
+                default=-1,
+                param_types={"project_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="organization_override",
+                description="override concurrent limit for a specific organization_id",
+                value_type=int,
+                default=-1,
+                param_types={"organization_id": int},
+            ),
+        ]
+
     def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
         overrides = {}
         available_tenant_ids = set(tenant_ids.keys())
@@ -173,6 +181,10 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             "Queries must have a project id or organization id"
         )
 
+    @property
+    def rate_limit_name(self) -> str:
+        return "concurrent_rate_limit_policy"
+
     def _get_rate_limit_params(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[RateLimitParameters, dict[str, int]]:
@@ -185,7 +197,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
         return (
             RateLimitParameters(
-                _RATE_LIMIT_NAME,
+                self.rate_limit_name,
                 bucket=str(tenant_value),
                 per_second_limit=None,
                 concurrent_limit=concurrent_limit,

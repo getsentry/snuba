@@ -176,6 +176,7 @@ class ReplaysLoader(DirectoryLoader):
             "0013_add_low_cardinality_codecs",
             "0014_add_id_event_columns",
             "0015_index_frequently_accessed_columns",
+            "0016_materialize_new_event_counts",
         ]
 
 
