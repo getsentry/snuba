@@ -996,7 +996,9 @@ def _treeify_or_and_conditions(
                               and(a, b, c) and turn them into and(a, and(b, c))
 
     even though clickhouse sql supports arbitrary amount of arguments there are other parts of the
-    codebase which assume `or` and `and` have two
+    codebase which assume `or` and `and` have two arguments
+
+    Adding this post-process step is easier than changing the rest of the query pipeline
     """
 
     def transform(exp: Expression) -> Expression:
