@@ -62,6 +62,7 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
   executeCardinalityQuery: (
     req: CardinalityQueryRequest
   ) => Promise<CardinalityQueryResult>;
@@ -298,6 +299,10 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
+    getPredefinedCardinalityQueryOptions: () => {
+      const url = baseUrl + "cardinality_queries";
+      return fetch(url).then((resp) => resp.json());
     },
     executeCardinalityQuery: (query: CardinalityQueryRequest) => {
       const url = baseUrl + "cardinality_query";
