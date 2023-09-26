@@ -1,12 +1,13 @@
 use crate::backends::kafka::config::KafkaConfig;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer as ArroyoProducer;
+use crate::backends::ProducerError;
 use crate::types::TopicOrPartition;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{BaseRecord, DefaultProducerContext, ThreadedProducer};
 
 pub struct KafkaProducer {
-    producer: Option<ThreadedProducer<DefaultProducerContext>>,
+    producer: ThreadedProducer<DefaultProducerContext>,
 }
 
 impl KafkaProducer {
@@ -15,22 +16,24 @@ impl KafkaProducer {
         let threaded_producer: ThreadedProducer<_> = config_obj.create().unwrap();
 
         Self {
-            producer: Some(threaded_producer),
+            producer: threaded_producer,
         }
     }
 }
 
 impl ArroyoProducer<KafkaPayload> for KafkaProducer {
-    fn produce(&self, destination: &TopicOrPartition, payload: &KafkaPayload) {
+    fn produce(
+        &self,
+        destination: &TopicOrPartition,
+        payload: KafkaPayload,
+    ) -> Result<(), ProducerError> {
         let topic = match destination {
             TopicOrPartition::Topic(topic) => topic.name.as_ref(),
             TopicOrPartition::Partition(partition) => partition.topic.name.as_ref(),
         };
 
-        // TODO: Fix the KafkaPayload type to avoid all this cloning
-        let payload_copy = payload.clone();
-        let msg_key = payload_copy.key.unwrap_or_default();
-        let msg_payload = payload_copy.payload.unwrap_or_default();
+        let msg_key = payload.key.unwrap_or_default();
+        let msg_payload = payload.payload.unwrap_or_default();
 
         let mut base_record = BaseRecord::to(topic).payload(&msg_payload).key(&msg_key);
 
@@ -43,12 +46,11 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
             base_record = base_record.partition(index as i32)
         }
 
-        let producer = self.producer.as_ref().expect("Not closed");
+        self.producer
+            .send(base_record)
+            .map_err(|_| ProducerError::ProducerErrorred)?;
 
-        producer.send(base_record).expect("Something went wrong");
-    }
-    fn close(&mut self) {
-        self.producer = None;
+        Ok(())
     }
 }
 
