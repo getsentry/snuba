@@ -77,6 +77,7 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
         health_check_file: Optional[str] = None,
+        group_instance_id: Optional[str] = None,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -148,6 +149,7 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
         self.health_check_file = health_check_file
+        self.group_instance_id = group_instance_id
 
         self.dlq_producer: Optional[KafkaProducer] = None
 
@@ -169,6 +171,8 @@ class ConsumerBuilder:
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+        if self.group_instance_id is not None:
+            configuration["group.instance.id"] = self.group_instance_id
 
         def log_general_error(e: KafkaError) -> None:
             with configure_scope() as scope:
