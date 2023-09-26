@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 pub struct MetricsBuffer {
     metrics: Arc<Mutex<Box<dyn Metrics>>>,
     timers: BTreeMap<String, Duration>,
+    gauges: BTreeMap<String, u64>,
     last_flush: Instant,
 }
 
@@ -22,6 +23,7 @@ impl MetricsBuffer {
         Self {
             metrics: get_metrics(),
             timers: BTreeMap::new(),
+            gauges: BTreeMap::new(),
             last_flush: Instant::now(),
         }
     }
@@ -35,12 +37,24 @@ impl MetricsBuffer {
         self.throttled_record();
     }
 
+    pub fn gauge(&mut self, metric: &str, value: u64) {
+        if !self.gauges.contains_key(metric) {
+            self.gauges.insert(metric.to_string(), value);
+        }
+        self.throttled_record();
+    }
+
     pub fn flush(&mut self) {
         let timers = mem::take(&mut self.timers);
         for (metric, duration) in timers {
             self.metrics
                 .timing(&metric, duration.as_millis() as u64, None);
         }
+        let gauges = mem::take(&mut self.gauges);
+        for (metric, value) in gauges {
+            self.metrics.gauge(&metric, value, None);
+        }
+
         self.last_flush = Instant::now();
     }
 
