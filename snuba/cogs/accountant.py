@@ -33,7 +33,6 @@ def record_cogs(
         accumulator = _accumulator(create=True)
         assert accumulator is not None
         accumulator.record(resource_id, app_feature, amount, usage_type)
-        accumulator.flush()
     except Exception as err:
         logger.warning("Could not record COGS due to error: %r", err, exc_info=True)
 
