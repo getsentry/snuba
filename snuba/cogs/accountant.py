@@ -29,6 +29,16 @@ def _accumulator(create: bool = False) -> UsageAccumulator | None:
 def record_cogs(
     resource_id: str, app_feature: str, amount: int, usage_type: UsageUnit
 ) -> None:
+    """
+    Spins up an instance (if it does not exist) of UsageAccumulator and records
+    cogs data to the configured shared resources usage topic.
+
+    *GOTCHAS*
+    - You must call `close_cogs_recorder` in order to flush and close the producer
+    used by the UsageAccumulator
+    - Eg. if this is used in a consumer, call the close function in the consumers
+    close out path
+    """
     try:
         accumulator = _accumulator(create=True)
         assert accumulator is not None
