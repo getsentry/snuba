@@ -14,9 +14,9 @@ struct ProduceMessage {
 }
 
 impl ProduceMessage {
-    pub fn new(producer: Arc<dyn Producer<KafkaPayload>>, topic: TopicOrPartition) -> Self {
+    pub fn new(producer: impl Producer<KafkaPayload> + 'static, topic: TopicOrPartition) -> Self {
         ProduceMessage {
-            producer,
+            producer: Arc::new(producer),
             topic: Arc::new(topic),
         }
     }
@@ -36,7 +36,6 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 
 pub struct Produce {
     inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
-    producer: Arc<dyn Producer<KafkaPayload>>,
 }
 
 impl Produce {
@@ -49,21 +48,18 @@ impl Produce {
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let producer = Arc::new(producer);
-
         let inner = Box::new(RunTaskInThreads::new(
             next_step,
-            Box::new(ProduceMessage::new(producer.clone(), topic)),
+            Box::new(ProduceMessage::new(producer, topic)),
             concurrency,
         ));
 
-        Produce { inner, producer }
+        Produce { inner }
     }
 }
 
 impl ProcessingStrategy<KafkaPayload> for Produce {
     fn poll(&mut self) -> Option<CommitRequest> {
-        self.producer.as_ref().poll();
         self.inner.poll()
     }
 
