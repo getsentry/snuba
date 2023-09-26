@@ -560,9 +560,6 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_or_expression(
         self, node: Node, visited_children: Tuple[Any, Expression, Node]
     ) -> Expression:
-        import pdb
-
-        pdb.set_trace()
         _, left_condition, or_condition = visited_children
         args = [left_condition]
         # in the case of one Condition
@@ -991,6 +988,38 @@ def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) ->
     query.transform_expressions(transform)
 
 
+def _treeify_or_and_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
+                              and(a, b, c) and turn them into and(a, and(b, c))
+
+    even though clickhouse sql supports arbitrary amount of arguments there are other parts of the
+    codebase which assume `or` and `and` have two
+    """
+
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, FunctionCall):
+            return exp
+
+        if exp.function_name not in ("and", "or"):
+            return exp
+        args = exp.parameters
+        if len(args) <= 2:
+            return exp
+
+        first = args[0]
+        rest = args[1:]
+        return FunctionCall(
+            exp.alias,
+            exp.function_name,
+            (first, FunctionCall(exp.alias, exp.function_name, rest)),
+        )
+
+    query.transform_expressions(transform)
+
+
 DATETIME_MATCH = FunctionCallMatch(
     StringMatch("toDateTime"), (Param("date_string", LiteralMatch(AnyMatch(str))),)
 )
@@ -1245,6 +1274,7 @@ def validate_identifiers_in_lambda(
 def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
+
     condition = query.get_condition()
     top_level = (
         get_first_level_and_conditions(condition) if condition is not None else []
@@ -1436,8 +1466,8 @@ def _post_process(
         # custom processors can be partials instead of functions but partials don't
         # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(func, "__name__", "custom")
-
         with sentry_sdk.start_span(op="processor", description=description):
+
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("snql_parsing", description, query):
                     func(query)
@@ -1452,6 +1482,7 @@ def _post_process(
 
 
 POST_PROCESSORS = [
+    _treeify_or_and_conditions,
     _parse_datetime_literals,
     validate_aliases,
     parse_subscriptables,  # -> This should be part of the grammar
@@ -1481,14 +1512,12 @@ def parse_snql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
-
-    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
@@ -1496,6 +1525,9 @@ def parse_snql_query(
             POST_PROCESSORS,
             settings,
         )
+
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):

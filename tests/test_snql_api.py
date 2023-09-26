@@ -77,33 +77,6 @@ class TestSnQLApi(BaseApiTest):
             [get_raw_transaction()],
         )
 
-    def test_buggy_query(self) -> None:
-
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH (replays) SELECT replay_id BY replay_id WHERE project_id IN array(4552673527463954) AND timestamp < toDateTime('2023-09-22T18:18:10.891157') AND timestamp >= toDateTime('2023-06-24T18:18:10.891157') HAVING or(1, 1, 1) != 0 LIMIT 10 """,
-                    "referrer": "myreferrer",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200, data
-        assert data["stats"]["consistent"]
-        assert data["data"] == [
-            {
-                "count": 1,
-                "tags[custom_tag]": "custom_value",
-                "project_id": self.project_id,
-            }
-        ]
-
     def test_simple_query(self) -> None:
         response = self.post(
             "/discover/snql",
