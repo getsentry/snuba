@@ -149,6 +149,8 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             return " AND ".join(formatted)
 
         elif exp.function_name == BooleanFunctions.OR:
+            # import pdb
+            # pdb.set_trace()
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 

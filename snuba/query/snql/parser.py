@@ -560,6 +560,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_or_expression(
         self, node: Node, visited_children: Tuple[Any, Expression, Node]
     ) -> Expression:
+        import pdb
+
+        pdb.set_trace()
         _, left_condition, or_condition = visited_children
         args = [left_condition]
         # in the case of one Condition
