@@ -1,3 +1,4 @@
+use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
@@ -22,6 +23,7 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     runtime: tokio::runtime::Runtime,
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
     message_carried_over: Option<Message<TTransformed>>,
+    metrics_buffer: MetricsBuffer,
 }
 
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
@@ -46,6 +48,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
                 .unwrap(),
             handles: VecDeque::new(),
             message_carried_over: None,
+            metrics_buffer: MetricsBuffer::new(),
         }
     }
 }
@@ -63,6 +66,11 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 return None;
             }
         }
+
+        self.metrics_buffer.gauge(
+            "arroyo.strategies.run_task_in_threads.threads",
+            self.handles.len() as u64,
+        );
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
@@ -146,6 +154,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             handle.abort();
         }
         self.handles.clear();
+        self.metrics_buffer.flush();
 
         let next_commit = self.next_step.join(remaining);
         merge_commit_request(commit_request, next_commit)

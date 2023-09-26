@@ -3,33 +3,20 @@ use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer as ArroyoProducer;
 use crate::types::TopicOrPartition;
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{BaseProducer, BaseRecord, Producer};
-use std::time::Duration;
+use rdkafka::producer::{BaseRecord, DefaultProducerContext, ThreadedProducer};
 
 pub struct KafkaProducer {
-    producer: Option<BaseProducer>,
+    producer: Option<ThreadedProducer<DefaultProducerContext>>,
 }
 
 impl KafkaProducer {
     pub fn new(config: KafkaConfig) -> Self {
         let config_obj: ClientConfig = config.into();
-        let base_producer: BaseProducer<_> = config_obj.create().unwrap();
+        let threaded_producer: ThreadedProducer<_> = config_obj.create().unwrap();
 
         Self {
-            producer: Some(base_producer),
+            producer: Some(threaded_producer),
         }
-    }
-}
-
-impl KafkaProducer {
-    pub fn poll(&self) {
-        let producer = self.producer.as_ref().unwrap();
-        producer.poll(Duration::ZERO);
-    }
-
-    pub fn flush(&self) {
-        let producer = self.producer.as_ref().unwrap();
-        producer.flush(Duration::from_millis(5000));
     }
 }
 
