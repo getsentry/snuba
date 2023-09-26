@@ -1233,10 +1233,11 @@ def test_treeify() -> None:
     query = """MATCH (replays)
     SELECT replay_id BY replay_id
     WHERE project_id IN array(4552673527463954) AND timestamp < toDateTime('2023-09-22T18:18:10.891157') AND timestamp >= toDateTime('2023-06-24T18:18:10.891157')
-    HAVING or(1, 1, 1) != 0 LIMIT 10
+    HAVING or(1, 1, 1, 1) != 0 LIMIT 10
     """
     query_ast, _ = parse_snql_query(query, get_dataset("replays"))
-    assert query_ast.get_having() == binary_condition(
+    having = query_ast.get_having()
+    expected = binary_condition(
         ConditionFunctions.NEQ,
         binary_condition(
             BooleanFunctions.OR,
@@ -1244,8 +1245,13 @@ def test_treeify() -> None:
             binary_condition(
                 BooleanFunctions.OR,
                 Literal(None, 1),
-                Literal(None, 1),
+                binary_condition(
+                    BooleanFunctions.OR,
+                    Literal(None, 1),
+                    Literal(None, 1),
+                ),
             ),
         ),
         Literal(None, 0),
     )
+    assert having == expected

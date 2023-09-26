@@ -1016,7 +1016,7 @@ def _treeify_or_and_conditions(
         return FunctionCall(
             exp.alias,
             exp.function_name,
-            (first, FunctionCall(exp.alias, exp.function_name, rest)),
+            (first, transform(FunctionCall(None, exp.function_name, rest))),
         )
 
     query.transform_expressions(transform)
