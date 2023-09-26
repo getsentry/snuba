@@ -63,6 +63,8 @@ class Topic(Enum):
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
     SPANS = "snuba-spans"
 
+    COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
+
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     config = {
