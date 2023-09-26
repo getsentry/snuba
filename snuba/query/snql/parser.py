@@ -1484,7 +1484,6 @@ def _post_process(
 
 
 POST_PROCESSORS = [
-    _treeify_or_and_conditions,
     _parse_datetime_literals,
     validate_aliases,
     parse_subscriptables,  # -> This should be part of the grammar
@@ -1521,15 +1520,18 @@ def parse_snql_query(
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
 
+    with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+        _post_process(query, [_treeify_or_and_conditions], settings)
+
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
+
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
             query,
             POST_PROCESSORS,
             settings,
         )
-
-    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):
