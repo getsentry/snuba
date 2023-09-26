@@ -37,12 +37,11 @@ ctrlc = "3.2.5"
 sentry = "0.31.0"
 reqwest = "0.11.11"
 uuid = "1.4.1"
-# running on procspawn fork because it's unclear https://github.com/mitsuhiko/procspawn/pull/48 is safe
-procspawn = { version = "1.0.0", features = ["json"], git = "https://github.com/getsentry/procspawn", branch = "fix/join-timeout-pool" }
+procspawn = { version = "0.10.2", features = ["json"] }
 
 [features]
 ffi = ["pyo3/extension-module"]
 
 [dev-dependencies]
 pyo3 = { version = "*", features = ["auto-initialize"] }
-procspawn = { version = "1.0.0", features = ["test-support", "json"], git = "https://github.com/getsentry/procspawn", branch = "fix/join-timeout-pool" }
+procspawn = { version = "0.10.2", features = ["test-support", "json"] }
