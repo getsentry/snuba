@@ -77,14 +77,21 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
 def aggregation_options_for_set_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    return {
-        "materialization_version": 1,
+    granularity_dict = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
     }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
+            granularity_dict["granularities"].append(GRANULARITY_TEN_SECONDS)
+            return {"materialization_version": 1, **granularity_dict}
+
+    return {"materialization_version": 1, **granularity_dict}
 
 
 def aggregation_options_for_distribution_message(
@@ -120,11 +127,18 @@ def aggregation_options_for_distribution_message(
 def aggregation_options_for_counter_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    return {
-        "materialization_version": 1,
+    granularity_dict = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
     }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
+            granularity_dict["granularities"].append(GRANULARITY_TEN_SECONDS)
+            return {"materialization_version": 1, **granularity_dict}
+
+    return {"materialization_version": 1, **granularity_dict}
