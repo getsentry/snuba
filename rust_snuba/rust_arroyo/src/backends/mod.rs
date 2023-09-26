@@ -153,6 +153,8 @@ pub trait Consumer<'a, TPayload: Clone> {
 }
 
 pub trait Producer<TPayload>: Send + Sync {
+    fn poll(&self);
+
     /// Produce to a topic or partition.
     fn produce(&self, destination: &TopicOrPartition, payload: &TPayload);
 

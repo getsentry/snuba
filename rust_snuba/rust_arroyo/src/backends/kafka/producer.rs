@@ -22,11 +22,6 @@ impl KafkaProducer {
 }
 
 impl KafkaProducer {
-    pub fn poll(&self) {
-        let producer = self.producer.as_ref().unwrap();
-        producer.poll(Duration::ZERO);
-    }
-
     pub fn flush(&self) {
         let producer = self.producer.as_ref().unwrap();
         producer.flush(Duration::from_millis(5000));
@@ -34,6 +29,11 @@ impl KafkaProducer {
 }
 
 impl ArroyoProducer<KafkaPayload> for KafkaProducer {
+    fn poll(&self) {
+        let producer = self.producer.as_ref().unwrap();
+        producer.poll(Duration::ZERO);
+    }
+
     fn produce(&self, destination: &TopicOrPartition, payload: &KafkaPayload) {
         let topic = match destination {
             TopicOrPartition::Topic(topic) => topic.name.as_ref(),
