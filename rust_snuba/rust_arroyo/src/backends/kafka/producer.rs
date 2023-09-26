@@ -28,8 +28,9 @@ impl KafkaProducer {
     }
 
     pub fn flush(&self) {
+        // TODO: Flush should probably return a producer error rather than panic
         let producer = self.producer.as_ref().unwrap();
-        producer.flush(Duration::from_millis(5000));
+        producer.flush(Duration::from_millis(5000)).unwrap();
     }
 }
 
