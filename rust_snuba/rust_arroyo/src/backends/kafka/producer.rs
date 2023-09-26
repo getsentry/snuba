@@ -77,7 +77,8 @@ mod tests {
             headers: None,
             payload: Some("asdf".as_bytes().to_vec()),
         };
-        producer.produce(&destination, &payload);
-        producer.close();
+        producer
+            .produce(&destination, payload)
+            .expect("Message produced")
     }
 }
