@@ -574,7 +574,9 @@ def process_message(
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
                     if enforce_schema:
-                        raise
+                        raise Exception(
+                            f"Validation Error - {snuba_logical_topic.value}"
+                        ) from err
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
