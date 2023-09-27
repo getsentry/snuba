@@ -40,6 +40,7 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import get_config
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -219,8 +220,11 @@ class SubscriptionData:
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
-            "tenant_ids": self.tenant_ids,
         }
+
+        if get_config("save_subscription_with_tenant_ids", 0):
+            subscription_data_dict["tenant_ids"] = self.tenant_ids
+
         subscription_processors = self.entity.get_subscription_processors()
         if subscription_processors:
             for processor in subscription_processors:
