@@ -156,6 +156,12 @@ logger = logging.getLogger(__name__)
     type=str,
     help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
+@click.option(
+    "--group-instance-id",
+    type=str,
+    default=None,
+    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+)
 def consumer(
     *,
     storage_name: str,
@@ -184,6 +190,7 @@ def consumer(
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
     health_check_file: Optional[str] = None,
+    group_instance_id: Optional[str] = None,
 ) -> None:
 
     setup_logging(log_level)
@@ -221,6 +228,7 @@ def consumer(
         slice_id=slice_id,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        group_instance_id=group_instance_id,
     )
 
     consumer_builder = ConsumerBuilder(
@@ -248,6 +256,7 @@ def consumer(
         max_poll_interval_ms=max_poll_interval_ms,
         health_check_file=health_check_file,
         enforce_schema=enforce_schema,
+        group_instance_id=group_instance_id,
     )
 
     consumer = consumer_builder.build_base_consumer()

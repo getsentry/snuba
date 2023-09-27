@@ -2,6 +2,7 @@ mod metrics_buffer;
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
+use crate::processing::strategies::MessageRejected;
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
@@ -187,23 +188,12 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                         processing_start.elapsed(),
                     );
                     match ret {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // If the processing strategy rejected our message, we need
-                            // to pause the consumer and hold the message until it is
-                            // accepted, at which point we can resume consuming.
-                            let partitions =
-                                self.consumer.tell().unwrap().keys().cloned().collect();
-                            // If a message is carried over, pause the consumer until it is accepted
-                            if message_carried_over {
-                                let res = self.consumer.pause(partitions);
-                                match res {
-                                    Ok(()) => {
-                                        self.paused_timestamp = Some(Instant::now());
-                                    }
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            } else if self.paused_timestamp.is_some() {
+                        Ok(()) => {
+                            // Resume if we are currently in a paused state
+                            if self.paused_timestamp.is_some() {
+                                let partitions =
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
+
                                 let res = self.consumer.resume(partitions);
                                 match res {
                                     Ok(()) => {
@@ -212,6 +202,26 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                             self.paused_timestamp.unwrap().elapsed(),
                                         );
                                         self.paused_timestamp = None;
+                                    }
+                                    Err(_) => return Err(RunError::PauseError),
+                                }
+                            }
+                        }
+                        Err(MessageRejected { message }) => {
+                            // Put back the carried over message
+                            self.message = Some(message);
+
+                            // If the processing strategy rejected our message, we need
+                            // to pause the consumer and hold the message until it is
+                            // accepted, at which point we can resume consuming.
+                            if self.paused_timestamp.is_none() {
+                                let partitions =
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
+
+                                let res = self.consumer.pause(partitions);
+                                match res {
+                                    Ok(()) => {
+                                        self.paused_timestamp = Some(Instant::now());
                                     }
                                     Err(_) => return Err(RunError::PauseError),
                                 }

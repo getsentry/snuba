@@ -20,13 +20,13 @@ use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
+use crate::config;
+use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
-use crate::config;
-use crate::logging::{setup_sentry, setup_logging};
 
 #[pyfunction]
 pub fn consumer(
@@ -144,6 +144,7 @@ pub fn consumer_impl(
                         next_step,
                         Box::new(task_runner),
                         self.concurrency,
+                        Some("process_message"),
                     ))
                 }
                 _ => Box::new(

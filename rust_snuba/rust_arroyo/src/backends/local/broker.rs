@@ -22,7 +22,7 @@ pub enum BrokerError {
     #[error("Rebalance not supported")]
     RebalanceNotSupported,
 
-    #[error("Topci does not exist")]
+    #[error("Topic does not exist")]
     TopicDoesNotExist,
 }
 
