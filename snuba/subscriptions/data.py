@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import partial
 from typing import (
@@ -87,8 +87,8 @@ class SubscriptionData:
     time_window_sec: int
     entity: Entity
     query: str
-    tenant_ids: MutableMapping[str, Any]
     metadata: Mapping[str, Any]
+    tenant_ids: MutableMapping[str, Any] = field(default_factory=lambda: dict())
 
     def add_conditions(
         self,
@@ -210,8 +210,8 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity=entity,
-            tenant_ids=data.get("tenant_ids", dict()),
             metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
         )
 
     def to_dict(self) -> Mapping[str, Any]:
