@@ -10,6 +10,7 @@ from typing import (
     Any,
     Iterator,
     Mapping,
+    MutableMapping,
     NamedTuple,
     NewType,
     Optional,
@@ -85,7 +86,7 @@ class SubscriptionData:
     time_window_sec: int
     entity: Entity
     query: str
-    tenant_ids: Mapping[str, Any]
+    tenant_ids: MutableMapping[str, Any]
     metadata: Mapping[str, Any]
 
     def add_conditions(
@@ -170,13 +171,15 @@ class SubscriptionData:
                 custom_processing.append(validator.validate)
         custom_processing.append(partial(self.add_conditions, timestamp, offset))
 
+        self.tenant_ids["referrer"] = referrer
+        if "organization_id" not in self.tenant_ids:
+            # TODO: Subscriptions queries should have an org ID
+            self.tenant_ids["organization_id"] = 1
+
         request = build_request(
             {
                 "query": self.query,
-                "tenant_ids": {
-                    "organization_id": 1,  # TODO: Defaulting to 1 for now, should be the Org ID of the subscription
-                    "referrer": referrer,
-                },
+                "tenant_ids": self.tenant_ids,
             },
             parse_snql_query,
             SubscriptionQuerySettings,
@@ -206,7 +209,7 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity=entity,
-            tenant_ids=data.get("tenant_ids", {}),
+            tenant_ids=data.get("tenant_ids", dict()),
             metadata=metadata,
         )
 
@@ -216,6 +219,7 @@ class SubscriptionData:
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "tenant_ids": self.tenant_ids,
         }
         subscription_processors = self.entity.get_subscription_processors()
         if subscription_processors:
