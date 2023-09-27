@@ -54,6 +54,7 @@ impl Produce {
             next_step,
             Box::new(ProduceMessage::new(producer, topic)),
             concurrency,
+            Some("produce"),
         ));
 
         Produce { inner }
