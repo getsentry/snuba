@@ -45,6 +45,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
+ENABLE_TENANT_IDS_RUNTIME_CONFIG = "save_subscription_with_tenant_ids"
 
 # These are subscription payload keys which need to be set as attributes in SubscriptionData.
 SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
@@ -222,7 +223,7 @@ class SubscriptionData:
             "query": self.query,
         }
 
-        if get_config("save_subscription_with_tenant_ids", 0):
+        if get_config(ENABLE_TENANT_IDS_RUNTIME_CONFIG, 0):
             subscription_data_dict["tenant_ids"] = self.tenant_ids
 
         subscription_processors = self.entity.get_subscription_processors()

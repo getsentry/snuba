@@ -10,7 +10,12 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import PartitionId, SubscriptionData
+from snuba.state import set_config
+from snuba.subscriptions.data import (
+    ENABLE_TENANT_IDS_RUNTIME_CONFIG,
+    PartitionId,
+    SubscriptionData,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
@@ -78,3 +83,57 @@ def test_entity_subscriptions_data() -> None:
     assert result.time_window_sec == time_window_sec
     assert result.entity == entity
     assert result.query == query
+
+
+# New tenant_ids support
+
+tenant_ids = {"organization_id": 1, "use_case_id": "transactions"}
+
+
+def subscription_data_builder_with_tenant_ids() -> SubscriptionData:
+    return SubscriptionData(
+        project_id=project_id,
+        resolution_sec=resolution_sec,
+        time_window_sec=time_window_sec,
+        entity=entity,
+        query=query,
+        metadata=metadata,
+        tenant_ids=tenant_ids,
+    )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_entity_subscriptions_data_with_tenant_ids() -> None:
+
+    set_config(ENABLE_TENANT_IDS_RUNTIME_CONFIG, 1)
+
+    subscription_data = subscription_data_builder_with_tenant_ids()
+
+    subscription_identifier = SubscriptionCreator(dataset, entity_key).create(
+        subscription_data, timer
+    )
+
+    stores = [
+        RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(i))
+        for i in range(topic_spec.partitions_number)
+    ]
+
+    assert len(stores) == 1
+    assert len([s for s in stores[0].all()]) == 1
+
+    result = cast(
+        List[Tuple[UUID, SubscriptionData]],
+        RedisSubscriptionDataStore(
+            redis_client,
+            entity_key,
+            subscription_identifier.partition,
+        ).all(),
+    )[0][1]
+
+    assert result.project_id == project_id
+    assert result.resolution_sec == resolution_sec
+    assert result.time_window_sec == time_window_sec
+    assert result.entity == entity
+    assert result.query == query
+    assert result.tenant_ids == tenant_ids
