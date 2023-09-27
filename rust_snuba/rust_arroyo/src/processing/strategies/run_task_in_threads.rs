@@ -198,7 +198,7 @@ mod tests {
             }
         }
 
-        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1);
+        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1, None);
 
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
