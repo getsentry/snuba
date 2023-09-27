@@ -24,6 +24,7 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
     message_carried_over: Option<Message<TTransformed>>,
     metrics_buffer: MetricsBuffer,
+    metric_name: String,
 }
 
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
@@ -33,10 +34,14 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
         concurrency: usize,
+        // If provided, this name is used for metrics
+        custom_strategy_name: Option<&'static str>,
     ) -> Self
     where
         N: ProcessingStrategy<TTransformed> + 'static,
     {
+        let strategy_name = custom_strategy_name.unwrap_or("run_task_in_threads");
+
         RunTaskInThreads {
             next_step: Box::new(next_step),
             task_runner,
@@ -49,6 +54,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
             handles: VecDeque::new(),
             message_carried_over: None,
             metrics_buffer: MetricsBuffer::new(),
+            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
     }
 }
@@ -67,10 +73,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             }
         }
 
-        self.metrics_buffer.gauge(
-            "arroyo.strategies.run_task_in_threads.threads",
-            self.handles.len() as u64,
-        );
+        self.metrics_buffer
+            .gauge(&self.metric_name, self.handles.len() as u64);
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
