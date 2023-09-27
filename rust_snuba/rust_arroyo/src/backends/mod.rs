@@ -32,6 +32,13 @@ pub enum ConsumerError {
     BrokerError(#[from] Box<dyn std::error::Error>),
 }
 
+#[non_exhaustive]
+#[derive(Error, Debug)]
+pub enum ProducerError {
+    #[error("The producer errored")]
+    ProducerErrorred,
+}
+
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
 pub trait AssignmentCallbacks: Send + Sync {
@@ -154,7 +161,9 @@ pub trait Consumer<'a, TPayload: Clone> {
 
 pub trait Producer<TPayload>: Send + Sync {
     /// Produce to a topic or partition.
-    fn produce(&self, destination: &TopicOrPartition, payload: &TPayload);
-
-    fn close(&mut self);
+    fn produce(
+        &self,
+        destination: &TopicOrPartition,
+        payload: TPayload,
+    ) -> Result<(), ProducerError>;
 }
