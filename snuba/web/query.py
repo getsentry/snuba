@@ -236,13 +236,16 @@ def record_subscription_created_missing_tenant_ids(request: Request) -> None:
     Used to track how often new subscriptions are created without Tenant IDs.
     """
     if request.referrer == SUBSCRIPTION_REFERRER:
-        if (
-            not (tenant_ids := request.attribution_info.tenant_ids)
-            or "organization_id" not in tenant_ids
-        ):
+        if not (tenant_ids := request.attribution_info.tenant_ids):
             metrics.increment("subscription_created_without_tenant_ids")
         else:
-            metrics.increment("subscription_created_with_tenant_ids")
+            metrics.increment(
+                "subscription_created_with_tenant_ids",
+                tags={
+                    "use_case_id": str(tenant_ids.get("use_case_id")),
+                    "has_org_id": str(tenant_ids.get("organization_id") is not None),
+                },
+            )
 
 
 def _dry_run_query_runner(
