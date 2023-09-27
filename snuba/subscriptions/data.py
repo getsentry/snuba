@@ -46,7 +46,13 @@ from snuba.utils.metrics.timer import Timer
 SUBSCRIPTION_REFERRER = "subscription"
 
 # These are subscription payload keys which need to be set as attributes in SubscriptionData.
-SUBSCRIPTION_DATA_PAYLOAD_KEYS = {"project_id", "time_window", "resolution", "query"}
+SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
+    "project_id",
+    "time_window",
+    "resolution",
+    "query",
+    "tenant_ids",
+}
 
 logger = logging.getLogger("snuba.subscriptions")
 
@@ -79,6 +85,7 @@ class SubscriptionData:
     time_window_sec: int
     entity: Entity
     query: str
+    tenant_ids: Mapping[str, Any]
     metadata: Mapping[str, Any]
 
     def add_conditions(
@@ -199,6 +206,7 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity=entity,
+            tenant_ids=data.get("tenant_ids", {}),
             metadata=metadata,
         )
 
