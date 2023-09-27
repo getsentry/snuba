@@ -10,7 +10,6 @@ from typing import (
     Any,
     Iterator,
     Mapping,
-    MutableMapping,
     NamedTuple,
     NewType,
     Optional,
@@ -88,7 +87,7 @@ class SubscriptionData:
     entity: Entity
     query: str
     metadata: Mapping[str, Any]
-    tenant_ids: MutableMapping[str, Any] = field(default_factory=lambda: dict())
+    tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
     def add_conditions(
         self,
@@ -172,15 +171,16 @@ class SubscriptionData:
                 custom_processing.append(validator.validate)
         custom_processing.append(partial(self.add_conditions, timestamp, offset))
 
-        self.tenant_ids["referrer"] = referrer
-        if "organization_id" not in self.tenant_ids:
+        tenant_ids = {**self.tenant_ids}
+        tenant_ids["referrer"] = referrer
+        if "organization_id" not in tenant_ids:
             # TODO: Subscriptions queries should have an org ID
-            self.tenant_ids["organization_id"] = 1
+            tenant_ids["organization_id"] = 1
 
         request = build_request(
             {
                 "query": self.query,
-                "tenant_ids": self.tenant_ids,
+                "tenant_ids": tenant_ids,
             },
             parse_snql_query,
             SubscriptionQuerySettings,
