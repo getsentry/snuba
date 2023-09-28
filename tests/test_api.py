@@ -2243,7 +2243,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             "subscription_id": f"0/{expected_uuid.hex}",
         }
 
-    def test_tenant_ids(self) -> None:
+    def test_dont_save_tenant_ids(self) -> None:
         expected_uuid = uuid.uuid1()
 
         tenant_ids = {
@@ -2285,6 +2285,50 @@ class TestCreateSubscriptionApi(BaseApiTest):
         )[0]
         assert data.tenant_ids == dict()  # not saved to the redis store
         assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
+
+    def test_save_tenant_ids(self) -> None:
+        state.set_config("save_subscription_with_tenant_ids", 1)
+        expected_uuid = uuid.uuid1()
+
+        tenant_ids = {
+            "organization_id": 1,
+            "referrer": "my-referrer",
+            "use_case_id": "transactions",
+        }
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "tenant_ids": tenant_ids,
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+
+        _, data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey.EVENTS,
+                partition,
+            ).all()
+        )[0]
+        assert data.tenant_ids == tenant_ids  # saved to the redis store
+        assert "tenant_ids" in data.to_dict()  # shows up in dictified data
 
     def test_selected_entity_is_used(self) -> None:
         """
