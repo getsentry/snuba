@@ -7,6 +7,7 @@ import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
+from snuba.cogs.accountant import close_cogs_recorder
 from snuba.consumers.consumer_builder import (
     ConsumerBuilder,
     KafkaParameters,
@@ -262,6 +263,7 @@ def consumer(
 
     def handler(signum: int, frame: Any) -> None:
         consumer.signal_shutdown()
+        close_cogs_recorder()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
