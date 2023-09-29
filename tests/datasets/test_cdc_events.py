@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -62,7 +61,7 @@ class TestCdcEvents(BaseApiTest):
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
+            second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=90)
         self.next_time = self.base_time + timedelta(minutes=95)
 
