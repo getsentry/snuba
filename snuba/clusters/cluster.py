@@ -63,19 +63,31 @@ class ClickhouseClientSettings(Enum):
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
-    REPLACE = ClickhouseClientSettingsType(
+    REPLACE = (
+        ClickhouseClientSettingsType(
+            {
+                # Replacing existing rows requires reconstructing the entire tuple
+                # for each event (via a SELECT), which is a Hard Thing (TM) for
+                # columnstores to do. With the default settings it's common for
+                # ClickHouse to go over the default max_memory_usage of 10GB per
+                # query. Lowering the max_block_size reduces memory usage, and
+                # increasing the max_memory_usage gives the query more breathing
+                # room.
+                "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
+                "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
+                # Don't use up production cache for the count() queries.
+                "use_uncompressed_cache": 0,
+            },
+            None,
+        ),
+    )
+    CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
         {
-            # Replacing existing rows requires reconstructing the entire tuple
-            # for each event (via a SELECT), which is a Hard Thing (TM) for
-            # columnstores to do. With the default settings it's common for
-            # ClickHouse to go over the default max_memory_usage of 10GB per
-            # query. Lowering the max_block_size reduces memory usage, and
-            # increasing the max_memory_usage gives the query more breathing
-            # room.
-            "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
-            "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-            # Don't use up production cache for the count() queries.
-            "use_uncompressed_cache": 0,
+            # Allow reading data and changing settings.
+            "readonly": 2,
+            # Allow more threads for faster processing since cardinality queries
+            # need more resources.
+            "max_threads": 10,
         },
         None,
     )
