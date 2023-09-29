@@ -241,7 +241,9 @@ def test_execute_query_strategy() -> None:
     assert isinstance(message.value, BrokerValue)
     assert next_step.submit.call_args[0][0].committable == message.committable
 
-    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"]["result"]
+    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"][
+        "result"
+    ]
 
     assert result["data"] == [{"count()": 0}]
     assert result["meta"] == [{"name": "count()", "type": "UInt64"}]
