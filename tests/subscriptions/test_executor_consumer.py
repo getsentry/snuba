@@ -10,6 +10,8 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.processing.strategies import MessageRejected
+from arroyo.processing.strategies.commit import CommitOffsets
+from arroyo.processing.strategies.produce import Produce
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
@@ -18,7 +20,6 @@ from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import (
     PartitionId,
@@ -26,17 +27,14 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
-    SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
-    ProduceResult,
     build_executor_consumer,
     calculate_max_concurrent_queries,
 )
 from snuba.utils.manage_topics import create_topics
-from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
@@ -243,9 +241,10 @@ def test_execute_query_strategy() -> None:
     assert isinstance(message.value, BrokerValue)
     assert next_step.submit.call_args[0][0].committable == message.committable
 
-    result = next_step.submit.call_args[0][0].payload.result
-    assert result[1]["data"] == [{"count()": 0}]
-    assert result[1]["meta"] == [{"name": "count()", "type": "UInt64"}]
+    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"]["result"]
+
+    assert result["data"] == [{"count()": 0}]
+    assert result["meta"] == [{"name": "count()", "type": "UInt64"}]
 
     strategy.close()
     strategy.join()
@@ -311,80 +310,6 @@ def test_skip_execution_for_entity() -> None:
 
 
 @pytest.mark.clickhouse_db
-def test_produce_result() -> None:
-    epoch = datetime(1970, 1, 1)
-    scheduled_topic = Topic("scheduled-subscriptions-events")
-    result_topic = Topic("events-subscriptions-results")
-    clock = TestingClock()
-    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
-    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
-    broker.create_topic(scheduled_topic, partitions=1)
-    broker.create_topic(result_topic, partitions=1)
-
-    producer = broker.get_producer()
-    commit = mock.Mock()
-
-    strategy = ProduceResult(producer, result_topic.name, commit)
-
-    entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SubscriptionData(
-        project_id=1,
-        query="MATCH (events) SELECT count() AS count",
-        time_window_sec=60,
-        resolution_sec=60,
-        entity=entity,
-        metadata={},
-    )
-
-    subscription = Subscription(
-        SubscriptionIdentifier(PartitionId(0), uuid.uuid1()), subscription_data
-    )
-
-    request = subscription_data.build_request(
-        get_dataset("events"), epoch, None, Timer("timer")
-    )
-    result: Result = {
-        "meta": [{"type": "UInt64", "name": "count"}],
-        "data": [{"count": 1}],
-        "profile": {},
-        "trace_output": "",
-    }
-
-    message = Message(
-        BrokerValue(
-            SubscriptionTaskResult(
-                ScheduledSubscriptionTask(
-                    epoch,
-                    SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
-                ),
-                (request, result),
-            ),
-            Partition(scheduled_topic, 0),
-            1,
-            epoch,
-        )
-    )
-
-    strategy.submit(message)
-
-    produced_message = broker_storage.consume(Partition(result_topic, 0), 0)
-    assert produced_message is not None
-    assert produced_message.payload.key == str(subscription.identifier).encode("utf-8")
-    assert broker_storage.consume(Partition(result_topic, 0), 1) is None
-    assert commit.call_count == 0
-    strategy.poll()
-    assert commit.call_count == 1
-
-    strategy.submit(message)
-    strategy.poll()
-    assert commit.call_count == 2
-
-    # Commit count immediately increases once we call join()
-    strategy.join()
-    assert commit.call_count == 3
-
-
-@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_execute_and_produce_result() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
@@ -404,7 +329,7 @@ def test_execute_and_produce_result() -> None:
         max_concurrent_queries=2,
         stale_threshold_seconds=None,
         metrics=TestingMetricsBackend(),
-        next_step=ProduceResult(producer, result_topic.name, commit),
+        next_step=Produce(producer, Topic(result_topic.name), CommitOffsets(commit)),
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
@@ -423,7 +348,7 @@ def test_execute_and_produce_result() -> None:
     produced_message = broker_storage.consume(Partition(result_topic, 0), 0)
     assert produced_message is not None
     assert produced_message.payload.key == str(subscription_identifier).encode("utf-8")
-    assert commit.call_count == 1
+    assert commit.call_count > 0
 
 
 def test_skip_stale_message() -> None:
@@ -443,7 +368,7 @@ def test_skip_stale_message() -> None:
         max_concurrent_queries=2,
         stale_threshold_seconds=60,
         metrics=metrics,
-        next_step=ProduceResult(producer, result_topic.name, mock.Mock()),
+        next_step=Produce(producer, Topic(result_topic.name), mock.Mock()),
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
