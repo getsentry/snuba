@@ -64,6 +64,25 @@ class ConsumerConfig:
     env: Optional[EnvConfig]
 
 
+def _add_to_topic_broker_config(
+    topic_config: TopicConfig, param_key: str, param_value: str
+) -> TopicConfig:
+    """
+    Add a parameter to the broker configuration of a topic.
+    Returns a new TopicConfig with the added parameter to
+    the broker configuration.
+    """
+    assert isinstance(param_key, str)
+    # copy the broker config to avoid modifying the original
+    broker_config = {k: v for k, v in topic_config.broker_config.items()}
+    broker_config[param_key] = param_value
+    return TopicConfig(
+        broker_config=broker_config,
+        logical_topic_name=topic_config.logical_topic_name,
+        physical_topic_name=topic_config.physical_topic_name,
+    )
+
+
 def _resolve_topic_config(
     param: str,
     topic_spec: Optional[KafkaTopicSpec],
@@ -115,6 +134,7 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    group_instance_id: Optional[str] = None,
 ) -> ConsumerConfig:
     """
     Resolves the ClickHouse cluster and Kafka brokers, and the physical topic name
@@ -135,6 +155,11 @@ def resolve_consumer_config(
     resolved_raw_topic = _resolve_topic_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
+    if resolved_raw_topic and group_instance_id is not None:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "group.instance.id", group_instance_id
+        )
+
     assert resolved_raw_topic is not None
 
     commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
@@ -157,7 +182,6 @@ def resolve_consumer_config(
         None,
         slice_id,
     )
-
     return ConsumerConfig(
         storages=[
             resolve_storage_config(storage_name, storage)

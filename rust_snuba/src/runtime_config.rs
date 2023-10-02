@@ -20,13 +20,7 @@ mod tests {
 
     #[test]
     fn test_runtime_config() {
-        // on macos, this test is polluting something in the global process state causing
-        // other tests to hang, therefore isolate it in another subprocess of its own.
-        let handle = procspawn::spawn((), |()| {
-            let config = get_str_config("test");
-            assert_eq!(config.unwrap(), None);
-        });
-
-        handle.join().unwrap();
+        let config = get_str_config("test");
+        assert_eq!(config.unwrap(), None);
     }
 }
