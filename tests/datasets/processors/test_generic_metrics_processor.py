@@ -39,6 +39,20 @@ def test__should_process(message, expected_output):
             },
             id="ten_second",
         ),
+        pytest.param(
+            {
+                "type": "d",
+                "metric_id": 4,
+                "value": [5, 7, 10],
+                "aggregation_option": "ten_second",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 2,
+                "granularities": [1, 2, 3],
+            },
+            id="hist",
+        ),
     ],
 )
 def test__aggregation_options(message, expected_output):
