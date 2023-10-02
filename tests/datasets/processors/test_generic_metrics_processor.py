@@ -44,7 +44,7 @@ def test__should_process(message, expected_output):
                 "type": "d",
                 "metric_id": 4,
                 "value": [5, 7, 10],
-                "aggregation_option": "ten_second",
+                "aggregation_option": "hist",
             },
             {
                 "min_retention_days": 90,
