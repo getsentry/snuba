@@ -1,9 +1,8 @@
 import itertools
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Sequence, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba import settings
@@ -18,7 +17,7 @@ from tests.helpers import write_processed_messages
 
 class BaseSessionsMockTest:
     started = datetime.utcnow().replace(
-        minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )
     storage = get_writable_storage(StorageKey.SESSIONS_RAW)
 
@@ -95,7 +94,7 @@ class TestLegacySessionsApi(BaseSessionsMockTest, BaseApiTest):
         self.minutes = 180
         self.skew = timedelta(minutes=self.minutes)
         self.started = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         )
 
         self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
