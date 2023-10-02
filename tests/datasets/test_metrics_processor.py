@@ -441,6 +441,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -461,6 +462,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -481,6 +483,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -532,7 +535,7 @@ TEST_CASES_GENERIC = [
         SET_MESSAGE_SHARED,
         [
             {
-                "use_case_id": "release-health",
+                "use_case_id": "sessions",
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
@@ -554,7 +557,7 @@ TEST_CASES_GENERIC = [
         SET_MESSAGE_TAG_VALUES_STRINGS,
         [
             {
-                "use_case_id": "release-health",
+                "use_case_id": "sessions",
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
