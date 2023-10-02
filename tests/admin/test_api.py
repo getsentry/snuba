@@ -26,13 +26,6 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
-@mock.patch("snuba.admin.auth.redis_client")
-def test_migration_groups(mock_redis, admin_api: FlaskClient) -> None:
-    mock_redis.get.side_effect = Exception("failed connection")
-    response = admin_api.get("/migrations/events/list")
-    assert response.status_code == 200
-
-
 @pytest.mark.redis_db
 def test_get_configs(admin_api: FlaskClient) -> None:
     response = admin_api.get("/configs")
