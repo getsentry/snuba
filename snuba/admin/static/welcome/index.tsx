@@ -2,9 +2,6 @@ import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 
 function Welcome(props: { api: Client }) {
-  const AVAILABLE_REGIONS =
-    "https://www.notion.so/sentry/Snuba-Admin-8344d5d508014d4a867cdb1b8e8d22cf";
-
   const [adminRegions, setAdminRegions] = useState<string[]>([]);
 
   useEffect(() => {
