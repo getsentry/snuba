@@ -1,10 +1,9 @@
 import itertools
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 from sentry_relay import DataCategory
 
@@ -89,7 +88,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
-        return time.replace(tzinfo=pytz.utc).isoformat()
+        return time.replace(tzinfo=timezone.utc).isoformat()
 
     def test_happy_path_querying(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
@@ -358,7 +357,7 @@ class TestOutcomesAPI(BaseApiTest):
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
-        return time.replace(tzinfo=pytz.utc).isoformat()
+        return time.replace(tzinfo=timezone.utc).isoformat()
 
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db: None) -> None:

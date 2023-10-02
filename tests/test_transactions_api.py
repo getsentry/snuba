@@ -1,11 +1,10 @@
 import calendar
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba import settings, state
@@ -49,7 +48,7 @@ class TestTransactionsApi(BaseApiTest):
         self.skew = timedelta(minutes=self.minutes)
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()

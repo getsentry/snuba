@@ -180,7 +180,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         Ok(BytesInsertBatch {
                             rows: result_decoded,
                         })
-                    }).map_err(|pyerr| pyerr.to_string())
+                    })
+                    .map_err(|pyerr| pyerr.to_string())
                 };
 
                 let original_message_meta = message.clone().replace(());

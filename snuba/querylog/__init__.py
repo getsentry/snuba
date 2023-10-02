@@ -64,6 +64,32 @@ def _record_timer_metrics(
     )
 
 
+def _record_bytes_scanned_metrics(
+    query_metadata: SnubaQueryMetadata,
+    result: Union[QueryResult, QueryException, QueryPlanException],
+) -> None:
+    """
+    Experimental metrics - trying to understand whether or not
+    profile.bytes is correct or we should be using progress.bytes
+    for calculating bytes scanned per Query.
+
+    Should be removed once we have gathered data and made a decision.
+    """
+    if not isinstance(result, QueryResult):
+        return
+    profile = result.result["profile"]
+    if not profile or "progress_bytes" not in profile or "bytes" not in profile:
+        return
+
+    tags = {"dataset": query_metadata.dataset}
+
+    profile_bytes = profile["bytes"]
+    metrics.increment("profile_bytes", profile_bytes, tags)
+
+    progress_bytes = profile["progress_bytes"]
+    metrics.increment("progress_bytes", progress_bytes, tags)
+
+
 def record_query(
     request: Request,
     timer: Timer,
@@ -85,6 +111,7 @@ def record_query(
         # QueryMetadata class
         state.record_query(query_metadata.to_dict())
         _record_timer_metrics(request, timer, query_metadata, result)
+        _record_bytes_scanned_metrics(query_metadata, result)
         _add_tags(timer, extra_data.get("experiments"), query_metadata)
 
 
