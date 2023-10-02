@@ -17,6 +17,9 @@ class OutputType(Enum):
 class AggregationOption(Enum):
     HIST = "hist"
     TEN_SECOND = "ten_second"
+    ONE_MINUTE = "one_minute"
+    ONE_HOUR = "one_hour"
+    ONE_DAY = "one_day"
 
 
 ILLEGAL_VALUE_IN_SET = "Illegal value in set."
