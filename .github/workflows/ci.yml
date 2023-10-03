@@ -388,11 +388,21 @@ jobs:
         run: |
           make test-snuba-full
 
-  clickhouse-21:
+  clickhouse-versions:
     needs: [linting, snuba-image]
-    name: Tests on Clickhouse 21
+    name: Tests on multiple clickhouse versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          [
+            "21.8.13.1.altinitystable",
+            "22.3.15.34.altinitystable",
+            "22.8.15.25.altinitystable",
+          ]
+
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -427,9 +437,9 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
-      - name: Docker Snuba Test Clickhouse 21
+      - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:21.8.13.1.altinitystable
+          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
