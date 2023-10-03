@@ -48,7 +48,7 @@ def __run_query(query: str) -> ClickhouseResult:
     """
     connection = get_ro_query_node_connection(
         StorageKey("generic_metrics_distributions").value,
-        ClickhouseClientSettings.TRACING,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER,
     )
 
     query_result = connection.execute(

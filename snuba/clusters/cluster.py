@@ -79,6 +79,16 @@ class ClickhouseClientSettings(Enum):
         },
         None,
     )
+    CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
+        {
+            # Allow reading data and changing settings.
+            "readonly": 2,
+            # Allow more threads for faster processing since cardinality queries
+            # need more resources.
+            "max_threads": 10,
+        },
+        None,
+    )
 
 
 @dataclass(frozen=True)

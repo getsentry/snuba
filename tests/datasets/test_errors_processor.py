@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from unittest.mock import ANY
 from uuid import UUID
 
 import pytest
-import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
@@ -345,7 +344,7 @@ class ErrorEvent:
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
             ],
-            "received": self.received_timestamp.astimezone(pytz.utc).replace(
+            "received": self.received_timestamp.astimezone(timezone.utc).replace(
                 tzinfo=None, microsecond=0
             ),
             "message": "",
