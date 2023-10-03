@@ -169,10 +169,12 @@ class TestOptimize:
         partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in partitions] == [
-            (base_monday, 90),
-            (a_month_earlier_monday, 90),
-        ]
+        assert sorted([(p.date, p.retention_days) for p in partitions]) == sorted(
+            [
+                (base_monday, 90),
+                (a_month_earlier_monday, 90),
+            ]
+        )
 
         # respects before (base is properly excluded)
         assert [

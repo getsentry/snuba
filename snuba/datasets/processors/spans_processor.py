@@ -1,6 +1,7 @@
 import logging
 import numbers
 import random
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
@@ -38,37 +39,6 @@ CommonSpanDict = MutableMapping[str, Any]
 RetentionDays = int
 
 
-def is_project_in_allowlist(project_id: int) -> bool:
-    """
-    Allow spans to be written to Clickhouse if the project falls into one of the following
-    categories in order of priority:
-    1. The project falls in the configured sample rate
-    2. The project is in the allowlist
-    """
-    spans_sample_rate = state.get_config("spans_sample_rate", None)
-    if spans_sample_rate and project_id % 100 <= spans_sample_rate:
-        return True
-
-    project_allowlist = state.get_config("spans_project_allowlist", None)
-    if project_allowlist:
-        # The expected format is [project,project,...]
-        project_allowlist = project_allowlist[1:-1]
-        if project_allowlist:
-            rolled_out_projects = [int(p.strip()) for p in project_allowlist.split(",")]
-            if project_id in rolled_out_projects:
-                return True
-    return False
-
-
-def clean_span_tags(tags: Mapping[str, Any]) -> MutableMapping[str, Any]:
-    """
-    A lot of metadata regarding spans is sent in spans.data. We do not want to store everything
-    as tags in clickhouse. This method allows only a few pre defined keys to be stored as tags.
-    """
-    allowed_keys = {"environment", "release", "user", "transaction.method"}
-    return {k: v for k, v in tags.items() if k in allowed_keys}
-
-
 class SpansMessageProcessor(DatasetMessageProcessor):
     """
     Message processor for writing spans data to the spans table.
@@ -77,14 +47,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     from the transactions topic and de-normalize it into the spans table.
     """
 
-    def __extract_timestamp(self, timestamp_sec: float) -> Tuple[datetime, int]:
+    def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec))
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-        milliseconds = int(timestamp.microsecond / 1000)
-        return timestamp, milliseconds
+        timestamp_sec = timestamp_ms / 1000
+        if _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec)) is None:
+            timestamp_sec = int(time.time())
+        return int(timestamp_sec), int(timestamp_ms % 1000)
 
     @staticmethod
     def _structure_and_validate_message(
@@ -124,15 +93,20 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         # descriptions
         processed["description"] = _unicodify(span_event.get("description", ""))
-        processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+
+        try:
+            processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+        except ValueError:
+            processed["group_raw"] = 0
 
         # timestamps
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
-            span_event["start_timestamp_ms"] / 1000,
+            span_event["start_timestamp_ms"],
         )
         processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
-            (span_event["start_timestamp_ms"] + span_event["duration_ms"]) / 1000,
+            span_event["start_timestamp_ms"] + span_event["duration_ms"],
         )
+
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = span_event["exclusive_time_ms"]
 
@@ -189,16 +163,26 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         TODO: For the top level span belonging to a transaction, we do not know how to fill these
               values yet. For now lets just set them to their default values.
         """
-        sentry_tags = span_event["sentry_tags"]
-        processed["module"] = sentry_tags.get("module", "")
-        processed["action"] = sentry_tags.get("action", "")
-        processed["domain"] = sentry_tags.get("domain", "")
-        processed["group"] = int(sentry_tags.get("group", "0") or "0", 16)
-        processed["span_kind"] = ""
-        processed["platform"] = sentry_tags.get("system", "")
-        processed["segment_name"] = _unicodify(sentry_tags.get("transaction") or "")
+        sentry_tags = span_event["sentry_tags"].copy()
+        sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
+        processed["sentry_tags.key"] = sentry_tag_keys
+        processed["sentry_tags.value"] = sentry_tag_values
 
-        status = sentry_tags.get("status", None)
+        processed["module"] = sentry_tags.pop("module", "")
+        processed["action"] = sentry_tags.pop("action", "")
+        processed["domain"] = sentry_tags.pop("domain", "")
+
+        try:
+            processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
+        except ValueError:
+            processed["group"] = 0
+
+        processed["span_kind"] = ""
+        processed["platform"] = sentry_tags.pop("system", "")
+        processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))
+
+        # TODO: handle status_code so it isn't stored in tags
+        status = sentry_tags.pop("status", None)
         if status:
             int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
             processed["status"] = int_status
@@ -206,10 +190,17 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             int_status = UNKNOWN_SPAN_STATUS
         processed["span_status"] = int_status
 
-        processed["op"] = sentry_tags.get("op", "")
-        transaction_op = sentry_tags.get("transaction.op", None)
+        processed["op"] = sentry_tags.pop("op", "")
+        transaction_op = sentry_tags.pop("transaction.op", None)
         if transaction_op:
             processed["transaction_op"] = _unicodify(transaction_op)
+
+        # Remaining tags are dumped into the tags column. In future these will be moved
+        # to the sentry_tags column to avoid the danger of conflicting with other tags.
+        # This expects that processed_tags has already been called
+        leftover_tag_keys, leftover_tag_values = extract_extra_tags(sentry_tags)
+        processed["tags.key"].extend(leftover_tag_keys)
+        processed["tags.value"].extend(leftover_tag_values)
 
     def process_message(
         self,
@@ -232,10 +223,6 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         }
 
         processed["project_id"] = span_event["project_id"]
-
-        # Reject events from projects that are not in the allowlist
-        if not is_project_in_allowlist(processed["project_id"]):
-            return None
 
         try:
             # The following helper functions should be able to be applied in any order.

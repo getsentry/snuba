@@ -64,6 +64,14 @@ schema:
   dist_table_name: search_issues_dist_v2
 
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -103,8 +111,7 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: SearchIssuesMessageProcessor
+  processor: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events

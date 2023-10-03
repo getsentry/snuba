@@ -38,6 +38,11 @@ schema:
       },
       { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
       { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
+      { name: fatal_id, type: UUID },
+      { name: error_id, type: UUID },
+      { name: warning_id, type: UUID },
+      { name: info_id, type: UUID },
+      { name: debug_id, type: UUID },
       {
         name: title,
         type: String,
@@ -168,11 +173,18 @@ query_processors:
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 stream_loader:
-  processor:
-    name: ReplaysProcessor
+  processor: ReplaysProcessor
   default_topic: ingest-replay-events
   dlq_topic: snuba-dead-letter-replays
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:

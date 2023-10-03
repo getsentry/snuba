@@ -508,10 +508,18 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # one policy
-        assert response.json is not None and len(response.json) == 1
-        [policy_configs] = response.json
-        assert policy_configs["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        # two policies
+        assert response.json is not None and len(response.json) == 2
+        policy_configs = response.json
+        bytes_scanned_policy = [
+            policy
+            for policy in policy_configs
+            if policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        ][0]
+
+        assert (
+            bytes_scanned_policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        )
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -520,7 +528,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } in policy_configs["configs"]
+        } in bytes_scanned_policy["configs"]
 
         # no need to record auditlog when nothing was updated
         assert not auditlog_records
@@ -541,7 +549,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 1
+        assert response.json is not None and len(response.json) == 2
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "

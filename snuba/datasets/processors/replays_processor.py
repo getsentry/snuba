@@ -36,6 +36,7 @@ LIST_ELEMENT_LIMIT = 1000
 MAX_CLICK_EVENTS = 20
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
+LOG_LEVELS = ["fatal", "error", "warning", "info", "debug"]
 
 
 class ReplaysProcessor(DatasetMessageProcessor):
@@ -212,6 +213,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if replay_event["type"] == "replay_actions":
             actions = process_replay_actions(replay_event, processed, metadata)
             return InsertBatch(actions, received)
+        if replay_event["type"] == "event_link":
+            link = process_replay_event_link(replay_event, processed, metadata)
+            return InsertBatch([link], received)
         else:
             # The following helper functions should be able to be applied in any order.
             # At time of writing, there are no reads of the values in the `processed`
@@ -276,6 +280,37 @@ def process_replay_actions(
         }
         for click in payload["clicks"][:MAX_CLICK_EVENTS]
     ]
+
+
+def process_replay_event_link(
+    payload: Mapping[Any, Any],
+    processed: Mapping[Any, Any],
+    metadata: KafkaMessageMetadata,
+) -> dict[str, Any]:
+    event_id = None
+    event_severity = None
+    for level in LOG_LEVELS:
+        if payload.get(level + "_id") is not None:
+            event_id = to_uuid(payload[level + "_id"])
+            event_severity = level
+            break
+
+    if event_id is None or event_severity is None:
+        raise ValueError("Missing event id")
+
+    return {
+        "project_id": processed["project_id"],
+        "replay_id": to_uuid(payload["replay_id"]),
+        "segment_id": None,
+        "event_hash": payload["event_hash"],
+        "timestamp": raise_on_null(
+            "timestamp", maybe(to_datetime, payload["timestamp"])
+        ),
+        "retention_days": processed["retention_days"],
+        "partition": metadata.partition,
+        "offset": metadata.offset,
+        event_severity + "_id": event_id,
+    }
 
 
 T = TypeVar("T")

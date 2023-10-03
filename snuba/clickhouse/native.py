@@ -45,6 +45,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 class ClickhouseProfile(TypedDict):
     bytes: int
+    progress_bytes: int
     blocks: int
     rows: int
     elapsed: float
@@ -200,6 +201,7 @@ class ClickhousePool(object):
 
                     profile_data = ClickhouseProfile(
                         bytes=conn.last_query.profile_info.bytes or 0,
+                        progress_bytes=conn.last_query.progress.bytes or 0,
                         blocks=conn.last_query.profile_info.blocks or 0,
                         rows=conn.last_query.profile_info.rows or 0,
                         elapsed=conn.last_query.elapsed or 0.0,

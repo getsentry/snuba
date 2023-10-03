@@ -56,6 +56,14 @@ query_processors:
         profile_id: null
   - processor: TableRateLimit
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -71,6 +79,5 @@ mandatory_condition_checkers:
       field_name: organization_id
   - condition: ProjectIdEnforcer
 stream_loader:
-  processor:
-    name: ProfilesMessageProcessor
+  processor: ProfilesMessageProcessor
   default_topic: processed-profiles

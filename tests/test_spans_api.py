@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba import settings, state
@@ -46,16 +45,14 @@ class TestSpansApi(BaseApiTest):
         self.trace_id = "7400045b25c443b885914600aa83ad04"
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
-        state.set_config("spans_project_allowlist", [1])
         state.set_config("log_bad_span_message_percentage", 1)
         self.generate_fizzbuzz_events()
 
         yield
 
-        state.delete_config("spans_project_allowlist")
         state.delete_config("log_bad_span_message_percentage")
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
@@ -186,22 +183,6 @@ class TestSpansApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert data["data"][0]["aggregate"] > 10, data
-
-        # No count for project 2 even though data was being sent to the processor because the
-        # allowlist does not allow the project
-        from_date = (self.base_time - self.skew).isoformat()
-        to_date = (self.base_time + self.skew).isoformat()
-        response = self._post_query(
-            f"""MATCH (spans)
-                SELECT count() AS aggregate
-                WHERE project_id = 2
-                AND timestamp >= toDateTime('{from_date}')
-                AND timestamp < toDateTime('{to_date}')
-            """
-        )
-        data = json.loads(response.data)
-        assert response.status_code == 200, response.data
-        assert data["data"][0]["aggregate"] == 0, data
 
     def test_get_group_sorted_by_exclusive_time(self) -> None:
         """

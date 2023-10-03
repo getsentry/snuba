@@ -83,7 +83,8 @@ class GroupAssigneeRow(CdcMessageRow):
 
 
 class GroupAssigneeProcessor(CdcProcessor):
-    def __init__(self, postgres_table: str) -> None:
+    def __init__(self) -> None:
+        postgres_table = "sentry_groupasignee"
         super().__init__(
             pg_table=postgres_table,
             message_row_class=GroupAssigneeRow,

@@ -8,13 +8,8 @@ from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.spans_processor import (
-    SpansMessageProcessor,
-    clean_span_tags,
-    is_project_in_allowlist,
-)
+from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
-from snuba.state import delete_config, set_config
 
 
 @dataclass
@@ -60,8 +55,8 @@ class SpanEventExample:
             "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
             "tags": {
                 "tag1": "value1",
-                "tag2": 123,
-                "tag3": True,
+                "tag2": "123",
+                "tag3": "True",
                 "sentry:user": self.user_id or "",
             },
             "sentry_tags": {
@@ -72,7 +67,7 @@ class SpanEventExample:
                 "group": self.group,
                 "status": "ok",
                 "system": "python",
-                "status_code": 200,
+                "status_code": "200",
                 "transaction": self.transaction_name,
                 "transaction.op": self.op,
                 "op": "http.client",
@@ -91,12 +86,16 @@ class SpanEventExample:
                 "segment_id": int(self.span_id, 16),
                 "is_segment": 0,
                 "segment_name": self.transaction_name,
-                "start_timestamp": datetime.utcfromtimestamp(
-                    self.start_timestamp_ms / 1000
+                "start_timestamp": int(
+                    datetime.utcfromtimestamp(
+                        self.start_timestamp_ms / 1000
+                    ).timestamp()
                 ),
                 "start_ms": self.start_timestamp_ms % 1000,
-                "end_timestamp": datetime.utcfromtimestamp(
-                    (self.start_timestamp_ms + self.duration_ms) / 1000
+                "end_timestamp": int(
+                    datetime.utcfromtimestamp(
+                        (self.start_timestamp_ms + self.duration_ms) / 1000
+                    ).timestamp()
                 ),
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
                 "duration": self.duration_ms,
@@ -112,8 +111,16 @@ class SpanEventExample:
                 "domain": "targetdomain.tld:targetport",
                 "platform": self.platform,
                 "action": "SELECT",
-                "tags.key": ["sentry:user", "tag1", "tag2", "tag3"],
-                "tags.value": ["123", "value1", "123", "True"],
+                "tags.key": [
+                    "sentry:user",
+                    "tag1",
+                    "tag2",
+                    "tag3",
+                    "http.method",
+                    "status_code",
+                    "transaction.method",
+                ],
+                "tags.value": ["123", "value1", "123", "True", "GET", "200", "GET"],
                 "measurements.key": [],
                 "measurements.value": [],
                 "partition": meta.partition,
@@ -121,6 +128,34 @@ class SpanEventExample:
                 "retention_days": self.retention_days,
                 "deleted": 0,
                 "user": self.user_id,
+                "sentry_tags.key": [
+                    "action",
+                    "domain",
+                    "group",
+                    "http.method",
+                    "module",
+                    "op",
+                    "status",
+                    "status_code",
+                    "system",
+                    "transaction",
+                    "transaction.method",
+                    "transaction.op",
+                ],
+                "sentry_tags.value": [
+                    "SELECT",
+                    "targetdomain.tld:targetport",
+                    self.group,
+                    "GET",
+                    self.module,
+                    "http.client",
+                    "ok",
+                    "200",
+                    "python",
+                    self.transaction_name,
+                    "GET",
+                    self.op,
+                ],
             },
         ]
 
@@ -188,7 +223,6 @@ class TestSpansProcessor:
         )
 
     def test_required_clickhouse_columns_are_present(self) -> None:
-        set_config("spans_project_allowlist", "[1]")
         message = self.__get_span_event()
 
         meta = KafkaMessageMetadata(
@@ -210,7 +244,6 @@ class TestSpansProcessor:
             assert len(rows[index]) == len(expected_result[index])
 
     def test_exact_results(self) -> None:
-        set_config("spans_project_allowlist", "[1]")
         message = self.__get_span_event()
 
         meta = KafkaMessageMetadata(
@@ -227,53 +260,3 @@ class TestSpansProcessor:
         assert len(rows) == len(expected_result)
         for index in range(len(rows)):
             assert compare_types_and_values(rows[index], expected_result[index])
-
-
-@pytest.mark.parametrize(
-    "tags, expected_output",
-    [
-        pytest.param(
-            {"span.example": 1, "environment": "prod", "span.data": 3},
-            {"environment": "prod"},
-        ),
-        pytest.param(
-            {"transaction": 1, "transaction.op": 2, "other": 3},
-            {},
-        ),
-        pytest.param(
-            {"environment": "value1", "release": "value2", "user": "value3"},
-            {"environment": "value1", "release": "value2", "user": "value3"},
-        ),
-    ],
-)
-def test_clean_span_tags(
-    tags: Mapping[str, Any], expected_output: Mapping[str, Any]
-) -> None:
-    assert clean_span_tags(tags) == expected_output
-
-
-@pytest.mark.parametrize(
-    "sample_rate, project_id, input_project_id, expected_result",
-    [
-        pytest.param(0, 100, 100, True, id="sample rate mismatch exact project match"),
-        pytest.param(0, 101, 100, False, id="sample rate mismatch project mismatch"),
-        pytest.param(1, 101, 100, True, id="sample rate match project mismatch"),
-        pytest.param(1, 101, 101, True, id="sample rate match project match"),
-        pytest.param(1, 101, 102, False, id="sample rate mismatch project mismatch"),
-        pytest.param(None, 100, 100, True, id="no sample rate exact project match"),
-        pytest.param(None, 101, 100, False, id="no sample rate project mismatch"),
-    ],
-)
-@pytest.mark.redis_db
-def test_is_project_in_allowlist(
-    sample_rate: int, project_id: int, input_project_id: int, expected_result: bool
-) -> None:
-    if sample_rate:
-        set_config("spans_sample_rate", sample_rate)
-    if project_id:
-        set_config("spans_project_allowlist", f"[{project_id}]")
-
-    assert is_project_in_allowlist(input_project_id) == expected_result
-
-    delete_config("spans_sample_rate")
-    delete_config("spans_project_allowlist")

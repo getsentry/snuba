@@ -9,4 +9,4 @@
   "Dataset Config Validation" \
   "sentry (0)" \
   "sentry (1)" \
-  "self-hosted-end-to-end"
+  "Tests on multiple clickhouse versions (21.8.13.1.altinitystable)"

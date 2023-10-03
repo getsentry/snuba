@@ -8,17 +8,12 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.26"
 uuid = "0.8"
-by_address = "1.0.4"
-rdkafka = { version = "0.28", features = ["cmake-build"] }
+rdkafka = { version = "0.34", features = ["cmake-build"] }
 thiserror = "1.0"
 clap = "2.18.0"
 tokio = { version = "1.19.2", features = ["full"] }
 futures = "0.3.21"
 env_logger = "0.9.0"
 log = "0.4.17"
-cadence = "0.29.0"
-lazy_static = "1.4.0"
-parking_lot = "0.10.0"
-rand="0.8.5"
 serde_json = "1.0.81"
 serde = {version = "1.0.137", features = ["derive"] }

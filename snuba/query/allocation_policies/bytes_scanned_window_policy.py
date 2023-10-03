@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
@@ -45,6 +45,7 @@ _ORG_LESS_REFERRERS = set(
         "https://snuba-admin.getsentry.net/",
         "http://localhost:1219/",
         "reprocessing2.start_group_reprocessing",
+        "metric_validation",
     ]
 )
 
@@ -108,6 +109,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 description="Number of threads any throttled query gets assigned.",
                 value_type=int,
                 default=1,
+            ),
+            AllocationPolicyConfig(
+                name="use_progress_bytes_scanned",
+                description="whether to use the progress.bytes scanned metric to determine the number of bytes scanned in a query, this option should be removed once this metric is used across policies",
+                value_type=int,
+                default=0,
             ),
         ]
 
@@ -184,6 +191,27 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, self.max_threads, {})
 
+    def _get_bytes_scanned_in_query(
+        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+    ) -> int:
+        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
+        profile_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("bytes", None))  # type: ignore
+        if isinstance(progress_bytes_scanned, (int, float)):
+            self.metrics.increment(
+                "progress_bytes_scanned",
+                progress_bytes_scanned,
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+        if isinstance(profile_bytes_scanned, (int, float)):
+            self.metrics.increment(
+                "profile_bytes_scanned",
+                profile_bytes_scanned,
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+        if self.get_config_value("use_progress_bytes_scanned"):
+            return progress_bytes_scanned
+        return profile_bytes_scanned
+
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
@@ -196,14 +224,21 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if not ids_are_valid:
             # we already logged the reason before the query
             return
+        bytes_scanned = self._get_bytes_scanned_in_query(tenant_ids, result_or_error)
         query_result = result_or_error.query_result
         assert query_result is not None
-        bytes_scanned = query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
         if bytes_scanned is None:
             logging.error("No bytes scanned in query_result %s", query_result)
             return
         if bytes_scanned == 0:
             return
+        # we emitted both kinds of bytes scanned in _get_bytes_scanned_in_query however
+        # this metric shows what is actually being used to enforce the policy
+        self.metrics.increment(
+            "bytes_scanned",
+            bytes_scanned,
+            tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+        )
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
                 tenant_ids.get("organization_id")

@@ -1,11 +1,12 @@
+use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
 use crate::types::Message;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
 pub type RunTaskFunc<TTransformed> =
@@ -22,6 +23,8 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     runtime: tokio::runtime::Runtime,
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
     message_carried_over: Option<Message<TTransformed>>,
+    metrics_buffer: MetricsBuffer,
+    metric_name: String,
 }
 
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
@@ -31,20 +34,27 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
         concurrency: usize,
+        // If provided, this name is used for metrics
+        custom_strategy_name: Option<&'static str>,
     ) -> Self
     where
         N: ProcessingStrategy<TTransformed> + 'static,
     {
+        let strategy_name = custom_strategy_name.unwrap_or("run_task_in_threads");
+
         RunTaskInThreads {
             next_step: Box::new(next_step),
             task_runner,
             concurrency,
             runtime: tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(concurrency)
                 .enable_all()
                 .build()
                 .unwrap(),
             handles: VecDeque::new(),
             message_carried_over: None,
+            metrics_buffer: MetricsBuffer::new(),
+            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
     }
 }
@@ -62,6 +72,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 return None;
             }
         }
+
+        self.metrics_buffer
+            .gauge(&self.metric_name, self.handles.len() as u64);
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
@@ -114,13 +127,41 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     }
 
     fn terminate(&mut self) {
-        // TODO: Implement terminate
+        for handle in &self.handles {
+            handle.abort();
+        }
+        self.handles.clear();
         self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        // TODO: Implement join
-        self.next_step.join(timeout)
+        let start = Instant::now();
+        let mut remaining: Option<Duration> = timeout;
+        let mut commit_request = None;
+
+        // Poll until there are no more messages or timeout is hit
+        while self.message_carried_over.is_some() || !self.handles.is_empty() {
+            if let Some(t) = remaining {
+                remaining = Some(t - start.elapsed());
+                if remaining.unwrap() <= Duration::from_secs(0) {
+                    log::warn!("Timeout reached while waiting for tasks to finish");
+                    break;
+                }
+            }
+
+            let next_commit = self.poll();
+            commit_request = merge_commit_request(commit_request, next_commit);
+        }
+
+        // Cancel remaining tasks if any
+        for handle in &self.handles {
+            handle.abort();
+        }
+        self.handles.clear();
+        self.metrics_buffer.flush();
+
+        let next_commit = self.next_step.join(remaining);
+        merge_commit_request(commit_request, next_commit)
     }
 }
 
@@ -157,11 +198,12 @@ mod tests {
             }
         }
 
-        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1);
+        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1, None);
 
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
         strategy.submit(message).unwrap();
-        strategy.poll();
+        let _ = strategy.poll();
+        let _ = strategy.join(None);
     }
 }

@@ -6,7 +6,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 import structlog
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -40,7 +40,7 @@ class SqlOperation(ABC):
     def storage_set(self) -> StorageSetKey:
         return self._storage_set
 
-    def execute(self) -> None:
+    def get_nodes(self) -> Sequence[ClickhouseNode]:
         cluster = get_cluster(self._storage_set)
         local_nodes, dist_nodes = (
             cluster.get_local_nodes(),
@@ -53,6 +53,11 @@ class SqlOperation(ABC):
             nodes = dist_nodes
         else:
             raise ValueError(f"Target not set for {self}")
+        return nodes
+
+    def execute(self) -> None:
+        nodes = self.get_nodes()
+        cluster = get_cluster(self._storage_set)
         if nodes:
             logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
@@ -310,6 +315,12 @@ class ModifyColumn(SqlOperation):
     def format_sql(self) -> str:
         column = self.__column.for_schema()
         return f"ALTER TABLE {self.__table_name} MODIFY COLUMN {column}{self.optional_ttl_clause};"
+
+    def get_column(self) -> Column[MigrationModifiers]:
+        return self.__column
+
+    def get_table_name(self) -> str:
+        return self.__table_name
 
     @property
     def optional_ttl_clause(self) -> str:

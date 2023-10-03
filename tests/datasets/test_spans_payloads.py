@@ -45,9 +45,13 @@ expected_for_required_fields = {
     "is_segment": True,
     "description": "",
     "group_raw": 0,
-    "start_timestamp": datetime.datetime(2100, 4, 11, 7, 18, 31, 111000),
+    "start_timestamp": int(
+        datetime.datetime(2100, 4, 11, 7, 18, 31, 111000).timestamp()
+    ),
     "start_ms": 111,
-    "end_timestamp": datetime.datetime(2100, 4, 25, 14, 14, 31, 234000),
+    "end_timestamp": int(
+        datetime.datetime(2100, 4, 25, 14, 14, 31, 234000).timestamp()
+    ),
     "end_ms": 234,
     "duration": 1234560123,
     "exclusive_time": 1234567890123,
@@ -56,6 +60,8 @@ expected_for_required_fields = {
     "user": "",
     "measurements.key": [],
     "measurements.value": [],
+    "sentry_tags.key": [],
+    "sentry_tags.value": [],
     "module": "",
     "action": "",
     "domain": "",
@@ -100,6 +106,16 @@ payloads = [
             }
         },
     },
+    {
+        **required_fields,
+        **{
+            "sentry_tags": {
+                "transaction.method": "GET",
+                "user": "user1",
+                "release": "release1234",
+            }
+        },
+    },
 ]
 
 expected_results: Sequence[Mapping[str, Any]] = [
@@ -121,22 +137,55 @@ expected_results: Sequence[Mapping[str, Any]] = [
         **expected_for_required_fields,
         **{"user": "user1", "tags.key": ["sentry:user"], "tags.value": ["user1"]},
     },
-    {**expected_for_required_fields, **{"span_status": 0, "status": 0}},
     {
         **expected_for_required_fields,
-        **{"span_status": 0, "status": 0, "group": int("deadbeefdeadbeef", 16)},
+        **{
+            "span_status": 0,
+            "status": 0,
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
+        **{
+            "sentry_tags.key": ["status", "status_code"],
+            "sentry_tags.value": ["ok", "200"],
+        },
+    },
+    {
+        **expected_for_required_fields,
+        **{
+            "span_status": 0,
+            "status": 0,
+            "group": int("deadbeefdeadbeef", 16),
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
+        **{
+            "sentry_tags.key": ["group", "status", "status_code"],
+            "sentry_tags.value": ["deadbeefdeadbeef", "ok", "200"],
+        },
+    },
+    {
+        **expected_for_required_fields,
+        **{
+            "tags.key": ["release", "transaction.method", "user"],
+            "tags.value": ["release1234", "GET", "user1"],
+        },
+        **{
+            "sentry_tags.key": ["release", "transaction.method", "user"],
+            "sentry_tags.value": ["release1234", "GET", "user1"],
+        },
     },
 ]
+
+assert len(payloads) == len(expected_results)
 
 
 @pytest.mark.redis_db
 class TestSpansPayloads:
     @pytest.fixture()
     def setup_state(self, redis_db: None) -> Generator[None, None, None]:
-        state.set_config("spans_project_allowlist", [project_id])
         state.set_config("log_bad_span_message_percentage", 1)
         yield
-        state.delete_config("spans_project_allowlist")
         state.delete_config("log_bad_span_message_percentage")
 
     @pytest.mark.parametrize(
@@ -153,7 +202,6 @@ class TestSpansPayloads:
 
         assert isinstance(processed_rows, InsertBatch), processed_rows
         actual_result = processed_rows.rows[0]
-
         assert compare_types_and_values(actual_result, expected_result)
 
     def test_fail_missing_required(self, setup_state: None, caplog: Any) -> None:

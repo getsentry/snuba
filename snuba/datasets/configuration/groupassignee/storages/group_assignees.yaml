@@ -35,6 +35,14 @@ postgres_table: sentry_groupasignee
 row_processor:
   processor: GroupAssigneeRowProcessor
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -51,10 +59,7 @@ query_processors:
         - project_id
   - processor: ConsistencyEnforcerProcessor
 stream_loader:
-  processor:
-    name: GroupAssigneeProcessor
-    args:
-      postgres_table: sentry_groupasignee
+  processor: GroupAssigneeProcessor
   default_topic: cdc
   pre_filter:
     type: CdcTableNameMessageFilter

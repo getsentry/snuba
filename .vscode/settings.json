@@ -51,6 +51,11 @@
     "editor.formatOnSave": true
   },
 
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+
   "python.linting.mypyEnabled": true,
   "python.linting.mypyArgs": ["--strict"],
   "python.linting.flake8Enabled": true,

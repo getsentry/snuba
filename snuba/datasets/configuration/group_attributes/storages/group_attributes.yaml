@@ -38,6 +38,14 @@ schema:
   not_deleted_mandatory_condition: deleted
 
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: PassthroughPolicy
     args:
       required_tenant_types:
@@ -51,7 +59,6 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: GroupAttributesMessageProcessor
+  processor: GroupAttributesMessageProcessor
   default_topic: group-attributes
   dlq_topic: snuba-dead-letter-group-attributes

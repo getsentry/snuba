@@ -94,6 +94,14 @@ schema:
   dist_table_name: generic_metric_distributions_aggregated_dist
 
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -103,6 +111,7 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+
 
 query_processors:
   - processor: MappingOptimizer

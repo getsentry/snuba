@@ -1,8 +1,11 @@
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy,
+};
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
+use std::mem;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
@@ -10,18 +13,19 @@ struct BatchState<T, TResult> {
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: SystemTime,
     message_count: usize,
-    is_complete: bool,
 }
 
 impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
-    fn new(initial_value: TResult, accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>) -> BatchState<T, TResult> {
+    fn new(
+        initial_value: TResult,
+        accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
+    ) -> BatchState<T, TResult> {
         BatchState {
             value: Some(initial_value),
             accumulator,
             offsets: Default::default(),
             batch_start_time: SystemTime::now(),
             message_count: 0,
-            is_complete: false,
         }
     }
 
@@ -43,17 +47,21 @@ pub struct Reduce<T, TResult> {
     max_batch_size: usize,
     max_batch_time: Duration,
     batch_state: BatchState<T, TResult>,
+    message_carried_over: Option<Message<TResult>>,
 }
-impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
+impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
+    for Reduce<T, TResult>
+{
     fn poll(&mut self) -> Option<CommitRequest> {
         self.flush(false);
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
-        if self.batch_state.is_complete {
-            return Err(MessageRejected{ message });
+        if self.message_carried_over.is_some() {
+            return Err(MessageRejected { message });
         }
+
         self.batch_state.add(message);
 
         Ok(())
@@ -68,12 +76,30 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.flush(true);
-        self.next_step.join(timeout)
+        let start = Instant::now();
+        let mut remaining: Option<Duration> = timeout;
+        let mut commit_request = None;
+        if self.message_carried_over.is_some() {
+            while self.message_carried_over.is_some() {
+                commit_request = merge_commit_request(commit_request, self.next_step.poll());
+                self.flush(true);
+                if let Some(t) = remaining {
+                    if t <= Duration::from_secs(0) {
+                        log::warn!("Timeout reached while waiting for tasks to finish");
+                        break;
+                    }
+                    remaining = Some(t - start.elapsed());
+                }
+            }
+        } else {
+            self.flush(true);
+        }
+        let next_commit = self.next_step.join(remaining);
+        merge_commit_request(commit_request, next_commit)
     }
 }
 
-impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
+impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
     pub fn new(
         next_step: Box<dyn ProcessingStrategy<TResult>>,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
@@ -89,48 +115,64 @@ impl <T: Clone + Send + Sync, TResult: Clone + Send + Sync>Reduce<T, TResult> {
             max_batch_size,
             max_batch_time,
             batch_state,
+            message_carried_over: None,
         }
     }
 
     fn flush(&mut self, force: bool) {
+        // Try re-submitting the carried over message if there is one
+        if let Some(message) = self.message_carried_over.take() {
+            if let Err(MessageRejected {
+                message: transformed_message,
+            }) = self.next_step.submit(message)
+            {
+                self.message_carried_over = Some(transformed_message);
+                return;
+            }
+        }
+
         if self.batch_state.message_count == 0 {
             return;
         }
 
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
-            || self.batch_state.batch_start_time.elapsed().unwrap_or_default() > self.max_batch_time;
+            || self
+                .batch_state
+                .batch_start_time
+                .elapsed()
+                .unwrap_or_default()
+                > self.max_batch_time;
 
         if batch_complete || force {
+            let batch_state = mem::replace(
+                &mut self.batch_state,
+                BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
+            );
+
             let next_message = Message {
                 inner_message: InnerMessage::AnyMessage(AnyMessage::new(
-                    // TODO: Avoid clones by including message in MessageRejected?
-                    self.batch_state.value.clone().unwrap(),
-                    self.batch_state.offsets.clone(),
+                    batch_state.value.unwrap(),
+                    batch_state.offsets,
                 )),
             };
 
-            match self.next_step.submit(next_message) {
-                Ok(_) => {
-                    self.batch_state = BatchState::new(self.initial_value.clone(), self.accumulator.clone());
-                }
-                Err(MessageRejected{..}) => {
-                    // The batch is marked is_complete, and we stop accepting
-                    // messages until the batch can be sucessfully submitted to the next step.
-                    self.batch_state.is_complete = true;
-                }
+            if let Err(MessageRejected {
+                message: transformed_message,
+            }) = self.next_step.submit(next_message)
+            {
+                self.message_carried_over = Some(transformed_message)
             }
         }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration};
-    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
     use crate::processing::strategies::reduce::Reduce;
+    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     #[test]
     fn test_reduce() {
@@ -167,7 +209,6 @@ mod tests {
             index: 0,
         };
 
-
         let max_batch_size = 2;
         let max_batch_time = Duration::from_secs(1);
 
@@ -177,26 +218,38 @@ mod tests {
             acc
         });
 
-        let next_step = Box::new(NextStep{submitted: submitted_messages});
+        let next_step = Box::new(NextStep {
+            submitted: submitted_messages,
+        });
 
         let mut strategy: Reduce<u64, Vec<u64>> = Reduce::new(
             next_step,
             accumulator,
             initial_value,
             max_batch_size,
-            max_batch_time
+            max_batch_time,
         );
 
         for i in 0..3 {
-            let msg = Message {inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(i, partition1.clone(), i, chrono::Utc::now()))};
+            let msg = Message {
+                inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
+                    i,
+                    partition1.clone(),
+                    i,
+                    chrono::Utc::now(),
+                )),
+            };
             strategy.submit(msg).unwrap();
-            strategy.poll();
+            let _ = strategy.poll();
         }
 
         strategy.close();
-        strategy.join(None);
+        let _ = strategy.join(None);
 
         // 2 batches were created
-        assert_eq!(*submitted_messages_clone.lock().unwrap(), vec![vec![0, 1], vec![2]]);
+        assert_eq!(
+            *submitted_messages_clone.lock().unwrap(),
+            vec![vec![0, 1], vec![2]]
+        );
     }
 }
