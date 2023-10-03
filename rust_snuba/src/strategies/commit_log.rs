@@ -86,7 +86,7 @@ mod tests {
             key: Some(b"topic:0:group1".to_vec()),
             headers: None,
             payload: Some(
-                b"{'offset': 5, 'orig_message_ts': '2023-09-26T21:58:14.191325Z'}".to_vec(),
+                b"{\"offset\": 5, \"orig_message_ts\": \"2023-09-26T21:58:14.191325Z\"}".to_vec(),
             ),
         };
 
