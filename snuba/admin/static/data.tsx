@@ -68,7 +68,7 @@ const NAV_ITEMS = [
   },
   {
     id: "cardinality-analyzer",
-    display: "🔢Cardinality Analyzer!!!",
+    display: "🔢 Cardinality Analyzer!!!",
     component: CardinalityAnalyzer,
   },
   {
