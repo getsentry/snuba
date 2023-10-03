@@ -11,13 +11,10 @@ import DeadLetterQueue from "./dead_letter_queue";
 import CardinalityAnalyzer from "./cardinality_analyzer";
 import ProductionQueries from "./production_queries";
 import SnubaExplain from "./snuba_explain";
-
-function Placeholder(props: any) {
-  return null;
-}
+import Welcome from "./welcome";
 
 const NAV_ITEMS = [
-  { id: "overview", display: "🤿 Snuba Admin", component: Placeholder },
+  { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "capacity-management",

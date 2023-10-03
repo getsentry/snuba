@@ -3,12 +3,11 @@ from __future__ import annotations
 import calendar
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pytz
 import simplejson as json
 from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
@@ -266,7 +265,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["time"],
                         "groupby": "time",
                         "from_date": (self.base_time + skew)
-                        .replace(tzinfo=pytz.utc)
+                        .replace(tzinfo=timezone.utc)
                         .isoformat(),
                         "to_date": (
                             self.base_time + skew + timedelta(minutes=self.minutes)
