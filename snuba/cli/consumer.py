@@ -162,6 +162,12 @@ logger = logging.getLogger(__name__)
     default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
+@click.option(
+    "--skip-write/--no-skip-write",
+    "skip_write",
+    help="Skip the write to clickhouse",
+    default=False,
+)
 def consumer(
     *,
     storage_name: str,
@@ -191,6 +197,7 @@ def consumer(
     max_poll_interval_ms: Optional[int] = None,
     health_check_file: Optional[str] = None,
     group_instance_id: Optional[str] = None,
+    skip_write: bool
 ) -> None:
 
     setup_logging(log_level)
@@ -257,6 +264,7 @@ def consumer(
         health_check_file=health_check_file,
         enforce_schema=enforce_schema,
         group_instance_id=group_instance_id,
+        skip_write=skip_write,
     )
 
     consumer = consumer_builder.build_base_consumer()
