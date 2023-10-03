@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -129,12 +130,27 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
-def test_fail_open(bad_backend: Cache[bytes]) -> None:
+def test_fail_open(
+    bad_backend: Cache[bytes], backend: Cache[bytes], caplog: Any
+) -> None:
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
+
+    class MyClickHouseError(Exception):
+        pass
+
+    bad_function = mock.MagicMock()
+    bad_function.side_effect = MyClickHouseError()
+
     with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES", False):
-        assert bad_backend.get_readthrough(key, function, noop, 5) == value
+        with caplog.at_level(logging.WARNING):
+            # Redis error is caught and value gen function is executed
+            assert bad_backend.get_readthrough(key, function, noop, 5) == value
+        assert "Redis readthrough cache failed open" in caplog.text
+        # Error within value gen function itself and not Redis, should raise
+        with pytest.raises(MyClickHouseError):
+            backend.get_readthrough(key, bad_function, noop, 5)
 
 
 @pytest.mark.redis_db
