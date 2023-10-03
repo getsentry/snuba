@@ -67,6 +67,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         output_block_size: Optional[int],
         max_insert_batch_size: Optional[int],
         max_insert_batch_time: Optional[float],
+        skip_write: bool = False,
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
         max_messages_to_process: Optional[int] = None,
@@ -78,6 +79,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__collector = collector
         self.__max_messages_to_process = max_messages_to_process
 
+        self.__skip_write = skip_write
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
         self.__max_insert_batch_size = max_insert_batch_size or max_batch_size
@@ -123,21 +125,27 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message.payload.join()
             return message
 
+        commit_strategy: ProcessingStrategy[Union[FilteredPayload, ProcessedMessage]]
+
         commit_strategy = CommitOffsets(commit)
 
-        collect: Reduce[ProcessedMessage, ProcessedMessageBatchWriter] = Reduce(
-            self.__max_insert_batch_size,
-            self.__max_insert_batch_time,
-            accumulator,
-            self.__collector,
-            RunTaskInThreads(
-                flush_batch,
-                # We process up to 2 insert batches in parallel
-                2,
-                3,
-                commit_strategy,
-            ),
-        )
+        collect: ProcessingStrategy[Union[FilteredPayload, ProcessedMessage]]
+        if self.__skip_write:
+            collect = commit_strategy
+        else:
+            collect = Reduce[ProcessedMessage, ProcessedMessageBatchWriter](
+                self.__max_insert_batch_size,
+                self.__max_insert_batch_time,
+                accumulator,
+                self.__collector,
+                RunTaskInThreads(
+                    flush_batch,
+                    # We process up to 2 insert batches in parallel
+                    2,
+                    3,
+                    commit_strategy,
+                ),
+            )
 
         transform_function = self.__process_message
 
