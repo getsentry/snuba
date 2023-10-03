@@ -66,7 +66,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
             retention_days = enforce_retention(
-                message["retention_days"],
+                message.get("retention_days"),
                 datetime.utcfromtimestamp(message["start_timestamp_ms"] / 1000),
             )
         except EventTooOld:
