@@ -245,6 +245,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
@@ -274,6 +275,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
@@ -299,6 +301,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
