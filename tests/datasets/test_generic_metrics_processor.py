@@ -1,9 +1,12 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Tuple
+from unittest import mock
 
 import pytest
+from usageaccountant import UsageUnit
 
+from snuba import state
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -135,3 +138,31 @@ def test_aggregation_option_is_converted_to_column(
     insert_batch = dis_processor.process_message(message, None)
 
     assert insert_batch.rows[0]["enable_histogram"] == 1
+
+
+@pytest.mark.redis_db
+def test_record_cogs(dis_processor: GenericDistributionsMetricsProcessor) -> None:
+    message = {
+        "use_case_id": "performance",
+        "org_id": 1,
+        "project_id": 2,
+        "metric_id": 9223372036854775910,
+        "type": InputType.DISTRIBUTION.value,
+        "timestamp": timestamp,
+        "tags": {"10": 11, "20": 22, "30": 33},
+        "value": [4, 5, 6],
+        "retention_days": 22,
+        "mapping_meta": MAPPING_META_COMMON,
+    }
+    state.set_config("gen_metrics_processor_cogs_probability", 1.0)
+    with mock.patch(
+        "snuba.datasets.processors.generic_metrics_processor.record_cogs"
+    ) as record_cogs:
+        dis_processor.process_message(message, None)
+
+    record_cogs.assert_called_once_with(
+        resource_id="generic_metrics_processor_distributions",
+        app_feature="genericmetrics_performance",
+        amount=297,
+        usage_type=UsageUnit.BYTES,
+    )

@@ -1,10 +1,9 @@
 import itertools
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 
 import pytest
-import pytz
 from pytest import approx
 from snuba_sdk import AliasedExpression, Function, Request
 from snuba_sdk.column import Column
@@ -27,7 +26,7 @@ SNQL_ROUTE = "/generic_metrics/snql"
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=pytz.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
     )
 
 

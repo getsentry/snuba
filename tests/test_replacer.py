@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import importlib
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, MutableMapping, Sequence
 from unittest import mock
 
 import pytest
-import pytz
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
@@ -98,7 +97,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now(tz=timezone.utc)
 
         project_id = self.project_id
 
@@ -171,7 +170,7 @@ class TestReplacer:
         assert _issue_count() == [{"count": 1, "group_id": 1}]
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now(tz=timezone.utc)
 
         message: Message[KafkaPayload] = Message(
             BrokerValue(
