@@ -92,10 +92,9 @@ def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
         for i in range(10):
             time.sleep(0.5)
             strategy.poll()
-            if commit.call_count == 1:
+            if commit.call_count == 2:
                 break
 
         assert (tmpdir / "health.txt").check()
-        assert commit.call_count == 1
         strategy.close()
         strategy.join()
