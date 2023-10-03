@@ -91,6 +91,7 @@ interface Client {
     instruction: ReplayInstruction
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
+  getAdminRegions: () => Promise<string[]>;
 }
 
 function Client() {
@@ -192,6 +193,11 @@ function Client() {
 
     getAllowedProjects: () => {
       const url = baseUrl + "allowed_projects";
+      return fetch(url).then((resp) => resp.json());
+    },
+
+    getAdminRegions: () => {
+      const url = baseUrl + "admin_regions";
       return fetch(url).then((resp) => resp.json());
     },
 

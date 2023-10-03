@@ -4,7 +4,7 @@ import logging
 import math
 import time
 from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Deque, Mapping, Optional, Sequence, Tuple
 
@@ -15,8 +15,10 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
+from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
-from arroyo.types import BrokerValue, Commit
+from arroyo.processing.strategies.produce import Produce
+from arroyo.types import Commit
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
@@ -202,7 +204,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             calculated_max_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
-            ProduceResult(self.__producer, self.__result_topic, commit),
+            Produce(self.__producer, Topic(self.__result_topic), CommitOffsets(commit)),
         )
 
         if self.__health_check_file:
@@ -224,7 +226,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         max_concurrent_queries: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[SubscriptionTaskResult],
+        next_step: ProcessingStrategy[KafkaPayload],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -235,6 +237,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__next_step = next_step
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
+        self.__result_encoder = SubscriptionTaskResultEncoder()
 
         self.__queue: Deque[
             Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]
@@ -288,13 +291,15 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             message, result_future = self.__queue.popleft()
 
-            self.__next_step.submit(
-                message.replace(
+            transformed_message = message.replace(
+                self.__result_encoder.encode(
                     SubscriptionTaskResult(
                         result_future.task, result_future.future.result()
                     )
                 )
             )
+
+            self.__next_step.submit(transformed_message)
 
         self.__next_step.poll()
 
@@ -376,87 +381,16 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             message, result_future = self.__queue.popleft()
 
-            subscription_task_result = SubscriptionTaskResult(
-                result_future.task, result_future.future.result(remaining)
+            transformed_message = self.__result_encoder.encode(
+                SubscriptionTaskResult(
+                    result_future.task, result_future.future.result(remaining)
+                )
             )
 
-            self.__next_step.submit(message.replace(subscription_task_result))
+            self.__next_step.submit(message.replace(transformed_message))
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
         self.__executor.shutdown()
 
         self.__next_step.close()
         self.__next_step.join(remaining)
-
-
-class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
-    """
-    Gets a SubscriptionTaskResult from the ExecuteQuery processor, encodes and produces
-    the results to the subscription result topic then commits offsets.
-    """
-
-    def __init__(
-        self,
-        producer: Producer[KafkaPayload],
-        result_topic: str,
-        commit: Commit,
-    ):
-        self.__producer = producer
-        self.__result_topic = Topic(result_topic)
-        self.__commit = commit
-
-        self.__encoder = SubscriptionTaskResultEncoder()
-
-        self.__queue: Deque[
-            Tuple[Message[SubscriptionTaskResult], Future[BrokerValue[KafkaPayload]]]
-        ] = deque()
-
-        self.__max_buffer_size = 10000
-        self.__closed = False
-
-    def poll(self) -> None:
-        while self.__queue:
-            message, future = self.__queue[0]
-
-            if not future.done():
-                break
-
-            self.__queue.popleft()
-
-            self.__commit(message.committable)
-
-    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
-        assert not self.__closed
-
-        if len(self.__queue) >= self.__max_buffer_size:
-            raise MessageRejected
-
-        encoded = self.__encoder.encode(message.payload)
-        self.__queue.append(
-            (message, self.__producer.produce(self.__result_topic, encoded))
-        )
-
-    def close(self) -> None:
-        self.__closed = True
-
-    def terminate(self) -> None:
-        self.__closed = True
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        start = time.time()
-
-        # Commit all pending offsets
-        self.__commit({}, force=True)
-
-        while self.__queue:
-            remaining = timeout - (time.time() - start) if timeout is not None else None
-            if remaining is not None and remaining <= 0:
-                logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
-                break
-
-            message, future = self.__queue.popleft()
-
-            future.result(remaining)
-
-            logger.info("Committing offset: %r", message.committable)
-            self.__commit(message.committable, force=True)

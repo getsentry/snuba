@@ -69,6 +69,7 @@ struct FromSentryTags {
     module: String,
     #[serde(default)]
     op: String,
+    #[serde(default)]
     status: SpanStatus,
     status_code: Option<String>,
     #[serde(default)]
@@ -250,6 +251,7 @@ pub enum SpanStatus {
     ///
     /// "We do not know whether the transaction failed or succeeded"
     #[default]
+    #[serde(alias = "")]
     Unknown = 2,
 
     /// Client specified an invalid argument. 4xx.
@@ -348,7 +350,7 @@ mod tests {
     use std::time::SystemTime;
 
     #[test]
-    fn test_spans() {
+    fn test_valid_span() {
         let data = r#"{
             "duration_ms": 1000,
             "event_id": "dcc403b73ef548648188bbfa6012e9dc",
@@ -376,6 +378,103 @@ mod tests {
               "module": "http",
               "op": "http.client",
               "status": "ok",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_no_status_value() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "project_id": 1,
+            "retention_days": 90,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "tags": {
+              "tag1": "value1",
+              "tag2": "123",
+              "tag3": "true"
+            },
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_empty_status_value() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "project_id": 1,
+            "retention_days": 90,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "tags": {
+              "tag1": "value1",
+              "tag2": "123",
+              "tag3": "true"
+            },
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status": "",
               "status_code": "200",
               "system": "python",
               "transaction": "/organizations/:orgId/issues/",

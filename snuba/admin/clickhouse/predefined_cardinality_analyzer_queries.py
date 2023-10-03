@@ -36,7 +36,7 @@ class SpanGroupingCardinality(CardinalityQuery):
     tags.raw_value [indexOf(tags.key, 9223372036854776062)] AS `span.category`,
     uniq(tags.raw_value [indexOf(tags.key, 9223372036854776060)]) AS count_groups
     FROM generic_metric_distributions_aggregated_dist
-    WHERE (granularity = 3)
+    WHERE (granularity = 2)
     AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
     AND (metric_id IN [9223372036854776212, 9223372036854776213])
     AND `span.category` = '{{span_category}}'
@@ -57,7 +57,7 @@ class SpanGroupingCardinalitySamples(CardinalityQuery):
     tags.raw_value[indexOf(tags.key, 9223372036854776060)] AS `span.group`,
     tags.raw_value[indexOf(tags.key, 9223372036854776057)] AS `span.description`
     FROM generic_metric_distributions_aggregated_dist
-    WHERE (granularity = 3)
+    WHERE (granularity = 2)
     AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
     AND (org_id = {{org_id}})
     AND (project_id = {{project_id}})

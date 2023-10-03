@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, Optional, Tuple, Union, cast
 
 import pytest
-import pytz
 import simplejson as json
 from pytest import approx
 
@@ -41,7 +40,7 @@ def teardown_common() -> None:
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=pytz.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
     )
 
 
@@ -227,10 +226,10 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         )
         self.sentry_received_timestamp = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         )
         self.storage = cast(
             WritableTableStorage,
