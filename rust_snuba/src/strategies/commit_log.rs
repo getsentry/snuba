@@ -1,6 +1,7 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::str;
+use thiserror::Error;
 
 #[derive(Debug, Serialize)]
 struct Commit {
@@ -16,15 +17,24 @@ struct Payload {
     orig_message_ts: f64,
 }
 
-impl TryFrom<KafkaPayload> for Commit {
-    type Error = anyhow::Error;
+#[derive(Error, Debug)]
+#[error(transparent)]
+enum CommitLogError {
+    #[error("encode error")]
+    EncodeError,
+    #[error("decode error")]
+    DecodeError,
+}
 
-    fn try_from(payload: KafkaPayload) -> Result<Self, anyhow::Error> {
+impl TryFrom<KafkaPayload> for Commit {
+    type Error = CommitLogError;
+
+    fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
         let key = payload.key.unwrap();
 
         let data: Vec<&str> = str::from_utf8(&key).unwrap().split(':').collect();
         if data.len() != 3 {
-            return Err(anyhow::anyhow!("Invalid payload"));
+            return Err(CommitLogError::DecodeError);
         }
 
         let topic = data[0].to_string();
@@ -32,7 +42,8 @@ impl TryFrom<KafkaPayload> for Commit {
         let consumer_group = data[2].to_string();
 
         let d: Payload =
-            serde_json::from_slice(&payload.payload.ok_or(anyhow::anyhow!("Invalid payload"))?)?;
+            serde_json::from_slice(&payload.payload.ok_or(CommitLogError::DecodeError)?)
+                .map_err(|_| CommitLogError::DecodeError)?;
 
         Ok(Commit {
             topic,
@@ -44,9 +55,9 @@ impl TryFrom<KafkaPayload> for Commit {
 }
 
 impl TryFrom<Commit> for KafkaPayload {
-    type Error = anyhow::Error;
+    type Error = CommitLogError;
 
-    fn try_from(commit: Commit) -> Result<Self, anyhow::Error> {
+    fn try_from(commit: Commit) -> Result<Self, CommitLogError> {
         let key = Some(
             format!(
                 "{}:{}:{}",
@@ -55,7 +66,7 @@ impl TryFrom<Commit> for KafkaPayload {
             .into_bytes(),
         );
 
-        let payload = Some(serde_json::to_vec(&commit)?);
+        let payload = Some(serde_json::to_vec(&commit).map_err(|_| CommitLogError::EncodeError)?);
 
         Ok(KafkaPayload {
             key,
