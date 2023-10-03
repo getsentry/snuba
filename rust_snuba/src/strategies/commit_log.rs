@@ -18,12 +18,13 @@ struct Payload {
 }
 
 #[derive(Error, Debug)]
-#[error(transparent)]
 enum CommitLogError {
-    #[error("encode error")]
-    EncodeError,
-    #[error("decode error")]
-    DecodeError,
+    #[error("json error")]
+    JsonError(#[from] serde_json::Error),
+    #[error("invalid message key")]
+    InvalidKey,
+    #[error("invalid message payload")]
+    InvalidPayload,
 }
 
 impl TryFrom<KafkaPayload> for Commit {
@@ -34,7 +35,7 @@ impl TryFrom<KafkaPayload> for Commit {
 
         let data: Vec<&str> = str::from_utf8(&key).unwrap().split(':').collect();
         if data.len() != 3 {
-            return Err(CommitLogError::DecodeError);
+            return Err(CommitLogError::InvalidKey);
         }
 
         let topic = data[0].to_string();
@@ -42,8 +43,7 @@ impl TryFrom<KafkaPayload> for Commit {
         let consumer_group = data[2].to_string();
 
         let d: Payload =
-            serde_json::from_slice(&payload.payload.ok_or(CommitLogError::DecodeError)?)
-                .map_err(|_| CommitLogError::DecodeError)?;
+            serde_json::from_slice(&payload.payload.ok_or(CommitLogError::InvalidPayload)?)?;
 
         Ok(Commit {
             topic,
@@ -66,7 +66,7 @@ impl TryFrom<Commit> for KafkaPayload {
             .into_bytes(),
         );
 
-        let payload = Some(serde_json::to_vec(&commit).map_err(|_| CommitLogError::EncodeError)?);
+        let payload = Some(serde_json::to_vec(&commit)?);
 
         Ok(KafkaPayload {
             key,
