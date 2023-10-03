@@ -1009,3 +1009,8 @@ def production_snql_query() -> Response:
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def get_allowed_projects() -> Response:
     return make_response(jsonify(settings.ADMIN_ALLOWED_PROD_PROJECTS), 200)
+
+
+@application.route("/admin_regions", methods=["GET"])
+def get_admin_regions() -> Response:
+    return make_response(jsonify(settings.ADMIN_REGIONS), 200)

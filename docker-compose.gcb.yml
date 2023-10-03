@@ -66,7 +66,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     volumes:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -80,7 +80,7 @@ services:
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -92,7 +92,7 @@ services:
   clickhouse-01:
     depends_on:
       - zookeeper
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -105,7 +105,7 @@ services:
   clickhouse-02:
     depends_on:
       - zookeeper
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -118,7 +118,7 @@ services:
   clickhouse-03:
     depends_on:
       - zookeeper
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -131,7 +131,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: '${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}'
+    image: "${CLICKHOUSE_IMAGE:-yandex/clickhouse-server:20.3.9.70}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
