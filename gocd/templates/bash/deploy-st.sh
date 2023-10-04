@@ -16,4 +16,3 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
   --container-name="cleanup"
-
