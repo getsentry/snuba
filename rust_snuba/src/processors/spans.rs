@@ -12,6 +12,7 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
+            println!("{:#?}", err);
             InvalidMessage
         })?;
         let mut span: Span = msg.try_into()?;
@@ -31,6 +32,10 @@ pub fn process_message(
     Err(InvalidMessage)
 }
 
+fn default_retention_days() -> Option<u16> {
+    Some(90)
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
     #[serde(default)]
@@ -44,7 +49,8 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     project_id: u64,
-    retention_days: u16,
+    #[serde(default = "default_retention_days")]
+    retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: FromSentryTags,
@@ -207,7 +213,7 @@ impl TryFrom<FromSpanMessage> for Span {
             parent_span_id: from.parent_span_id,
             platform: from.sentry_tags.system.clone(),
             project_id: from.project_id,
-            retention_days: from.retention_days,
+            retention_days: from.retention_days.unwrap_or(90),
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.clone(),
             sentry_tag_keys,
@@ -475,6 +481,103 @@ mod tests {
               "module": "http",
               "op": "http.client",
               "status": "",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_null_retention_days() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "project_id": 1,
+            "retention_days": null,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "tags": {
+              "tag1": "value1",
+              "tag2": "123",
+              "tag3": "true"
+            },
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status": "ok",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_missing_retention_days() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "project_id": 1,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "tags": {
+              "tag1": "value1",
+              "tag2": "123",
+              "tag3": "true"
+            },
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status": "ok",
               "status_code": "200",
               "system": "python",
               "transaction": "/organizations/:orgId/issues/",
