@@ -12,7 +12,6 @@ pub fn process_message(
     if let Some(payload_bytes) = payload.payload {
         let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            println!("{:#?}", err);
             InvalidMessage
         })?;
         let mut span: Span = msg.try_into()?;
