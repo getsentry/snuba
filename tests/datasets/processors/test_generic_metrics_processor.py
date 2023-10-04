@@ -2,17 +2,16 @@ import pytest
 
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericCountersMetricsProcessor,
+    GenericDistributionsMetricsProcessor,
 )
 
 
 @pytest.mark.parametrize(
     "message, expected_output",
     [
+        pytest.param({"type": "c", "metric_id": 1, "value": 10}, True, id="counter"),
         pytest.param(
-            {"type": "c", "name": "my_counter", "value": 10}, True, id="counter"
-        ),
-        pytest.param(
-            {"type": "d", "name": "my_distribution", "value": 20},
+            {"type": "d", "metric_id": 2, "value": 20},
             False,
             id="distribution",
         ),
@@ -21,6 +20,44 @@ from snuba.datasets.processors.generic_metrics_processor import (
 def test__should_process(message, expected_output):
     processor = GenericCountersMetricsProcessor()
     assert processor._should_process(message) == expected_output
+
+
+@pytest.mark.parametrize(
+    "message, expected_output",
+    [
+        pytest.param(
+            {
+                "type": "d",
+                "metric_id": 3,
+                "value": [5, 7, 10],
+                "aggregation_option": "ten_second",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 2,
+                "granularities": [0, 1, 2, 3],
+            },
+            id="ten_second",
+        ),
+        pytest.param(
+            {
+                "type": "d",
+                "metric_id": 4,
+                "value": [5, 7, 10],
+                "aggregation_option": "hist",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 2,
+                "granularities": [1, 2, 3],
+            },
+            id="hist",
+        ),
+    ],
+)
+def test__aggregation_options(message, expected_output):
+    processor = GenericDistributionsMetricsProcessor()
+    assert processor._aggregation_options(message, expected_output)
 
 
 @pytest.mark.parametrize(
