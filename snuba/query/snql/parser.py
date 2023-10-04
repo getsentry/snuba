@@ -1514,7 +1514,7 @@ def parse_snql_query(
         explain_meta.set_original_ast(str(query))
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
-    # OR and AND clauses with multiple parameters so we have to teeify them
+    # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
