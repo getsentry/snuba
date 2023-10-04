@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from snuba.datasets.storage import StorageKey
@@ -76,6 +78,25 @@ def test_rate_limit_concurrent_diff_tenants(
         tenant_ids={"organization_id": OTHER_ORG_ID},
         query_id=f"abc{MAX_CONCURRENT_QUERIES}",
     )
+
+
+@pytest.mark.redis_db
+def test_configure_max_query_duration(
+    policy: ConcurrentRateLimitAllocationPolicy,
+) -> None:
+    max_query_duration_s = 1
+    sleep_time = 1.01
+    policy.set_config_value("concurrent_limit", 1)
+    policy.set_config_value("max_query_duration_s", max_query_duration_s)
+
+    policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
+    time.sleep(sleep_time)
+    try:
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc2")
+    except AllocationPolicyViolation:
+        assert (
+            False
+        ), "max_query_duration_s is set to {max_query_duration_s}, test sleeps for {sleep_time} seconds, the first query should have no longer been counted towards the concurrent limit"
 
 
 @pytest.mark.redis_db

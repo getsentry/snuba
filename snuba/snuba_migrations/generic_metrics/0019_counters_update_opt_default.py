@@ -10,10 +10,10 @@ from snuba.migrations.operations import OperationTarget, SqlOperation
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    storage_set_key = StorageSetKey.GENERIC_METRICS_SETS
+    storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
 
-    local_table_name = "generic_metric_sets_raw_local"
-    dist_table_name = "generic_metric_sets_raw_dist"
+    local_table_name = "generic_metric_counters_raw_local"
+    dist_table_name = "generic_metric_counters_raw_dist"
 
     before = [
         Column(
