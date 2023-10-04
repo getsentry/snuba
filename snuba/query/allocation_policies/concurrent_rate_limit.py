@@ -214,6 +214,13 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
             )
+        if self.is_cross_org_query(tenant_ids):
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "pass_through"},
+            )
+
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
         within_rate_limit, why = self._is_within_rate_limit(query_id, rate_limit_params)
         return QuotaAllowance(
@@ -226,5 +233,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
+        if self.is_cross_org_query(tenant_ids):
+            return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
