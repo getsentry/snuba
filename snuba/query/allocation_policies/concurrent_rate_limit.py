@@ -218,7 +218,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return QuotaAllowance(
                 can_run=True,
                 max_threads=self.max_threads,
-                explanation={"reason": "pass_through"},
+                explanation={"reason": "cross_org"},
             )
 
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
