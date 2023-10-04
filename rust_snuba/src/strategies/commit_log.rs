@@ -3,12 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::str;
 use thiserror::Error;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 struct Commit {
     topic: String,
     partition: u16,
     consumer_group: String,
     orig_message_ts: f64,
+    offset: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -50,6 +51,7 @@ impl TryFrom<KafkaPayload> for Commit {
             partition,
             consumer_group,
             orig_message_ts: d.orig_message_ts,
+            offset: d.offset,
         })
     }
 }
@@ -66,7 +68,10 @@ impl TryFrom<Commit> for KafkaPayload {
             .into_bytes(),
         );
 
-        let payload = Some(serde_json::to_vec(&commit)?);
+        let payload = Some(serde_json::to_vec(&Payload {
+            offset: commit.offset,
+            orig_message_ts: commit.orig_message_ts,
+        })?);
 
         Ok(KafkaPayload {
             key,
