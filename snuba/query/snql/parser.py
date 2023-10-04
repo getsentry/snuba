@@ -1005,19 +1005,12 @@ def _treeify_or_and_conditions(
         if not isinstance(exp, FunctionCall):
             return exp
 
-        if exp.function_name not in ("and", "or"):
+        if exp.function_name == "and":
+            return combine_and_conditions(exp.parameters)
+        elif exp.function_name == "or":
+            return combine_or_conditions(exp.parameters)
+        else:
             return exp
-        args = exp.parameters
-        if len(args) <= 2:
-            return exp
-
-        first = args[0]
-        rest = args[1:]
-        return FunctionCall(
-            exp.alias,
-            exp.function_name,
-            (first, transform(FunctionCall(None, exp.function_name, rest))),
-        )
 
     query.transform_expressions(transform)
 
