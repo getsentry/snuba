@@ -638,7 +638,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         class_name = self.__class__.__name__
 
-        # config doesn't existhttps://riseup.net/en
+        # config doesn't exist
         if config_key not in definitions:
             raise InvalidPolicyConfig(
                 f"'{config_key}' is not a valid config for {class_name}!"
