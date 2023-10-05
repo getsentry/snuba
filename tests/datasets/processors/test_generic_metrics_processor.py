@@ -1,3 +1,5 @@
+from typing import Any, Mapping
+
 import pytest
 
 from snuba.datasets.processors.generic_metrics_processor import (
@@ -17,13 +19,15 @@ from snuba.datasets.processors.generic_metrics_processor import (
         ),
     ],
 )
-def test__should_process(message, expected_output):
+def test__should_process(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any]
+) -> None:
     processor = GenericCountersMetricsProcessor()
     assert processor._should_process(message) == expected_output
 
 
 @pytest.mark.parametrize(
-    "message, expected_output",
+    "message, expected_output, retention_days",
     [
         pytest.param(
             {
@@ -35,8 +39,9 @@ def test__should_process(message, expected_output):
             {
                 "min_retention_days": 90,
                 "materialization_version": 2,
-                "granularities": [0, 1, 2, 3],
+                "granularities": [1, 2, 3, 0],
             },
+            90,
             id="ten_second",
         ),
         pytest.param(
@@ -50,14 +55,18 @@ def test__should_process(message, expected_output):
                 "min_retention_days": 90,
                 "materialization_version": 2,
                 "granularities": [1, 2, 3],
+                "enable_histogram": 1,
             },
+            90,
             id="hist",
         ),
     ],
 )
-def test__aggregation_options(message, expected_output):
+def test__aggregation_options(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any], retention_days: int
+) -> None:
     processor = GenericDistributionsMetricsProcessor()
-    assert processor._aggregation_options(message, expected_output)
+    assert processor._aggregation_options(message, retention_days) == expected_output
 
 
 @pytest.mark.parametrize(
@@ -83,7 +92,11 @@ def test__aggregation_options(message, expected_output):
         ),
     ],
 )
-def test__process_values(message, expected_output, should_raise_exception):
+def test__process_values(
+    message: Mapping[str, Any],
+    expected_output: Mapping[str, Any],
+    should_raise_exception: bool,
+) -> None:
     processor = GenericCountersMetricsProcessor()
     if should_raise_exception:
         with pytest.raises(Exception):
