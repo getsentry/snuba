@@ -121,6 +121,8 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[bool, str]:
+        if self.is_cross_org_query(tenant_ids):
+            return True, "cross org query"
         if tenant_ids.get("referrer") is None:
             return False, "no referrer"
         if (
@@ -141,6 +143,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
+        if self.is_cross_org_query(tenant_ids):
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "cross_org_query"},
+            )
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
@@ -218,11 +226,13 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
-        if result_or_error.error:
-            return
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             # we already logged the reason before the query
+            return
+        if self.is_cross_org_query(tenant_ids):
+            return
+        if result_or_error.error:
             return
         bytes_scanned = self._get_bytes_scanned_in_query(tenant_ids, result_or_error)
         query_result = result_or_error.query_result

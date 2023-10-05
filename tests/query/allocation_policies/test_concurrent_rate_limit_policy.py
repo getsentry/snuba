@@ -337,3 +337,19 @@ def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
             )
     except AllocationPolicyViolation:
         pytest.fail("should not have been blocked")
+
+
+@pytest.mark.redis_db
+def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "cross_org_query": 1,
+    }
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id="a").can_run
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id="b").max_threads
+        == policy.max_threads
+    )
+    # make sure that this can be called with cross org queries
+    # and nothing raises
+    policy.update_quota_balance(tenant_ids, "c", None)  # type: ignore
