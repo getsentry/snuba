@@ -90,7 +90,7 @@ mod tests {
         let payload = KafkaPayload {
             key: Some(b"topic:0:group1".to_vec()),
             headers: None,
-            payload: Some(b"{\"offset\": 5, \"orig_message_ts\": 1696381946.0}".to_vec()),
+            payload: Some(b"{\"offset\": 5,\"orig_message_ts\": 1696381946.0}".to_vec()),
         };
 
         let payload_clone = payload.clone();
