@@ -1,4 +1,4 @@
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use crate::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::str;
 use thiserror::Error;
