@@ -57,7 +57,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
     start_timestamp_ms: u64,
-    tags: BTreeMap<String, String>,
+    tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
 }
 
@@ -180,8 +180,10 @@ impl TryFrom<FromSpanMessage> for Span {
         let status = from.sentry_tags.status as u8;
         let transaction_op = from.sentry_tags.transaction_op.clone();
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
-        let mut tag_keys: Vec<String> = from.tags.clone().into_keys().collect();
-        let mut tag_values: Vec<String> = from.tags.into_values().collect();
+
+        let tags = from.tags.unwrap_or_default();
+        let mut tag_keys: Vec<String> = tags.clone().into_keys().collect();
+        let mut tag_values: Vec<String> = tags.into_values().collect();
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
@@ -600,4 +602,96 @@ mod tests {
         };
         process_message(payload, meta).expect("The message should be processed");
     }
+
+    #[test]
+    fn test_no_tags() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "profile_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "project_id": 1,
+            "retention_days": 90,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status": "ok",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_null_tags() {
+        let data = r#"{
+            "duration_ms": 1000,
+            "event_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "exclusive_time_ms": 1000,
+            "group_raw": "b640a0ce465fa2a4",
+            "is_segment": false,
+            "organization_id": 69,
+            "parent_span_id": "deadbeefdeadbeef",
+            "profile_id": "dcc403b73ef548648188bbfa6012e9dc",
+            "project_id": 1,
+            "retention_days": 90,
+            "segment_id": "deadbeefdeadbeef",
+            "span_id": "deadbeefdeadbeef",
+            "start_timestamp_ms": 1691105878720,
+            "tags": null,
+            "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+            "sentry_tags": {
+              "action": "GET",
+              "domain": "targetdomain.tld:targetport",
+              "group": "deadbeefdeadbeef",
+              "http.method": "GET",
+              "module": "http",
+              "op": "http.client",
+              "status": "ok",
+              "status_code": "200",
+              "system": "python",
+              "transaction": "/organizations/:orgId/issues/",
+              "transaction.method": "GET",
+              "transaction.op": "navigation"
+            }
+          }"#;
+        let payload = KafkaPayload {
+            key: None,
+            headers: None,
+            payload: Some(data.as_bytes().to_vec()),
+        };
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
 }
