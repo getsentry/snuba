@@ -47,6 +47,7 @@ struct FromSpanMessage {
     is_segment: bool,
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
+    profile_id: Option<Uuid>,
     project_id: u64,
     #[serde(default = "default_retention_days")]
     retention_days: Option<u16>,
@@ -146,6 +147,7 @@ struct Span {
     parent_span_id: u64,
     partition: u16,
     platform: String,
+    profile_id: Option<Uuid>,
     project_id: u64,
     retention_days: u16,
     segment_id: u64,
@@ -211,6 +213,7 @@ impl TryFrom<FromSpanMessage> for Span {
             op: from.sentry_tags.op.clone(),
             parent_span_id: from.parent_span_id,
             platform: from.sentry_tags.system.clone(),
+            profile_id: from.profile_id,
             project_id: from.project_id,
             retention_days: from.retention_days.unwrap_or(90),
             segment_id: from.segment_id,
@@ -364,6 +367,7 @@ mod tests {
             "is_segment": false,
             "organization_id": 69,
             "parent_span_id": "deadbeefdeadbeef",
+            "profile_id": "dcc403b73ef548648188bbfa6012e9dc",
             "project_id": 1,
             "retention_days": 90,
             "segment_id": "deadbeefdeadbeef",
