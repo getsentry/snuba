@@ -90,6 +90,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         transaction_id: Optional[str] = span_event.get("event_id", None)
         if transaction_id:
             processed["transaction_id"] = str(uuid.UUID(transaction_id))
+        profile_id: Optional[str] = span_event.get("profile_id", None)
+        if profile_id:
+            processed["profile_id"] = str(uuid.UUID(profile_id))
 
         # descriptions
         processed["description"] = _unicodify(span_event.get("description", ""))
