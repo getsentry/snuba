@@ -7,6 +7,7 @@ from typing import Any, Dict, Generator, Mapping, Sequence
 
 import pytest
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
+from structlog.testing import capture_logs
 
 from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
@@ -230,9 +231,10 @@ class TestSpansPayloads:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime.datetime(1970, 1, 1)
         )
-        processed = SpansMessageProcessor().process_message(payload2, meta)
-        assert processed is None
-        assert "Failed to process span message" in caplog.text
+        with capture_logs() as logs:
+            processed = SpansMessageProcessor().process_message(payload2, meta)
+            assert processed is None
+            assert "Failed to process span message" in str(logs)
 
 
 class TestWriteSpansClickhouse:
