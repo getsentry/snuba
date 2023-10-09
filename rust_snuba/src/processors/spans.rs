@@ -31,8 +31,10 @@ pub fn process_message(
     Err(InvalidMessage)
 }
 
+const DEFAULT_RETENTION_DAYS: u16 = 90;
+
 fn default_retention_days() -> Option<u16> {
-    Some(90)
+    Some(DEFAULT_RETENTION_DAYS)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -247,7 +249,7 @@ impl TryFrom<FromSpanMessage> for Span {
             platform: from.sentry_tags.system.unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
-            retention_days: from.retention_days.unwrap_or(90),
+            retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.unwrap_or_default(),
             sentry_tag_keys,
