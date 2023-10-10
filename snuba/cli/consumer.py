@@ -190,13 +190,13 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    join_timeout: int = 5,
-    enforce_schema: bool = False,
-    log_level: Optional[str] = None,
-    profile_path: Optional[str] = None,
-    max_poll_interval_ms: Optional[int] = None,
-    health_check_file: Optional[str] = None,
-    group_instance_id: Optional[str] = None,
+    join_timeout: int,
+    enforce_schema: bool,
+    log_level: Optional[str],
+    profile_path: Optional[str],
+    max_poll_interval_ms: Optional[int],
+    health_check_file: Optional[str],
+    group_instance_id: Optional[str],
     skip_write: bool
 ) -> None:
 
