@@ -55,9 +55,12 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
-
 ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
+
+# All available regions where region is:
+# https://snuba-admin.<region>.getsentry.net/
+ADMIN_REGIONS: Sequence[str] = []
 
 ######################
 # End Admin Settings #

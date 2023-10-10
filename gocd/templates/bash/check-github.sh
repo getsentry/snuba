@@ -8,4 +8,5 @@
   "Tests and code coverage (test_distributed_migrations)" \
   "Dataset Config Validation" \
   "sentry (0)" \
-  "sentry (1)"
+  "sentry (1)" \
+  "Tests on multiple clickhouse versions (21.8.13.1.altinitystable)"

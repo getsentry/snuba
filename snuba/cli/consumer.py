@@ -7,6 +7,7 @@ import sentry_sdk
 from arroyo import configure_metrics
 
 from snuba import environment, settings
+from snuba.cogs.accountant import close_cogs_recorder
 from snuba.consumers.consumer_builder import (
     ConsumerBuilder,
     KafkaParameters,
@@ -155,6 +156,18 @@ logger = logging.getLogger(__name__)
     type=str,
     help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
+@click.option(
+    "--group-instance-id",
+    type=str,
+    default=None,
+    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+)
+@click.option(
+    "--skip-write/--no-skip-write",
+    "skip_write",
+    help="Skip the write to clickhouse",
+    default=False,
+)
 def consumer(
     *,
     storage_name: str,
@@ -183,6 +196,8 @@ def consumer(
     profile_path: Optional[str] = None,
     max_poll_interval_ms: Optional[int] = None,
     health_check_file: Optional[str] = None,
+    group_instance_id: Optional[str] = None,
+    skip_write: bool
 ) -> None:
 
     setup_logging(log_level)
@@ -220,6 +235,7 @@ def consumer(
         slice_id=slice_id,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        group_instance_id=group_instance_id,
     )
 
     consumer_builder = ConsumerBuilder(
@@ -247,12 +263,15 @@ def consumer(
         max_poll_interval_ms=max_poll_interval_ms,
         health_check_file=health_check_file,
         enforce_schema=enforce_schema,
+        group_instance_id=group_instance_id,
+        skip_write=skip_write,
     )
 
     consumer = consumer_builder.build_base_consumer()
 
     def handler(signum: int, frame: Any) -> None:
         consumer.signal_shutdown()
+        close_cogs_recorder()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)

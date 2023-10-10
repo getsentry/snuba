@@ -73,6 +73,7 @@ impl ClickhouseWriterStep {
                 skip_write,
             )),
             concurrency,
+            Some("clickhouse"),
         ));
 
         ClickhouseWriterStep { inner }

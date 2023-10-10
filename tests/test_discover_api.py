@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -42,7 +41,7 @@ class TestDiscoverApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
+            second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=90)
 
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()

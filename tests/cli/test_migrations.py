@@ -49,3 +49,4 @@ def test_migrations_cli() -> None:
     )
     _check_run(runner, reverse_in_progress, ["--group", "system"])
     _check_run(runner, reverse_in_progress)
+    _check_run(runner, migrate, ["--group", "system", "--check-dangerous"])

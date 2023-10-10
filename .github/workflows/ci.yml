@@ -6,6 +6,23 @@ on:
   pull_request:
 
 jobs:
+  files-changed:
+    name: detect what files changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Map a step output to a job output
+    outputs:
+      api_changes: ${{ steps.changes.outputs.api_changes }}
+    steps:
+      - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
+
+      - name: Check for backend file changes
+        uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
+        id: changes
+        with:
+          token: ${{ github.token }}
+          filters: .github/file-filters.yml
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
@@ -270,18 +287,16 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
-    needs: [snuba-image]
+    needs: [snuba-image, files-changed]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-
+    timeout-minutes: 60
     strategy:
       matrix:
         instance: [0, 1]
-
     env:
-      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
-      MATRIX_INSTANCE_TOTAL: 2
       MIGRATIONS_TEST_MIGRATE: 1
+      # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
+      MATRIX_INSTANCE_TOTAL: 2
 
     steps:
       # Checkout codebase
@@ -361,15 +376,33 @@ jobs:
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
+        if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
           make test-snuba
 
-  clickhouse-21:
+      - name: Run full tests
+        # TODO: Adjust which changed files we care about
+        if: needs.files-changed.outputs.api_changes == 'true'
+        working-directory: sentry
+        run: |
+          make test-snuba-full
+
+  clickhouse-versions:
     needs: [linting, snuba-image]
-    name: Tests on Clickhouse 21
+    name: Tests on multiple clickhouse versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          [
+            "21.8.13.1.altinitystable",
+            "22.3.15.34.altinitystable",
+            "22.8.15.25.altinitystable",
+          ]
+
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -404,11 +437,55 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
-      - name: Docker Snuba Test Clickhouse 21
+      - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:21.8.13.1.altinitystable
+          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
+  publish-to-dockerhub:
+    name: Publish Snuba to DockerHub
+    runs-on: ubuntu-20.04
+    if: ${{ (github.ref_name == 'master') }}
+    steps:
+      - uses: actions/checkout@v3 # v3.1.0
+      - name: Pull the test image
+        id: image_pull
+        env:
+          IMAGE_URL: us.gcr.io/sentryio/snuba:${{ github.sha }}
+        shell: bash
+        run: |
+          echo "We poll for the Docker image that the GCB/GHA build produces until it succeeds or this job times out."
+          echo "Polling for $IMAGE_URL"
+          timeout 20m bash -c 'until docker pull "$IMAGE_URL" 2>/dev/null; do sleep 10; done'
+      - name: Get short SHA for docker tag
+        id: short_sha
+        shell: bash
+        run: |
+          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
+          if [[ -z "$SHORT_SHA" ]]; then
+            echo "Short SHA empty? Re-running rev-parse."
+            git rev-parse --short "$GITHUB_SHA"
+          else
+            echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          fi
+      - name: Push built docker image
+        shell: bash
+        env:
+          SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
+          IMAGE_URL: us.gcr.io/sentryio/snuba:${{ github.sha }}
+        run: |
+          # only login if the password is set
+          if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
+          # We push 3 tags to Dockerhub:
+          # first, the full sha of the commit
+          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
+          docker push getsentry/snuba:${GITHUB_SHA}
+          # second, the short sha of the commit
+          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
+          docker push getsentry/snuba:${SHORT_SHA}
+          # finally, nightly
+          docker tag ${IMAGE_URL} getsentry/snuba:nightly
+          docker push getsentry/snuba:nightly

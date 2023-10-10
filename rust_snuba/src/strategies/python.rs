@@ -46,7 +46,7 @@ impl PythonTransformStep {
         let python_module = &processor_config.python_module;
         let python_class_name = &processor_config.python_class_name;
 
-        let processing_pool = if processes <= 1 {
+        let processing_pool = if processes > 1 {
             Some(
                 procspawn::Pool::builder(processes)
                     .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
@@ -169,7 +169,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
-                    let result = Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -180,9 +180,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         Ok(BytesInsertBatch {
                             rows: result_decoded,
                         })
-                    });
-
-                    Ok(result.unwrap())
+                    })
+                    .map_err(|pyerr| pyerr.to_string())
                 };
 
                 let original_message_meta = message.clone().replace(());
@@ -262,7 +261,7 @@ mod tests {
         )
         .unwrap();
 
-        step.poll();
+        let _ = step.poll();
         step.submit(Message::new_broker_message(
             KafkaPayload {
                 key: None,
@@ -280,7 +279,7 @@ mod tests {
         ))
         .unwrap();
 
-        step.join(Some(Duration::from_secs(10)));
+        let _ = step.join(Some(Duration::from_secs(10)));
 
         assert_eq!(sink.messages.lock().unwrap().len(), 1);
     }

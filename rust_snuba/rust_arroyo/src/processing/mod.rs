@@ -1,6 +1,8 @@
+mod metrics_buffer;
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
+use crate::processing::strategies::MessageRejected;
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
@@ -57,7 +59,7 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&mut self, _: Vec<Partition>) {
-        let metrics = get_metrics();
+        let mut metrics = get_metrics();
         let start = Instant::now();
 
         let mut stg = self.strategies.lock().unwrap();
@@ -65,7 +67,9 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                s.join(None);
+                // TODO: We need to actually call consumer.commit() with the commit request.
+                // Right now we are never committing during consumer shutdown.
+                let _ = s.join(None);
             }
         }
         stg.strategy = None;
@@ -75,6 +79,8 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             start.elapsed().as_millis() as u64,
             None,
         );
+
+        // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
 }
 
@@ -93,6 +99,9 @@ pub struct StreamProcessor<'a, TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
+    backpressure_timestamp: Option<Instant>,
+    is_paused: bool,
+    metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
 impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
@@ -112,6 +121,9 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
+            backpressure_timestamp: None,
+            is_paused: false,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }
     }
 
@@ -122,29 +134,27 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
-        let message_carried_over = self.message.is_some();
-
-        if message_carried_over {
-            // If a message was carried over from the previous run, the consumer
-            // should be paused and not returning any messages on ``poll``.
+        if self.is_paused {
+            // If the consumer waas paused, it should not be returning any messages
+            // on ``poll``.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
+
             match res {
                 None => {}
                 Some(_) => return Err(RunError::InvalidState),
             }
-        } else {
+        } else if self.message.is_none() {
             // Otherwise, we need to try fetch a new message from the consumer,
             // even if there is no active assignment and/or processing strategy.
-            let msg = self.consumer.poll(Some(Duration::ZERO));
+            let poll_start = Instant::now();
             //TODO: Support errors properly
-            match msg {
-                Ok(None) => {
-                    self.message = None;
-                }
-                Ok(Some(inner)) => {
-                    self.message = Some(Message {
+            match self.consumer.poll(Some(Duration::from_secs(1))) {
+                Ok(msg) => {
+                    self.message = msg.map(|inner| Message {
                         inner_message: InnerMessage::BrokerMessage(inner),
                     });
+                    self.metrics_buffer
+                        .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
                 Err(e) => {
                     log::error!("poll error: {}", e);
@@ -171,25 +181,66 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 
                 let msg = self.message.take();
                 if let Some(msg_s) = msg {
+                    let processing_start = Instant::now();
                     let ret = strategy.submit(msg_s);
+                    self.metrics_buffer.incr_timing(
+                        "arroyo.consumer.processing.time",
+                        processing_start.elapsed(),
+                    );
                     match ret {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // If the processing strategy rejected our message, we need
-                            // to pause the consumer and hold the message until it is
-                            // accepted, at which point we can resume consuming.
-                            let partitions =
-                                self.consumer.tell().unwrap().keys().cloned().collect();
-                            if message_carried_over {
-                                let res = self.consumer.pause(partitions);
-                                match res {
-                                    Ok(()) => {}
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            } else {
+                        Ok(()) => {
+                            // Resume if we are currently in a paused state
+                            if self.is_paused {
+                                let partitions: std::collections::HashSet<Partition> =
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
+
                                 let res = self.consumer.resume(partitions);
                                 match res {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        self.is_paused = false;
+                                    }
+                                    Err(_) => return Err(RunError::PauseError),
+                                }
+                            }
+
+                            // Clear backpressure timestamp if it is set
+                            if self.backpressure_timestamp.is_some() {
+                                self.metrics_buffer.incr_timing(
+                                    "arroyo.consumer.backpressure.time",
+                                    self.backpressure_timestamp.unwrap().elapsed(),
+                                );
+                                self.backpressure_timestamp = None;
+                            }
+                        }
+                        Err(MessageRejected { message }) => {
+                            // Put back the carried over message
+                            self.message = Some(message);
+
+                            if self.backpressure_timestamp.is_none() {
+                                self.backpressure_timestamp = Some(Instant::now());
+                            }
+
+                            // If we are in the backpressure state for more than 1 second,
+                            // we pause the consumer and hold the message until it is
+                            // accepted, at which point we can resume consuming.
+                            if !self.is_paused && self.backpressure_timestamp.is_none() {
+                                let backpressure_duration =
+                                    self.backpressure_timestamp.unwrap().elapsed();
+
+                                if backpressure_duration < Duration::from_secs(1) {
+                                    return Ok(());
+                                }
+
+                                log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
+
+                                let partitions =
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
+
+                                let res = self.consumer.pause(partitions);
+                                match res {
+                                    Ok(()) => {
+                                        self.is_paused = true;
+                                    }
                                     Err(_) => return Err(RunError::PauseError),
                                 }
                             }

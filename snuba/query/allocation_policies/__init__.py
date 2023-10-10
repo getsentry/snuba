@@ -437,6 +437,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             and self._required_tenant_types == other._required_tenant_types
         )
 
+    def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
+        return bool(tenant_ids.get("cross_org_query", False))
+
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
         required_tenant_types = kwargs.pop("required_tenant_types", None)

@@ -15,9 +15,8 @@ local migrate_stage(stage_name, region) = [
           timeout: 1200,
           elastic_profile_id: 'snuba',
           environment_variables: {
-            // ST deployments use 'snuba' for container and label selectors
-            // in migrations, whereas the US region deployment uses snuba-admin.
-            SNUBA_SERVICE_NAME: if getsentry.is_st(region) then 'snuba' else 'snuba-admin',
+            // Use snuba-admin pod spec for running migrations
+            SNUBA_SERVICE_NAME: 'snuba-admin',
           },
           tasks: [
             if getsentry.is_st(region) then
@@ -51,13 +50,42 @@ local s4s_health_check(region) =
             health_check: {
               environment_variables: {
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][st_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][st_datadog_app_key]}}',
+                LABEL_SELECTOR: 'service=snuba',
+              },
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
+                gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
+
+// Snuba deploy to ST is blocked till SaaS deploy is healthy
+local saas_health_check(region) =
+  if region == 'us' then
+    [
+      {
+        health_check: {
+          jobs: {
+            health_check: {
+              environment_variables: {
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba',
               },
               elastic_profile_id: 'snuba',
               tasks: [
-                gocdtasks.script(importstr '../bash/s4s_health_check.sh'),
+                gocdtasks.script(importstr '../bash/saas-sentry-health-check.sh'),
+                gocdtasks.script(importstr '../bash/saas-sentry-error-check.sh'),
+                gocdtasks.script(importstr '../bash/saas-ddog-health-check.sh'),
               ],
             },
           },
@@ -78,6 +106,42 @@ local early_migrate(region) =
   else
     [];
 
+local deploy_canary_stage(region) =
+  if region == 'us' then
+    [
+      {
+        'deploy-canary': {
+          fetch_materials: true,
+          jobs: {
+            'create-sentry-release': {
+              environment_variables: {
+                SENTRY_ORG: 'sentry',
+                SENTRY_PROJECT: 'snuba',
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+              },
+              timeout: 300,
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
+              ],
+            },
+            'deploy-canary': {
+              timeout: 1200,
+              elastic_profile_id: 'snuba',
+              environment_variables: {
+                LABEL_SELECTOR: 'service=snuba,is_canary=true',
+              },
+              tasks: [
+                gocdtasks.script(importstr '../bash/deploy.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
+
 function(region) {
   environment_variables: {
     SENTRY_REGION: region,
@@ -95,59 +159,33 @@ function(region) {
     },
   },
   stages: [
-    {
-      checks: {
-        jobs: {
-          checks: {
-            timeout: 1800,
-            elastic_profile_id: 'snuba',
-            tasks: [
-              gocdtasks.script(importstr '../bash/check-github.sh'),
-              gocdtasks.script(importstr '../bash/check-cloud-build.sh'),
-              gocdtasks.script(importstr '../bash/check-migrations.sh'),
-            ],
-          },
-        },
-      },
-    },
-
-  ] + early_migrate(region) + [
-
-    {
-      'deploy-canary': {
-        fetch_materials: true,
-        jobs: {
-          'create-sentry-release': {
-            environment_variables: {
-              SENTRY_ORG: 'sentry',
-              SENTRY_PROJECT: 'snuba',
-              SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+            {
+              checks: {
+                jobs: {
+                  checks: {
+                    timeout: 1800,
+                    elastic_profile_id: 'snuba',
+                    tasks: [
+                      gocdtasks.script(importstr '../bash/check-github.sh'),
+                      gocdtasks.script(importstr '../bash/check-cloud-build.sh'),
+                      gocdtasks.script(importstr '../bash/check-migrations.sh'),
+                    ],
+                  },
+                },
+              },
             },
-            timeout: 300,
-            elastic_profile_id: 'snuba',
-            tasks: [
-              gocdtasks.script(importstr '../bash/sentry-release-canary.sh'),
-            ],
-          },
-          'deploy-canary': {
-            timeout: 1200,
-            elastic_profile_id: 'snuba',
-            environment_variables: {
-              LABEL_SELECTOR: 'service=snuba,is_canary=true',
-            },
-            tasks: [
-              gocdtasks.script(importstr '../bash/deploy.sh'),
-            ],
-          },
-        },
-      },
-    },
+
+          ] + early_migrate(region) +
+          deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
         fetch_materials: true,
         jobs: {
-          'create-sentry-release': {
+          // NOTE: sentry-release-primary relies on the sentry-release-canary
+          // script being run first. So any changes here should account for
+          // this and update deploy_canary_stage accordingly
+          [if region == 'us' then 'create-sentry-release' else null]: {
             environment_variables: {
               SENTRY_ORG: 'sentry',
               SENTRY_PROJECT: 'snuba',
@@ -176,5 +214,5 @@ function(region) {
       },
     },
 
-  ] + migrate_stage('migrate', region) + s4s_health_check(region),
+  ] + migrate_stage('migrate', region) + s4s_health_check(region) + saas_health_check(region),
 }

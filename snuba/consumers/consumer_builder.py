@@ -77,6 +77,8 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
         health_check_file: Optional[str] = None,
+        group_instance_id: Optional[str] = None,
+        skip_write: bool = False,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -88,6 +90,7 @@ class ConsumerBuilder:
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
         self.__enforce_schema = enforce_schema
+        self.__skip_write = skip_write
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -148,6 +151,7 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
         self.health_check_file = health_check_file
+        self.group_instance_id = group_instance_id
 
         self.dlq_producer: Optional[KafkaProducer] = None
 
@@ -169,6 +173,8 @@ class ConsumerBuilder:
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+        if self.group_instance_id is not None:
+            configuration["group.instance.id"] = self.group_instance_id
 
         def log_general_error(e: KafkaError) -> None:
             with configure_scope() as scope:
@@ -242,6 +248,7 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
             health_check_file=self.health_check_file,
+            skip_write=self.__skip_write,
         )
 
         if self.__profile_path is not None:

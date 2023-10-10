@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, cast
 
+from snuba import state
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
@@ -31,18 +32,10 @@ _PASS_THROUGH_REFERRERS = set(
     ]
 )
 
-_RATE_LIMIT_NAME = "concurrent_limit_policy"
 
-
-class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
+class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
-            AllocationPolicyConfig(
-                name="concurrent_limit",
-                description="maximum amount of concurrent queries per tenant",
-                value_type=int,
-                default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
-            ),
             AllocationPolicyConfig(
                 name="rate_limit_shard_factor",
                 description="""number of shards that each redis set is supposed to have.
@@ -54,34 +47,16 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 default=1,
             ),
             AllocationPolicyConfig(
-                name="referrer_project_override",
-                description="override concurrent limit for a specific project, referrer combo",
+                name="max_query_duration_s",
+                description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
                 value_type=int,
-                default=-1,
-                param_types={"referrer": str, "project_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="referrer_organization_override",
-                description="override concurrent limit for a specific organization_id, referrer combo",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str, "organization_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="project_override",
-                description="override concurrent limit for a specific project_id",
-                value_type=int,
-                default=-1,
-                param_types={"project_id": int},
-            ),
-            AllocationPolicyConfig(
-                name="organization_override",
-                description="override concurrent limit for a specific organization_id",
-                value_type=int,
-                default=-1,
-                param_types={"organization_id": int},
+                default=state.max_query_duration_s,
             ),
         ]
+
+    @property
+    def rate_limit_name(self) -> str:
+        raise NotImplementedError
 
     def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
@@ -106,6 +81,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_history_s,
             rate_limit_shard_factor,
             rate_limit_prefix,
+            self.get_config_value("max_query_duration_s"),
         )
         if rate_limit_stats.concurrent == -1:
             return True, "rate limiter errored, failing open"
@@ -137,7 +113,48 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_shard_factor,
             was_rate_limited,
             rate_limit_prefix,
+            self.get_config_value("max_query_duration_s"),
         )
+
+
+class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return super()._additional_config_definitions() + [
+            AllocationPolicyConfig(
+                name="concurrent_limit",
+                description="maximum amount of concurrent queries per tenant",
+                value_type=int,
+                default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
+            ),
+            AllocationPolicyConfig(
+                name="referrer_project_override",
+                description="override concurrent limit for a specific project, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "project_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="referrer_organization_override",
+                description="override concurrent limit for a specific organization_id, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "organization_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="project_override",
+                description="override concurrent limit for a specific project_id",
+                value_type=int,
+                default=-1,
+                param_types={"project_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="organization_override",
+                description="override concurrent limit for a specific organization_id",
+                value_type=int,
+                default=-1,
+                param_types={"organization_id": int},
+            ),
+        ]
 
     def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
         overrides = {}
@@ -173,6 +190,10 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             "Queries must have a project id or organization id"
         )
 
+    @property
+    def rate_limit_name(self) -> str:
+        return "concurrent_rate_limit_policy"
+
     def _get_rate_limit_params(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[RateLimitParameters, dict[str, int]]:
@@ -185,7 +206,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
         return (
             RateLimitParameters(
-                _RATE_LIMIT_NAME,
+                self.rate_limit_name,
                 bucket=str(tenant_value),
                 per_second_limit=None,
                 concurrent_limit=concurrent_limit,
@@ -202,6 +223,13 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
             )
+        if self.is_cross_org_query(tenant_ids):
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "cross_org"},
+            )
+
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
         within_rate_limit, why = self._is_within_rate_limit(query_id, rate_limit_params)
         return QuotaAllowance(
@@ -214,5 +242,7 @@ class ConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
+        if self.is_cross_org_query(tenant_ids):
+            return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)

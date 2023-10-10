@@ -1,6 +1,7 @@
 import logging
 import numbers
 import random
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
@@ -46,14 +47,13 @@ class SpansMessageProcessor(DatasetMessageProcessor):
     from the transactions topic and de-normalize it into the spans table.
     """
 
-    def __extract_timestamp(self, timestamp_sec: float) -> Tuple[datetime, int]:
+    def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec))
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-        milliseconds = int(timestamp.microsecond / 1000)
-        return timestamp, milliseconds
+        timestamp_sec = timestamp_ms / 1000
+        if _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec)) is None:
+            timestamp_sec = int(time.time())
+        return int(timestamp_sec), int(timestamp_ms % 1000)
 
     @staticmethod
     def _structure_and_validate_message(
@@ -66,7 +66,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
             retention_days = enforce_retention(
-                message["retention_days"],
+                message.get("retention_days"),
                 datetime.utcfromtimestamp(message["start_timestamp_ms"] / 1000),
             )
         except EventTooOld:
@@ -90,18 +90,26 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         transaction_id: Optional[str] = span_event.get("event_id", None)
         if transaction_id:
             processed["transaction_id"] = str(uuid.UUID(transaction_id))
+        profile_id: Optional[str] = span_event.get("profile_id", None)
+        if profile_id:
+            processed["profile_id"] = str(uuid.UUID(profile_id))
 
         # descriptions
         processed["description"] = _unicodify(span_event.get("description", ""))
-        processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+
+        try:
+            processed["group_raw"] = int(span_event.get("group_raw", "0") or "0", 16)
+        except ValueError:
+            processed["group_raw"] = 0
 
         # timestamps
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
-            span_event["start_timestamp_ms"] / 1000,
+            span_event["start_timestamp_ms"],
         )
         processed["end_timestamp"], processed["end_ms"] = self.__extract_timestamp(
-            (span_event["start_timestamp_ms"] + span_event["duration_ms"]) / 1000,
+            span_event["start_timestamp_ms"] + span_event["duration_ms"],
         )
+
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = span_event["exclusive_time_ms"]
 
@@ -159,10 +167,19 @@ class SpansMessageProcessor(DatasetMessageProcessor):
               values yet. For now lets just set them to their default values.
         """
         sentry_tags = span_event["sentry_tags"].copy()
+        sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
+        processed["sentry_tags.key"] = sentry_tag_keys
+        processed["sentry_tags.value"] = sentry_tag_values
+
         processed["module"] = sentry_tags.pop("module", "")
         processed["action"] = sentry_tags.pop("action", "")
         processed["domain"] = sentry_tags.pop("domain", "")
-        processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
+
+        try:
+            processed["group"] = int(sentry_tags.pop("group", "0") or "0", 16)
+        except ValueError:
+            processed["group"] = 0
+
         processed["span_kind"] = ""
         processed["platform"] = sentry_tags.pop("system", "")
         processed["segment_name"] = _unicodify(sentry_tags.pop("transaction", ""))

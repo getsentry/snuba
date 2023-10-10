@@ -76,6 +76,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-group-attributes",
         "snuba-generic-events-commit-log",
         "snuba-spans",
+        "shared-resources-usage",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():

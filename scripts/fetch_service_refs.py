@@ -27,7 +27,7 @@ def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
 
 
 # print the most recent passing sha for a repo
-def main(pipeline_name: str = "deploy-snuba", repo: str = "snuba") -> int:
+def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
     GOCD_ACCESS_TOKEN = os.environ.get("GOCD_ACCESS_TOKEN")
     if not GOCD_ACCESS_TOKEN:
         raise SystemExit(

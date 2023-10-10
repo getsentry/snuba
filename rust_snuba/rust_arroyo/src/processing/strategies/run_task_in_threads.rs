@@ -1,5 +1,6 @@
+use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
 };
 use crate::types::Message;
 use std::collections::VecDeque;
@@ -22,6 +23,8 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     runtime: tokio::runtime::Runtime,
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
     message_carried_over: Option<Message<TTransformed>>,
+    metrics_buffer: MetricsBuffer,
+    metric_name: String,
 }
 
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
@@ -31,20 +34,27 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
         concurrency: usize,
+        // If provided, this name is used for metrics
+        custom_strategy_name: Option<&'static str>,
     ) -> Self
     where
         N: ProcessingStrategy<TTransformed> + 'static,
     {
+        let strategy_name = custom_strategy_name.unwrap_or("run_task_in_threads");
+
         RunTaskInThreads {
             next_step: Box::new(next_step),
             task_runner,
             concurrency,
             runtime: tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(concurrency)
                 .enable_all()
                 .build()
                 .unwrap(),
             handles: VecDeque::new(),
             message_carried_over: None,
+            metrics_buffer: MetricsBuffer::new(),
+            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
     }
 }
@@ -62,6 +72,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 return None;
             }
         }
+
+        self.metrics_buffer
+            .gauge(&self.metric_name, self.handles.len() as u64);
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
@@ -124,6 +137,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
+        let mut commit_request = None;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
@@ -135,7 +149,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 }
             }
 
-            self.poll();
+            let next_commit = self.poll();
+            commit_request = merge_commit_request(commit_request, next_commit);
         }
 
         // Cancel remaining tasks if any
@@ -143,8 +158,10 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             handle.abort();
         }
         self.handles.clear();
+        self.metrics_buffer.flush();
 
-        self.next_step.join(remaining)
+        let next_commit = self.next_step.join(remaining);
+        merge_commit_request(commit_request, next_commit)
     }
 }
 
@@ -181,12 +198,12 @@ mod tests {
             }
         }
 
-        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1);
+        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1, None);
 
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
         strategy.submit(message).unwrap();
-        strategy.poll();
-        strategy.join(None);
+        let _ = strategy.poll();
+        let _ = strategy.join(None);
     }
 }

@@ -1,11 +1,13 @@
 import warnings
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba.clusters.cluster import get_cluster
+from snuba.migrations.check_dangerous import check_dangerous_operation
 from snuba.migrations.context import Context
 from snuba.migrations.operations import OperationTarget, RunPython, SqlOperation
 from snuba.migrations.status import Status
+from snuba.utils.types import ColumnStatesMapType
 
 
 class Migration(ABC):
@@ -122,8 +124,17 @@ class ClickhouseNodeMigration(Migration, ABC):
     def forwards_ops(self) -> Sequence[SqlOperation]:
         raise NotImplementedError()
 
-    def forwards(self, context: Context, dry_run: bool = False) -> None:
+    def forwards(
+        self,
+        context: Context,
+        dry_run: bool = False,
+        columns_state_to_check: Optional[ColumnStatesMapType] = None,
+    ) -> None:
         ops = self.forwards_ops()
+
+        if columns_state_to_check and not self.blocking:
+            for op in ops:
+                check_dangerous_operation(op, columns_state_to_check)
 
         if dry_run:
             self.__dry_run(ops)
@@ -143,7 +154,12 @@ class ClickhouseNodeMigration(Migration, ABC):
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
-    def backwards(self, context: Context, dry_run: bool) -> None:
+    def backwards(
+        self,
+        context: Context,
+        dry_run: bool,
+        columns_state_to_check: Optional[ColumnStatesMapType] = None,
+    ) -> None:
         ops = self.backwards_ops()
         if dry_run:
             self.__dry_run(ops)
@@ -154,6 +170,8 @@ class ClickhouseNodeMigration(Migration, ABC):
         update_status(Status.IN_PROGRESS)
 
         for op in ops:
+            if columns_state_to_check:
+                check_dangerous_operation(op, columns_state_to_check)
             op.execute()
         logger.info(f"Finished reversing: {migration_id}")
 
