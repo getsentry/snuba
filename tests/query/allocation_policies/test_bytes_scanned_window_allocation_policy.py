@@ -326,3 +326,20 @@ def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
     policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
     policy.set_config_value("use_progress_bytes_scanned", 1)
     policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+
+
+@pytest.mark.redis_db
+def test_cross_org(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "cross_org_query": 1,
+    }
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).can_run
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == policy.max_threads
+    )
+    # make sure that this can be called with cross org queries
+    # and nothing raises
+    policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore

@@ -172,6 +172,7 @@ def rate_limit_start_request(
     rate_history_sec: int,
     rate_limit_shard_factor: int,
     rate_limit_prefix: str,
+    max_query_duration_s: int | None = None,
 ) -> RateLimitStats:
     """
     The first half of the rate limiting algorithm. This function is called before the thing
@@ -183,6 +184,7 @@ def rate_limit_start_request(
         query_id: str
         rate_history_sec: int - How many seconds to retain completed queries for the per-second rolling window limit
         rate_limit_shard_factor: int - How many shards to use for the rate limit buckets
+        max_query_duration_s: how long we consider a query to be running before it is killed and cleaned up, defaults to state.max_query_duration_s
 
     Usage:
 
@@ -217,6 +219,7 @@ def rate_limit_start_request(
 
     """
     now = time.time()
+    max_query_duration_s = max_query_duration_s or state.max_query_duration_s
 
     # Compute the set shard to which we should add and remove the query_id
     bucket_shard = hash(query_id) % rate_limit_shard_factor
@@ -261,7 +264,7 @@ def rate_limit_start_request(
     #                                   running concurrently; in this case 3)
     #              ^
     #              | current time
-    pipe.zadd(query_bucket, {query_id: now + state.max_query_duration_s})
+    pipe.zadd(query_bucket, {query_id: now + max_query_duration_s})
 
     # bump the expiration date of the entire set so that it roughly aligns with
     # the expiration date of the latest item.
@@ -280,7 +283,7 @@ def rate_limit_start_request(
     # * the next query's zremrangebyscore would remove this item on `now +
     #   max_query_duration_s + rate_history_s` at the earliest.
     # * add +1 to account for rounding errors when casting to int
-    pipe.expire(query_bucket, int(state.max_query_duration_s + rate_history_sec + 1))
+    pipe.expire(query_bucket, int(max_query_duration_s + rate_history_sec + 1))
 
     if rate_limit_params.per_second_limit is not None:
         # count queries that have finished for the per-second rate
@@ -335,12 +338,14 @@ def rate_limit_finish_request(
     rate_limit_shard_factor: int,
     was_rate_limited: bool,
     rate_limit_prefix: str,
+    max_query_duration_s: int | None = None,
 ) -> None:
     """Second half of rate limiting, called after the request is finished. See rate_limit_start_request for details"""
     bucket_shard = hash(query_id) % rate_limit_shard_factor
     query_bucket = _get_bucket_key(
         rate_limit_prefix, rate_limit_params.bucket, bucket_shard
     )
+    max_query_duration_s = max_query_duration_s or state.max_query_duration_s
     if was_rate_limited:
         try:
             rds.zrem(query_bucket, query_id)  # not allowed / not counted
@@ -349,7 +354,7 @@ def rate_limit_finish_request(
     else:
         try:
             # return the query to its start time, if the query_id was actually added.
-            rds.zincrby(query_bucket, -float(state.max_query_duration_s), query_id)
+            rds.zincrby(query_bucket, -float(max_query_duration_s), query_id)
         except Exception as ex:
             logger.exception(ex)
 

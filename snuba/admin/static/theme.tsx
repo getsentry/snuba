@@ -8,6 +8,7 @@ const COLORS = {
   TEXT_LIGHTER: "#464646",
   TEXT_INACTIVE: "#858585",
   BG_LIGHT: "#E3E3E3",
+  RED: "#c42e2b",
 };
 
 export { COLORS };

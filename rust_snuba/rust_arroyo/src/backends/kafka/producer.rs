@@ -70,7 +70,7 @@ mod tests {
         let configuration =
             KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);
 
-        let mut producer = KafkaProducer::new(configuration);
+        let producer = KafkaProducer::new(configuration);
 
         let payload = KafkaPayload {
             key: None,
