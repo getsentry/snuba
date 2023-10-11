@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import structlog
 
+from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.notifications.slack.client import SlackClient
 from snuba.admin.notifications.slack.utils import build_blocks
@@ -15,7 +16,9 @@ class AuditLog:
         self.logger = structlog.get_logger().bind(
             module=self.__class__.__module__, context_class=self.__class__.__qualname__
         )
-        self.client = SlackClient()
+        self.client = SlackClient(
+            channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
+        )
 
     def record(
         self,
