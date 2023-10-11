@@ -91,7 +91,10 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, name, package, path, is_application, platform, environment, release, os_name, os_version, retention_days)",
                     primary_key="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
                     partition_by="(retention_days, toMonday(timestamp))",
-                    settings={"index_granularity": self.index_granularity},
+                    settings={
+                        "allow_nullable_key": 1,
+                        "index_granularity": self.index_granularity,
+                    },
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
             ),
