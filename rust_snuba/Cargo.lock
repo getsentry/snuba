@@ -1500,6 +1500,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "thiserror",
  "tokio",
  "uuid 1.4.1",
 ]

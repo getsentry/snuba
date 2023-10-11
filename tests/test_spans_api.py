@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba import settings, state
@@ -46,7 +45,7 @@ class TestSpansApi(BaseApiTest):
         self.trace_id = "7400045b25c443b885914600aa83ad04"
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
         state.set_config("log_bad_span_message_percentage", 1)

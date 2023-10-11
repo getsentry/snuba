@@ -139,8 +139,8 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
 
-        if not self._referrer_is_registered(referrer) and not tenant_ids.get(
-            "cross_org_query", False
+        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
+            tenant_ids
         ):
             # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
@@ -167,6 +167,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
+            tenant_ids
+        ):
+            return
         rate_limit_params = RateLimitParameters(
             self.rate_limit_name,
             referrer,

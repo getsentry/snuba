@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, cast
 
+from snuba import state
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
@@ -45,6 +46,12 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=1,
             ),
+            AllocationPolicyConfig(
+                name="max_query_duration_s",
+                description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
+                value_type=int,
+                default=state.max_query_duration_s,
+            ),
         ]
 
     @property
@@ -74,6 +81,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_history_s,
             rate_limit_shard_factor,
             rate_limit_prefix,
+            self.get_config_value("max_query_duration_s"),
         )
         if rate_limit_stats.concurrent == -1:
             return True, "rate limiter errored, failing open"
@@ -105,6 +113,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_shard_factor,
             was_rate_limited,
             rate_limit_prefix,
+            self.get_config_value("max_query_duration_s"),
         )
 
 
@@ -214,6 +223,13 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
             )
+        if self.is_cross_org_query(tenant_ids):
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "cross_org"},
+            )
+
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
         within_rate_limit, why = self._is_within_rate_limit(query_id, rate_limit_params)
         return QuotaAllowance(
@@ -226,5 +242,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
+        if self.is_cross_org_query(tenant_ids):
+            return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)

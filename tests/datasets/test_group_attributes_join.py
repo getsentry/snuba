@@ -1,10 +1,9 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Any, Mapping
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -36,7 +35,7 @@ def write_group_attribute_row(row: Mapping[str, Any]) -> None:
 def _convert_clickhouse_datetime_str(str: str) -> str:
     return (
         datetime.strptime(str, "%Y-%m-%d %H:%M:%S")
-        .replace(microsecond=0, tzinfo=pytz.utc)
+        .replace(microsecond=0, tzinfo=timezone.utc)
         .isoformat()
     )
 
@@ -52,7 +51,7 @@ class TestEventsGroupAttributes(BaseApiTest):
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
+            second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=90)
         self.next_time = self.base_time + timedelta(minutes=95)
 
@@ -216,7 +215,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
+            second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=90)
         self.next_time = self.base_time + timedelta(minutes=95)
         self.occurrence = self.get_search_issue_occurrence(self.base_time)

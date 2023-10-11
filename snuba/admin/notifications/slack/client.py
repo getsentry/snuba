@@ -3,31 +3,27 @@ from typing import Any, MutableMapping, Optional
 import requests
 import structlog
 
-from snuba import settings
-
 logger = structlog.get_logger().bind(module=__name__)
 
 
 class SlackClient(object):
+    def __init__(
+        self, channel_id: Optional[str] = None, token: Optional[str] = None
+    ) -> None:
+        self.__channel_id = channel_id
+        self.__token = token
+
     @property
     def is_configured(self) -> bool:
-        return self.channel_id is not None and self.token is not None
-
-    @property
-    def channel_id(self) -> Optional[str]:
-        return settings.SNUBA_SLACK_CHANNEL_ID
-
-    @property
-    def token(self) -> Optional[str]:
-        return settings.SLACK_API_TOKEN
+        return self.__channel_id is not None and self.__token is not None
 
     def post_message(self, message: MutableMapping[str, Any]) -> None:
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer {self.__token}",
         }
 
-        message["channel"] = self.channel_id
+        message["channel"] = self.__channel_id
 
         try:
             resp = requests.post(
