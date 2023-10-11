@@ -112,7 +112,6 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
 
         if self.handles.len() > self.concurrency {
-            log::warn!("Reached max concurrency, rejecting message");
             return Err(MessageRejected { message });
         }
 
