@@ -5,6 +5,7 @@ import pytest
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericCountersMetricsProcessor,
     GenericDistributionsMetricsProcessor,
+    GenericSetsMetricsProcessor,
 )
 
 
@@ -24,6 +25,33 @@ def test__should_process(
 ) -> None:
     processor = GenericCountersMetricsProcessor()
     assert processor._should_process(message) == expected_output
+
+
+@pytest.mark.parametrize(
+    "message, expected_output, retention_days",
+    [
+        pytest.param(
+            {
+                "type": "s",
+                "metric_id": 3,
+                "value": [0],
+                "aggregation_option": "ten_second",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 1,
+                "granularities": [1, 2, 3, 0],
+            },
+            90,
+            id="ten_second",
+        ),
+    ],
+)
+def test__sets_aggregation_options(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any], retention_days: int
+) -> None:
+    processor = GenericSetsMetricsProcessor()
+    assert processor._aggregation_options(message, retention_days) == expected_output
 
 
 @pytest.mark.parametrize(
@@ -62,10 +90,37 @@ def test__should_process(
         ),
     ],
 )
-def test__aggregation_options(
+def test__dists_aggregation_options(
     message: Mapping[str, Any], expected_output: Mapping[str, Any], retention_days: int
 ) -> None:
     processor = GenericDistributionsMetricsProcessor()
+    assert processor._aggregation_options(message, retention_days) == expected_output
+
+
+@pytest.mark.parametrize(
+    "message, expected_output, retention_days",
+    [
+        pytest.param(
+            {
+                "type": "s",
+                "metric_id": 3,
+                "value": 1,
+                "aggregation_option": "ten_second",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 1,
+                "granularities": [1, 2, 3, 0],
+            },
+            90,
+            id="ten_second",
+        ),
+    ],
+)
+def test__counters_aggregation_options(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any], retention_days: int
+) -> None:
+    processor = GenericCountersMetricsProcessor()
     assert processor._aggregation_options(message, retention_days) == expected_output
 
 
