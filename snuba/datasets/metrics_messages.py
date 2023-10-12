@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, MutableMapping
 
 
 class InputType(Enum):
@@ -74,71 +74,70 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
 
 
+def apply_aggregation_option(
+    settings: MutableMapping[str, Any], option: AggregationOption
+) -> None:
+    if option is AggregationOption.TEN_SECOND:
+        settings["granularities"].append(GRANULARITY_TEN_SECONDS)
+    elif option is AggregationOption.HIST:
+        settings["enable_histogram"] = 1
+
+
 def aggregation_options_for_set_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    granularity_dict = {
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
+        "min_retention_days": retention_days,
+        "materialization_version": 1,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
         parsed_aggregation_setting = AggregationOption(aggregation_setting)
-        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
-            granularity_dict["granularities"].append(GRANULARITY_TEN_SECONDS)
-            return {"materialization_version": 1, **granularity_dict}
+        apply_aggregation_option(settings, parsed_aggregation_setting)
 
-    return {"materialization_version": 1, **granularity_dict}
+    return settings
 
 
 def aggregation_options_for_distribution_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    granularity_dict = {
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
-    }
-    aggregation_options = {
         "min_retention_days": retention_days,
         "materialization_version": 2,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
         parsed_aggregation_setting = AggregationOption(aggregation_setting)
-        if parsed_aggregation_setting is AggregationOption.HIST:
-            return {
-                **aggregation_options,
-                **granularity_dict,
-                "enable_histogram": 1,
-            }
-        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
-            granularity_dict["granularities"].append(GRANULARITY_TEN_SECONDS)
-            return {**aggregation_options, **granularity_dict}
+        apply_aggregation_option(settings, parsed_aggregation_setting)
 
-    return {**aggregation_options, **granularity_dict}
+    return settings
 
 
 def aggregation_options_for_counter_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    granularity_dict = {
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
+        "min_retention_days": retention_days,
+        "materialization_version": 1,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
         parsed_aggregation_setting = AggregationOption(aggregation_setting)
-        if parsed_aggregation_setting is AggregationOption.TEN_SECOND:
-            granularity_dict["granularities"].append(GRANULARITY_TEN_SECONDS)
-            return {"materialization_version": 1, **granularity_dict}
+        apply_aggregation_option(settings, parsed_aggregation_setting)
 
-    return {"materialization_version": 1, **granularity_dict}
+    return settings
