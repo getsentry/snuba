@@ -23,4 +23,4 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   "snuba-migrate" \
   "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   -- \
-  snuba migrations migrate --check-dangerous --force
+  snuba migrations migrate --check-dangerous
