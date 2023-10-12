@@ -552,6 +552,7 @@ TEST_CASES_GENERIC = [
                 "timeseries_id": ANY,
                 "retention_days": 30,
                 "granularities": [1, 2, 3],
+                "min_retention_days": 30,
             }
         ],
         id="all tag values ints",
@@ -574,6 +575,7 @@ TEST_CASES_GENERIC = [
                 "timeseries_id": ANY,
                 "retention_days": 30,
                 "granularities": [1, 2, 3],
+                "min_retention_days": 30,
             }
         ],
         id="all tag values strings",
