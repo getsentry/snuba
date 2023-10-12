@@ -145,7 +145,7 @@ class InsertBatchWriter:
         self.__messages: MutableSequence[Message[BytesInsertBatch]] = []
         self.__closed = False
 
-    def add(self, message: Message[BytesInsertBatch]) -> None:
+    def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
 
         self.__messages.append(message)
@@ -228,7 +228,7 @@ class ReplacementBatchWriter:
         self.__messages: MutableSequence[Message[ReplacementBatch]] = []
         self.__closed = False
 
-    def add(self, message: Message[ReplacementBatch]) -> None:
+    def submit(self, message: Message[ReplacementBatch]) -> None:
         assert not self.__closed
 
         self.__messages.append(message)
@@ -285,12 +285,12 @@ class ProcessedMessageBatchWriter:
             return
 
         if isinstance(message.payload, BytesInsertBatch):
-            self.__insert_batch_writer.add(cast(Message[BytesInsertBatch], message))
+            self.__insert_batch_writer.submit(cast(Message[BytesInsertBatch], message))
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
 
-            self.__replacement_batch_writer.add(
+            self.__replacement_batch_writer.submit(
                 cast(Message[ReplacementBatch], message)
             )
         else:
