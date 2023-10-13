@@ -57,11 +57,9 @@ class SquashedMigration(Migration):
 
     blocking = False
 
-    @abstractmethod
     def forwards(self, context: Context, dry_run: bool) -> None:
         pass
 
-    @abstractmethod
     def backwards(self, context: Context, dry_run: bool) -> None:
         pass
 
