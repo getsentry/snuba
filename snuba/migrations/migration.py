@@ -49,6 +49,23 @@ class Migration(ABC):
         raise NotImplementedError
 
 
+class SquashedMigration(Migration):
+    """
+    This is a migration that used to exist. We keep the migration ID in the DB
+    sequence but it no longer does anything as it is safe to longer run.
+    """
+
+    blocking = False
+
+    @abstractmethod
+    def forwards(self, context: Context, dry_run: bool) -> None:
+        pass
+
+    @abstractmethod
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        pass
+
+
 class CodeMigration(Migration, ABC):
     """
     Consists of one or more Python functions executed in sequence.

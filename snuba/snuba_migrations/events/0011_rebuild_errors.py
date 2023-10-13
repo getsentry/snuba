@@ -118,7 +118,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="errors_local_new",
+                table_name="errors_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.EVENTS,
@@ -133,28 +133,19 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="errors_local_new",
+                table_name="errors_local",
                 column=Column(
                     "_tags_hash_map",
                     Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags",
             ),
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS,
-                table_name="errors_local",
-            ),
-            operations.RenameTable(
-                storage_set=StorageSetKey.EVENTS,
-                old_table_name="errors_local_new",
-                new_table_name="errors_local",
-            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_local_new"
+                storage_set=StorageSetKey.EVENTS, table_name="errors_local"
             )
         ]
 
@@ -162,7 +153,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="errors_dist_new",
+                table_name="errors_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="errors_local",
@@ -171,21 +162,12 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="errors_dist_new",
+                table_name="errors_dist",
                 column=Column(
                     "_tags_hash_map",
                     Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags",
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS,
-                table_name="errors_dist",
-            ),
-            operations.RenameTable(
-                storage_set=StorageSetKey.EVENTS,
-                old_table_name="errors_dist_new",
-                new_table_name="errors_dist",
             ),
             operations.CreateTable(
                 storage_set=StorageSetKey.EVENTS_RO,
@@ -201,9 +183,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_dist_new"
+                storage_set=StorageSetKey.EVENTS, table_name="errors_dist"
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"
+                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist"
             ),
         ]
