@@ -76,8 +76,8 @@ tests = [
                 ),
             ),
         ),
-        "arrayMap((x -> replaceAll(toString(x), '-', '')), arraySlice(column1, 0, 2))",
-        id="arrayMap((x -> replaceAll(toString(x), '-', '')), arraySlice(column1, 0, 2))",
+        "arrayMap(x -> replaceAll(toString(x), '-', ''), arraySlice(column1, 0, 2))",
+        id="arrayMap(x -> replaceAll(toString(x), '-', ''), arraySlice(column1, 0, 2))",
     )
 ]
 
