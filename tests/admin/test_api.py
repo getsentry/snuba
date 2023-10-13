@@ -341,7 +341,7 @@ def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "transactions", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)

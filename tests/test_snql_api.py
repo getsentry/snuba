@@ -109,29 +109,6 @@ class TestSnQLApi(BaseApiTest):
             }
         ]
 
-    def test_sessions_query(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "dataset": "sessions",
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE project_id IN array({self.project_id})
-                    AND project_id IN array({self.project_id})
-                    AND org_id = {self.org_id}
-                    AND started >= toDateTime('2021-01-01T17:05:59.554860')
-                    AND started < toDateTime('2022-01-01T17:06:00.554981')
-                    ORDER BY sessions DESC
-                    LIMIT 100 OFFSET 0""",
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
-
     def test_join_query(self) -> None:
         response = self.post(
             "/events/snql",
@@ -378,28 +355,6 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["type"] == "internal_server_error"
         assert data["error"]["message"] == "stuff"
-
-    def test_sessions_with_function_orderby(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE org_id = {self.org_id}
-                    AND started >= toDateTime('2021-04-05T16:52:48.907628')
-                    AND started < toDateTime('2021-04-06T16:52:49.907666')
-                    AND project_id IN tuple({self.project_id})
-                    AND project_id IN tuple({self.project_id})
-                    ORDER BY divide(sessions_crashed, sessions) ASC
-                    LIMIT 21
-                    OFFSET 0
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
 
     def test_arrayjoin(self) -> None:
         response = self.post(
