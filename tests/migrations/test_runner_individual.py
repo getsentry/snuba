@@ -92,7 +92,9 @@ def test_transactions_compatibility() -> None:
     generate_transactions()
 
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
 
     runner._update_migration_status(
         MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"),
@@ -170,7 +172,9 @@ def test_groupedmessages_compatibility() -> None:
     migration_id = "0010_groupedmessages_onpremise_compatibility"
 
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
     events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
 
     # Mark prior migrations complete
