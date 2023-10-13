@@ -1160,8 +1160,8 @@ test_cases = [
                             right_node=IndividualNode(
                                 "se",
                                 QueryEntity(
-                                    EntityKey.METRICS,
-                                    get_entity(EntityKey.METRICS).get_data_model(),
+                                    EntityKey.METRICS_SETS,
+                                    get_entity(EntityKey.METRICS_SETS).get_data_model(),
                                 ),
                             ),
                             keys=[
