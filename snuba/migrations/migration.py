@@ -52,7 +52,7 @@ class Migration(ABC):
 class SquashedMigration(Migration):
     """
     This is a migration that used to exist. We keep the migration ID in the DB
-    sequence but it no longer does anything as it is safe to longer run.
+    sequence but it no longer does anything as it is safe to no longer run.
     """
 
     blocking = False
