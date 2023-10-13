@@ -7,12 +7,12 @@ def test_storage_set_combination() -> None:
         is True
     )
     assert (
-        is_valid_storage_set_combination(StorageSetKey.EVENTS, StorageSetKey.SESSIONS)
+        is_valid_storage_set_combination(StorageSetKey.EVENTS, StorageSetKey.PROFILES)
         is False
     )
     assert (
         is_valid_storage_set_combination(
-            StorageSetKey.EVENTS, StorageSetKey.CDC, StorageSetKey.SESSIONS
+            StorageSetKey.EVENTS, StorageSetKey.CDC, StorageSetKey.PROFILES
         )
         is False
     )

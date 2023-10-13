@@ -355,15 +355,15 @@ def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.clickhouse_db
 def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
-    MATCH (sessions)
-    SELECT sessions_crashed
+    MATCH (functions)
+    SELECT worst
     WHERE org_id = 100
     AND project_id IN tuple(100)
     AND started >= toDateTime('2022-01-01 00:00:00')
     AND started < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
+        "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -375,15 +375,15 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.clickhouse_db
 def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
     snql_query = """
-    MATCH (sessions)
-    SELECT sessions_crashed
+    MATCH (functions)
+    SELECT worst
     WHERE org_id = 100
     AND project_id IN tuple(100)
     AND started >= toDateTime('2022-01-01 00:00:00')
     AND started < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snuba_debug", data=json.dumps({"dataset": "sessions", "query": snql_query})
+        "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -576,7 +576,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/production_snql_query", data=json.dumps({"dataset": "sessions", "query": ""})
+        "/production_snql_query", data=json.dumps({"dataset": "functions", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
