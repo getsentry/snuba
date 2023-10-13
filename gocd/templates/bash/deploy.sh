@@ -52,6 +52,8 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="rust-spans-reference-consumer" \
   --container-name="rust-profiles-consumer" \
   --container-name="rust-profiling-functions-consumer" \
+  --container-name="spans-exp-static-off" \
+  --container-name="spans-exp-static-on" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
