@@ -182,6 +182,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             generate_migration_test_role("system", "all"),
             generate_migration_test_role("generic_metrics", "none"),
             generate_migration_test_role("events", "non_blocking", True),
+            generate_migration_test_role("querylog", "non_blocking", True),
             generate_tool_test_role("all"),
         ],
     ):
@@ -257,9 +258,9 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             )
 
         with patch.object(Runner, method) as mock_run_migration:
-            # not allowed blocking
+            # not allowed non blocking
             response = admin_api.post(
-                f"/migrations/querylog/{action}/0002_status_type_change"
+                f"/migrations/querylog/{action}/0006_sorting_key_change"
             )
             assert response.status_code == 403
             assert json.loads(response.data) == {
@@ -274,7 +275,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                 )
                 assert response.status_code == 200
                 migration_key = MigrationKey(
-                    group=MigrationGroup.EVENTS, migration_id="0001_querylog"
+                    group=MigrationGroup.QUERYLOG, migration_id="0001_querylog"
                 )
                 mock_run_migration.assert_called_once_with(
                     migration_key, force=False, fake=False, dry_run=False
@@ -288,7 +289,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                         return_value=(Status.IN_PROGRESS, None),
                     ):
                         migration_key = MigrationKey(
-                            group=MigrationGroup.EVENTS,
+                            group=MigrationGroup.QUERYLOG,
                             migration_id="0001_querylog",
                         )
                         response = admin_api.post(
