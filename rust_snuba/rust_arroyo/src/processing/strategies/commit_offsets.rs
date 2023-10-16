@@ -1,6 +1,5 @@
 use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
 use crate::types::{Message, Partition};
-use log::info;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
@@ -48,7 +47,6 @@ impl CommitOffsets {
             || force
         {
             if !self.partitions.is_empty() {
-                info!("Performing a commit {:?}", self.partitions);
                 let ret = Some(CommitRequest {
                     positions: self.partitions.clone(),
                 });
