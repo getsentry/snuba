@@ -186,6 +186,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 storage_set=StorageSetKey.EVENTS, table_name="errors_dist"
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist"
+                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"
             ),
         ]
