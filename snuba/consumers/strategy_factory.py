@@ -122,7 +122,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message: Message[ProcessedMessageBatchWriter],
         ) -> Message[ProcessedMessageBatchWriter]:
             message.payload.close()
-            message.payload.join()
             return message
 
         flush_and_commit: ProcessingStrategy[ProcessedMessageBatchWriter]
