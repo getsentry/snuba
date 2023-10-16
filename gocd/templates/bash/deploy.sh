@@ -52,6 +52,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="rust-spans-reference-consumer" \
   --container-name="rust-profiles-consumer" \
   --container-name="rust-profiling-functions-consumer" \
+  --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
@@ -59,4 +60,9 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
   --container-name="cleanup" \
-  --container-name="optimize"
+  --container-name="optimize" \
+&& /devinfra/scripts/k8s/k8s-deploy.py \
+  --label-selector="${LABEL_SELECTOR}" \
+  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --type="statefulset" \
+  --container-name="spans-exp-static-on"

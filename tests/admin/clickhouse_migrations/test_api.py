@@ -122,7 +122,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         assert response.status_code == 200
         expected_json = [
             {
-                "blocking": False,
+                "blocking": True,
                 "migration_id": "0001_migrations",
                 "status": "completed",
             }
