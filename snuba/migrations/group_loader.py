@@ -306,6 +306,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0017_distributions_mv2",
             "0018_sets_update_opt_default",
             "0019_counters_update_opt_default",
+            "0020_gauges_aggregate_table",
+            "0021_gauges_raw_table",
+            "0022_gauges_mv",
         ]
 
 

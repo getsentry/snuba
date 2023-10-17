@@ -40,6 +40,19 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("set_values", Array(UInt(64))),
         Column("count_value", Float(64)),
         Column("distribution_values", Array(Float(64))),
+        Column(
+            "gauges_values",
+            Nested(
+                [
+                    ("last", Float(64)),
+                    ("min", Float(64)),
+                    ("max", Float(64)),
+                    ("sum", Float(64)),
+                    ("count", UInt(64)),
+                    ("avg", Float(64)),
+                ]
+            ),
+        ),
         Column("metric_type", String(Modifiers(low_cardinality=True))),
         Column("materialization_version", UInt(8)),
         Column("timeseries_id", UInt(32)),

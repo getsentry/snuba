@@ -1,18 +1,11 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    AggregateFunction,
-    Column,
-    DateTime,
-    Nested,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
-from snuba.utils.schemas import Float
+from snuba.utils.schemas import AggregateFunction
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -37,7 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 ]
             ),
         ),
-        Column("value", AggregateFunction("sum", [Float(64)])),
+        Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
     ]
 
@@ -63,12 +56,12 @@ class Migration(migration.ClickhouseNodeMigration):
                       intDiv(toUnixTimestamp(timestamp),
                              multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as timestamp,
                     retention_days,
-                    minState(arrayJoin(gauges_values) AS values_rows) as min,
-                    maxState(values_rows) as max,
-                    avgState(values_rows) as avg,
-                    sumState(values_rows) as sum,
-                    countState(values_rows) as count,
-                    anyLastState(values_rows) as last,
+                    minState(arrayJoin(gauges_values.min)) as min,
+                    maxState(arrayJoin(gauges_values.max)) as max,
+                    avgState(arrayJoin(gauges_values.avg)) as avg,
+                    sumState(arrayJoin(gauges_values.sum)) as sum,
+                    countState(arrayJoin(gauges_values.count)) as count,
+                    anyLastState(arrayJoin(gauges_values.last)) as last
                 FROM generic_metric_gauges_raw_local
                 WHERE materialization_version = 1
                   AND metric_type = 'gauge'
