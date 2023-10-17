@@ -49,7 +49,13 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("avg", AggregateFunction("avg", [Float(64)])),
         Column("sum", AggregateFunction("sum", [Float(64)])),
         Column("count", AggregateFunction("count", [UInt(64)])),
-        Column("last", AggregateFunction("anyLast", [Float(64)])),
+        Column(
+            "last",
+            AggregateFunction(
+                "argMax",
+                [Float(64), DateTime()],
+            ),
+        ),
     ]
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
