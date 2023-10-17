@@ -35,16 +35,56 @@ class SlackClient(object):
             logger.error(exc, exc_info=True)
             return
 
-            # Slack error handling
-            # Copied from https://github.com/getsentry/sentry/blob/601f829c9246ae73c8169510140fd7f47fc6dfc3/src/sentry/integrations/slack/client.py#L36-L53
         content_type = resp.headers["content-type"]
         if content_type == "text/html":
             is_ok = str(resp.content) == "ok"
-            # If there is an error, Slack just makes the error the entire response.
             error_option = resp.content
 
         else:
-            # The content-type should be "application/json" at this point but we don't check.
+            response = resp.json()
+            is_ok = response.get("ok")
+            error_option = response.get("error")
+
+        if not is_ok:
+            logger.error(f"Slack error: {str(error_option)}")
+
+    def post_file(
+        self,
+        file_name: str,
+        file_path: str,
+        file_type: str,
+        initial_comment: Optional[str] = None,
+    ) -> None:
+        headers = {
+            "Authorization": f"Bearer {self.__token}",
+        }
+
+        data = {
+            "channels": self.__channel_id,
+            "initial_comment": initial_comment,
+        }
+
+        files = {
+            "file": (file_name, open(file_path, "rb"), file_type),
+        }
+
+        try:
+            resp = requests.post(
+                "https://slack.com/api/files.upload",
+                headers=headers,
+                data=data,
+                files=files,
+            )
+        except Exception as exc:
+            logger.error(exc, exc_info=True)
+            return
+
+        content_type = resp.headers["content-type"]
+        if content_type == "text/html":
+            is_ok = str(resp.content) == "ok"
+            error_option = resp.content
+
+        else:
             response = resp.json()
             is_ok = response.get("ok")
             error_option = response.get("error")
