@@ -585,7 +585,54 @@ TEST_CASES_GENERIC = [
 
 @pytest.mark.parametrize(
     "message, expected_output",
-    TEST_CASES_GENERIC,
+    [
+        pytest.param(
+            SET_MESSAGE_SHARED,
+            [
+                {
+                    "use_case_id": "sessions",
+                    "org_id": 1,
+                    "project_id": 2,
+                    "metric_id": 1232341,
+                    "timestamp": expected_timestamp,
+                    "tags.key": [10, 20, 30],
+                    "tags.indexed_value": [11, 22, 33],
+                    "tags.raw_value": ["value-1", "value-2", "value-3"],
+                    "metric_type": "set",
+                    "set_values": [324234, 345345, 456456, 567567],
+                    "materialization_version": 2,
+                    "timeseries_id": ANY,
+                    "retention_days": 30,
+                    "granularities": [1, 2, 3],
+                    "min_retention_days": 30,
+                }
+            ],
+            id="all tag values ints",
+        ),
+        pytest.param(
+            SET_MESSAGE_TAG_VALUES_STRINGS,
+            [
+                {
+                    "use_case_id": "sessions",
+                    "org_id": 1,
+                    "project_id": 2,
+                    "metric_id": 1232341,
+                    "timestamp": expected_timestamp,
+                    "tags.key": [10, 20, 30],
+                    "tags.indexed_value": [0, 0, 0],
+                    "tags.raw_value": ["value-1", "value-2", "value-3"],
+                    "metric_type": "set",
+                    "set_values": [324234, 345345, 456456, 567567],
+                    "materialization_version": 2,
+                    "timeseries_id": ANY,
+                    "retention_days": 30,
+                    "granularities": [1, 2, 3],
+                    "min_retention_days": 30,
+                }
+            ],
+            id="all tag values strings",
+        ),
+    ],
 )
 def test_generic_metrics_sets_processor(
     message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]]

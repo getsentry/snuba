@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import NamedTuple
 
-from snuba.utils.types import Interval
+from snuba.subscriptions.types import Interval
 
 logger = logging.getLogger(__name__)
 
