@@ -307,7 +307,6 @@ class GenericMetricsLoader(DirectoryLoader):
             "0018_sets_update_opt_default",
             "0019_counters_update_opt_default",
             "0020_sets_mv2",
-            "0021_counters_mv2",
         ]
 
 
