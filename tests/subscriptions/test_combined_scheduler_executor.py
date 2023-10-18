@@ -1,7 +1,7 @@
 import time
 import uuid
 from contextlib import closing
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest import mock
 
 import pytest
@@ -79,7 +79,7 @@ def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
                 Tick(
                     0,
                     offsets=Interval(1, 3),
-                    timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
+                    timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 60),
                 ),
                 partition,
                 4,

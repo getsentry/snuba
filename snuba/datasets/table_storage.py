@@ -87,6 +87,7 @@ class KafkaStreamLoader:
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
+        subscription_synchronization_timestamp: Optional[str] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
         dlq_topic_spec: Optional[KafkaTopicSpec] = None,
@@ -148,6 +149,7 @@ def build_kafka_stream_loader_from_settings(
     subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
+    subscription_synchronization_timestamp: Optional[str] = None,
     dlq_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
@@ -189,6 +191,7 @@ def build_kafka_stream_loader_from_settings(
         replacement_topic_spec,
         commit_log_topic_spec,
         subscription_scheduler_mode=subscription_scheduler_mode,
+        subscription_synchronization_timestamp=subscription_synchronization_timestamp,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
         dlq_topic_spec=dlq_topic_spec,

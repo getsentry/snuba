@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 from arroyo.backends.abstract import Consumer, Producer
@@ -38,10 +38,10 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 class MessageDetails(NamedTuple):
     offset: int
-    orig_message_ts: datetime
+    orig_message_ts: float
     # The timestamp the message was first received by Sentry (Relay)
     # It is optional since it is not currently present on all topics
-    received_ts: Optional[datetime]
+    received_ts: Optional[float]
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -104,7 +104,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__metrics = metrics
-        self.__time_shift = time_shift if time_shift is not None else timedelta()
+        self.__time_shift = time_shift.total_seconds() if time_shift is not None else 0
 
     def subscribe(
         self,

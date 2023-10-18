@@ -274,9 +274,9 @@ class ProcessedMessageBatchWriter:
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-        self.__received_timestamps: MutableMapping[
-            Partition, List[datetime]
-        ] = defaultdict(list)
+        self.__received_timestamps: MutableMapping[Partition, List[int]] = defaultdict(
+            list
+        )
 
         self.__closed = False
 
@@ -343,7 +343,7 @@ class ProcessedMessageBatchWriter:
                         self.__commit_log_config.group_id,
                         partition,
                         offset,
-                        timestamp,
+                        datetime.timestamp(timestamp),
                         received_p99,
                     )
                 )
@@ -472,7 +472,11 @@ class MultistorageCollector:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(

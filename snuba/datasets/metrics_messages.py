@@ -133,7 +133,7 @@ def aggregation_options_for_counter_message(
             GRANULARITY_ONE_DAY,
         ],
         "min_retention_days": retention_days,
-        "materialization_version": 1,
+        "materialization_version": 2,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
