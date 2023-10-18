@@ -122,7 +122,8 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
                     "events",
                     Partition(commit_log_topic, partition),
                     offset,
-                    orig_message_ts,
+                    orig_message_ts.timestamp(),
+                    None,
                 )
             ),
         )
@@ -144,11 +145,11 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 def test_tick_time_shift() -> None:
     partition = 0
     offsets = Interval(0, 1)
-    tick = Tick(
-        partition, offsets, Interval(datetime(1970, 1, 1), datetime(1970, 1, 2))
-    )
-    assert tick.time_shift(timedelta(hours=24)) == Tick(
-        partition, offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
+    tick = Tick(partition, offsets, Interval(0, 60 * 60 * 24))
+    assert tick.time_shift(timedelta(hours=24).total_seconds()) == Tick(
+        partition,
+        offsets,
+        Interval(datetime(1970, 1, 2).timestamp(), datetime(1970, 1, 3).timestamp()),
     )
 
 
@@ -176,7 +177,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
         for offset in offsets:
             payload = commit_codec.encode(
                 Commit(
-                    followed_consumer_group, Partition(topic, partition), offset, epoch
+                    followed_consumer_group,
+                    Partition(topic, partition),
+                    offset,
+                    epoch.timestamp(),
+                    None,
                 )
             )
             producer.produce(Partition(topic, 0), payload).result()
@@ -212,9 +217,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 1
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(0, 1),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         1,
         epoch,
@@ -226,9 +233,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 2
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         2,
         epoch,
@@ -267,9 +276,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 2
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         2,
         epoch,
@@ -313,7 +324,9 @@ def test_tick_consumer_non_monotonic() -> None:
 
     producer.produce(
         partition,
-        commit_codec.encode(Commit(followed_consumer_group, partition, 0, epoch)),
+        commit_codec.encode(
+            Commit(followed_consumer_group, partition, 0, epoch.timestamp(), None)
+        ),
     ).result()
 
     clock.sleep(1)
@@ -321,7 +334,7 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 1, epoch + timedelta(seconds=1))
+            Commit(followed_consumer_group, partition, 1, epoch.timestamp() + 1, None)
         ),
     ).result()
 
@@ -335,7 +348,7 @@ def test_tick_consumer_non_monotonic() -> None:
             Tick(
                 0,
                 offsets=Interval(0, 1),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 1),
             ),
             partition,
             1,
@@ -346,7 +359,9 @@ def test_tick_consumer_non_monotonic() -> None:
 
     producer.produce(
         partition,
-        commit_codec.encode(Commit(followed_consumer_group, partition, 2, epoch)),
+        commit_codec.encode(
+            Commit(followed_consumer_group, partition, 2, epoch.timestamp(), None)
+        ),
     ).result()
 
     with assert_changes(consumer.tell, {partition: 2}, {partition: 3}):
@@ -357,7 +372,7 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 3, epoch + timedelta(seconds=2))
+            Commit(followed_consumer_group, partition, 3, epoch.timestamp() + 2, None)
         ),
     ).result()
 
@@ -366,9 +381,7 @@ def test_tick_consumer_non_monotonic() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
-                ),
+                timestamps=Interval(epoch.timestamp() + 1, epoch.timestamp() + 2),
             ),
             partition,
             3,
@@ -425,7 +438,8 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
                 followed_consumer_group,
                 partition,
                 5,
-                now,
+                now.timestamp(),
+                None,
             )
         ),
     ).result()
@@ -433,12 +447,7 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(
-                followed_consumer_group,
-                partition,
-                4,
-                now - timedelta(seconds=2),
-            )
+            Commit(followed_consumer_group, partition, 4, now.timestamp() - 2, None)
         ),
     ).result()
 
