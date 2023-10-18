@@ -54,7 +54,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     tags.raw_value,
                     timestamp as raw_timestamp,
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
-                      intDiv(toUnixTimestamp(timestamp),
+                      intDiv(toUnixTimestamp(raw_timestamp),
                              multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as _timestamp,
                     retention_days,
                     minState(arrayJoin(gauges_values.min)) as min,
@@ -74,7 +74,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     tags.key,
                     tags.indexed_value,
                     tags.raw_value,
-                    timestamp,
+                    raw_timestamp,
                     granularity,
                     retention_days
                 """,
