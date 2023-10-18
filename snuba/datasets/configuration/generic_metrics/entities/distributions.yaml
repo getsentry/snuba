@@ -285,6 +285,7 @@ query_processors:
   - processor: MappedGranularityProcessor
     args:
       accepted_granularities:
+        10: 0
         60: 1
         3600: 2
         86400: 3
@@ -315,14 +316,12 @@ validators:
 required_time_column: timestamp
 partition_key_column_name: org_id
 subscription_processors:
-  -
-    processor: AddColumnCondition
+  - processor: AddColumnCondition
     args:
       extra_condition_data_key: organization
       extra_condition_column: org_id
 subscription_validators:
-  -
-    validator: AggregationValidator
+  - validator: AggregationValidator
     args:
       max_allowed_aggregations: 3
       disallowed_aggregations: [having, orderby]

@@ -18,3 +18,18 @@ updates:
       # sentry-kafka-schemas has its own lints to ensure it is reasonably
       # up-to-date -- we should rely on them
       - dependency-name: "sentry-kafka-schemas"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 0 # security updates only
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      # Check for updates to GitHub Actions every week
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 10

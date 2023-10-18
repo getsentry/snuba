@@ -27,7 +27,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     write any statuses until this migration is completed.
     """
 
-    blocking = False
+    blocking = True
 
     def is_first_migration(self) -> bool:
         return True

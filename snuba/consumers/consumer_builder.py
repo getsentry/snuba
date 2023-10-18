@@ -379,7 +379,10 @@ class ConsumerBuilder:
                     self.dlq_producer,
                     Topic(self.__consumer_config.dlq_topic.physical_topic_name),
                 ),
-                DlqLimit(),
+                DlqLimit(
+                    max_invalid_ratio=0.01,
+                    max_consecutive_count=1000,
+                ),
                 None,
             )
         else:

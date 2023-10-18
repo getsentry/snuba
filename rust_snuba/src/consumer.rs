@@ -170,10 +170,12 @@ pub fn consumer_impl(
     assert!(consumer_config.replacements_topic.is_none());
     assert!(consumer_config.commit_log_topic.is_none());
 
+    let mut _sentry_guard = None;
+
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
         log::debug!("Using sentry dsn {:?}", dsn);
-        setup_sentry(dsn);
+        _sentry_guard = Some(setup_sentry(dsn));
     }
 
     // setup arroyo metrics
