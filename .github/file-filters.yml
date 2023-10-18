@@ -4,3 +4,4 @@ api_changes:
   - "snuba/datasets/configuration/**/*.yaml"
   - "snuba/web/*.py"
   - "snuba/query/**/*.py"
+  - "snuba/snuba_migrations/**/*"

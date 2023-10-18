@@ -29,9 +29,9 @@ from snuba.subscriptions.scheduler_processing_strategy import (
     TickSubscription,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 

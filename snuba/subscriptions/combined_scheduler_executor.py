@@ -90,6 +90,7 @@ def build_scheduler_executor_consumer(
             ),
         ),
         followed_consumer_group=followed_consumer_group,
+        metrics=metrics,
         time_shift=(
             timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None
         ),
