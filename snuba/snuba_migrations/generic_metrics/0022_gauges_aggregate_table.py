@@ -49,7 +49,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("max", AggregateFunction("max", [Float(64)])),
         Column("avg", AggregateFunction("avg", [Float(64)])),
         Column("sum", AggregateFunction("sum", [Float(64)])),
-        Column("count", AggregateFunction("count", [UInt(64)])),
+        Column("count", AggregateFunction("sum", [UInt(64)])),
         Column(
             "last",
             AggregateFunction(
