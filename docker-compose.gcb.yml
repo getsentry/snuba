@@ -143,7 +143,7 @@ services:
         hard: 262144
 
   redis1: &redis_config
-    image: redis:5.0-alpine
+    image: redis:7.2.1-alpine
     command:
       - redis-server
       - "--appendonly"

@@ -1,5 +1,5 @@
 ---
-version: '3'
+version: "3"
 services:
   snuba-api:
     build: ./
@@ -15,8 +15,8 @@ services:
       - "1"
       - "--http-keepalive"
     environment: &snuba_env
-      CLICKHOUSE_HOST: 'clickhouse'
-      REDIS_HOST: 'redis'
+      CLICKHOUSE_HOST: "clickhouse"
+      REDIS_HOST: "redis"
       # Uncomment this to run sentry's snuba testsuite
       #SNUBA_SETTINGS: test
   clickhouse:
@@ -30,7 +30,7 @@ services:
     ulimits:
       nofile: 262144
   redis:
-    image: redis:5.0-alpine
+    image: redis:7.2.1-alpine
 
 volumes:
   clickhouse:
