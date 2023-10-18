@@ -1,8 +1,6 @@
 from enum import Enum
 from typing import Any, Iterable, Mapping, MutableMapping
 
-from snuba.state import get_config
-
 
 class InputType(Enum):
     SET = "s"
@@ -135,7 +133,7 @@ def aggregation_options_for_counter_message(
             GRANULARITY_ONE_DAY,
         ],
         "min_retention_days": retention_days,
-        "materialization_version": get_config("gen_metric_counters_mv_ver", 1),
+        "materialization_version": 2,
     }
 
     if aggregation_setting := message.get("aggregation_option"):

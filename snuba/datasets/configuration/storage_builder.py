@@ -181,6 +181,20 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     )
     subscription_result_topic = __get_topic(loader_config, "subscription_result_topic")
 
+    subscription_synchronization_timestamp = loader_config.get(
+        "subscription_synchronization_timestamp"
+    )
+
+    subscription_values = [
+        bool(subscription_scheduled_topic),
+        bool(subscription_scheduler_mode),
+        bool(subscription_result_topic),
+        bool(subscription_synchronization_timestamp),
+    ]
+    assert all(subscription_values) or not any(
+        subscription_values
+    ), "provide all subscription config or none"
+
     dlq_topic = __get_topic(loader_config, "dlq_topic")
 
     return build_kafka_stream_loader_from_settings(
@@ -192,6 +206,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduler_mode,
         subscription_scheduled_topic,
         subscription_result_topic,
+        subscription_synchronization_timestamp,
         dlq_topic,
     )
 
