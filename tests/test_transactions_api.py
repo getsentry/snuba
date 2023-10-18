@@ -539,7 +539,7 @@ class TestTransactionsApi(BaseApiTest):
                     "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "project": 1,
                     "selected_columns": ["event_id"],
-                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff\\"]],
+                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff"]],
                     "limit": 4,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),

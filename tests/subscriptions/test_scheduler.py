@@ -18,9 +18,9 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.types import Interval
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
