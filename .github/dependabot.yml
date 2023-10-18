@@ -6,6 +6,13 @@ updates:
       interval: "weekly"
       day: "sunday"
     open-pull-requests-limit: 10
+    groups:
+      maintine-dependencies:
+        patterns:
+          - "@mantine/*"
+      tiptap-dependencies:
+        patterns:
+          - "@tiptap/*"
 
   - package-ecosystem: "pip"
     directory: "/"
