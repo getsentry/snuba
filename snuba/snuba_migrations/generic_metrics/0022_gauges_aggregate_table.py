@@ -31,7 +31,8 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
         Column("granularity", UInt(8)),
-        Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
+        Column("_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
+        Column("raw_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column(
             "tags",
@@ -66,12 +67,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     order_by="(org_id, project_id, metric_id, granularity, "
-                    "timestamp, tags.key, tags.indexed_value, "
+                    "_timestamp, tags.key, tags.indexed_value, "
                     "tags.raw_value, retention_days, use_case_id)",
-                    primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
-                    partition_by="(retention_days, toMonday(timestamp))",
+                    primary_key="(org_id, project_id, metric_id, granularity, _timestamp)",
+                    partition_by="(retention_days, toMonday(_timestamp))",
                     settings={"index_granularity": self.granularity},
-                    ttl="timestamp + toIntervalDay(retention_days)",
+                    ttl="_timestamp + toIntervalDay(retention_days)",
                 ),
                 columns=self.columns,
                 target=OperationTarget.LOCAL,
