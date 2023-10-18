@@ -54,6 +54,7 @@ def close_cogs_recorder() -> None:
     This producer only gets created if the `record_cogs` function is called at least
     once.
     """
+    logger.info("Flushing and closing cogs recorder if it exists...")
     try:
         accumulator = _accumulator()
         if accumulator is not None:
