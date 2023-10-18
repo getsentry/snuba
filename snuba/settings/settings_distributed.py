@@ -28,7 +28,6 @@ CLUSTERS = [
             "generic_metrics_counters",
             "spans",
             "group_attributes",
-            "generic_metrics_gauges",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
