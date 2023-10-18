@@ -296,7 +296,7 @@ class ProcessedMessageBatchWriter:
             origin_timestamp = insert_message.payload.origin_timestamp
             if origin_timestamp is not None:
                 self.__received_timestamps[message.value.partition].append(
-                    origin_timestamp
+                    datetime.timestamp(origin_timestamp)
                 )
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
