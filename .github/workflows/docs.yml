@@ -22,7 +22,7 @@ jobs:
       - name: Build docs
         run: |
           make snubadocs
-      - uses: peaceiris/actions-gh-pages@v3.7.3
+      - uses: peaceiris/actions-gh-pages@v3.9.3
         name: Publish to GitHub Pages
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
