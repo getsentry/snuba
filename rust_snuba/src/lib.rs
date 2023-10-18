@@ -1,11 +1,11 @@
 mod config;
 mod consumer;
+mod logging;
 mod metrics;
 mod processors;
 mod runtime_config;
 mod strategies;
 mod types;
-mod logging;
 
 use pyo3::prelude::*;
 

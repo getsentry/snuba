@@ -122,30 +122,28 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             message: Message[ProcessedMessageBatchWriter],
         ) -> Message[ProcessedMessageBatchWriter]:
             message.payload.close()
-            message.payload.join()
             return message
 
-        commit_strategy: ProcessingStrategy[Union[FilteredPayload, ProcessedMessage]]
+        flush_and_commit: ProcessingStrategy[ProcessedMessageBatchWriter]
 
-        commit_strategy = CommitOffsets(commit)
-
-        collect: ProcessingStrategy[Union[FilteredPayload, ProcessedMessage]]
         if self.__skip_write:
-            collect = commit_strategy
+            flush_and_commit = CommitOffsets(commit)
         else:
-            collect = Reduce[ProcessedMessage, ProcessedMessageBatchWriter](
-                self.__max_insert_batch_size,
-                self.__max_insert_batch_time,
-                accumulator,
-                self.__collector,
-                RunTaskInThreads(
-                    flush_batch,
-                    # We process up to 2 insert batches in parallel
-                    2,
-                    3,
-                    commit_strategy,
-                ),
+            flush_and_commit = RunTaskInThreads(
+                flush_batch,
+                # We process up to 2 insert batches in parallel
+                2,
+                3,
+                CommitOffsets(commit),
             )
+
+        collect = Reduce[ProcessedMessage, ProcessedMessageBatchWriter](
+            self.__max_insert_batch_size,
+            self.__max_insert_batch_time,
+            accumulator,
+            self.__collector,
+            flush_and_commit,
+        )
 
         transform_function = self.__process_message
 
