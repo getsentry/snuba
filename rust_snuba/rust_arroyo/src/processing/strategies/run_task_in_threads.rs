@@ -107,12 +107,12 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
 
     fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
         if self.message_carried_over.is_some() {
-            log::warn!("carried over message, rejecting subsequent messages");
+            log::warn!("[{}] carried over message, rejecting subsequent messages", self.metric_name);
             return Err(MessageRejected { message });
         }
 
         if self.handles.len() > self.concurrency {
-            log::warn!("Reached max concurrency, rejecting message");
+            log::warn!("[{}] Reached max concurrency, rejecting message", self.metric_name);
             return Err(MessageRejected { message });
         }
 
@@ -144,7 +144,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             if let Some(t) = remaining {
                 remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
-                    log::warn!("Timeout reached while waiting for tasks to finish");
+                    log::warn!("[{}] Timeout reached while waiting for tasks to finish", self.metric_name);
                     break;
                 }
             }
