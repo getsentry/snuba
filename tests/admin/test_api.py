@@ -357,10 +357,9 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (functions)
     SELECT worst
-    WHERE org_id = 100
-    AND project_id IN tuple(100)
-    AND started >= toDateTime('2022-01-01 00:00:00')
-    AND started < toDateTime('2022-02-01 00:00:00')
+    WHERE project_id IN tuple(100)
+    AND timestamp >= toDateTime('2022-01-01 00:00:00')
+    AND timestamp < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
         "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
@@ -377,10 +376,9 @@ def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (functions)
     SELECT worst
-    WHERE org_id = 100
-    AND project_id IN tuple(100)
-    AND started >= toDateTime('2022-01-01 00:00:00')
-    AND started < toDateTime('2022-02-01 00:00:00')
+    WHERE project_id IN tuple(100)
+    AND timestamp >= toDateTime('2022-01-01 00:00:00')
+    AND timestamp < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
         "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
