@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.10.0
+
+### Various fixes & improvements
+
+- feat(slack): Allow sending files in slack client (#4865) by @nikhars
+- ref: Simplify collector / processed message batch writer (#4848) by @lynnagara
+- deploy static experimental consumers with statefulsets (#4856) by @dbanda
+- feat: Mark first migration blocking (#4849) by @lynnagara
+- deploy to experimental static membership consumers (#4851) by @dbanda
+- feat: Reduce more logging (#4852) by @lynnagara
+- test: Run full Sentry test suite if any migrations changed (#4850) by @lynnagara
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4820) by @john-z-yang
+- feat(generic-metrics): Add new mat view for generic set metrics (#4803) by @john-z-yang
+- feat(generic-metrics): Write `retention_days` to `min_retention_days` columns for sets and counters (#4819) by @john-z-yang
+- docs(migrations): document --fake (#4844) by @MeredithAnya
+- remove `--force` from ST migrations (#4840) by @dbanda
+- Add 10s granularity to generic metrics granularity processors (#4834) by @ayirr7
+- fix: Fix rust logging setup and sentry integration (#4843) by @untitaker
+- Upgrade Python to 3.8.18 (#4841) by @oioki
+- feat: Reduce logging in Rust consumers (#4845) by @lynnagara
+- fix(slack): Allow slack to talk to different channels. (#4810) by @nikhars
+- fix(dlq): Add sane defaults to the dlq policy (#4817) by @nikhars
+- fix(cardinality-analyzer): Add more storage keys to cardinality analyzer (#4839) by @john-z-yang
+- fix: Fix committing in the no-skip-write python consumer (#4838) by @lynnagara
+- ref(spans): Refactor spans Rust processor (#4833) by @phacops
+- fix(spans): Handle null and no tags values (#4830) by @phacops
+- ref: bump sentry-arroyo to 2.14.12 (#4829) by @getsentry-bot
+- fix: deploy new dummy rust consumers (#4828) by @untitaker
+
+_Plus 65 more_
+
 ## 23.9.1
 
 ### Various fixes & improvements

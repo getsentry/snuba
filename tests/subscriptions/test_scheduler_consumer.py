@@ -23,6 +23,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
@@ -30,7 +31,6 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend
 
@@ -184,7 +184,10 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     inner_consumer = broker.get_consumer("group")
 
     consumer = CommitLogTickConsumer(
-        inner_consumer, followed_consumer_group, time_shift=time_shift
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        time_shift=time_shift,
     )
 
     if time_shift is None:
@@ -296,7 +299,9 @@ def test_tick_consumer_non_monotonic() -> None:
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+    consumer = CommitLogTickConsumer(
+        inner_consumer, followed_consumer_group, TestingMetricsBackend()
+    )
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
@@ -385,7 +390,9 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+    consumer = CommitLogTickConsumer(
+        inner_consumer, followed_consumer_group, TestingMetricsBackend()
+    )
 
     now = datetime.now()
 
