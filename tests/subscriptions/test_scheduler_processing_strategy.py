@@ -610,7 +610,7 @@ def test_produce_scheduled_subscription_message() -> None:
                 Tick(
                     0,
                     offsets=Interval(1, 3),
-                    timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 2),
+                    timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 120),
                 ),
                 2,
             ),
