@@ -1,6 +1,6 @@
 ARG PYTHON_VERSION=3.8.18
 
-FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
