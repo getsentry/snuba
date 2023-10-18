@@ -274,9 +274,9 @@ class ProcessedMessageBatchWriter:
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-        self.__received_timestamps: MutableMapping[Partition, List[int]] = defaultdict(
-            list
-        )
+        self.__received_timestamps: MutableMapping[
+            Partition, List[float]
+        ] = defaultdict(list)
 
         self.__closed = False
 
