@@ -76,7 +76,7 @@ jobs:
       # If working tree is dirty, commit and update if we have a token
       - name: Apply any pre-commit fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
-        uses: getsentry/action-github-commit@v1.0.0
+        uses: getsentry/action-github-commit@v1.1.0
         with:
           github-token: ${{ steps.token.outputs.token }}
 
