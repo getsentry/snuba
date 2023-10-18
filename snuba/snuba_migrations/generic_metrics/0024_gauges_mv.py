@@ -56,7 +56,12 @@ class Migration(migration.ClickhouseNodeMigration):
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
                       intDiv(toUnixTimestamp(raw_timestamp),
                              multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as _timestamp,
-                    retention_days,
+                    least(retention_days,
+                        multiIf(granularity=0,decasecond_retention_days,
+                                granularity=1,min_retention_days,
+                                granularity=2,hr_retention_days,
+                                granularity=3,day_retention_days,
+                                0)) as retention_days,
                     minState(arrayJoin(gauges_values.min)) as min,
                     maxState(arrayJoin(gauges_values.max)) as max,
                     avgState(arrayJoin(gauges_values.avg)) as avg,

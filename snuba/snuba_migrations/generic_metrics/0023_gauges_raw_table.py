@@ -59,6 +59,22 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("partition", UInt(16)),
         Column("offset", UInt(64)),
         Column("granularities", Array(UInt(8))),
+        Column(
+            "decasecond_retention_days",
+            UInt(8, Modifiers(default=str("7"))),
+        ),
+        Column(
+            "min_retention_days",
+            UInt(8, Modifiers(default=str("30"))),
+        ),
+        Column(
+            "hr_retention_days",
+            UInt(8, Modifiers(default=str("retention_days"))),
+        ),
+        Column(
+            "day_retention_days",
+            UInt(8, Modifiers(default=str("retention_days"))),
+        ),
     ]
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
