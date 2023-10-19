@@ -5,7 +5,7 @@ from typing import Optional, Sequence
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.check_dangerous import check_dangerous_operation
 from snuba.migrations.context import Context
-from snuba.migrations.operations import OperationTarget, RunPython, SqlOperation
+from snuba.migrations.operations import GenericOperation, OperationTarget, SqlOperation
 from snuba.migrations.status import Status
 from snuba.utils.types import ColumnStatesMapType
 
@@ -73,11 +73,11 @@ class CodeMigration(Migration, ABC):
     """
 
     @abstractmethod
-    def forwards_global(self) -> Sequence[RunPython]:
+    def forwards_global(self) -> Sequence[GenericOperation]:
         raise NotImplementedError
 
     @abstractmethod
-    def backwards_global(self) -> Sequence[RunPython]:
+    def backwards_global(self) -> Sequence[GenericOperation]:
         raise NotImplementedError
 
     def forwards(self, context: Context, dry_run: bool) -> None:
