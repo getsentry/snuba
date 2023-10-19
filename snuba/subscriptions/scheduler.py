@@ -402,8 +402,8 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         subscriptions = self.__get_subscriptions()
 
         for timestamp in range(
-            math.ceil(interval.lower.timestamp()),
-            math.ceil(interval.upper.timestamp()),
+            math.ceil(interval.lower),
+            math.ceil(interval.upper),
         ):
             for subscription in subscriptions:
                 task = self.__builder.get_task(

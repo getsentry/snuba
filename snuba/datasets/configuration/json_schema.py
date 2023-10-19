@@ -36,13 +36,20 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the subscription scheduled Kafka topic",
         },
+        "subscription_result_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the subscription result Kafka topic",
+        },
         "subscription_scheduler_mode": {
             "type": ["string", "null"],
             "description": "The subscription scheduler mode used (e.g. partition or global). This must be specified if subscriptions are supported for this storage",
         },
-        "subscription_result_topic": {
-            "type": ["string", "null"],
-            "description": "Name of the subscription result Kafka topic",
+        "subscription_synchronization_timestamp": {
+            "anyOf": [
+                {"type": "string", "enum": ["orig_message_ts", "received_p99"]},
+                {"type": "null"},
+            ],
+            "description": "Field to be used for timestamp synchronization by the scheduler",
         },
         "replacement_topic": {
             "type": ["string", "null"],
