@@ -200,7 +200,7 @@ class TestMetricsSdkApiCounters(BaseApiTest):
         )
         data = json.loads(response.data)
 
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         rows = data["data"]
         assert len(rows) == 180, rows
 
