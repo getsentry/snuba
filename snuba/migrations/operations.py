@@ -1,7 +1,8 @@
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
+from functools import cached_property
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import structlog
 
@@ -547,13 +548,20 @@ class RunPython(GenericMigration):
 
 
 class RunSqlAsCode(GenericMigration):
-    def __init__(self, operation: SqlOperation) -> None:
-        assert isinstance(operation, SqlOperation)
-        assert operation.target != OperationTarget.UNSET
-        self.__operation = operation
+    def __init__(
+        self, operation_function: Union[SqlOperation, Callable[[], SqlOperation]]
+    ) -> None:
+        self.__operation_function = operation_function
+
+    @cached_property
+    def _operation(self):
+        if callable(self.__operation_function):
+            return self.__operation_function()
+        else:
+            return self.__operation_function
 
     def execute(self, logger: logging.Logger) -> None:
-        self.__operation.execute()
+        self._operation.execute()
 
     def execute_new_node(
         self,
@@ -562,16 +570,16 @@ class RunSqlAsCode(GenericMigration):
         clickhouse: ClickhousePool,
     ) -> None:
         if node_type == ClickhouseNodeType.LOCAL:
-            if self.__operation.target != OperationTarget.LOCAL:
+            if self._operation.target != OperationTarget.LOCAL:
                 return
         else:
-            if self.__operation.target != OperationTarget.DISTRIBUTED:
+            if self._operation.target != OperationTarget.DISTRIBUTED:
                 return
 
-        if self.__operation._storage_set in storage_sets:
-            sql = self.__operation.format_sql()
+        if self._operation._storage_set in storage_sets:
+            sql = self._operation.format_sql()
             logger.info(f"Executing {sql}")
             clickhouse.execute(sql)
 
     def description(self) -> Optional[str]:
-        return self.__operation.format_sql()
+        return self._operation.format_sql()
