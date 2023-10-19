@@ -14,7 +14,6 @@ pub struct SchemaValidator {
 }
 
 impl SchemaValidator {
-    #[allow(dead_code)]
     pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
         let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
             Ok(s) => Some(s),
@@ -68,6 +67,7 @@ pub struct ValidateSchema {
 }
 
 impl ValidateSchema {
+    #[allow(dead_code)]
     pub fn new<N>(next_step: N, topic: String, enforce_schema: bool) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
