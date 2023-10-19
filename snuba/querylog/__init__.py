@@ -1,4 +1,3 @@
-from random import random
 from typing import Any, Mapping, Optional, Union
 
 import sentry_sdk
@@ -99,13 +98,10 @@ def _record_cogs(
     result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     """
-    Record bytes scanned for Generic Metrics Queries per use case.
+    Record bytes scanned for shared resource Queries per use case.
     """
 
-    if (
-        not isinstance(result, QueryResult)
-        or query_metadata.dataset != "generic_metrics"
-    ):
+    if not isinstance(result, QueryResult):
         return
 
     profile = result.result.get("profile")
@@ -115,13 +111,12 @@ def _record_cogs(
     if (use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is None:
         return
 
-    if random() < (state.get_config("gen_metrics_query_cogs_probability") or 0):
-        record_cogs(
-            resource_id="snuba_api_bytes_scanned",
-            app_feature=f"genericmetrics_{use_case_id}",
-            amount=bytes_scanned,
-            usage_type=UsageUnit.BYTES,
-        )
+    record_cogs(
+        resource_id="snuba_api_bytes_scanned",
+        app_feature=f"{query_metadata.dataset.replace('_','')}_{use_case_id}",
+        amount=bytes_scanned,
+        usage_type=UsageUnit.BYTES,
+    )
 
 
 def record_query(
