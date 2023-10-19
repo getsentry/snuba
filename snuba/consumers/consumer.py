@@ -320,7 +320,11 @@ class ProcessedMessageBatchWriter:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -447,7 +451,11 @@ class MultistorageCollector:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(

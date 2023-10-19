@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import functools
 import itertools
 import logging
@@ -44,6 +45,7 @@ from snuba.clusters.cluster import (
     ConnectionId,
     UndefinedClickhouseCluster,
 )
+from snuba.cogs.accountant import close_cogs_recorder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
@@ -215,6 +217,7 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
+atexit.register(close_cogs_recorder)
 
 
 @application.errorhandler(InvalidJsonRequestException)

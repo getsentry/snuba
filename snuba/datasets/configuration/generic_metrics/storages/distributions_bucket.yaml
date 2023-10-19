@@ -57,6 +57,7 @@ stream_loader:
       header_value: d
   commit_log_topic: snuba-generic-metrics-distributions-commit-log
   subscription_scheduler_mode: global
+  subscription_synchronization_timestamp: orig_message_ts
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
   subscription_result_topic: generic-metrics-subscription-results
   # We noticed that the Snuba generic metrics consumers are unable to
