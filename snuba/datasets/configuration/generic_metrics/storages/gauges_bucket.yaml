@@ -1,0 +1,73 @@
+version: v1
+kind: writable_storage
+name: generic_metrics_gauges_raw
+storage:
+  key: generic_metrics_gauges_raw
+  set_key: generic_metrics_gauges
+readiness_state: limited
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+      {
+        name: granularities,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      { name: count_value, type: Float, args: { size: 64 } },
+      {
+        name: set_values,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 64 } } },
+      },
+      {
+        name: distribution_values,
+        type: Array,
+        args: { inner_type: { type: Float, args: { size: 64 } } },
+      },
+      {
+        name: gauges_values,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: last, type: Float, args: { size: 64 } },
+                { name: min, type: Float, args: { size: 64 } },
+                { name: max, type: Float, args: { size: 64 } },
+                { name: sum, type: Float, args: { size: 64 } },
+                { name: count, type: UInt, args: { size: 64 } },
+                { name: avg, type: Float, args: { size: 64 } },
+              ],
+          },
+      },
+      { name: timeseries_id, type: UInt, args: { size: 32 } },
+    ]
+  local_table_name: generic_metric_gauges_raw_local
+  dist_table_name: generic_metric_gauges_raw_dist
+stream_loader:
+  processor: GenericGaugesMetricsProcessor
+  default_topic: snuba-generic-metrics
+  pre_filter:
+    type: KafkaHeaderSelectFilter
+    args:
+      header_key: metric_type
+      header_value: g
