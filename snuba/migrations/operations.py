@@ -8,12 +8,11 @@ import structlog
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import (
-    ClickhouseClientSettings,
-    ClickhouseNode,
-    ClickhouseNodeType,
-    get_cluster,
-)
+
+# this import needs to be exactly like this in order to facilitate use of
+# importlib.reload in tests
+from snuba.clusters import cluster
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -504,7 +503,7 @@ class GenericOperation(ABC):
     def execute_new_node(
         self,
         storage_sets: Sequence[StorageSetKey],
-        node_type: ClickhouseNodeType,
+        node_type: cluster.ClickhouseNodeType,
         clickhouse: ClickhousePool,
     ) -> None:
         raise NotImplementedError
@@ -537,7 +536,7 @@ class RunPython(GenericOperation):
     def execute_new_node(
         self,
         storage_sets: Sequence[StorageSetKey],
-        node_type: ClickhouseNodeType,
+        node_type: cluster.ClickhouseNodeType,
         clickhouse: ClickhousePool,
     ) -> None:
         if self.__new_node_func is not None:
@@ -572,10 +571,10 @@ class RunSqlAsCode(GenericOperation):
     def execute_new_node(
         self,
         storage_sets: Sequence[StorageSetKey],
-        node_type: ClickhouseNodeType,
+        node_type: cluster.ClickhouseNodeType,
         clickhouse: ClickhousePool,
     ) -> None:
-        if node_type == ClickhouseNodeType.LOCAL:
+        if node_type == cluster.ClickhouseNodeType.LOCAL:
             if self._operation.target != OperationTarget.LOCAL:
                 return
         else:
