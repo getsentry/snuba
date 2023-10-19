@@ -8,13 +8,13 @@ use rust_arroyo::types::Message;
 use sentry_kafka_schemas;
 use std::time::Duration;
 
-struct SchemaValidator {
-    topic: String,
+pub struct SchemaValidator {
     schema: Option<sentry_kafka_schemas::Schema>,
     enforce_schema: bool,
 }
 
 impl SchemaValidator {
+    #[allow(dead_code)]
     pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
         let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
             Ok(s) => Some(s),
@@ -30,7 +30,6 @@ impl SchemaValidator {
         };
 
         SchemaValidator {
-            topic: logical_topic,
             schema,
             enforce_schema,
         }
@@ -39,20 +38,24 @@ impl SchemaValidator {
 
 impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
+        let mut errorred = false;
+
+        if let Some(schema) = &self.schema {
+            let payload = message.payload().payload.unwrap();
+
+            let res = schema.validate_json(&payload);
+
+            if let Err(err) = res {
+                log::error!("Validation error {}", err);
+                if self.enforce_schema {
+                    errorred = true;
+                };
+            }
+        }
+
         Box::pin(async move {
-            if let Some(schema) = &self.schema {
-                let payload = message.payload().payload.unwrap();
-                match schema.validate_json(&payload) {
-                    Ok(_) => Ok(message),
-                    Err(e) => {
-                        log::error!("Validation error {}", e);
-                        if self.enforce_schema {
-                            return Err(InvalidMessage);
-                        } else {
-                            return Ok(message);
-                        }
-                    }
-                }
+            if errorred {
+                Err(InvalidMessage)
             } else {
                 Ok(message)
             }
