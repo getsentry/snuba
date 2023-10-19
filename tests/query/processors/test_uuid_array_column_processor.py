@@ -89,8 +89,8 @@ tests = [
                 Literal(None, 2),
             ),
         ),
-        "arraySlice(arrayMap((x -> replaceAll(toString(x), '-', '')), column1), 0, 2)",
-        id="arraySlice(arrayMap((x -> replaceAll(toString(x), '-', '')), column1), 0, 2)",
+        "arraySlice(arrayMap(x -> replaceAll(toString(x), '-', ''), column1), 0, 2)",
+        id="arraySlice(arrayMap(x -> replaceAll(toString(x), '-', ''), column1), 0, 2)",
     ),
 ]
 
