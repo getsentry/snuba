@@ -24,6 +24,7 @@ def test_build_stream_loader() -> None:
             },
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
+            "subscription_synchronization_timestamp": "orig_message_ts",
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_topic": "snuba-dead-letter-generic-metrics",
