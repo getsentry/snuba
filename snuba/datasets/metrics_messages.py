@@ -13,6 +13,7 @@ class OutputType(Enum):
     SET = "set"
     COUNTER = "counter"
     DIST = "distribution"
+    GAUGE = "gauge"
 
 
 class AggregationOption(Enum):
@@ -94,7 +95,7 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     count = values["count"]
 
     return {
-        "metric_type": OutputType.COUNTER.value,
+        "metric_type": OutputType.GAUGE.value,
         "gauges_values.min": [values["min"]],
         "gauges_values.max": [values["max"]],
         "gauges_values.sum": sum,
