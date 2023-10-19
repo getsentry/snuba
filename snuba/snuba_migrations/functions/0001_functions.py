@@ -101,7 +101,7 @@ class Migration(migration.CodeMigration):
         return [*self._forwards_local(), *self._forwards_dist()]
 
     def backwards_global(self) -> Sequence[operations.GenericOperation]:
-        return [*self._backwards_local(), *self._backwards_dist()]
+        return [*self._backwards_dist(), *self._backwards_local()]
 
     def _forwards_local(self) -> Sequence[operations.GenericOperation]:
         return [
