@@ -5,7 +5,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
-from snuba.utils.schemas import AggregateFunction
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -30,7 +29,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 ]
             ),
         ),
-        Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
     ]
 
@@ -52,10 +50,10 @@ class Migration(migration.ClickhouseNodeMigration):
                     tags.key,
                     tags.indexed_value,
                     tags.raw_value,
-                    timestamp as raw_timestamp,
+                    maxState(timestamp as raw_timestamp) as last_timestamp,
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
                       intDiv(toUnixTimestamp(raw_timestamp),
-                             multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as _timestamp,
+                             multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as rounded_timestamp,
                     least(retention_days,
                         multiIf(granularity=0,decasecond_retention_days,
                                 granularity=1,min_retention_days,

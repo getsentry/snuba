@@ -31,8 +31,10 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
         Column("granularity", UInt(8)),
-        Column("_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
-        Column("raw_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
+        Column(
+            "rounded_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))
+        ),
+        Column("last_timestamp", AggregateFunction("max", [DateTime()])),
         Column("retention_days", UInt(16)),
         Column(
             "tags",
@@ -67,12 +69,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     order_by="(org_id, project_id, metric_id, granularity, "
-                    "_timestamp, tags.key, tags.indexed_value, "
+                    "rounded_timestamp, tags.key, tags.indexed_value, "
                     "tags.raw_value, retention_days, use_case_id)",
-                    primary_key="(org_id, project_id, metric_id, granularity, _timestamp)",
-                    partition_by="(retention_days, toMonday(_timestamp))",
+                    primary_key="(org_id, project_id, metric_id, granularity, rounded_timestamp)",
+                    partition_by="(retention_days, toMonday(rounded_timestamp))",
                     settings={"index_granularity": self.granularity},
-                    ttl="_timestamp + toIntervalDay(retention_days)",
+                    ttl="rounded_timestamp + toIntervalDay(retention_days)",
                 ),
                 columns=self.columns,
                 target=OperationTarget.LOCAL,
