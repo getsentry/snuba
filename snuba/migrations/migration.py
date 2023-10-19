@@ -15,6 +15,7 @@ class Migration(ABC):
     A Migration should implement the forwards and backwards methods. Migrations should
     not use this class directly, rather they should extend either the ClickHouseNodeMigration
     (for SQL migrations to be run on ClickHouse) or CodeMigration (for Python migrations).
+    SquashedMigration can be used for a noop migration.
 
     Migrations that cannot be completed immediately, such as those that contain
     a data migration, must be marked with blocking = True.
@@ -47,6 +48,23 @@ class Migration(ABC):
     @abstractmethod
     def backwards(self, context: Context, dry_run: bool) -> None:
         raise NotImplementedError
+
+
+class SquashedMigration(Migration):
+    """
+    This is a migration that used to exist. We keep the migration ID in the DB
+    sequence but it no longer does anything as it is safe to no longer run.
+    """
+
+    blocking = False
+
+    def forwards(self, context: Context, dry_run: bool) -> None:
+        _migration_id, _logger, update_status = context
+        update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        _migration_id, _logger, update_status = context
+        update_status(Status.NOT_STARTED)
 
 
 class CodeMigration(Migration, ABC):
