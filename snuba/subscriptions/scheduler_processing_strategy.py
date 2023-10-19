@@ -142,7 +142,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         # Record the lag between the fastest and slowest partition
         self.__metrics.timing(
             "partition_lag_ms",
-            (fastest - slowest).total_seconds() * 1000,
+            (fastest - slowest) * 1000,
         )
 
         if (
@@ -441,8 +441,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         if (
             self.__stale_threshold_seconds is not None
-            and time.time() - datetime.timestamp(tick.timestamps.lower)
-            > self.__stale_threshold_seconds
+            and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
         ):
             encoded_tasks = []
         else:

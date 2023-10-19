@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 from arroyo.backends.abstract import Consumer, Producer
@@ -25,10 +25,10 @@ from snuba.subscriptions.scheduler_processing_strategy import (
     TickBuffer,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval, InvalidRangeError
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
-from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,10 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 class MessageDetails(NamedTuple):
     offset: int
-    orig_message_ts: datetime
+    orig_message_ts: float
+    # The timestamp the message was first received by Sentry (Relay)
+    # It is optional since it is not currently present on all topics
+    received_ts: Optional[float]
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -94,12 +97,14 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self,
         consumer: Consumer[KafkaPayload],
         followed_consumer_group: str,
+        metrics: MetricsBackend,
         time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__consumer = consumer
         self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
-        self.__time_shift = time_shift if time_shift is not None else timedelta()
+        self.__metrics = metrics
+        self.__time_shift = time_shift.total_seconds() if time_shift is not None else 0
 
     def subscribe(
         self,
@@ -149,12 +154,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
-                logger.warning(
-                    "Could not construct valid interval between %r and %r!",
-                    previous_message,
-                    MessageDetails(commit.offset, commit.orig_message_ts),
-                    exc_info=True,
-                )
+                self.__metrics.increment("invalid_interval")
                 return None
             else:
                 result = BrokerValue(
@@ -172,7 +172,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             result = None
 
         self.__previous_messages[commit.partition] = MessageDetails(
-            commit.offset, commit.orig_message_ts
+            commit.offset, commit.orig_message_ts, None
         )
 
         return result
@@ -300,6 +300,7 @@ class SchedulerBuilder:
         return CommitLogTickConsumer(
             KafkaConsumer(consumer_configuration),
             followed_consumer_group=self.__followed_consumer_group,
+            metrics=self.__metrics,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
                 if self.__delay_seconds is not None
