@@ -279,13 +279,13 @@ TEST_CASES = [
                 (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
             ),
         ),
-        """(a,b,c ->
+        """(a,b,c) ->
   some_func(
     a,
     b,
     c
   )
-)""",
+""",
     ),
 ]
 
