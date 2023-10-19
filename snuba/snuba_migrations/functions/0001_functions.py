@@ -97,13 +97,13 @@ class Migration(migration.CodeMigration):
             target=operations.OperationTarget.LOCAL,
         )
 
-    def forwards_global(self) -> Sequence[operations.GenericMigration]:
+    def forwards_global(self) -> Sequence[operations.GenericOperation]:
         return [*self._forwards_local(), *self._forwards_dist()]
 
-    def backwards_global(self) -> Sequence[operations.GenericMigration]:
+    def backwards_global(self) -> Sequence[operations.GenericOperation]:
         return [*self._backwards_local(), *self._backwards_dist()]
 
-    def _forwards_local(self) -> Sequence[operations.GenericMigration]:
+    def _forwards_local(self) -> Sequence[operations.GenericOperation]:
         return [
             operations.RunSqlAsCode(
                 operations.CreateTable(
@@ -132,7 +132,7 @@ class Migration(migration.CodeMigration):
             ),
         ]
 
-    def _backwards_local(self) -> Sequence[operations.GenericMigration]:
+    def _backwards_local(self) -> Sequence[operations.GenericOperation]:
         return [
             operations.RunSqlAsCode(
                 operations.DropTable(
@@ -157,7 +157,7 @@ class Migration(migration.CodeMigration):
             ),
         ]
 
-    def _forwards_dist(self) -> Sequence[operations.GenericMigration]:
+    def _forwards_dist(self) -> Sequence[operations.GenericOperation]:
         return [
             operations.RunSqlAsCode(
                 operations.CreateTable(
@@ -185,7 +185,7 @@ class Migration(migration.CodeMigration):
             ),
         ]
 
-    def _backwards_dist(self) -> Sequence[operations.GenericMigration]:
+    def _backwards_dist(self) -> Sequence[operations.GenericOperation]:
         return [
             operations.RunSqlAsCode(
                 operations.DropTable(

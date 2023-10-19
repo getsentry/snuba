@@ -495,7 +495,7 @@ class InsertIntoSelect(SqlOperation):
         )
 
 
-class GenericMigration(ABC):
+class GenericOperation(ABC):
     @abstractmethod
     def execute(self, logger: logging.Logger) -> None:
         raise NotImplementedError
@@ -514,7 +514,7 @@ class GenericMigration(ABC):
         raise NotImplementedError
 
 
-class RunPython(GenericMigration):
+class RunPython(GenericOperation):
     """
     `new_node_func` should only be provided in the (probably rare)
     scenario where there is a Python script that must be rerun anytime
@@ -547,7 +547,13 @@ class RunPython(GenericMigration):
         return self.__description
 
 
-class RunSqlAsCode(GenericMigration):
+class RunSqlAsCode(GenericOperation):
+    """
+    A wrapper around SqlOperation that can be used to run additional code
+    directly before execution, to determine which kind of operation should be
+    returned.
+    """
+
     def __init__(
         self, operation_function: Union[SqlOperation, Callable[[], SqlOperation]]
     ) -> None:

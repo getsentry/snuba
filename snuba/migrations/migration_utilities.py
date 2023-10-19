@@ -9,6 +9,11 @@ ClickhouseVersion = Tuple[int, int]
 def get_clickhouse_version_for_storage_set(
     storage_set: StorageSetKey,
 ) -> ClickhouseVersion:
+    """
+    Determine the clickhouse version for a storage set. Assumes (and verifies)
+    that all local nodes have the same version for simplicity.
+    """
+
     cluster = get_cluster(storage_set)
     versions = set()
     for node in cluster.get_local_nodes():
@@ -33,4 +38,8 @@ _CLICKHOUSE_SETTINGS_SUPPORTED = {
 
 
 def supports_setting(clickhouse_version: ClickhouseVersion, setting: str) -> bool:
+    """
+    For a given setting, determine whether the given clickhouse version
+    supports it.
+    """
     return _CLICKHOUSE_SETTINGS_SUPPORTED[setting] <= clickhouse_version
