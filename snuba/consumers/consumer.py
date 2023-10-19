@@ -268,15 +268,11 @@ class ProcessedMessageBatchWriter:
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
-        metrics: Optional[MetricsBackend] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-        self.__received_timestamps: MutableMapping[
-            Partition, List[float]
-        ] = defaultdict(list)
 
         self.__closed = False
 
@@ -288,25 +284,19 @@ class ProcessedMessageBatchWriter:
         if message.payload is None:
             return
 
-        assert isinstance(message.value, BrokerValue)
-
         if isinstance(message.payload, BytesInsertBatch):
-            insert_message = cast(Message[BytesInsertBatch], message)
-            self.__insert_batch_writer.submit(insert_message)
-            origin_timestamp = insert_message.payload.origin_timestamp
-            if origin_timestamp is not None:
-                self.__received_timestamps[message.value.partition].append(
-                    datetime.timestamp(origin_timestamp)
-                )
+            self.__insert_batch_writer.submit(cast(Message[BytesInsertBatch], message))
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
+
             self.__replacement_batch_writer.submit(
                 cast(Message[ReplacementBatch], message)
             )
         else:
             raise TypeError("unexpected payload type")
 
+        assert isinstance(message.value, BrokerValue)
         self.__offsets_to_produce[message.value.partition] = (
             message.value.next_offset,
             message.value.timestamp,
@@ -346,7 +336,7 @@ class ProcessedMessageBatchWriter:
                         partition,
                         offset,
                         datetime.timestamp(timestamp),
-                        received_p99,
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -396,7 +386,9 @@ def build_batch_writer(
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
-        insert_metrics = MetricsWrapper(metrics, "insertions")
+        insert_batch_writer = InsertBatchWriter(
+            writer, MetricsWrapper(metrics, "insertions")
+        )
 
         replacement_batch_writer: Optional[ReplacementBatchWriter]
         if supports_replacements:
@@ -409,10 +401,7 @@ def build_batch_writer(
             replacement_batch_writer = None
 
         return ProcessedMessageBatchWriter(
-            InsertBatchWriter(writer, insert_metrics),
-            replacement_batch_writer,
-            commit_log_config,
-            metrics=insert_metrics,
+            insert_batch_writer, replacement_batch_writer, commit_log_config
         )
 
     return build_writer
@@ -703,12 +692,6 @@ def build_multistorage_batch_writer(
     else:
         replacement_batch_writer = None
 
-    insertion_metrics = MetricsWrapper(
-        metrics,
-        "insertions",
-        {"storage": storage.get_storage_key().value},
-    )
-
     return ProcessedMessageBatchWriter(
         InsertBatchWriter(
             storage.get_table_writer().get_batch_writer(
@@ -716,10 +699,13 @@ def build_multistorage_batch_writer(
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 slice_id=slice_id,
             ),
-            insertion_metrics,
+            MetricsWrapper(
+                metrics,
+                "insertions",
+                {"storage": storage.get_storage_key().value},
+            ),
         ),
         replacement_batch_writer,
-        metrics=insertion_metrics,
     )
 
 
