@@ -1,4 +1,4 @@
-from typing import List, MutableMapping, Sequence, Union
+from typing import List, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -10,6 +10,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, migration_utilities, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -69,13 +70,15 @@ class Migration(migration.CodeMigration):
 
     local_view_table = "functions_local"
 
-    def _create_functions_mv_table(self) -> operations.SqlOperation:
+    def _create_functions_mv_table(
+        self, clickhouse: Optional[ClickhousePool]
+    ) -> operations.SqlOperation:
         table_settings: MutableMapping[str, Union[int, str]] = {
             "index_granularity": self.index_granularity,
         }
 
         clickhouse_version = migration_utilities.get_clickhouse_version_for_storage_set(
-            self.storage_set
+            self.storage_set, clickhouse
         )
         if migration_utilities.supports_setting(
             clickhouse_version, "allow_nullable_key"

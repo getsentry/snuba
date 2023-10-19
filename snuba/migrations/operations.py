@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from functools import cached_property
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import structlog
@@ -554,19 +553,21 @@ class RunSqlAsCode(GenericOperation):
     """
 
     def __init__(
-        self, operation_function: Union[SqlOperation, Callable[[], SqlOperation]]
+        self,
+        operation_function: Union[
+            SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]
+        ],
     ) -> None:
         self.__operation_function = operation_function
 
-    @cached_property
-    def _operation(self) -> SqlOperation:
+    def _get_operation(self, clickhouse: Optional[ClickhousePool]) -> SqlOperation:
         if callable(self.__operation_function):
-            return self.__operation_function()
+            return self.__operation_function(clickhouse)
         else:
             return self.__operation_function
 
     def execute(self, logger: logging.Logger) -> None:
-        self._operation.execute()
+        self._get_operation(None).execute()
 
     def execute_new_node(
         self,
@@ -574,17 +575,18 @@ class RunSqlAsCode(GenericOperation):
         node_type: cluster.ClickhouseNodeType,
         clickhouse: ClickhousePool,
     ) -> None:
+        operation = self._get_operation(clickhouse)
         if node_type == cluster.ClickhouseNodeType.LOCAL:
-            if self._operation.target != OperationTarget.LOCAL:
+            if operation.target != OperationTarget.LOCAL:
                 return
         else:
-            if self._operation.target != OperationTarget.DISTRIBUTED:
+            if operation.target != OperationTarget.DISTRIBUTED:
                 return
 
-        if self._operation._storage_set in storage_sets:
-            sql = self._operation.format_sql()
+        if operation._storage_set in storage_sets:
+            sql = operation.format_sql()
             logger.info(f"Executing {sql}")
             clickhouse.execute(sql)
 
     def description(self) -> Optional[str]:
-        return self._operation.format_sql()
+        return self._get_operation(None).format_sql()
