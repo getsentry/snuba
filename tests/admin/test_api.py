@@ -391,11 +391,6 @@ def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
 
     expected_steps = [
         {
-            "category": "entity_processor",
-            "name": "BasicFunctionsProcessor",
-            "type": "query_transform",
-        },
-        {
             "category": "storage_planning",
             "name": "mappers",
             "type": "query_transform",
