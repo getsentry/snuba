@@ -6,7 +6,13 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 import structlog
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
+from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseNode,
+    ClickhouseNodeType,
+    get_cluster,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -488,7 +494,26 @@ class InsertIntoSelect(SqlOperation):
         )
 
 
-class RunPython:
+class GenericMigration(ABC):
+    @abstractmethod
+    def execute(self, logger: logging.Logger) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def description(self) -> Optional[str]:
+        raise NotImplementedError
+
+
+class RunPython(GenericMigration):
     """
     `new_node_func` should only be provided in the (probably rare)
     scenario where there is a Python script that must be rerun anytime
@@ -508,9 +533,45 @@ class RunPython:
     def execute(self, logger: logging.Logger) -> None:
         self.__func(logger)
 
-    def execute_new_node(self, storage_sets: Sequence[StorageSetKey]) -> None:
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
         if self.__new_node_func is not None:
             self.__new_node_func(storage_sets)
 
     def description(self) -> Optional[str]:
         return self.__description
+
+
+class RunSqlAsCode(GenericMigration):
+    def __init__(self, operation: SqlOperation) -> None:
+        assert isinstance(operation, SqlOperation)
+        assert operation.target != OperationTarget.UNSET
+        self.__operation = operation
+
+    def execute(self, logger: logging.Logger) -> None:
+        self.__operation.execute()
+
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
+        if node_type == ClickhouseNodeType.LOCAL:
+            if self.__operation.target != OperationTarget.LOCAL:
+                return
+        else:
+            if self.__operation.target != OperationTarget.DISTRIBUTED:
+                return
+
+        if self.__operation._storage_set in storage_sets:
+            sql = self.__operation.format_sql()
+            logger.info(f"Executing {sql}")
+            clickhouse.execute(sql)
+
+    def description(self) -> Optional[str]:
+        return self.__operation.format_sql()
