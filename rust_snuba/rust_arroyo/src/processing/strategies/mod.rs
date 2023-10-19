@@ -14,7 +14,10 @@ pub struct MessageRejected<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct InvalidMessage;
+pub struct InvalidMessage {
+    pub partition: Partition,
+    pub offset: u64,
+}
 
 /// Signals that we need to commit offsets
 #[derive(Debug, Clone, PartialEq)]

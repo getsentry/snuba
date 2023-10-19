@@ -1,7 +1,6 @@
 use crate::processors::spans::SpanStatus;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -9,19 +8,19 @@ use uuid::Uuid;
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
+) -> Result<BytesInsertBatch, BadMessage> {
     if let Some(payload_bytes) = payload.payload {
         let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
+            BadMessage
         })?;
 
-        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
+        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| BadMessage)?;
         let timestamp = match msg.timestamp {
             Some(timestamp) => timestamp,
             _ => SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|_err| InvalidMessage)?
+                .map_err(|_err| BadMessage)?
                 .as_secs(),
         };
         let device_classification = match msg.device_class {
@@ -60,14 +59,14 @@ pub fn process_message(
             };
             let serialized = serde_json::to_vec(&function).map_err(|err| {
                 log::error!("Failed to serialize message: {}", err);
-                InvalidMessage
+                BadMessage
             })?;
             rows.push(serialized);
         }
 
         return Ok(BytesInsertBatch { rows });
     }
-    Err(InvalidMessage)
+    Err(BadMessage)
 }
 
 #[derive(Debug, Deserialize)]
