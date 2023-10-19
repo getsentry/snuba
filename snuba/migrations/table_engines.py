@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Union
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
@@ -41,7 +41,7 @@ class MergeTree(TableEngine):
         partition_by: Optional[str] = None,
         sample_by: Optional[str] = None,
         ttl: Optional[str] = None,
-        settings: Optional[Mapping[str, str]] = None,
+        settings: Optional[Mapping[str, Union[str, int]]] = None,
         unsharded: bool = False,
     ) -> None:
         self._storage_set_value = storage_set.value

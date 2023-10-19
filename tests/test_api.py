@@ -1989,7 +1989,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(response.data)
 
         val = (
-            "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "SELECT (arrayMap(x -> replaceAll(toString(x), '-', ''), "
             "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
         )
         assert result["sql"].startswith(val)
@@ -2039,7 +2039,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(response.data)
 
         val = (
-            "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "SELECT (arrayJoin((arrayMap(x -> replaceAll(toString(x), '-', ''), "
             "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
         )
         assert result["sql"].startswith(val)

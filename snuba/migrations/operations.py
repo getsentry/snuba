@@ -1,11 +1,16 @@
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import structlog
 
 from snuba.clickhouse.columns import Column
+from snuba.clickhouse.native import ClickhousePool
+
+# this import needs to be exactly like this in order to facilitate use of
+# importlib.reload in tests
+from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
@@ -488,7 +493,26 @@ class InsertIntoSelect(SqlOperation):
         )
 
 
-class RunPython:
+class GenericOperation(ABC):
+    @abstractmethod
+    def execute(self, logger: logging.Logger) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: cluster.ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def description(self) -> Optional[str]:
+        raise NotImplementedError
+
+
+class RunPython(GenericOperation):
     """
     `new_node_func` should only be provided in the (probably rare)
     scenario where there is a Python script that must be rerun anytime
@@ -508,9 +532,61 @@ class RunPython:
     def execute(self, logger: logging.Logger) -> None:
         self.__func(logger)
 
-    def execute_new_node(self, storage_sets: Sequence[StorageSetKey]) -> None:
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: cluster.ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
         if self.__new_node_func is not None:
             self.__new_node_func(storage_sets)
 
     def description(self) -> Optional[str]:
         return self.__description
+
+
+class RunSqlAsCode(GenericOperation):
+    """
+    A wrapper around SqlOperation that can be used to run additional code
+    directly before execution, to determine which kind of operation should be
+    returned.
+    """
+
+    def __init__(
+        self,
+        operation_function: Union[
+            SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]
+        ],
+    ) -> None:
+        self.__operation_function = operation_function
+
+    def _get_operation(self, clickhouse: Optional[ClickhousePool]) -> SqlOperation:
+        if callable(self.__operation_function):
+            return self.__operation_function(clickhouse)
+        else:
+            return self.__operation_function
+
+    def execute(self, logger: logging.Logger) -> None:
+        self._get_operation(None).execute()
+
+    def execute_new_node(
+        self,
+        storage_sets: Sequence[StorageSetKey],
+        node_type: cluster.ClickhouseNodeType,
+        clickhouse: ClickhousePool,
+    ) -> None:
+        operation = self._get_operation(clickhouse)
+        if node_type == cluster.ClickhouseNodeType.LOCAL:
+            if operation.target != OperationTarget.LOCAL:
+                return
+        else:
+            if operation.target != OperationTarget.DISTRIBUTED:
+                return
+
+        if operation._storage_set in storage_sets:
+            sql = operation.format_sql()
+            logger.info(f"Executing {sql}")
+            clickhouse.execute(sql)
+
+    def description(self) -> Optional[str]:
+        return self._get_operation(None).format_sql()
