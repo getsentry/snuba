@@ -34,10 +34,7 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 class InsertBatch(NamedTuple):
     rows: Sequence[WriterTableRow]
-    # origin_timestamp is the timestamp of the event when was received by Relay
     origin_timestamp: Optional[datetime]
-    # sentry_received_timestamp is the timestamp of the event when received by the ingest
-    # consumer in Sentry
     sentry_received_timestamp: Optional[datetime] = None
 
 
