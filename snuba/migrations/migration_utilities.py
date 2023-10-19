@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Set, Tuple
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -15,20 +15,20 @@ def get_clickhouse_version_for_storage_set(
     """
 
     cluster = get_cluster(storage_set)
-    versions = set()
+    versions: Set[ClickhouseVersion] = set()
     for node in cluster.get_local_nodes():
         connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
         ver = connection.execute("SELECT version()").results[0][0]
 
-        versions.add(tuple(map(int, ver.split(".")[:2])))
+        major, minor, *_ = ver.split(".")
+        versions.add((int(major), int(minor)))
 
     if len(versions) != 1:
         raise RuntimeError(
             f"found multiple clickhouse versions in local nodes of storage set {storage_set}: {versions}"
         )
 
-    (ver,) = versions
-    return ver
+    return versions.pop()
 
 
 _CLICKHOUSE_SETTINGS_SUPPORTED = {

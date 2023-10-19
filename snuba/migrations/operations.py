@@ -560,7 +560,7 @@ class RunSqlAsCode(GenericOperation):
         self.__operation_function = operation_function
 
     @cached_property
-    def _operation(self):
+    def _operation(self) -> SqlOperation:
         if callable(self.__operation_function):
             return self.__operation_function()
         else:
