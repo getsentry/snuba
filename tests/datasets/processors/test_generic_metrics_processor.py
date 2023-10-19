@@ -39,7 +39,7 @@ def test__should_process(
             },
             {
                 "min_retention_days": 90,
-                "materialization_version": 1,
+                "materialization_version": 2,
                 "granularities": [1, 2, 3, 0],
             },
             90,
@@ -109,7 +109,7 @@ def test__dists_aggregation_options(
             },
             {
                 "min_retention_days": 90,
-                "materialization_version": 1,
+                "materialization_version": 2,
                 "granularities": [1, 2, 3, 0],
             },
             90,

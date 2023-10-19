@@ -29,9 +29,9 @@ from snuba.subscriptions.scheduler_processing_strategy import (
     TickSubscription,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 
@@ -52,11 +52,11 @@ def test_tick_buffer_immediate() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 5),
             ),
             partition,
             4,
-            epoch,
+            datetime(1970, 1, 1),
         )
     )
 
@@ -84,7 +84,7 @@ def test_tick_buffer_wait_slowest() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 5),
             ),
             commit_log_partition,
             4,
@@ -101,9 +101,7 @@ def test_tick_buffer_wait_slowest() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
-                ),
+                timestamps=Interval(epoch.timestamp() + 5, epoch.timestamp() + 10),
             ),
             commit_log_partition,
             5,
@@ -120,7 +118,7 @@ def test_tick_buffer_wait_slowest() -> None:
             Tick(
                 1,
                 offsets=Interval(100, 120),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 4),
             ),
             commit_log_partition,
             6,
@@ -140,9 +138,7 @@ def test_tick_buffer_wait_slowest() -> None:
             Tick(
                 1,
                 offsets=Interval(120, 130),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=5)
-                ),
+                timestamps=Interval(epoch.timestamp() + 4, epoch.timestamp() + 5),
             ),
             commit_log_partition,
             7,
@@ -167,9 +163,7 @@ def test_tick_buffer_wait_slowest() -> None:
             Tick(
                 1,
                 offsets=Interval(130, 140),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=5), epoch + timedelta(seconds=10)
-                ),
+                timestamps=Interval(epoch.timestamp() + 5, epoch.timestamp() + 10),
             ),
             commit_log_partition,
             7,
@@ -197,8 +191,8 @@ def test_tick_buffer_wait_slowest() -> None:
                     1,
                     offsets=Interval(4 + i, 5 + i),
                     timestamps=Interval(
-                        epoch + timedelta(seconds=10 + i),
-                        epoch + timedelta(seconds=11 + i),
+                        epoch.timestamp() + 10 + i,
+                        epoch.timestamp() + 11 + i,
                     ),
                 ),
                 commit_log_partition,
@@ -233,9 +227,7 @@ def test_provide_commit_strategy() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 2),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
-                ),
+                timestamps=Interval(epoch.timestamp() + 1, epoch.timestamp() + 2),
             ),
             partition,
             1,
@@ -256,9 +248,7 @@ def test_provide_commit_strategy() -> None:
             Tick(
                 1,
                 offsets=Interval(11, 12),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=2), epoch + timedelta(seconds=3)
-                ),
+                timestamps=Interval(epoch.timestamp() + 2, epoch.timestamp() + 3),
             ),
             partition,
             2,
@@ -280,9 +270,7 @@ def test_provide_commit_strategy() -> None:
             Tick(
                 1,
                 offsets=Interval(12, 13),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=3), epoch + timedelta(seconds=6)
-                ),
+                timestamps=Interval(epoch.timestamp() + 3, epoch.timestamp() + 6),
             ),
             partition,
             3,
@@ -305,9 +293,7 @@ def test_provide_commit_strategy() -> None:
             Tick(
                 0,
                 offsets=Interval(2, 4),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=2), epoch + timedelta(seconds=5)
-                ),
+                timestamps=Interval(epoch.timestamp() + 2, epoch.timestamp() + 5),
             ),
             partition,
             4,
@@ -349,7 +335,7 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 2),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 4),
             ),
             commit_log_partition,
             4,
@@ -370,9 +356,7 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             Tick(
                 1,
                 offsets=Interval(3, 6),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
-                ),
+                timestamps=Interval(epoch.timestamp() + 4, epoch.timestamp() + 6),
             ),
             commit_log_partition,
             5,
@@ -394,9 +378,7 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             Tick(
                 0,
                 offsets=Interval(2, 3),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
-                ),
+                timestamps=Interval(epoch.timestamp() + 4, epoch.timestamp() + 6),
             ),
             commit_log_partition,
             6,
@@ -435,7 +417,7 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 4),
             ),
             commit_log_partition,
             4,
@@ -452,9 +434,7 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 6),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
-                ),
+                timestamps=Interval(epoch.timestamp() + 4, epoch.timestamp() + 6),
             ),
             commit_log_partition,
             5,
@@ -472,7 +452,7 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             Tick(
                 1,
                 offsets=Interval(100, 120),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=3)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 3),
             ),
             commit_log_partition,
             6,
@@ -496,9 +476,7 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             Tick(
                 1,
                 offsets=Interval(120, 140),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=3), epoch + timedelta(seconds=4)
-                ),
+                timestamps=Interval(epoch.timestamp() + 3, epoch.timestamp() + 4),
             ),
             commit_log_partition,
             7,
@@ -529,7 +507,7 @@ def test_scheduled_subscription_queue() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 2),
             ),
             1,
         ),
@@ -632,7 +610,7 @@ def test_produce_scheduled_subscription_message() -> None:
                 Tick(
                     0,
                     offsets=Interval(1, 3),
-                    timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+                    timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 120),
                 ),
                 2,
             ),
@@ -741,9 +719,7 @@ def test_produce_stale_message() -> None:
                 Tick(
                     0,
                     offsets=Interval(1, 3),
-                    timestamps=Interval(
-                        now - timedelta(minutes=3), now - timedelta(seconds=60)
-                    ),
+                    timestamps=Interval(now.timestamp() - 180, now.timestamp() - 60),
                 ),
                 2,
             ),
@@ -769,7 +745,7 @@ def test_produce_stale_message() -> None:
                 Tick(
                     0,
                     offsets=Interval(3, 4),
-                    timestamps=Interval(now - timedelta(seconds=60), now),
+                    timestamps=Interval(now.timestamp() - 60, now.timestamp()),
                 ),
                 2,
             ),

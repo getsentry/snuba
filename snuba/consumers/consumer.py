@@ -219,9 +219,6 @@ class InsertBatchWriter:
             self.__writer,
         )
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
-
 
 class ReplacementBatchWriter:
     def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
@@ -260,20 +257,7 @@ class ReplacementBatchWriter:
                     on_delivery=self.__delivery_callback,
                 )
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        args = []
-        if timeout is not None:
-            args.append(timeout)
-
-        start = time.time()
-        self.__producer.flush(*args)
-
-        logger.debug(
-            "Waited %0.4f seconds for %r replacements to be flushed to %r.",
-            time.time() - start,
-            sum(len(message.payload.values) for message in self.__messages),
-            self.__producer,
-        )
+        self.__producer.flush()
 
 
 class ProcessedMessageBatchWriter:
@@ -336,7 +320,11 @@ class ProcessedMessageBatchWriter:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -348,16 +336,6 @@ class ProcessedMessageBatchWriter:
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        start = time.time()
-        self.__insert_batch_writer.join(timeout)
-
-        if self.__replacement_batch_writer is not None:
-            if timeout is not None:
-                timeout = max(timeout - (time.time() - start), 0)
-
-            self.__replacement_batch_writer.join(timeout)
 
 
 json_row_encoder = JSONRowEncoder()
@@ -469,24 +447,15 @@ class MultistorageCollector:
         for storage_key, step in self.__steps.items():
             step.close()
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        start = time.time()
-
-        for step in self.__steps.values():
-            if timeout is not None:
-                timeout_remaining: Optional[float] = max(
-                    timeout - (time.time() - start), 0
-                )
-            else:
-                timeout_remaining = None
-
-            step.join(timeout_remaining)
-
         if self.__commit_log_config is not None:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -818,7 +787,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             message: Message[MultistorageCollector],
         ) -> Message[MultistorageCollector]:
             message.payload.close()
-            message.payload.join()
             return message
 
         collect = Reduce[MultistorageProcessedMessage, MultistorageCollector](

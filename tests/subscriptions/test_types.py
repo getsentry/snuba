@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.utils.types import Interval, InvalidRangeError
+from snuba.subscriptions.types import Interval, InvalidRangeError
 
 
 def test_interval_validation() -> None:
