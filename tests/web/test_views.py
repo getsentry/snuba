@@ -1,13 +1,15 @@
+import copy
 import logging
 from typing import Any
 from unittest import mock
 
 import pytest
+import simplejson as json
 from flask.testing import FlaskClient
 
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser.exceptions import ParsingException
-from snuba.web.views import handle_invalid_query
+from snuba.web.views import dump_payload, handle_invalid_query
 
 invalid_query_exception_test_cases = [
     pytest.param(
@@ -28,6 +30,37 @@ def snuba_api() -> FlaskClient:
     from snuba.web.views import application
 
     return application.test_client()
+
+
+def test_response_dumping() -> None:
+    data = {
+        "data": [
+            {"count": 5181337, "release": "elsa"},
+            {"count": 2170, "release": "simba"},
+            {"count": 98, "release": "bambi"},
+            {"count": 88, "release": b"x;\x83\xc0\x05"},
+        ],
+        "meta": [],
+        "profile": {
+            "blocks": 1,
+            "bytes": 5698,
+            "elapsed": 0.07789874076843262,
+            "progress_bytes": 210032515,
+            "rows": 10,
+        },
+        "timing": {
+            "duration_ms": 211,
+            "marks_ms": {},
+            "tags": {},
+            "timestamp": 1697823384,
+        },
+        "trace_output": "",
+    }
+    dumped_payload = dump_payload(data)
+
+    clean_data = copy.deepcopy(data)
+    clean_data["data"][3]["release"] = b"x;\x83\xc0\x05".hex()
+    assert json.loads(dumped_payload) == clean_data
 
 
 @pytest.mark.parametrize(
