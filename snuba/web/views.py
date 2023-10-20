@@ -418,6 +418,49 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
+def _sanitize_payload(
+    payload: MutableMapping[str, Any], res: MutableMapping[str, Any]
+) -> None:
+    def hex_encode_if_bytes(value: Any) -> Any:
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                # encode the byte string in a hex string
+                return "RAW_BYTESTRING__" + value.hex()
+
+        return value
+
+    for k, v in payload.items():
+        if isinstance(v, dict):
+            res[hex_encode_if_bytes(k)] = {}
+            _sanitize_payload(v, res[hex_encode_if_bytes(k)])
+        elif isinstance(v, list):
+            res[hex_encode_if_bytes(k)] = []
+            for item in v:
+                if isinstance(item, dict):
+                    res[hex_encode_if_bytes(k)].append({})
+                    _sanitize_payload(item, res[hex_encode_if_bytes(k)][-1])
+                else:
+                    res[hex_encode_if_bytes(k)].append(hex_encode_if_bytes(item))
+        else:
+            res[hex_encode_if_bytes(k)] = hex_encode_if_bytes(v)
+
+
+def dump_payload(payload: MutableMapping[str, Any]) -> str:
+    try:
+        return json.dumps(payload, default=str)
+    except UnicodeDecodeError:
+        # If there were any string that could not be decoded, we
+        # encode the problematic bytes in a hex string.
+        # this is to prevent other clients downstream of us from having
+        # to deal with potentially malicious strings and to prevent one
+        # bad string from breaking the entire payload.
+        sanitized_payload: MutableMapping[str, Any] = {}
+        _sanitize_payload(payload, sanitized_payload)
+        return json.dumps(sanitized_payload, default=str)
+
+
 @with_span()
 def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
@@ -503,9 +546,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
-    return Response(
-        json.dumps(payload, default=str), 200, {"Content-Type": "application/json"}
-    )
+    return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
 
 
 @application.errorhandler(InvalidSubscriptionError)
