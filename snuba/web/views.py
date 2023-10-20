@@ -425,7 +425,7 @@ def _sanitize_payload(payload: Dict[str, Any], res: Dict[str, Any]) -> None:
                 return value.decode("utf-8")
             except UnicodeDecodeError:
                 # encode the byte string in a hex string
-                return "RAW_BYTE_STRING__" + value.hex()
+                return "RAW_BYTESTRING__" + value.hex()
 
         return value
 
