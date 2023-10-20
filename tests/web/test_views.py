@@ -59,7 +59,7 @@ def test_response_dumping() -> None:
     dumped_payload = dump_payload(data)
 
     clean_data = copy.deepcopy(data)
-    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()
+    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()  # type: ignore
     assert json.loads(dumped_payload) == clean_data
 
 

@@ -418,7 +418,9 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
-def _sanitize_payload(payload: Dict[str, Any], res: Dict[str, Any]) -> None:
+def _sanitize_payload(
+    payload: MutableMapping[str, Any], res: MutableMapping[str, Any]
+) -> None:
     def hex_encode_if_bytes(value: Any) -> Any:
         if isinstance(value, bytes):
             try:
@@ -445,7 +447,7 @@ def _sanitize_payload(payload: Dict[str, Any], res: Dict[str, Any]) -> None:
             res[hex_encode_if_bytes(k)] = hex_encode_if_bytes(v)
 
 
-def dump_payload(payload: Dict[str, Any]) -> str:
+def dump_payload(payload: MutableMapping[str, Any]) -> str:
     try:
         return json.dumps(payload, default=str)
     except UnicodeDecodeError:
@@ -454,7 +456,7 @@ def dump_payload(payload: Dict[str, Any]) -> str:
         # this is to prevent other clients downstream of us from having
         # to deal with potentially malicious strings and to prevent one
         # bad string from breaking the entire payload.
-        sanitized_payload = {}
+        sanitized_payload: MutableMapping[str, Any] = {}
         _sanitize_payload(payload, sanitized_payload)
         return json.dumps(sanitized_payload, default=str)
 
