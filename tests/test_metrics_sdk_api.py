@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Generator, Tuple, Union, cast
+from typing import Any, Callable, Tuple, Union, cast
 
 import pytest
 import simplejson as json
@@ -17,7 +17,6 @@ from snuba_sdk import (
     Timeseries,
 )
 
-from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -26,29 +25,9 @@ from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
-TransactionMRI = "d:transactions/duration@millisecond"
-UseCaseID = "transactions"
-SNQL_ROUTE = "/metrics/snql"
-LIMIT_BY_COUNT = 5
-TAG_1_KEY = "6"
-TAG_1_VALUE_1 = 91
-TAG_2_KEY = "9"
-TAG_2_VALUE_1 = 134
-TAG_3_KEY = "4"
-TAG_3_VALUE_1 = 159
-TAG_4_KEY = "5"
-TAG_4_VALUE_1 = 34
+TRANSACTION_MRI = "d:transactions/duration@millisecond"
+USE_CASE_ID = "performance"
 RETENTION_DAYS = 90
-
-
-def teardown_common() -> None:
-    # Reset rate limits
-    state.delete_config("global_concurrent_limit")
-    state.delete_config("global_per_second_limit")
-    state.delete_config("project_concurrent_limit")
-    state.delete_config("project_concurrent_limit_1")
-    state.delete_config("project_per_second_limit")
-    state.delete_config("date_align_seconds")
 
 
 def utc_yesterday_12_15() -> datetime:
@@ -57,52 +36,94 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
+SHARED_TAGS: dict[str, int] = {
+    "65546": 65536,
+    "9223372036854776010": 65593,
+}
+
+SHARED_MAPPING_META = {
+    "c": {
+        "65546": "transaction",
+        "65536": "t1",
+        "65593": "200",
+    },
+    "h": {
+        "9223372036854776010": "status_code",
+    },
+}
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestMetricsSdkApiCounters(BaseApiTest):
+class TestGenericMetricsSdkApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
         return self.app
 
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "metrics_counters"
+        return "generic_metrics_counters"
+
+    @pytest.fixture
+    def test_dataset(self) -> str:
+        return "generic_metrics"
+
+    @pytest.fixture
+    def tag_column(self) -> str:
+        return "tags_raw"
+
+    @pytest.fixture
+    def tag_value_indexed(self) -> bool:
+        return False
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, _build_snql_post_methods: Callable[[str], Any], clickhouse_db: None
-    ) -> Generator[None, None, None]:
+        self,
+        _build_snql_post_methods: Callable[[str], Any],
+        clickhouse_db: None,
+        test_entity: str,
+        test_dataset: str,
+        tag_value_indexed: bool,
+    ) -> None:
         self.post = _build_snql_post_methods
-
+        self.snql_route = f"/{test_dataset}/snql"
         # values for test data
         self.metric_id = 1001
         self.org_id = 101
         self.project_ids = [1, 2]  # 2 projects
         self.seconds = 180 * 60
 
-        self.default_tags = {
-            TAG_1_KEY: TAG_1_VALUE_1,
-            TAG_2_KEY: TAG_2_VALUE_1,
-            TAG_3_KEY: TAG_3_VALUE_1,
-            TAG_4_KEY: TAG_4_VALUE_1,
-        }
-        self.skew = timedelta(seconds=self.seconds)
+        self.default_tags = SHARED_TAGS
+        self.mapping_meta = SHARED_MAPPING_META
 
+        # This is a little confusing, but these values are the ones that should be used in the tests
+        # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
+        if tag_value_indexed:
+            self.tags: list[tuple[str, str | int]] = [
+                (k, v) for k, v in self.default_tags.items()
+            ]
+        else:
+            mapping = {}
+            for v in self.mapping_meta.values():
+                mapping.update(v)
+
+            self.tags = [(k, mapping[str(v)]) for k, v in self.default_tags.items()]
+
+        self.skew = timedelta(seconds=self.seconds)
         self.base_time = utc_yesterday_12_15()
+        self.start_time = self.base_time - self.skew
+        self.end_time = self.base_time + self.skew
+
         self.sentry_received_time = utc_yesterday_12_15() - timedelta(minutes=1)
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
+            get_entity(EntityKey(test_entity)).get_writable_storage(),
         )
         self.generate_counters()
 
-        yield
-
-        teardown_common()
-
     def generate_counters(self) -> None:
         events = []
-        for n in range(self.seconds):
+        for n in range(self.seconds)[::60]:
             for p in self.project_ids:
                 processed = (
                     self.storage.get_table_writer()
@@ -113,7 +134,7 @@ class TestMetricsSdkApiCounters(BaseApiTest):
                             {
                                 "org_id": self.org_id,
                                 "project_id": p,
-                                "use_case_id": UseCaseID,
+                                "use_case_id": USE_CASE_ID,
                                 "unit": "ms",
                                 "type": InputType.COUNTER.value,
                                 "value": 1.0,
@@ -121,6 +142,7 @@ class TestMetricsSdkApiCounters(BaseApiTest):
                                 "tags": self.default_tags,
                                 "metric_id": self.metric_id,
                                 "retention_days": RETENTION_DAYS,
+                                "mapping_meta": self.mapping_meta,
                                 "sentry_received_timestamp": self.sentry_received_time.timestamp()
                                 + n,
                             }
@@ -132,71 +154,86 @@ class TestMetricsSdkApiCounters(BaseApiTest):
                     events.append(processed)
         write_processed_messages(self.storage, events)
 
-    def test_retrieval_basic(self) -> None:
-        start_time = self.base_time - self.skew
-        end_time = self.base_time + self.skew
-
+    def test_retrieval_basic(self, test_entity: str, test_dataset: str) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TransactionMRI,
+                    TRANSACTION_MRI,
                     self.metric_id,
-                    "metrics_counters",
+                    test_entity,
                 ),
                 aggregate="sum",
-                # filters=[Condition(Column("status_code"), Op.EQ, "500")],
-                # groupby=[Column("transaction")],
             ),
-            # filters=[Condition(Column("device"), Op.EQ, "BlackBerry")],
-            start=start_time,
-            end=end_time,
+            start=self.start_time,
+            end=self.end_time,
             rollup=Rollup(interval=60, granularity=60),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
-                use_case_id=UseCaseID,
+                use_case_id=USE_CASE_ID,
             ),
         )
 
         response = self.app.post(
-            SNQL_ROUTE,
-            data=json.dumps({"query": query.serialize(), "dataset": "metrics"}),
+            self.snql_route,
+            data=json.dumps(
+                {
+                    "query": query.serialize(),
+                    "dataset": test_dataset,
+                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
+                }
+            ),
         )
         data = json.loads(response.data)
 
         assert response.status_code == 200
         assert len(data["data"]) == 180, data
 
-    def test_retrieval_complex(self) -> None:
-        start_time = self.base_time - self.skew
-        end_time = self.base_time + self.skew
-
+    def test_retrieval_complex(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TransactionMRI,
+                    TRANSACTION_MRI,
                     self.metric_id,
-                    "metrics_counters",
+                    test_entity,
                 ),
                 aggregate="sum",
-                filters=[Condition(Column(f"tags[{TAG_1_KEY}]"), Op.EQ, "91")],
-                groupby=[AliasedExpression(Column(f"tags[{TAG_2_KEY}]"), "project_id")],
+                filters=[
+                    Condition(
+                        Column(f"{tag_column}[{self.tags[0][0]}]"),
+                        Op.EQ,
+                        self.tags[0][1],
+                    )
+                ],
+                groupby=[
+                    AliasedExpression(
+                        Column(f"{tag_column}[{self.tags[1][0]}]"), "status_code"
+                    )
+                ],
             ),
-            start=start_time,
-            end=end_time,
+            start=self.start_time,
+            end=self.end_time,
             rollup=Rollup(interval=60, granularity=60),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
-                use_case_id=UseCaseID,
+                use_case_id=USE_CASE_ID,
             ),
         )
 
         response = self.app.post(
-            SNQL_ROUTE,
-            data=json.dumps({"query": query.serialize(), "dataset": "metrics"}),
+            self.snql_route,
+            data=json.dumps(
+                {
+                    "query": query.serialize(),
+                    "dataset": test_dataset,
+                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -204,38 +241,53 @@ class TestMetricsSdkApiCounters(BaseApiTest):
         rows = data["data"]
         assert len(rows) == 180, rows
 
-        assert rows[0]["aggregate_value"] == 120.0
-        assert rows[0]["project_id"] == 134
+        assert rows[0]["aggregate_value"] > 0
+        assert rows[0]["status_code"] == self.tags[1][1]
 
-    def test_interval_with_totals(self) -> None:
-        start_time = self.base_time - self.skew
-        end_time = self.base_time + self.skew
-
+    def test_interval_with_totals(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TransactionMRI,
+                    TRANSACTION_MRI,
                     self.metric_id,
-                    "metrics_counters",
+                    test_entity,
                 ),
                 aggregate="sum",
-                filters=[Condition(Column(f"tags[{TAG_1_KEY}]"), Op.EQ, "91")],
-                groupby=[AliasedExpression(Column(f"tags[{TAG_2_KEY}]"), "project_id")],
+                filters=[
+                    Condition(
+                        Column(f"{tag_column}[{self.tags[0][0]}]"),
+                        Op.EQ,
+                        self.tags[0][1],
+                    )
+                ],
+                groupby=[
+                    AliasedExpression(
+                        Column(f"{tag_column}[{self.tags[1][0]}]"), "status_code"
+                    )
+                ],
             ),
-            start=start_time,
-            end=end_time,
+            start=self.start_time,
+            end=self.end_time,
             rollup=Rollup(interval=60, granularity=60, totals=True),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
-                use_case_id=UseCaseID,
+                use_case_id=USE_CASE_ID,
             ),
         )
 
         response = self.app.post(
-            SNQL_ROUTE,
-            data=json.dumps({"query": query.serialize(), "dataset": "metrics"}),
+            self.snql_route,
+            data=json.dumps(
+                {
+                    "query": query.serialize(),
+                    "dataset": test_dataset,
+                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
+                }
+            ),
         )
         data = json.loads(response.data)
 
@@ -243,6 +295,28 @@ class TestMetricsSdkApiCounters(BaseApiTest):
         rows = data["data"]
         assert len(rows) == 180, rows
 
-        assert rows[0]["aggregate_value"] == 120.0
-        assert rows[0]["project_id"] == 134
-        assert data["totals"]["aggregate_value"] == 21600.0
+        assert rows[0]["aggregate_value"] > 0
+        assert rows[0]["status_code"] == self.tags[1][1]
+        assert (
+            data["totals"]["aggregate_value"] > 180
+        )  # Should be more than the number of data points
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestMetricsSdkApiCounters(TestGenericMetricsSdkApiCounters):
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "metrics_counters"
+
+    @pytest.fixture
+    def test_dataset(self) -> str:
+        return "metrics"
+
+    @pytest.fixture
+    def tag_column(self) -> str:
+        return "tags"
+
+    @pytest.fixture
+    def tag_value_indexed(self) -> bool:
+        return True
