@@ -201,7 +201,9 @@ pub fn consumer_impl(
         )));
     }
 
-    procspawn::init();
+    if !use_rust_processor {
+        procspawn::init();
+    }
 
     let first_storage = &consumer_config.storages[0];
 
