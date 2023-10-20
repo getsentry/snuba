@@ -1,3 +1,4 @@
+from random import random
 from typing import Any, Mapping, Optional, Union
 
 import sentry_sdk
@@ -108,15 +109,22 @@ def _record_cogs(
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
-    if (use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is None:
-        return
+    app_feature = query_metadata.dataset.replace("_", "")
 
-    record_cogs(
-        resource_id="snuba_api_bytes_scanned",
-        app_feature=f"{query_metadata.dataset.replace('_','')}_{use_case_id}",
-        amount=bytes_scanned,
-        usage_type=UsageUnit.BYTES,
-    )
+    if (
+        query_metadata.dataset == "generic_metrics"
+        and (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
+        is not None
+    ):
+        app_feature += f"_{use_case_id}"
+
+    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+        record_cogs(
+            resource_id="snuba_api_bytes_scanned",
+            app_feature=app_feature,
+            amount=bytes_scanned,
+            usage_type=UsageUnit.BYTES,
+        )
 
 
 def record_query(
