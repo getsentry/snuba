@@ -292,11 +292,11 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        instance: [0, 1, 2, 3, 4, 5]
+        instance: [0, 1, 2, 3, 4, 5, 6, 7]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
-      MATRIX_INSTANCE_TOTAL: 6
+      MATRIX_INSTANCE_TOTAL: 8
       TEST_GROUP_STRATEGY: ROUND_ROBIN
 
     steps:
