@@ -86,8 +86,6 @@ logger = logging.getLogger("snuba.api")
 # Flask wants a Dict, not a Mapping
 RespTuple = Tuple[Text, int, Dict[Any, Any]]
 
-# change this to trigger full tests
-
 
 def shutdown_time() -> Optional[float]:
     try:
@@ -154,7 +152,7 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
             for storage in storages
         }
 
-        for cluster_key, cluster in unique_clusters.items():
+        for (cluster_key, cluster) in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             clickhouse_tables = clickhouse.execute("show tables").results
             known_table_names = connection_grouped_table_names[cluster_key]
