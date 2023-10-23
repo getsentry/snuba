@@ -429,8 +429,30 @@ def test_reset_settings() -> None:
     )
 
 
-@patch("snuba.migrations.operations.SqlOperation.get_nodes", return_value=[])
-def test_no_nodes_found(mock_get_nodes: Mock) -> None:
-    op = RenameTable(StorageSetKey.EVENTS, "old_table", "new_table")
+@patch("snuba.migrations.operations.get_cluster")
+def test_no_nodes_found(mock_get_cluster: Mock) -> None:
+    cluster = Mock()
+    mock_get_cluster.return_value = cluster
+    cluster.get_host.return_value = "127.0.0.1"
+    cluster.get_port.return_value = "9000"
+    cluster.get_clickhouse_cluster_name.return_value = "query_cluster"
+
+    cluster.get_local_nodes.return_value = []
+    cluster.get_distributed_nodes.return_value = []
+    # Local op must have local nodes present
+    local_op = RenameTable(
+        StorageSetKey.EVENTS, "old_table", "new_table", OperationTarget.LOCAL
+    )
     with pytest.raises(NodesNotFound):
-        op.execute()
+        local_op.execute()
+
+    # Dist op can have missing dist nodes if in single node mode
+    dist_op = RenameTable(
+        StorageSetKey.EVENTS, "old_table", "new_table", OperationTarget.DISTRIBUTED
+    )
+    dist_op.execute()
+
+    # Dist op must have dist nodes present if NOT single node mode
+    cluster.is_single_node.return_value = False
+    with pytest.raises(NodesNotFound):
+        dist_op.execute()

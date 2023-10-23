@@ -53,9 +53,19 @@ class SqlOperation(ABC):
             cluster.get_distributed_nodes(),
         )
 
+        cluster_name = f"{cluster.get_host()}:{cluster.get_port()}"
+        readable_name = cluster.get_clickhouse_cluster_name()
+        if readable_name:
+            cluster_name += readable_name
+
         if self.target == OperationTarget.LOCAL:
+            if not local_nodes:
+                print("MEEPS", local_nodes)
+                raise NodesNotFound(f"No nodes found for {cluster_name}")
             nodes = local_nodes
         elif self.target == OperationTarget.DISTRIBUTED:
+            if not cluster.is_single_node() and not dist_nodes:
+                raise NodesNotFound(f"No nodes found for {cluster_name}")
             nodes = dist_nodes
         else:
             raise ValueError(f"Target not set for {self}")
@@ -64,12 +74,7 @@ class SqlOperation(ABC):
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
-        if not nodes:
-            cluster_name = f"{cluster.get_host()}:{cluster.get_port()}"
-            readable_name = cluster.get_clickhouse_cluster_name()
-            if readable_name:
-                cluster_name += readable_name
-            raise NodesNotFound(f"No nodes found for {cluster_name}")
+
         if nodes:
             logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
