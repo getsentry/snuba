@@ -111,6 +111,8 @@ impl ProcessingStrategy<KafkaPayload> for ValidateSchema {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use super::Produce;
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
@@ -176,7 +178,7 @@ mod tests {
             }),
         };
 
-        strategy.submit(message).unwrap();
+        strategy.submit(message).unwrap(); // Does not error
         strategy.close();
         let _ = strategy.join(None);
     }
