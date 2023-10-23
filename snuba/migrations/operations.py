@@ -60,7 +60,6 @@ class SqlOperation(ABC):
 
         if self.target == OperationTarget.LOCAL:
             if not local_nodes:
-                print("MEEPS", local_nodes)
                 raise NodesNotFound(f"No nodes found for {cluster_name}")
             nodes = local_nodes
         elif self.target == OperationTarget.DISTRIBUTED:
