@@ -103,6 +103,9 @@ class KafkaStreamLoader:
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
         self.__subscription_scheduler_mode = subscription_scheduler_mode
+        self.__subscription_synchronization_timestamp = (
+            subscription_synchronization_timestamp
+        )
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
@@ -129,6 +132,9 @@ class KafkaStreamLoader:
 
     def get_subscription_scheduler_mode(self) -> Optional[SchedulingWatermarkMode]:
         return self.__subscription_scheduler_mode
+
+    def get_subscription_sychronization_timestamp(self) -> Optional[str]:
+        return self.__subscription_synchronization_timestamp
 
     def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_scheduled_topic_spec
