@@ -76,7 +76,7 @@ def test_handled_processor() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(arrayAll((x -> (isNull(x) OR notEquals(assumeNotNull(x), 0))), exception_stacks.mechanism_handled) AS result)"
+        "(arrayAll(x -> (isNull(x) OR notEquals(assumeNotNull(x), 0)), exception_stacks.mechanism_handled) AS result)"
     )
 
 
@@ -160,7 +160,7 @@ def test_not_handled_processor() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(arrayExists((x -> isNotNull(x) AND equals(assumeNotNull(x), 0)), exception_stacks.mechanism_handled) AS result)"
+        "(arrayExists(x -> isNotNull(x) AND equals(assumeNotNull(x), 0), exception_stacks.mechanism_handled) AS result)"
     )
 
 
