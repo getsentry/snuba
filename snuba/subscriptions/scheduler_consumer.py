@@ -153,7 +153,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             try:
                 time_interval = Interval(
                     getattr(previous_message, self.__synchronization_timestamp),
-                    getattr(commit.orig_message_ts, self.__synchronization_timestamp),
+                    getattr(commit, self.__synchronization_timestamp),
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
