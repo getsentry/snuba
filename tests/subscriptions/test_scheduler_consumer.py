@@ -91,7 +91,6 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
         False,
         60 * 5,
         None,
-        None,
         metrics_backend,
         health_check_file=(tmpdir / "health.txt").strpath,
     )
