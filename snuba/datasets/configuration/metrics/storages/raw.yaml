@@ -49,6 +49,7 @@ stream_loader:
   commit_log_topic: snuba-metrics-commit-log
   subscription_scheduler_mode: global
   subscription_synchronization_timestamp: orig_message_ts
+  subscription_delay_seconds: 60
   subscription_scheduled_topic: scheduled-subscriptions-metrics
   subscription_result_topic: metrics-subscription-results
   dlq_topic: snuba-dead-letter-metrics

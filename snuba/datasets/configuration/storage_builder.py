@@ -185,15 +185,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         "subscription_synchronization_timestamp"
     )
 
-    subscription_values = [
-        bool(subscription_scheduled_topic),
-        bool(subscription_scheduler_mode),
-        bool(subscription_result_topic),
-        bool(subscription_synchronization_timestamp),
-    ]
-    assert all(subscription_values) or not any(
-        subscription_values
-    ), "provide all subscription config or none"
+    subscription_delay_seconds = loader_config.get("subscription_delay_seconds")
 
     dlq_topic = __get_topic(loader_config, "dlq_topic")
 
@@ -207,6 +199,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduled_topic,
         subscription_result_topic,
         subscription_synchronization_timestamp,
+        subscription_delay_seconds,
         dlq_topic,
     )
 

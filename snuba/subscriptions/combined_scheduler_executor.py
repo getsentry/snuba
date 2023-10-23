@@ -35,6 +35,7 @@ class TopicConfig(NamedTuple):
     partition: int
     commit_log_topic: KafkaTopicSpec
     result_topic: KafkaTopicSpec
+    delay_seconds: int
 
 
 def build_scheduler_executor_consumer(
@@ -46,7 +47,6 @@ def build_scheduler_executor_consumer(
     auto_offset_reset: str,
     strict_offset_reset: bool,
     schedule_ttl: int,
-    delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     total_concurrent_queries: int,
     metrics: MetricsBackend,
@@ -69,7 +69,11 @@ def build_scheduler_executor_consumer(
 
         result_topic_spec = stream_loader.get_subscription_result_topic_spec()
         assert result_topic_spec is not None
-        return TopicConfig(partition_count, commit_log_topic_spec, result_topic_spec)
+
+        delay_seconds = stream_loader.get_subscription_delay_seconds()
+        assert delay_seconds is not None
+
+        return TopicConfig(partition_count, commit_log_topic_spec, result_topic_spec, delay_seconds)
 
     entity_topic_configurations = [
         get_topic_configuration_for_entity(entity_name) for entity_name in entity_names
@@ -78,7 +82,7 @@ def build_scheduler_executor_consumer(
     for c in entity_topic_configurations[1:]:
         assert c == entity_topic_configuration
 
-    partitions, commit_log_topic, result_topic = entity_topic_configuration
+    partitions, commit_log_topic, result_topic, delay_seconds = entity_topic_configuration
 
     tick_consumer = CommitLogTickConsumer(
         KafkaConsumer(

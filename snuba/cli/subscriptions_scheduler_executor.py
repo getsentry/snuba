@@ -65,7 +65,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Forces the kafka consumer auto offset reset.",
 )
 @click.option("--schedule-ttl", type=int, default=60 * 5)
-@click.option("--delay-seconds", type=int)
+@click.option(
+    "--delay-seconds", type=int, help="Deprecated. Will be removed in a follow up"
+)
 @click.option(
     "--stale-threshold-seconds",
     type=int,
@@ -139,7 +141,6 @@ def subscriptions_scheduler_executor(
         auto_offset_reset,
         not no_strict_offset_reset,
         schedule_ttl,
-        delay_seconds,
         stale_threshold_seconds,
         total_concurrent_queries,
         metrics,
