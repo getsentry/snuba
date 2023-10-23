@@ -1,13 +1,16 @@
 import os
 from logging import Logger
 from typing import Callable, Sequence
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+
+import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.context import Context
+from snuba.migrations.errors import NodesNotFound
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,
@@ -424,3 +427,10 @@ def test_reset_settings() -> None:
         ).format_sql()
         == "ALTER TABLE test_table RESET SETTING setting_a, setting_b;"
     )
+
+
+@patch("snuba.migrations.operations.SqlOperation.get_nodes", return_value=[])
+def test_no_nodes_found(mock_get_nodes: Mock) -> None:
+    op = RenameTable(StorageSetKey.EVENTS, "old_table", "new_table")
+    with pytest.raises(NodesNotFound):
+        op.execute()

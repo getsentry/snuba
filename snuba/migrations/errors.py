@@ -23,3 +23,7 @@ class InvalidClickhouseVersion(SerializableException):
 
 class InactiveClickhouseReplica(SerializableException):
     pass
+
+
+class NodesNotFound(SerializableException):
+    pass

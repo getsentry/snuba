@@ -14,6 +14,7 @@ from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
+from snuba.migrations.errors import NodesNotFound
 from snuba.migrations.table_engines import TableEngine
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -63,6 +64,12 @@ class SqlOperation(ABC):
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
+        if not nodes:
+            cluster_name = f"{cluster.get_host()}:{cluster.get_port()}"
+            readable_name = cluster.get_clickhouse_cluster_name()
+            if readable_name:
+                cluster_name += readable_name
+            raise NodesNotFound(f"No nodes found for {cluster_name}")
         if nodes:
             logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
