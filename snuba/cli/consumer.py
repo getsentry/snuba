@@ -149,6 +149,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--max-poll-interval-ms",
     type=int,
+    default=30000,
 )
 @click.option(
     "--health-check-file",
@@ -194,7 +195,7 @@ def consumer(
     enforce_schema: bool = False,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
-    max_poll_interval_ms: Optional[int] = None,
+    max_poll_interval_ms: int = 30000,
     health_check_file: Optional[str] = None,
     group_instance_id: Optional[str] = None,
     skip_write: bool
