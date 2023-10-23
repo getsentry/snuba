@@ -297,6 +297,8 @@ jobs:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 8
+      TEST_GROUP_STRATEGY: ROUND_ROBIN
+
     steps:
       # Checkout codebase
       - name: Checkout snuba
