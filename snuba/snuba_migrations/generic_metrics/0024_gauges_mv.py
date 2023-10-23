@@ -67,7 +67,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     sumState(arrayJoin(gauges_values.count)) as count,
                     argMaxState(arrayJoin(gauges_values.last), raw_timestamp) as last
                 FROM generic_metric_gauges_raw_local
-                WHERE materialization_version = 1
+                WHERE materialization_version = 2
                   AND metric_type = 'gauge'
                 GROUP BY
                     use_case_id,
