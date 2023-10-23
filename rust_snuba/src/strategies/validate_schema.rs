@@ -37,7 +37,7 @@ impl SchemaValidator {
 
 impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
-        let mut errorred = false;
+        let mut errored = false;
 
         if let Some(schema) = &self.schema {
             let payload = message.payload().payload.unwrap();
@@ -47,13 +47,13 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             if let Err(err) = res {
                 log::error!("Validation error {}", err);
                 if self.enforce_schema {
-                    errorred = true;
+                    errored = true;
                 };
             }
         }
 
         Box::pin(async move {
-            if errorred {
+            if errored {
                 Err(InvalidMessage)
             } else {
                 Ok(message)
