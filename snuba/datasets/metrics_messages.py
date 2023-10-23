@@ -6,7 +6,7 @@ class InputType(Enum):
     SET = "s"
     COUNTER = "c"
     DISTRIBUTION = "d"
-    GAUGE = "g'"
+    GAUGE = "g"
 
 
 class OutputType(Enum):
@@ -98,8 +98,8 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
         "metric_type": OutputType.GAUGE.value,
         "gauges_values.min": [values["min"]],
         "gauges_values.max": [values["max"]],
-        "gauges_values.sum": sum,
-        "gauges_values.count": count,
+        "gauges_values.sum": [sum],
+        "gauges_values.count": [count],
         "gauges_values.avg": [sum / count],
         "gauges_values.last": [values["last"]],
     }
@@ -184,7 +184,7 @@ def aggregation_options_for_gauge_message(
             GRANULARITY_ONE_DAY,
         ],
         "min_retention_days": retention_days,
-        "materialization_version": 2,
+        "materialization_version": 1,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
