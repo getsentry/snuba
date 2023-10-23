@@ -1,0 +1,121 @@
+version: v1
+kind: readable_storage
+name: generic_metrics_gauges
+storage:
+  key: generic_metrics_gauges
+  set_key: generic_metrics_gauges
+readiness_state: limited
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: rounded_timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+      {
+        name: _raw_tags_hash,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
+      {
+        name: _indexed_tags_hash,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
+      { name: granularity, type: UInt, args: { size: 8 } },
+      {
+        name: last_timestamp,
+        type: AggregateFunction,
+        args: { func: max, arg_types: [{ type: DateTime }] },
+      },
+      {
+        name: min,
+        type: AggregateFunction,
+        args: { func: min, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+      {
+        name: max,
+        type: AggregateFunction,
+        args: { func: max, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+      {
+        name: avg,
+        type: AggregateFunction,
+        args: { func: avg, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+      {
+        name: sum,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+      {
+        name: count,
+        type: AggregateFunction,
+        args: { func: count, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+    ]
+  local_table_name: generic_metric_gauges_aggregated_local
+  dist_table_name: generic_metric_gauges_aggregated_dist
+
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+  - name: CrossOrgQueryAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+      cross_org_referrer_limits:
+        statistical_detectors.distributions.fetch_top_transaction_names:
+          max_threads: 4
+          concurrent_limit: 10
+
+query_processors:
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _raw_tags_hash
+      killswitch: generic_metrics/tags_hash_map_enabled
+      value_subcolumn_name: raw_value
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser
