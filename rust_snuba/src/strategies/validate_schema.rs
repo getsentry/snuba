@@ -68,11 +68,10 @@ pub struct ValidateSchema {
 
 impl ValidateSchema {
     #[allow(dead_code)]
-    pub fn new<N>(next_step: N, topic: String, enforce_schema: bool) -> Self
+    pub fn new<N>(next_step: N, topic: String, enforce_schema: bool, concurrency: usize) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let concurrency = 5;
         let inner = Box::new(RunTaskInThreads::new(
             next_step,
             Box::new(SchemaValidator::new(topic, enforce_schema)),
@@ -162,6 +161,7 @@ mod tests {
             Noop {},
             10,
             TopicOrPartition::Topic(partition.topic.clone()),
+            5,
         );
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
