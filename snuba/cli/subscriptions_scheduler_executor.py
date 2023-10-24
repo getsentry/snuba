@@ -66,9 +66,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option(
-    "--delay-seconds", type=int, help="Deprecated. Will be removed in a follow up"
-)
-@click.option(
     "--stale-threshold-seconds",
     type=int,
     help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
@@ -90,7 +87,6 @@ def subscriptions_scheduler_executor(
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
-    delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     health_check_file: Optional[str],
     log_level: Optional[str],
