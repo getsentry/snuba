@@ -100,7 +100,6 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
         "gauges_values.max": [values["max"]],
         "gauges_values.sum": [sum],
         "gauges_values.count": [count],
-        "gauges_values.avg": [sum / count],
         "gauges_values.last": [values["last"]],
     }
 

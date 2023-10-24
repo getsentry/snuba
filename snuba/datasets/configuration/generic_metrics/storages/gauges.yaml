@@ -62,11 +62,6 @@ schema:
         args: { func: max, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
-        name: avg,
-        type: AggregateFunction,
-        args: { func: avg, arg_types: [{ type: Float, args: { size: 64 } }] },
-      },
-      {
         name: sum,
         type: AggregateFunction,
         args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },

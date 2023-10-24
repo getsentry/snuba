@@ -55,7 +55,6 @@ schema:
                 { name: max, type: Float, args: { size: 64 } },
                 { name: sum, type: Float, args: { size: 64 } },
                 { name: count, type: UInt, args: { size: 64 } },
-                { name: avg, type: Float, args: { size: 64 } },
               ],
           },
       },
