@@ -35,6 +35,7 @@ class TopicConfig(NamedTuple):
     partition: int
     commit_log_topic: KafkaTopicSpec
     result_topic: KafkaTopicSpec
+    synchronization_timestamp: str
     delay_seconds: int
 
 
@@ -62,6 +63,7 @@ def build_scheduler_executor_consumer(
         storage = get_entity(EntityKey(entity_name)).get_writable_storage()
         assert storage is not None
         stream_loader = storage.get_table_writer().get_stream_loader()
+
         partition_count = stream_loader.get_default_topic_spec().partitions_number
 
         commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
@@ -70,11 +72,20 @@ def build_scheduler_executor_consumer(
         result_topic_spec = stream_loader.get_subscription_result_topic_spec()
         assert result_topic_spec is not None
 
+        synchronization_timestamp = (
+            stream_loader.get_subscription_sychronization_timestamp()
+        )
+        assert synchronization_timestamp is not None
+
         delay_seconds = stream_loader.get_subscription_delay_seconds()
         assert delay_seconds is not None
 
         return TopicConfig(
-            partition_count, commit_log_topic_spec, result_topic_spec, delay_seconds
+            partition_count,
+            commit_log_topic_spec,
+            result_topic_spec,
+            synchronization_timestamp,
+            delay_seconds,
         )
 
     entity_topic_configurations = [
@@ -88,6 +99,7 @@ def build_scheduler_executor_consumer(
         partitions,
         commit_log_topic,
         result_topic,
+        synchronization_timestamp,
         delay_seconds,
     ) = entity_topic_configuration
 
@@ -102,6 +114,7 @@ def build_scheduler_executor_consumer(
         ),
         followed_consumer_group=followed_consumer_group,
         metrics=metrics,
+        synchronization_timestamp=synchronization_timestamp,
         time_shift=(
             timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None
         ),
