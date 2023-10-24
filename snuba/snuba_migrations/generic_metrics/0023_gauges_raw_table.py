@@ -49,7 +49,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     ("max", Float(64)),
                     ("sum", Float(64)),
                     ("count", UInt(64)),
-                    ("avg", Float(64)),
                 ]
             ),
         ),

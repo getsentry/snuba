@@ -62,7 +62,6 @@ class Migration(migration.ClickhouseNodeMigration):
                                 0)) as retention_days,
                     minState(arrayJoin(gauges_values.min)) as min,
                     maxState(arrayJoin(gauges_values.max)) as max,
-                    avgState(arrayJoin(gauges_values.avg)) as avg,
                     sumState(arrayJoin(gauges_values.sum)) as sum,
                     sumState(arrayJoin(gauges_values.count)) as count,
                     argMaxState(arrayJoin(gauges_values.last), raw_timestamp) as last
