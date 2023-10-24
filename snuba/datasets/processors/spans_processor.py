@@ -1,4 +1,3 @@
-import logging
 import numbers
 import random
 import time
@@ -6,6 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
+import structlog
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -27,7 +27,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "spans.processor")
 

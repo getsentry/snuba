@@ -96,10 +96,9 @@ test_cases = [
 def test_failures(query_body: str, message: str) -> None:
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
-        "contains": (EntityKey("transactions"), "event_id"),
-        "assigned": (EntityKey("groupassignee"), "group_id"),
-        "bookmark": (EntityKey("groupedmessages"), "first_release_id"),
-        "activity": (EntityKey("metrics"), "org_id"),
+        "contains": (EntityKey.TRANSACTIONS, "event_id"),
+        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
+        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
     }
 
     def events_mock(relationship: str) -> Optional[JoinRelationship]:
