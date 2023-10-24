@@ -112,26 +112,15 @@ impl ProcessingStrategy<KafkaPayload> for ValidateSchema {
 mod tests {
     use super::*;
 
-    use super::Produce;
-    use crate::backends::kafka::config::KafkaConfig;
-    use crate::backends::kafka::producer::KafkaProducer;
-    use crate::backends::kafka::types::KafkaPayload;
-    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-    use crate::types::{BrokerMessage, InnerMessage};
-    use crate::types::{Message, Partition, Topic, TopicOrPartition};
     use chrono::Utc;
+    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+    use rust_arroyo::types::{BrokerMessage, InnerMessage};
+    use rust_arroyo::types::{Message, Partition, Topic};
     use std::time::Duration;
 
     #[test]
     fn validate_schema() {
-        let config = KafkaConfig::new_consumer_config(
-            vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
-            "my_group".to_string(),
-            "latest".to_string(),
-            false,
-            None,
-        );
-
         let partition = Partition {
             topic: Topic {
                 name: "test".to_string(),
@@ -157,14 +146,19 @@ mod tests {
             }
         }
 
-        let mut strategy = ValidateSchema::new(
-            Noop {},
-            10,
-            TopicOrPartition::Topic(partition.topic.clone()),
-            5,
-        );
+        let mut strategy = ValidateSchema::new(Noop {}, "outcomes".to_string(), true, 5);
 
-        let payload_str = "hello world".to_string().as_bytes().to_vec();
+        let example = "{
+            \"project_id\": 1,
+            \"logging.googleapis.com/labels\": {
+              \"host\": \"lb-6\"
+            },
+            \"org_id\": 0,
+            \"outcome\": 4,
+            \"timestamp\": \"2023-03-28T18:50:39.463685Z\"
+          }";
+
+        let payload_str = example.to_string().as_bytes().to_vec();
         let message = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
                 payload: KafkaPayload {
