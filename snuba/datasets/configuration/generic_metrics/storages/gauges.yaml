@@ -74,7 +74,17 @@ schema:
       {
         name: count,
         type: AggregateFunction,
-        args: { func: count, arg_types: [{ type: Float, args: { size: 64 } }] },
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
+      },
+      {
+        name: last,
+        type: AggregateFunction,
+        args:
+          {
+            func: argMax,
+            arg_types:
+              [{ type: Float, args: { size: 64 } }, { type: DateTime }],
+          },
       },
     ]
   local_table_name: generic_metric_gauges_aggregated_local
