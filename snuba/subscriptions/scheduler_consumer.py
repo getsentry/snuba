@@ -222,7 +222,6 @@ class SchedulerBuilder:
         auto_offset_reset: str,
         strict_offset_reset: Optional[bool],
         schedule_ttl: int,
-        delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
@@ -265,6 +264,9 @@ class SchedulerBuilder:
         self.__auto_offset_reset = auto_offset_reset
         self.__strict_offset_reset = strict_offset_reset
         self.__schedule_ttl = schedule_ttl
+
+        delay_seconds = stream_loader.get_subscription_delay_seconds()
+        assert delay_seconds is not None
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
