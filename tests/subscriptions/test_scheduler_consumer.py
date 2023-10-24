@@ -192,6 +192,7 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
         inner_consumer,
         followed_consumer_group,
         TestingMetricsBackend(),
+        "orig_message_ts",
         time_shift=time_shift,
     )
 
@@ -311,7 +312,10 @@ def test_tick_consumer_non_monotonic() -> None:
     inner_consumer = broker.get_consumer("group")
 
     consumer = CommitLogTickConsumer(
-        inner_consumer, followed_consumer_group, TestingMetricsBackend()
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        "orig_message_ts",
     )
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
@@ -404,7 +408,10 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
     inner_consumer = broker.get_consumer("group")
 
     consumer = CommitLogTickConsumer(
-        inner_consumer, followed_consumer_group, TestingMetricsBackend()
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        "orig_message_ts",
     )
 
     now = datetime.now()
