@@ -157,7 +157,6 @@ def test_format_expressions(query_body: str, expected_snql_anonymized: str) -> N
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
         "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
-        "activity": (EntityKey.SESSIONS, "org_id"),
     }
 
     def events_mock(relationship: str) -> JoinRelationship:
