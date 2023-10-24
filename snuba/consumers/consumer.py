@@ -337,6 +337,8 @@ class ProcessedMessageBatchWriter:
                     received_p99 = received_timestamps[
                         int(len(received_timestamps) * 0.99)
                     ]
+                else:
+                    received_p99 = None
 
                 payload = commit_codec.encode(
                     CommitLogCommit(

@@ -223,7 +223,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             // If we are in the backpressure state for more than 1 second,
                             // we pause the consumer and hold the message until it is
                             // accepted, at which point we can resume consuming.
-                            if !self.is_paused && self.backpressure_timestamp.is_none() {
+                            if !self.is_paused && self.backpressure_timestamp.is_some() {
                                 let backpressure_duration =
                                     self.backpressure_timestamp.unwrap().elapsed();
 

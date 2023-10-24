@@ -1,6 +1,5 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -8,11 +7,11 @@ use uuid::Uuid;
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
+) -> Result<BytesInsertBatch, BadMessage> {
     if let Some(payload_bytes) = payload.payload {
         let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
             log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
+            BadMessage
         })?;
         let mut span: Span = msg.try_into()?;
 
@@ -21,14 +20,14 @@ pub fn process_message(
 
         let serialized = serde_json::to_vec(&span).map_err(|err| {
             log::error!("Failed to serialize processed message: {}", err);
-            InvalidMessage
+            BadMessage
         })?;
 
         return Ok(BytesInsertBatch {
             rows: vec![serialized],
         });
     }
-    Err(InvalidMessage)
+    Err(BadMessage)
 }
 
 const DEFAULT_RETENTION_DAYS: u16 = 90;
@@ -136,7 +135,7 @@ impl FromSentryTags {
             tags.insert("status_code".into(), status_code.into());
         }
 
-        for (key, value) in &self.extra{
+        for (key, value) in &self.extra {
             tags.insert(key.into(), value.into());
         }
 
@@ -199,12 +198,12 @@ struct Span {
 }
 
 impl TryFrom<FromSpanMessage> for Span {
-    type Error = InvalidMessage;
+    type Error = BadMessage;
 
-    fn try_from(from: FromSpanMessage) -> Result<Span, InvalidMessage> {
+    fn try_from(from: FromSpanMessage) -> Result<Span, BadMessage> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let group = if let Some(group) = &from.sentry_tags.group {
-            u64::from_str_radix(group, 16).map_err(|_| InvalidMessage)?
+            u64::from_str_radix(group, 16).map_err(|_| BadMessage)?
         } else {
             0
         };
@@ -230,7 +229,6 @@ impl TryFrom<FromSpanMessage> for Span {
             tag_keys.push("transaction.method".into());
             tag_values.push(transaction_method);
         }
-
 
         Ok(Self {
             action: from.sentry_tags.action.unwrap_or_default(),

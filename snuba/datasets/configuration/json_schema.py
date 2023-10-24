@@ -51,6 +51,12 @@ STREAM_LOADER_SCHEMA = {
             ],
             "description": "Field to be used for timestamp synchronization by the scheduler",
         },
+        "subscription_delay_seconds": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 120,
+            "description": "Additional delay in seconds to be added before scheduling. Amount added depends on the synchronization timestamp used. For orig_message_ts, we typically add 60 seconds to account for ingest time as it is not included.",
+        },
         "replacement_topic": {
             "type": ["string", "null"],
             "description": "Name of the replacements Kafka topic",

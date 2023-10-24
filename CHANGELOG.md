@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.10.1
+
+### Various fixes & improvements
+
+- feat(cardinality): Cardinalily analysis reporting (#4893) by @nikhars
+- ref(rust): Skip procspawn::init() if pure rust (#4899) by @lynnagara
+- fix(rust): Fix the consumer pause condition when backpressure happens (#4898) by @lynnagara
+- fix(clickhouse-v23.3): Fix function tuple can't have lambda expression as arguments bug (#4853) by @enochtangg
+- feat(subscriptions): Record received_p99 - take 2 (#4894) by @lynnagara
+- fix: fix 0001_functions and 0001_querylog for clickhouse 23 (#4842) by @untitaker
+- feat: Squash errors migrations (#4854) by @lynnagara
+- Revert "feat: Write received_p99 to commit log (#4872)" (2d3fc182) by @getsentry-bot
+- feat: Write received_p99 to commit log (#4872) by @lynnagara
+- feat(rust): Update all dependencies in lockfile (#4892) by @lynnagara
+- feat(generic-metrics): Add gauges storage set locally (#4888) by @ayirr7
+- deps: bump node to 20.8.1 (#4884) by @mdtro
+- feat(CoGS): Record bytes scanned for Generic Metrics queries by use case (#4748) by @rahul-kumar-saini
+- ref: bump sentry-arroyo to 2.14.13 (#4887) by @getsentry-bot
+- lint(generic-metrics): Remove feature flag for gen-metrics counters mat view version (#4891) by @john-z-yang
+- feat(subscriptions): Add mechanism for storage to define timestamp used for scheduling (#4873) by @lynnagara
+- configure dependabot and dependency review (#4885) by @mdtro
+- fix: Log step name in run_task_in_threads (#4875) by @untitaker
+- bump to debian 12 and configure dependabot for docker + gh actions (#4874) by @mdtro
+- ref(23.3) Fix test so it runs on 23.3 (#4863) by @evanh
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4869) by @john-z-yang
+- feat: Make subscription scheduler invalid interval a metric not warning (#4855) by @lynnagara
+- feat(generic-metrics): Add new mat view for generic counter metrics (#4867) by @john-z-yang
+- lint(generic-metrics): Remove feature flag for gen-metrics sets mat view version (#4866) by @john-z-yang
+
+_Plus 1 more_
+
 ## 23.10.0
 
 ### Various fixes & improvements

@@ -26,7 +26,7 @@ use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 
 #[pyfunction]
 pub fn consumer(
@@ -101,8 +101,7 @@ pub fn consumer_impl(
                         func: fn(
                             KafkaPayload,
                             KafkaMessageMetadata,
-                        )
-                            -> Result<BytesInsertBatch, InvalidMessage>,
+                        ) -> Result<BytesInsertBatch, BadMessage>,
                     }
 
                     impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
@@ -133,7 +132,10 @@ pub fn consumer_impl(
                                             timestamp: broker_message.timestamp,
                                         }),
                                     }),
-                                    Err(e) => Err(e),
+                                    Err(_e) => Err(InvalidMessage {
+                                        partition: broker_message.partition,
+                                        offset: broker_message.offset,
+                                    }),
                                 }
                             })
                         }
@@ -201,7 +203,9 @@ pub fn consumer_impl(
         )));
     }
 
-    procspawn::init();
+    if !use_rust_processor {
+        procspawn::init();
+    }
 
     let first_storage = &consumer_config.storages[0];
 

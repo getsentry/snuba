@@ -173,6 +173,11 @@ class ConsumerBuilder:
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+            # HACK: If the max poll interval is less than 45 seconds, set the session timeout
+            # to the same. (it's default is 45 seconds and it must be <= to max.poll.interval.ms)
+            if self.max_poll_interval_ms < 45000:
+                configuration["session.timeout.ms"] = self.max_poll_interval_ms
+
         if self.group_instance_id is not None:
             configuration["group.instance.id"] = self.group_instance_id
 

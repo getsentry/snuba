@@ -7,6 +7,9 @@ pub struct BytesInsertBatch {
 }
 
 #[derive(Clone, Debug)]
+pub struct BadMessage;
+
+#[derive(Clone, Debug)]
 pub struct KafkaMessageMetadata {
     pub partition: u16,
     pub offset: u64,
