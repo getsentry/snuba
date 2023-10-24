@@ -4,7 +4,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 };
 use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-use rust_arroyo::types::Message;
+use rust_arroyo::types::{InnerMessage, Message};
 use sentry_kafka_schemas;
 use std::time::Duration;
 
@@ -54,7 +54,17 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
 
         Box::pin(async move {
             if errored {
-                Err(InvalidMessage)
+                match message.inner_message {
+                    InnerMessage::BrokerMessage(ref broker_message) => {
+                        let partition = broker_message.partition.clone();
+                        let offset = broker_message.offset;
+
+                        Err(InvalidMessage { partition, offset })
+                    }
+                    _ => {
+                        panic!("Cannot return Invalid message error");
+                    }
+                }
             } else {
                 Ok(message)
             }
