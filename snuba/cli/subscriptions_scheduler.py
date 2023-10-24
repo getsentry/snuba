@@ -157,10 +157,8 @@ def subscriptions_scheduler(
         storage is not None
     ), f"Entity {entity_name} does not have a writable storage by default."
 
-    if stale_threshold_seconds is not None and delay_seconds is not None:
-        assert (
-            stale_threshold_seconds > delay_seconds
-        ), "stale_threshold_seconds must be greater than delay_seconds"
+    if stale_threshold_seconds is not None:
+        assert stale_threshold_seconds > 120, "stale_threshold_seconds must be 120"
 
     stream_loader = storage.get_table_writer().get_stream_loader()
 
@@ -185,7 +183,6 @@ def subscriptions_scheduler(
         auto_offset_reset,
         not no_strict_offset_reset,
         schedule_ttl,
-        delay_seconds,
         stale_threshold_seconds,
         metrics,
         slice_id,
