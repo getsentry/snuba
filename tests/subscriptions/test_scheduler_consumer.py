@@ -122,7 +122,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
                     Partition(commit_log_topic, partition),
                     offset,
                     orig_message_ts.timestamp(),
-                    None,
+                    orig_message_ts.timestamp(),
                 )
             ),
         )
