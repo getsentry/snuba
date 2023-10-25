@@ -348,7 +348,7 @@ def test_tick_consumer_non_monotonic() -> None:
                 partition,
                 1,
                 epoch.timestamp() + 1,
-                epoch.timstamp() + 1,
+                epoch.timestamp() + 1,
             )
         ),
     ).result()
