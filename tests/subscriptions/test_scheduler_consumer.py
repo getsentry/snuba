@@ -100,7 +100,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     scheduler._run_once()
     scheduler._run_once()
 
-    epoch = 0
+    epoch = 1000
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
