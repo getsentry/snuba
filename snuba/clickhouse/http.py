@@ -41,6 +41,10 @@ CLICKHOUSE_ERROR_RE = re.compile(
     re.MULTILINE,
 )
 
+CLICKHOUSE_ERROR_RE_V2 = re.compile(
+    r"^Code: (?P<code>\d+)\. (?P<message>.+?(?: \(at row (?P<row>\d+)\))?)$",
+    re.MULTILINE,
+)
 
 JSONRow = bytes  # a single row in JSONEachRow format
 
@@ -257,6 +261,10 @@ class HTTPWriteBatch:
             # https://github.com/yandex/ClickHouse/issues/6272 is available.
             content = response.data.decode("utf8")
             details = CLICKHOUSE_ERROR_RE.match(content)
+            if not details:
+                # Error messages looks a bit different in newer versions e.g 22.8
+                # so try a different way of parsing the content
+                details = CLICKHOUSE_ERROR_RE_V2.match(content)
             if details is not None:
                 code = int(details["code"])
                 message = details["message"]
