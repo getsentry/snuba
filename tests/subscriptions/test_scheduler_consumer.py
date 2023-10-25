@@ -100,7 +100,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     scheduler._run_once()
     scheduler._run_once()
 
-    epoch = datetime(1970, 1, 1)
+    epoch = 0
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
@@ -108,11 +108,11 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
         )
     )
 
-    for (partition, offset, orig_message_ts) in [
+    for (partition, offset, ts) in [
         (0, 0, epoch),
-        (1, 0, epoch + timedelta(minutes=1)),
-        (0, 1, epoch + timedelta(minutes=2)),
-        (1, 1, epoch + timedelta(minutes=3)),
+        (1, 0, epoch + 60),
+        (0, 1, epoch + 120),
+        (1, 1, epoch + 180),
     ]:
         fut = producer.produce(
             commit_log_topic,
@@ -121,8 +121,8 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
                     "events",
                     Partition(commit_log_topic, partition),
                     offset,
-                    orig_message_ts.timestamp(),
-                    orig_message_ts.timestamp(),
+                    ts,
+                    ts,
                 )
             ),
         )
