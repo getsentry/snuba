@@ -1070,11 +1070,8 @@ class TestSnQLApi(BaseApiTest):
     #         ),
     #     )
 
-    #     print("response.sata", response.data)
-
     #     assert b"DB::Exception: Type mismatch" in response.data
     #     assert response.status_code == 400
-    #     assert False
 
     def test_clickhouse_illegal_type_error(self) -> None:
         response = self.post(
