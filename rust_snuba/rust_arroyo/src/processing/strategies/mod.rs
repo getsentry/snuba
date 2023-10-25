@@ -9,6 +9,12 @@ pub mod run_task_in_threads;
 pub mod transform;
 
 #[derive(Debug, Clone)]
+pub enum SubmitError<T> {
+    MessageRejected(MessageRejected<T>),
+    InvalidMessage(InvalidMessage),
+}
+
+#[derive(Debug, Clone)]
 pub struct MessageRejected<T> {
     pub message: Message<T>,
 }
@@ -73,7 +79,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
     #[must_use]
-    fn poll(&mut self) -> Option<CommitRequest>;
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage>;
 
     /// Submit a message for processing.
     ///
@@ -85,7 +91,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// If the processing strategy is unable to accept a message (due to it
     /// being at or over capacity, for example), this method will raise a
     /// ``MessageRejected`` exception.
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>>;
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>>;
 
     /// Close this instance. No more messages should be accepted by the
     /// instance after this method has been called.
@@ -112,7 +118,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// completed and committed before the continuing the rebalancing
     /// process.
     #[must_use]
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest>;
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
 }
 
 pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {

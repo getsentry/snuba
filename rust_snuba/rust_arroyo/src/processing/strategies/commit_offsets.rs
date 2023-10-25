@@ -1,4 +1,6 @@
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -9,11 +11,11 @@ pub struct CommitOffsets {
     commit_frequency: Duration,
 }
 impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.commit(false)
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(false))
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }
@@ -24,8 +26,8 @@ impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-        self.commit(true)
+    fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(true))
     }
 }
 
