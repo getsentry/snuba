@@ -1049,29 +1049,28 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
-    # def test_clickhouse_type_mismatch_error(self) -> None:
-    #     """Test that snql queries that cause Clickhosue type errors have a 400 status code."""
-    #     response = self.post(
-    #         "/discover/snql",
-    #         data=json.dumps(
-    #             {
-    #                 "query": f"""MATCH (discover_events)
-    #                 SELECT count()
-    #                 WHERE type != 'transaction' AND project_id = {self.project_id}
-    #                 AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-    #                 AND timestamp < toDateTime('{self.next_time.isoformat()}')
-    #                 AND type IN array(1, 2, 3)
-    #                 LIMIT 1000""",
-    #                 "turbo": False,
-    #                 "consistent": True,
-    #                 "debug": True,
-    #                 "tenant_ids": {"referrer": "r", "organization_id": 123},
-    #             }
-    #         ),
-    #     )
+    def test_clickhouse_type_mismatch_error(self) -> None:
+        """Test that snql queries that cause Clickhosue type errors have a 400 status code."""
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover_events)
+                    SELECT count()
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array('one', 'two')
+                    LIMIT 1000""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
 
-    #     assert b"DB::Exception: Type mismatch" in response.data
-    #     assert response.status_code == 400
+        assert response.status_code == 400
 
     def test_clickhouse_illegal_type_error(self) -> None:
         response = self.post(
