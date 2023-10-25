@@ -180,7 +180,7 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
                     Partition(topic, partition),
                     offset,
                     epoch.timestamp(),
-                    None,
+                    epoch.timestamp(),
                 )
             )
             producer.produce(Partition(topic, 0), payload).result()
@@ -328,7 +328,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 0, epoch.timestamp(), None)
+            Commit(
+                followed_consumer_group,
+                partition,
+                0,
+                epoch.timestamp(),
+                epoch.timestamp(),
+            )
         ),
     ).result()
 
@@ -337,7 +343,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 1, epoch.timestamp() + 1, None)
+            Commit(
+                followed_consumer_group,
+                partition,
+                1,
+                epoch.timestamp() + 1,
+                epoch.timstamp() + 1,
+            )
         ),
     ).result()
 
@@ -363,7 +375,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 2, epoch.timestamp(), None)
+            Commit(
+                followed_consumer_group,
+                partition,
+                2,
+                epoch.timestamp(),
+                epoch.timestamp(),
+            )
         ),
     ).result()
 
@@ -375,7 +393,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 3, epoch.timestamp() + 2, None)
+            Commit(
+                followed_consumer_group,
+                partition,
+                3,
+                epoch.timestamp() + 2,
+                epoch.timestamp() + 2,
+            )
         ),
     ).result()
 
@@ -445,7 +469,7 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
                 partition,
                 5,
                 now.timestamp(),
-                None,
+                now.timestamp(),
             )
         ),
     ).result()
@@ -453,7 +477,13 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 4, now.timestamp() - 2, None)
+            Commit(
+                followed_consumer_group,
+                partition,
+                4,
+                now.timestamp() - 2,
+                now.timestamp() - 2,
+            )
         ),
     ).result()
 
