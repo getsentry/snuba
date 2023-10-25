@@ -244,6 +244,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
+            (
+                "generic-metrics-gauges-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_gauges_raw",
+                    "--consumer-group=snuba-gen-metrics-gauges-consumers",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
         ]
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:

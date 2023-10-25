@@ -92,13 +92,13 @@ storages:
           args:
             column_to_map: value
             from_name: count
-            to_name: countMerge
+            to_name: sumMerge
             aggr_col_name: count
         - mapper: AggregateFunctionMapper
           args:
             column_to_map: value
             from_name: countIf
-            to_name: countMergeIf
+            to_name: sumMergeIf
             aggr_col_name: count
         - mapper: AggregateFunctionMapper
           args:
@@ -171,13 +171,13 @@ storages:
           args:
             column_to_map: value
             from_name: count
-            to_name: countMerge
+            to_name: sumMerge
             aggr_col_name: count
         - mapper: AggregateFunctionMapper
           args:
             column_to_map: value
             from_name: countIf
-            to_name: countMergeIf
+            to_name: sumMergeIf
             aggr_col_name: count
         - mapper: AggregateFunctionMapper
           args:
@@ -253,14 +253,3 @@ validators:
       required_filter_columns: ["org_id", "project_id"]
 required_time_column: rounded_timestamp
 partition_key_column_name: org_id
-subscription_processors:
-  - processor: AddColumnCondition
-    args:
-      extra_condition_data_key: organization
-      extra_condition_column: org_id
-subscription_validators:
-  - validator: AggregationValidator
-    args:
-      max_allowed_aggregations: 3
-      disallowed_aggregations: [having, orderby]
-      required_time_column: rounded_timestamp
