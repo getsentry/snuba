@@ -10,12 +10,10 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
-
 
 columns: List[Column[Modifiers]] = [
     Column("event_id", UUID()),
