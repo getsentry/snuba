@@ -49,13 +49,19 @@ pub struct Reduce<T, TResult> {
     max_batch_time: Duration,
     batch_state: BatchState<T, TResult>,
     message_carried_over: Option<Message<TResult>>,
+    commit_request_carried_over: Option<CommitRequest>,
 }
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
     for Reduce<T, TResult>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        self.flush(false);
-        self.next_step.poll()
+        let commit_request = self.next_step.poll()?;
+        self.commit_request_carried_over =
+            merge_commit_request(self.commit_request_carried_over.take(), commit_request);
+
+        self.flush(false)?;
+
+        Ok(self.commit_request_carried_over.take())
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
@@ -79,11 +85,12 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
-        let mut commit_request = None;
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
-                commit_request = merge_commit_request(commit_request, self.next_step.poll());
-                self.flush(true);
+                let next_commit = self.next_step.poll()?;
+                self.commit_request_carried_over =
+                    merge_commit_request(self.commit_request_carried_over.take(), next_commit);
+                self.flush(true)?;
                 if let Some(t) = remaining {
                     if t <= Duration::from_secs(0) {
                         log::warn!("Timeout reached while waiting for tasks to finish");
@@ -95,8 +102,12 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         } else {
             self.flush(true);
         }
-        let next_commit = self.next_step.join(remaining);
-        merge_commit_request(commit_request, next_commit)
+        let next_commit = self.next_step.join(remaining)?;
+
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 
@@ -117,23 +128,28 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
             max_batch_time,
             batch_state,
             message_carried_over: None,
+            commit_request_carried_over: None,
         }
     }
 
-    fn flush(&mut self, force: bool) {
+    fn flush(&mut self, force: bool) -> Result<(), InvalidMessage> {
         // Try re-submitting the carried over message if there is one
         if let Some(message) = self.message_carried_over.take() {
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(message)
-            {
-                self.message_carried_over = Some(transformed_message);
-                return;
+            match self.next_step.submit(message) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.message_carried_over = Some(transformed_message);
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message);
+                }
+                Ok(_) => {}
             }
         }
 
         if self.batch_state.message_count == 0 {
-            return;
+            return Ok(());
         }
 
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
@@ -157,13 +173,21 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
                 )),
             };
 
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(next_message)
-            {
-                self.message_carried_over = Some(transformed_message)
+            match self.next_step.submit(next_message) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.message_carried_over = Some(transformed_message);
+                    return Ok(());
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message);
+                }
+                Ok(_) => return Ok(()),
             }
         }
+
+        Ok(())
     }
 }
 
