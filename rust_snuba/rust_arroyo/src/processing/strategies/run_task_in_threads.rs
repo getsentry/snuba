@@ -66,13 +66,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        match self.next_step.poll() {
-            Ok(commit_request) => {
-                self.commit_request_carried_over =
-                    merge_commit_request(self.commit_request_carried_over.take(), commit_request)
-            }
-            Err(invalid_message) => return Err(invalid_message),
-        }
+        let commit_request = self.next_step.poll()?;
+        self.commit_request_carried_over =
+            merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
         self.metrics_buffer
             .gauge(&self.metric_name, self.handles.len() as u64);
@@ -167,15 +163,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                 }
             }
 
-            match self.poll() {
-                Ok(next_commit) => {
-                    self.commit_request_carried_over =
-                        merge_commit_request(self.commit_request_carried_over.take(), next_commit);
-                }
-                Err(invalid_message) => {
-                    return Err(invalid_message);
-                }
-            }
+            let commit_request = self.poll()?;
+            self.commit_request_carried_over =
+                merge_commit_request(self.commit_request_carried_over.take(), commit_request);
         }
 
         // Cancel remaining tasks if any
@@ -185,16 +175,12 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.handles.clear();
         self.metrics_buffer.flush();
 
-        let next_commit = self.next_step.join(remaining);
-        match next_commit {
-            Ok(next_commit) => {
-                self.commit_request_carried_over =
-                    merge_commit_request(self.commit_request_carried_over.take(), next_commit);
-            }
-            Err(invalid_message) => return Err(invalid_message),
-        }
+        let next_commit = self.next_step.join(remaining)?;
 
-        Ok(self.commit_request_carried_over.take())
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 
