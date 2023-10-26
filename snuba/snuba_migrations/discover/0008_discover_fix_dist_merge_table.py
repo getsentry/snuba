@@ -47,16 +47,10 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = True
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return []
-
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return []
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.DISCOVER,
@@ -74,7 +68,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.DISCOVER,
@@ -86,8 +80,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name="discover_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="discover_local",
-                    sharding_key=None,
+                    local_table_name="discover_local", sharding_key=None,
                 ),
             ),
         ]
