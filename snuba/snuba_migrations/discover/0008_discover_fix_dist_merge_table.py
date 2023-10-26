@@ -81,7 +81,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 target=OperationTarget.DISTRIBUTED,
                 engine=table_engines.Distributed(
-                    local_table_name="discover_local", sharding_key=None,
+                    local_table_name="discover_local",
+                    sharding_key=None,
                 ),
             ),
         ]
