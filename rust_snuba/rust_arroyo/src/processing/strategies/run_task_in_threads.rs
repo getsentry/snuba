@@ -1,6 +1,7 @@
 use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    SubmitError,
 };
 use crate::types::Message;
 use std::collections::VecDeque;
@@ -62,14 +63,14 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         if let Some(message) = self.message_carried_over.take() {
             if let Err(MessageRejected {
                 message: transformed_message,
             }) = self.next_step.submit(message)
             {
                 self.message_carried_over = Some(transformed_message);
-                return None;
+                return Ok(None);
             }
         }
 
@@ -105,9 +106,12 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>> {
         if self.message_carried_over.is_some() {
-            log::warn!("[{}] carried over message, rejecting subsequent messages", self.metric_name);
+            log::warn!(
+                "[{}] carried over message, rejecting subsequent messages",
+                self.metric_name
+            );
             return Err(MessageRejected { message });
         }
 
@@ -133,7 +137,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
         let mut commit_request = None;
@@ -143,7 +147,10 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             if let Some(t) = remaining {
                 remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
-                    log::warn!("[{}] Timeout reached while waiting for tasks to finish", self.metric_name);
+                    log::warn!(
+                        "[{}] Timeout reached while waiting for tasks to finish",
+                        self.metric_name
+                    );
                     break;
                 }
             }

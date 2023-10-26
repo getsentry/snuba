@@ -1,5 +1,6 @@
 use crate::processing::strategies::{
-    merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    SubmitError,
 };
 use crate::types::{AnyMessage, InnerMessage, Message, Partition};
 use std::collections::BTreeMap;
@@ -52,14 +53,14 @@ pub struct Reduce<T, TResult> {
 impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
     for Reduce<T, TResult>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.flush(false);
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
         if self.message_carried_over.is_some() {
-            return Err(MessageRejected { message });
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         self.batch_state.add(message);
@@ -75,7 +76,7 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
         let mut commit_request = None;

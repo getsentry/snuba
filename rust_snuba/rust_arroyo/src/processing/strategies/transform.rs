@@ -1,5 +1,5 @@
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
 };
 use crate::types::Message;
 use std::time::Duration;
@@ -31,7 +31,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
     for Transform<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         if let Some(message) = self.message_carried_over.take() {
             if let Err(MessageRejected {
                 message: transformed_message,
@@ -44,9 +44,9 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>> {
         if self.message_carried_over.is_some() {
-            return Err(MessageRejected { message });
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         // TODO: Handle InvalidMessage
@@ -69,7 +69,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.next_step.join(timeout)
     }
 }
@@ -92,15 +92,18 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 None
             }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected<String>> {
+            fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
                 None
             }
         }

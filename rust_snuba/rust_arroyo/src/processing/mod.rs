@@ -2,7 +2,7 @@ mod metrics_buffer;
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::processing::strategies::MessageRejected;
+use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
@@ -172,10 +172,13 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             Some(strategy) => {
                 let commit_request = strategy.poll();
                 match commit_request {
-                    None => {}
-                    Some(request) => {
+                    Ok(None) => {}
+                    Ok(Some(request)) => {
                         self.consumer.stage_offsets(request.positions).unwrap();
                         self.consumer.commit_offsets().unwrap();
+                    }
+                    Err(e) => {
+                        println!("TODOO: Handle invalid message {:?}", e);
                     }
                 };
 
@@ -212,7 +215,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                 self.backpressure_timestamp = None;
                             }
                         }
-                        Err(MessageRejected { message }) => {
+                        Err(SubmitError::MessageRejected(MessageRejected { message })) => {
                             // Put back the carried over message
                             self.message = Some(message);
 
@@ -244,6 +247,9 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                     Err(_) => return Err(RunError::PauseError),
                                 }
                             }
+                        }
+                        Err(SubmitError::InvalidMessage(invalid_message)) => {
+                            println!("TODOO: Handle invalid message {:?}", invalid_message);
                         }
                     }
                 }
