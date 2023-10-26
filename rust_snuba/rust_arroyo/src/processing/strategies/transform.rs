@@ -38,7 +38,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
         match self.next_step.poll() {
             Ok(commit_request) => {
                 self.commit_request_carried_over =
-                    merge_commit_request(self.commit_request_carried_over, commit_request)
+                    merge_commit_request(self.commit_request_carried_over.take(), commit_request)
             }
             Err(invalid_message) => return Err(invalid_message),
         }
@@ -51,7 +51,6 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
                     self.message_carried_over = Some(transformed_message);
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    self.message_carried_over = Some(message);
                     return Err(invalid_message);
                 }
                 Ok(_) => {}
@@ -79,7 +78,6 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
                         self.message_carried_over = Some(transformed_message);
                     }
                     Err(SubmitError::InvalidMessage(invalid_message)) => {
-                        self.message_carried_over = Some(next_message);
                         return Err(SubmitError::InvalidMessage(invalid_message));
                     }
                     Ok(_) => {}

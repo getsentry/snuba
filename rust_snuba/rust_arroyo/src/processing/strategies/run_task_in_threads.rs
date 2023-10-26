@@ -69,7 +69,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         match self.next_step.poll() {
             Ok(commit_request) => {
                 self.commit_request_carried_over =
-                    merge_commit_request(self.commit_request_carried_over, commit_request)
+                    merge_commit_request(self.commit_request_carried_over.take(), commit_request)
             }
             Err(invalid_message) => return Err(invalid_message),
         }
@@ -85,7 +85,6 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                     self.message_carried_over = Some(transformed_message);
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    self.message_carried_over = Some(message);
                     return Err(invalid_message);
                 }
                 Ok(_) => {}
@@ -104,7 +103,6 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                                 self.message_carried_over = Some(transformed_message);
                             }
                             Err(SubmitError::InvalidMessage(invalid_message)) => {
-                                self.message_carried_over = Some(message);
                                 return Err(invalid_message);
                             }
                             Ok(_) => {}
@@ -172,7 +170,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             match self.poll() {
                 Ok(next_commit) => {
                     self.commit_request_carried_over =
-                        merge_commit_request(self.commit_request_carried_over, next_commit);
+                        merge_commit_request(self.commit_request_carried_over.take(), next_commit);
                 }
                 Err(invalid_message) => {
                     return Err(invalid_message);
@@ -191,7 +189,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         match next_commit {
             Ok(next_commit) => {
                 self.commit_request_carried_over =
-                    merge_commit_request(self.commit_request_carried_over, next_commit);
+                    merge_commit_request(self.commit_request_carried_over.take(), next_commit);
             }
             Err(invalid_message) => return Err(invalid_message),
         }
