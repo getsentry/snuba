@@ -100,7 +100,7 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
                 }
             }
         } else {
-            self.flush(true);
+            self.flush(true)?;
         }
         let next_commit = self.next_step.join(remaining)?;
 
