@@ -79,6 +79,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.DISCOVER,
                 table_name="discover_dist",
                 columns=columns,
+                target=OperationTarget.DISTRIBUTED,
                 engine=table_engines.Distributed(
                     local_table_name="discover_local", sharding_key=None,
                 ),
