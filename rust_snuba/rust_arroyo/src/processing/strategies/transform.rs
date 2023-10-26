@@ -96,7 +96,11 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
-        self.next_step.join(timeout)
+        let next_commit = self.next_step.join(timeout)?;
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 

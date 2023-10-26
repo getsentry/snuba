@@ -5,7 +5,9 @@ use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::Message;
 use std::time::Duration;
 
@@ -81,14 +83,14 @@ impl ClickhouseWriterStep {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
         message: Message<BytesInsertBatch>,
-    ) -> Result<(), MessageRejected<BytesInsertBatch>> {
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
         self.inner.submit(message)
     }
 
@@ -100,7 +102,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.join(timeout)
     }
 }

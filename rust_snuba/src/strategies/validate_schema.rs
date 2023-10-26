@@ -2,8 +2,9 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::InvalidMessage;
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::{InnerMessage, Message};
 use sentry_kafka_schemas;
 use std::time::Duration;
@@ -94,14 +95,11 @@ impl ValidateSchema {
 }
 
 impl ProcessingStrategy<KafkaPayload> for ValidateSchema {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(
-        &mut self,
-        message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         self.inner.submit(message)
     }
 
@@ -113,7 +111,7 @@ impl ProcessingStrategy<KafkaPayload> for ValidateSchema {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.join(timeout)
     }
 }
@@ -124,7 +122,7 @@ mod tests {
 
     use chrono::Utc;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+    use rust_arroyo::processing::strategies::{CommitRequest, ProcessingStrategy, SubmitError};
     use rust_arroyo::types::{BrokerMessage, InnerMessage};
     use rust_arroyo::types::{Message, Partition, Topic};
     use std::time::Duration;

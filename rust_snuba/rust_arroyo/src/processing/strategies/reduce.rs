@@ -194,7 +194,9 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
 #[cfg(test)]
 mod tests {
     use crate::processing::strategies::reduce::Reduce;
-    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+    use crate::processing::strategies::{
+        CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    };
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -209,11 +211,11 @@ mod tests {
         }
 
         impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-            fn poll(&mut self) -> Option<CommitRequest> {
-                None
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
 
-            fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+            fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
                 self.submitted.lock().unwrap().push(message.payload());
                 Ok(())
             }
@@ -222,8 +224,11 @@ mod tests {
 
             fn terminate(&mut self) {}
 
-            fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-                None
+            fn join(
+                &mut self,
+                _: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
         }
 
