@@ -249,7 +249,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                             }
                         }
                         Err(SubmitError::InvalidMessage(invalid_message)) => {
-                            println!("TODOO: Handle invalid message {:?}", invalid_message);
+                            // TODO: Put this into the DLQ once we have one
+                            log::error!("Invalid message: {:?}", invalid_message);
                         }
                     }
                 }
