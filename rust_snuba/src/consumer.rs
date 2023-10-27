@@ -26,6 +26,7 @@ use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
+use crate::strategies::validate_schema::ValidateSchema;
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 
 #[pyfunction]
@@ -60,6 +61,7 @@ pub fn consumer_impl(
 ) {
     struct ConsumerStrategyFactory {
         processor_config: config::MessageProcessorConfig,
+        logical_topic_name: String,
         max_batch_size: usize,
         max_batch_time: Duration,
         clickhouse_cluster_config: config::ClickhouseConfig,
@@ -142,11 +144,16 @@ pub fn consumer_impl(
                     }
 
                     let task_runner = MessageProcessor { func };
-                    Box::new(RunTaskInThreads::new(
-                        next_step,
-                        Box::new(task_runner),
+                    Box::new(ValidateSchema::new(
+                        RunTaskInThreads::new(
+                            next_step,
+                            Box::new(task_runner),
+                            self.concurrency,
+                            Some("process_message"),
+                        ),
+                        self.logical_topic_name.clone(),
+                        false,
                         self.concurrency,
-                        Some("process_message"),
                     ))
                 }
                 _ => Box::new(
@@ -235,12 +242,14 @@ pub fn consumer_impl(
     let processor_config = first_storage.message_processor.clone();
     let clickhouse_cluster_config = first_storage.clickhouse_cluster.clone();
     let clickhouse_table_name = first_storage.clickhouse_table_name.clone();
+    let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
     let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory {
             processor_config,
+            logical_topic_name,
             max_batch_size,
             max_batch_time,
             clickhouse_cluster_config,
