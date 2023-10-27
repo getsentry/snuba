@@ -304,7 +304,8 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 #[cfg(test)]
 mod tests {
     use super::strategies::{
-        CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+        CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+        ProcessingStrategyFactory, SubmitError,
     };
     use super::StreamProcessor;
     use crate::backends::local::broker::LocalBroker;
@@ -321,16 +322,16 @@ mod tests {
     }
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Option<CommitRequest> {
-            match self.message.as_ref() {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
                     positions: HashMap::from_iter(message.committable().into_iter()),
                 }),
-            }
+            })
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected<String>> {
+        fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {
             self.message = Some(message);
             Ok(())
         }
@@ -339,8 +340,8 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-            None
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
         }
     }
 
