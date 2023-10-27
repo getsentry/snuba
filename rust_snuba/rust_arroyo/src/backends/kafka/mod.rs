@@ -29,7 +29,6 @@ enum KafkaConsumerState {
     Consuming,
     #[allow(dead_code)]
     Error,
-    #[allow(dead_code)]
     Closed,
     #[allow(dead_code)]
     Assigning,
