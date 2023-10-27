@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use cadence::prelude::*;
 use cadence::{BufferedUdpMetricSink, MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
