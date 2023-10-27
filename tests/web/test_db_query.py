@@ -596,3 +596,28 @@ def test_clickhouse_settings_applied_to_query() -> None:
         "group_by_overflow_mode" in clickhouse_settings_used
         and clickhouse_settings_used["group_by_overflow_mode"] == "any"
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_ignore_consistent() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("search_issues_ignore_consistent_queries_sample_rate", 1)
+
+    # query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=[],
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    print(result)
