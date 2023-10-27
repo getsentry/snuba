@@ -74,8 +74,6 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                // TODO: We need to actually call consumer.commit() with the commit request.
-                // Right now we are never committing during consumer shutdown.
                 if let Some(commit_request) = s.join(None) {
                     let mut consumer = self.consumer.lock().unwrap();
                     consumer.stage_offsets(commit_request.positions).unwrap();
