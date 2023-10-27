@@ -525,14 +525,15 @@ def _raw_query(
     # Force query to use the first shard replica, which
     # should have synchronously received any cluster writes
     # before this query is run.
-    if query_settings.get_consistent():
+    consistent = query_settings.get_consistent()
+    stats["consistent"] = consistent
+    if consistent:
         sample_rate = state.get_config(
             f"{dataset_name}_ignore_consistent_queries_sample_rate", 0
         )
         assert sample_rate is not None
         ignore_consistent = random.random() < float(sample_rate)
         if not ignore_consistent:
-            stats["consistent"] = True
             clickhouse_query_settings["load_balancing"] = "in_order"
             clickhouse_query_settings["max_threads"] = 1
         else:

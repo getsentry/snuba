@@ -602,17 +602,17 @@ def test_clickhouse_settings_applied_to_query() -> None:
 @pytest.mark.redis_db
 def test_db_query_ignore_consistent() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("search_issues_ignore_consistent_queries_sample_rate", 1)
+    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
 
-    # query_metadata_list: list[ClickhouseQueryMetadata] = []
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
 
     result = db_query(
         clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
+        query_settings=HTTPQuerySettings(consistent=True),
         attribution_info=attribution_info,
         dataset_name="events",
-        query_metadata_list=[],
+        query_metadata_list=query_metadata_list,
         formatted_query=format_query(query),
         reader=storage.get_cluster().get_reader(),
         timer=Timer("foo"),
@@ -620,4 +620,5 @@ def test_db_query_ignore_consistent() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    print(result)
+    assert result.extra["stats"]["consistent"] is False
+    assert result.extra["stats"]["max_threads"] == 10
