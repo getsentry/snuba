@@ -73,7 +73,7 @@ async fn main() {
         None,
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config.clone()));
+    let consumer = KafkaConsumer::new(config.clone()).unwrap();
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ReverseStringAndProduceStrategyFactory {

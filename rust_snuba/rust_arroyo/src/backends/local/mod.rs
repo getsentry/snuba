@@ -24,10 +24,10 @@ struct SubscriptionState {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-pub struct LocalConsumer<'a, TPayload: Clone> {
+pub struct LocalConsumer<TPayload: Clone> {
     id: Uuid,
     group: String,
-    broker: &'a mut LocalBroker<TPayload>,
+    broker: LocalBroker<TPayload>,
     pending_callback: VecDeque<Callback>,
     paused: HashSet<Partition>,
     // The offset that a the last ``EndOfPartition`` exception that was
@@ -40,10 +40,10 @@ pub struct LocalConsumer<'a, TPayload: Clone> {
     closed: bool,
 }
 
-impl<'a, TPayload: Clone> LocalConsumer<'a, TPayload> {
+impl<TPayload: Clone> LocalConsumer<TPayload> {
     pub fn new(
         id: Uuid,
-        broker: &'a mut LocalBroker<TPayload>,
+        broker: LocalBroker<TPayload>,
         group: String,
         enable_end_of_partition: bool,
     ) -> Self {
@@ -68,7 +68,7 @@ impl<'a, TPayload: Clone> LocalConsumer<'a, TPayload> {
     }
 }
 
-impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload> {
+impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn subscribe(
         &mut self,
         topics: &[Topic],
@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn test_consumer_subscription() {
-        let mut broker = build_broker();
+        let broker = build_broker();
 
         let topic1 = Topic {
             name: "test1".to_string(),
@@ -338,7 +338,7 @@ mod tests {
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+            LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
         assert!(consumer.subscription_state.topics.is_empty());
 
         let res = consumer.subscribe(&[topic1.clone(), topic2.clone()], my_callbacks);
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_subscription_callback() {
-        let mut broker = build_broker();
+        let broker = build_broker();
 
         let topic1 = Topic {
             name: "test1".to_string(),
@@ -456,7 +456,7 @@ mod tests {
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
 
         let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+            LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
         let _ = consumer.subscribe(&[topic1, topic2], my_callbacks);
         let _ = consumer.poll(Some(Duration::from_millis(100)));
@@ -501,7 +501,7 @@ mod tests {
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
         let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+            LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
         let _ = consumer.subscribe(&[topic2], my_callbacks);
 
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_paused() {
-        let mut broker = build_broker();
+        let broker = build_broker();
         let topic2 = Topic {
             name: "test2".to_string(),
         };
@@ -533,7 +533,7 @@ mod tests {
         };
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), false);
+            LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let _ = consumer.subscribe(&[topic2], my_callbacks);
 
         assert_eq!(consumer.poll(None).unwrap(), None);
@@ -549,10 +549,10 @@ mod tests {
 
     #[test]
     fn test_commit() {
-        let mut broker = build_broker();
+        let broker = build_broker();
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), false);
+            LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let topic2 = Topic {
             name: "test2".to_string(),
         };
