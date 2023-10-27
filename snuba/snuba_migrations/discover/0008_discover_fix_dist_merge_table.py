@@ -2,6 +2,7 @@ from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
+    Array,
     Column,
     DateTime,
     IPv4,
@@ -39,7 +40,7 @@ columns: List[Column[Modifiers]] = [
     Column("http_method", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("http_referer", String(Modifiers(nullable=True))),
     Column("tags", Nested([("key", String()), ("value", String())])),
-    Column("_tags_hash_map", UInt(64)),
+    Column("_tags_hash_map", Array(UInt(64))),
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("trace_id", UUID(Modifiers(nullable=True))),
     Column("span_id", UInt(64, Modifiers(nullable=True))),
@@ -81,8 +82,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 target=OperationTarget.DISTRIBUTED,
                 engine=table_engines.Distributed(
-                    local_table_name="discover_local",
-                    sharding_key=None,
+                    local_table_name="discover_local", sharding_key=None,
                 ),
             ),
         ]
