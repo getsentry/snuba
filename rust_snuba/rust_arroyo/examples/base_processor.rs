@@ -24,7 +24,7 @@ fn main() {
         false,
         None,
     );
-    let consumer = Box::new(KafkaConsumer::new(config));
+    let consumer = KafkaConsumer::new(config).unwrap();
     let topic = Topic {
         name: "test_static".to_string(),
     };
