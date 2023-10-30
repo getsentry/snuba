@@ -139,7 +139,7 @@ mod tests {
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                None
+                Ok(None)
             }
             fn submit(
                 &mut self,
@@ -153,7 +153,7 @@ mod tests {
                 &mut self,
                 _timeout: Option<Duration>,
             ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                None
+                Ok(None)
             }
         }
 
