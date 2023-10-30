@@ -90,7 +90,8 @@ mod tests {
     use super::*;
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
-    use crate::types::{BrokerMessage, Partition, Topic};
+    use crate::processing::strategies::InvalidMessage;
+    use crate::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use chrono::Utc;
 
     #[test]

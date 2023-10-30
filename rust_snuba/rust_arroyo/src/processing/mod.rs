@@ -304,8 +304,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 #[cfg(test)]
 mod tests {
     use super::strategies::{
-        CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-        ProcessingStrategyFactory, SubmitError,
+        CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
     };
     use super::StreamProcessor;
     use crate::backends::local::broker::LocalBroker;
