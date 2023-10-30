@@ -138,18 +138,21 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 None
             }
             fn submit(
                 &mut self,
                 _message: Message<KafkaPayload>,
-            ) -> Result<(), MessageRejected<KafkaPayload>> {
+            ) -> Result<(), SubmitError<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
                 None
             }
         }
