@@ -1,5 +1,6 @@
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    SubmitError,
 };
 use crate::types::Message;
 use std::time::Duration;
@@ -8,6 +9,7 @@ pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send +
     pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
     pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     pub message_carried_over: Option<Message<TTransformed>>,
+    pub commit_request_carried_over: Option<CommitRequest>,
 }
 
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
@@ -24,6 +26,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
             function,
             next_step: Box::new(next_step),
             message_carried_over: None,
+            commit_request_carried_over: None,
         }
     }
 }
@@ -31,33 +34,56 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
     for Transform<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        match self.next_step.poll() {
+            Ok(commit_request) => {
+                self.commit_request_carried_over =
+                    merge_commit_request(self.commit_request_carried_over.take(), commit_request)
+            }
+            Err(invalid_message) => return Err(invalid_message),
+        }
+
         if let Some(message) = self.message_carried_over.take() {
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(message)
-            {
-                self.message_carried_over = Some(transformed_message);
+            match self.next_step.submit(message) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.message_carried_over = Some(transformed_message);
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message);
+                }
+                Ok(_) => {}
             }
         }
 
-        self.next_step.poll()
+        Ok(self.commit_request_carried_over.take())
     }
 
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>> {
         if self.message_carried_over.is_some() {
-            return Err(MessageRejected { message });
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
-        // TODO: Handle InvalidMessage
-        let transformed = (self.function)(message.payload()).unwrap();
-
-        if let Err(MessageRejected {
-            message: transformed_message,
-        }) = self.next_step.submit(message.replace(transformed))
-        {
-            self.message_carried_over = Some(transformed_message);
-        }
+        match (self.function)(message.payload()) {
+            Err(invalid_message) => {
+                return Err(SubmitError::InvalidMessage(invalid_message));
+            }
+            Ok(transformed) => {
+                let next_message = message.replace(transformed);
+                match self.next_step.submit(next_message) {
+                    Err(SubmitError::MessageRejected(MessageRejected {
+                        message: transformed_message,
+                    })) => {
+                        self.message_carried_over = Some(transformed_message);
+                    }
+                    Err(SubmitError::InvalidMessage(invalid_message)) => {
+                        return Err(SubmitError::InvalidMessage(invalid_message));
+                    }
+                    Ok(_) => {}
+                }
+            }
+        };
         Ok(())
     }
 
@@ -69,20 +95,20 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
-        self.next_step.join(timeout)
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        let next_commit = self.next_step.join(timeout)?;
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Transform;
-    use crate::processing::strategies::{
-        CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    };
+    use super::*;
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use chrono::Utc;
-    use std::time::Duration;
 
     #[test]
     fn test_transform() {
@@ -92,16 +118,19 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
-                None
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected<String>> {
+            fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-                None
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
         }
 

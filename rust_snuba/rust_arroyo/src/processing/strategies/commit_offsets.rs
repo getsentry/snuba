@@ -1,4 +1,6 @@
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -9,11 +11,11 @@ pub struct CommitOffsets {
     commit_frequency: Duration,
 }
 impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.commit(false)
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(false))
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }
@@ -24,8 +26,8 @@ impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-        self.commit(true)
+    fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(true))
     }
 }
 
@@ -124,13 +126,13 @@ mod tests {
         commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             None
         );
 
         sleep(Duration::from_secs(2));
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             Some(commit_req1)
         );
 
@@ -140,14 +142,15 @@ mod tests {
         commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             None
         );
         assert_eq!(
             <CommitOffsets as ProcessingStrategy<KafkaPayload>>::join(
                 &mut noop,
                 Some(Duration::from_secs(5))
-            ),
+            )
+            .unwrap(),
             Some(commit_req2)
         );
     }

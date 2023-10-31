@@ -1,5 +1,7 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
 use std::collections::VecDeque;
@@ -107,9 +109,9 @@ impl PythonTransformStep {
             };
             match message_result {
                 Ok(data) => {
-                    if let Err(MessageRejected {
+                    if let Err(SubmitError::MessageRejected(MessageRejected {
                         message: transformed_message,
-                    }) = self.next_step.submit(original_message_meta.replace(data))
+                    })) = self.next_step.submit(original_message_meta.replace(data))
                     {
                         self.message_carried_over = Some(transformed_message);
                     }
@@ -123,15 +125,12 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.check_for_results();
         self.next_step.poll()
     }
 
-    fn submit(
-        &mut self,
-        message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         self.check_for_results();
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
@@ -144,7 +143,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         if let Some(ref processing_pool) = self.processing_pool {
             if processing_pool.queued_count() > processing_pool.active_count() {
                 log::debug!("python strategy provides backpressure");
-                return Err(MessageRejected { message });
+                return Err(SubmitError::MessageRejected(MessageRejected { message }));
             }
         }
 
@@ -216,7 +215,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let now = Instant::now();
 
         let deadline = timeout.map(|x| now + x);

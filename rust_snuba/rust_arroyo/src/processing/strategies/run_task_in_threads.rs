@@ -1,6 +1,7 @@
 use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    SubmitError,
 };
 use crate::types::Message;
 use std::collections::VecDeque;
@@ -23,6 +24,7 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     runtime: tokio::runtime::Runtime,
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
     message_carried_over: Option<Message<TTransformed>>,
+    commit_request_carried_over: Option<CommitRequest>,
     metrics_buffer: MetricsBuffer,
     metric_name: String,
 }
@@ -53,6 +55,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
                 .unwrap(),
             handles: VecDeque::new(),
             message_carried_over: None,
+            commit_request_carried_over: None,
             metrics_buffer: MetricsBuffer::new(),
             metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
@@ -62,35 +65,46 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
 impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
     ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        if let Some(message) = self.message_carried_over.take() {
-            if let Err(MessageRejected {
-                message: transformed_message,
-            }) = self.next_step.submit(message)
-            {
-                self.message_carried_over = Some(transformed_message);
-                return None;
-            }
-        }
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        let commit_request = self.next_step.poll()?;
+        self.commit_request_carried_over =
+            merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
         self.metrics_buffer
             .gauge(&self.metric_name, self.handles.len() as u64);
+
+        if let Some(message) = self.message_carried_over.take() {
+            match self.next_step.submit(message) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.message_carried_over = Some(transformed_message);
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message);
+                }
+                Ok(_) => {}
+            }
+        }
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
                 if front.is_finished() {
                     let handle = self.handles.pop_front().unwrap();
                     match self.runtime.block_on(handle) {
-                        Ok(Ok(message)) => {
-                            if let Err(MessageRejected {
+                        Ok(Ok(message)) => match self.next_step.submit(message) {
+                            Err(SubmitError::MessageRejected(MessageRejected {
                                 message: transformed_message,
-                            }) = self.next_step.submit(message)
-                            {
+                            })) => {
                                 self.message_carried_over = Some(transformed_message);
                             }
-                        }
+                            Err(SubmitError::InvalidMessage(invalid_message)) => {
+                                return Err(invalid_message);
+                            }
+                            Ok(_) => {}
+                        },
                         Ok(Err(e)) => {
-                            log::error!("function errored {:?}", e);
+                            return Err(e);
                         }
                         Err(e) => {
                             log::error!("the thread crashed {}", e);
@@ -102,17 +116,16 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             }
         }
 
-        self.next_step.poll()
+        Ok(self.commit_request_carried_over.take())
     }
 
-    fn submit(&mut self, message: Message<TPayload>) -> Result<(), MessageRejected<TPayload>> {
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>> {
         if self.message_carried_over.is_some() {
-            log::warn!("[{}] carried over message, rejecting subsequent messages", self.metric_name);
-            return Err(MessageRejected { message });
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         if self.handles.len() > self.concurrency {
-            return Err(MessageRejected { message });
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         let handle = self.runtime.spawn(self.task_runner.get_task(message));
@@ -133,23 +146,26 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
         let mut remaining: Option<Duration> = timeout;
-        let mut commit_request = None;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
             if let Some(t) = remaining {
                 remaining = Some(t - start.elapsed());
                 if remaining.unwrap() <= Duration::from_secs(0) {
-                    log::warn!("[{}] Timeout reached while waiting for tasks to finish", self.metric_name);
+                    log::warn!(
+                        "[{}] Timeout reached while waiting for tasks to finish",
+                        self.metric_name
+                    );
                     break;
                 }
             }
 
-            let next_commit = self.poll();
-            commit_request = merge_commit_request(commit_request, next_commit);
+            let commit_request = self.poll()?;
+            self.commit_request_carried_over =
+                merge_commit_request(self.commit_request_carried_over.take(), commit_request);
         }
 
         // Cancel remaining tasks if any
@@ -159,33 +175,37 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.handles.clear();
         self.metrics_buffer.flush();
 
-        let next_commit = self.next_step.join(remaining);
-        merge_commit_request(commit_request, next_commit)
+        let next_commit = self.next_step.join(remaining)?;
+
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RunTaskFunc, RunTaskInThreads, TaskRunner};
-    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-    use crate::types::Message;
+    use super::*;
     use std::collections::BTreeMap;
-    use std::time::Duration;
 
     #[test]
     fn test() {
         struct Noop {}
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
-                None
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), MessageRejected<String>> {
+            fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-                None
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
         }
 
