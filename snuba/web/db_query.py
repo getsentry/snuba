@@ -722,6 +722,14 @@ def db_query(
             error_code=None,
             triggered_rate_limiter="AllocationPolicy",
         )
+        error = QueryException()
+        error.__cause__ = e
+        for allocation_policy in allocation_policies:
+            allocation_policy.update_quota_balance(
+                tenant_ids=attribution_info.tenant_ids,
+                query_id=query_id,
+                result_or_error=QueryResultOrError(query_result=None, error=error),
+            )
 
         raise QueryException.from_args(
             AllocationPolicyViolations.__name__,
