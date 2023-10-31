@@ -345,6 +345,7 @@ mod tests {
     use crate::types::{Message, Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -399,12 +400,12 @@ mod tests {
     #[test]
     fn test_processor() {
         let mut broker = build_broker();
-        let consumer = Box::new(LocalConsumer::new(
+        let consumer = Arc::new(Mutex::new(LocalConsumer::new(
             Uuid::nil(),
-            &mut broker,
+            broker,
             "test_group".to_string(),
             false,
-        ));
+        )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic {
@@ -429,7 +430,7 @@ mod tests {
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
-            &mut broker,
+            broker,
             "test_group".to_string(),
             false,
         ));

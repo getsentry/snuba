@@ -337,8 +337,7 @@ mod tests {
         };
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
         assert!(consumer.subscription_state.topics.is_empty());
 
         let res = consumer.subscribe(&[topic1.clone(), topic2.clone()], my_callbacks);
@@ -455,8 +454,7 @@ mod tests {
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
 
-        let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
         let _ = consumer.subscribe(&[topic1, topic2], my_callbacks);
         let _ = consumer.poll(Some(Duration::from_millis(100)));
@@ -500,8 +498,7 @@ mod tests {
         }
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
-        let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
         let _ = consumer.subscribe(&[topic2], my_callbacks);
 
@@ -532,8 +529,7 @@ mod tests {
             index: 0,
         };
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), false);
+        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let _ = consumer.subscribe(&[topic2], my_callbacks);
 
         assert_eq!(consumer.poll(None).unwrap(), None);
@@ -551,8 +547,7 @@ mod tests {
     fn test_commit() {
         let mut broker = build_broker();
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        let mut consumer =
-            LocalConsumer::new(Uuid::nil(), &mut broker, "test_group".to_string(), false);
+        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let topic2 = Topic {
             name: "test2".to_string(),
         };
