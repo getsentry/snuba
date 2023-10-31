@@ -428,12 +428,12 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer = Box::new(LocalConsumer::new(
+        let consumer = Arc::new(Mutex::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
-        ));
+        )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic {
