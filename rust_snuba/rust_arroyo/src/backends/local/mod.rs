@@ -24,10 +24,10 @@ struct SubscriptionState {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-pub struct LocalConsumer<'a, TPayload: Clone> {
+pub struct LocalConsumer<TPayload: Clone> {
     id: Uuid,
     group: String,
-    broker: &'a mut LocalBroker<TPayload>,
+    broker: LocalBroker<TPayload>,
     pending_callback: VecDeque<Callback>,
     paused: HashSet<Partition>,
     // The offset that a the last ``EndOfPartition`` exception that was
@@ -40,10 +40,10 @@ pub struct LocalConsumer<'a, TPayload: Clone> {
     closed: bool,
 }
 
-impl<'a, TPayload: Clone> LocalConsumer<'a, TPayload> {
+impl<TPayload: Clone> LocalConsumer<TPayload> {
     pub fn new(
         id: Uuid,
-        broker: &'a mut LocalBroker<TPayload>,
+        broker: LocalBroker<TPayload>,
         group: String,
         enable_end_of_partition: bool,
     ) -> Self {
@@ -68,7 +68,7 @@ impl<'a, TPayload: Clone> LocalConsumer<'a, TPayload> {
     }
 }
 
-impl<'a, TPayload: Clone> Consumer<'a, TPayload> for LocalConsumer<'a, TPayload> {
+impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn subscribe(
         &mut self,
         topics: &[Topic],

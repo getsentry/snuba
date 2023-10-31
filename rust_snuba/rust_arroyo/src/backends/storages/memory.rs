@@ -68,7 +68,7 @@ impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
     }
 }
 
-impl<TPayload: Clone> MessageStorage<TPayload> for MemoryMessageStorage<TPayload> {
+impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<TPayload> {
     fn create_topic(&mut self, topic: Topic, partitions: u16) -> Result<(), TopicExists> {
         if self.topics.contains_key(&topic) {
             return Err(TopicExists);

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -236,7 +236,7 @@ pub fn consumer_impl(
     let clickhouse_cluster_config = first_storage.clickhouse_cluster.clone();
     let clickhouse_table_name = first_storage.clickhouse_table_name.clone();
 
-    let consumer = Box::new(KafkaConsumer::new(config));
+    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory {
