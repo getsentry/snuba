@@ -355,9 +355,9 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     policy.update_quota_balance(tenant_ids, "c", None)  # type: ignore
 
 
-
 def spam_project(project_id: int) -> None:
     import random
+
     policy = ConcurrentRateLimitAllocationPolicy(
         storage_key=StorageKey("test"),
         required_tenant_types=["organization_id"],
@@ -369,7 +369,8 @@ def spam_project(project_id: int) -> None:
     for i in range(100):
         try:
             policy.get_quota_allowance(
-                tenant_ids={"referrer": "do_something", "project_id": project_id}, query_id=f"a+{i}"
+                tenant_ids={"referrer": "do_something", "project_id": project_id},
+                query_id=f"a+{i}",
             )
         except AllocationPolicyViolation:
             if random.random() > 0.99:
@@ -379,16 +380,16 @@ def spam_project(project_id: int) -> None:
 
 @pytest.mark.redis_db
 def test_memory_leak(policy: ConcurrentRateLimitAllocationPolicy) -> None:
-    from snuba.state.rate_limit import rds
     import multiprocessing
+
+    from snuba.state.rate_limit import rds
+
     policy.set_config_value("max_query_duration_s", 2)
     num_projects = 100
     multiprocessing.Pool(10).map(spam_project, range(num_projects))
     import time
+
     time.sleep(5)
 
     keys = rds.keys("*")
     assert len(keys) == 0
-
-
-
