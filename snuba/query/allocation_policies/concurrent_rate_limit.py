@@ -87,7 +87,9 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 False,
                 f"concurrent policy {rate_limit_stats.concurrent} exceeds limit of {rate_limit_params.concurrent_limit}",
             )
-        logger.info(f"WITHIN RATE LIMIT: concurrent: {rate_limit_stats.concurrent}, limit: {rate_limit_params.concurrent_limit}")
+        logger.info(
+            f"WITHIN RATE LIMIT: concurrent: {rate_limit_stats.concurrent}, limit: {rate_limit_params.concurrent_limit}"
+        )
         return True, "within limit"
 
     def _end_query(
