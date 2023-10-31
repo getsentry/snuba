@@ -1,7 +1,7 @@
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-pub trait Clock: Send {
+pub trait Clock {
     fn time(&self) -> SystemTime;
 
     fn sleep(self, duration: Duration);

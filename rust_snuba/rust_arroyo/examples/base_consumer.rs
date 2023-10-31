@@ -21,7 +21,7 @@ fn main() {
         false,
         None,
     );
-    let mut consumer = KafkaConsumer::new(config).unwrap();
+    let mut consumer = KafkaConsumer::new(config);
     let topic = Topic {
         name: "test_static".to_string(),
     };

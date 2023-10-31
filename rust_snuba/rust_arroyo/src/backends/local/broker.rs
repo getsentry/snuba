@@ -32,7 +32,7 @@ impl From<TopicDoesNotExist> for BrokerError {
     }
 }
 
-impl<TPayload: Clone + Send> LocalBroker<TPayload> {
+impl<TPayload: Clone> LocalBroker<TPayload> {
     pub fn new(storage: Box<dyn MessageStorage<TPayload>>, clock: Box<dyn Clock>) -> Self {
         Self {
             storage,

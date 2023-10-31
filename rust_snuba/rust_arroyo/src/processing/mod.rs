@@ -34,13 +34,6 @@ struct Strategies<TPayload: Clone> {
 
 struct Callbacks<TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
-    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-}
-
-impl<TPayload: Clone> Callbacks<TPayload> {
-    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>, consumer: Arc<Mutex<dyn Consumer<TPayload> >>) -> Self {
-        Self { strategies, consumer }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -74,11 +67,9 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                if let Some(commit_request) = s.join(None) {
-                    let mut consumer = self.consumer.lock().unwrap();
-                    consumer.stage_offsets(commit_request.positions).unwrap();
-                    consumer.commit_offsets().unwrap();
-                }
+                // TODO: We need to actually call consumer.commit() with the commit request.
+                // Right now we are never committing during consumer shutdown.
+                let _ = s.join(None);
             }
         }
         stg.strategy = None;
@@ -93,12 +84,18 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     }
 }
 
+impl<TPayload: Clone> Callbacks<TPayload> {
+    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>) -> Self {
+        Self { strategies }
+    }
+}
+
 /// A stream processor manages the relationship between a ``Consumer``
 /// instance and a ``ProcessingStrategy``, ensuring that processing
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
-pub struct StreamProcessor<TPayload: Clone> {
-    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+pub struct StreamProcessor<'a, TPayload: Clone> {
+    consumer: Box<dyn Consumer<'a, TPayload> + 'a>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
@@ -107,17 +104,15 @@ pub struct StreamProcessor<TPayload: Clone> {
     metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
-impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
-    pub fn new<C: Consumer<TPayload> + 'static>(
-        consumer: C,
+impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
+    pub fn new(
+        consumer: Box<dyn Consumer<'a, TPayload> + 'a>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     ) -> Self {
         let strategies = Arc::new(Mutex::new(Strategies {
             processing_factory,
             strategy: None,
         }));
-
-        let consumer = Arc::new(Mutex::new(consumer));
 
         Self {
             consumer,
@@ -134,15 +129,15 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
 
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> =
-            Box::new(Callbacks::new(self.strategies.clone(), self.consumer.clone()));
-        self.consumer.lock().unwrap().subscribe(&[topic], callbacks).unwrap();
+            Box::new(Callbacks::new(self.strategies.clone()));
+        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
         if self.is_paused {
             // If the consumer waas paused, it should not be returning any messages
             // on ``poll``.
-            let res = self.consumer.lock().unwrap().poll(Some(Duration::ZERO)).unwrap();
+            let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
 
             match res {
                 None => {}
@@ -153,7 +148,7 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
             // even if there is no active assignment and/or processing strategy.
             let poll_start = Instant::now();
             //TODO: Support errors properly
-            match self.consumer.lock().unwrap().poll(Some(Duration::from_secs(1))) {
+            match self.consumer.poll(Some(Duration::from_secs(1))) {
                 Ok(msg) => {
                     self.message = msg.map(|inner| Message {
                         inner_message: InnerMessage::BrokerMessage(inner),
@@ -175,11 +170,14 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             },
             Some(strategy) => {
-                if let Some(commit_request) = strategy.poll() {
-                    let mut consumer = self.consumer.lock().unwrap();
-                    consumer.stage_offsets(commit_request.positions).unwrap();
-                    consumer.commit_offsets().unwrap();
-                }
+                let commit_request = strategy.poll();
+                match commit_request {
+                    None => {}
+                    Some(request) => {
+                        self.consumer.stage_offsets(request.positions).unwrap();
+                        self.consumer.commit_offsets().unwrap();
+                    }
+                };
 
                 let msg = self.message.take();
                 if let Some(msg_s) = msg {
@@ -194,9 +192,9 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                             // Resume if we are currently in a paused state
                             if self.is_paused {
                                 let partitions: std::collections::HashSet<Partition> =
-                                    self.consumer.lock().unwrap().tell().unwrap().keys().cloned().collect();
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
 
-                                let res = self.consumer.lock().unwrap().resume(partitions);
+                                let res = self.consumer.resume(partitions);
                                 match res {
                                     Ok(()) => {
                                         self.is_paused = false;
@@ -236,9 +234,9 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                                 log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
 
                                 let partitions =
-                                    self.consumer.lock().unwrap().tell().unwrap().keys().cloned().collect();
+                                    self.consumer.tell().unwrap().keys().cloned().collect();
 
-                                let res = self.consumer.lock().unwrap().pause(partitions);
+                                let res = self.consumer.pause(partitions);
                                 match res {
                                     Ok(()) => {
                                         self.is_paused = true;
@@ -274,7 +272,7 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                         }
                     }
                     drop(trait_callbacks); // unlock mutex so we can close consumer
-                    self.consumer.lock().unwrap().close();
+                    self.consumer.close();
                     return Err(e);
                 }
             }
@@ -288,11 +286,11 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
     }
 
     pub fn shutdown(&mut self) {
-        self.consumer.lock().unwrap().close();
+        self.consumer.close();
     }
 
     pub fn tell(self) -> HashMap<Partition, u64> {
-        self.consumer.lock().unwrap().tell().unwrap()
+        self.consumer.tell().unwrap()
     }
 }
 
@@ -361,13 +359,13 @@ mod tests {
 
     #[test]
     fn test_processor() {
-        let broker = build_broker();
-        let consumer = LocalConsumer::new(
+        let mut broker = build_broker();
+        let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            &mut broker,
             "test_group".to_string(),
             false,
-        );
+        ));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic {
@@ -390,12 +388,12 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer = LocalConsumer::new(
+        let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            &mut broker,
             "test_group".to_string(),
             false,
-        );
+        ));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic {

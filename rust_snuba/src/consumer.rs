@@ -236,7 +236,7 @@ pub fn consumer_impl(
     let clickhouse_cluster_config = first_storage.clickhouse_cluster.clone();
     let clickhouse_table_name = first_storage.clickhouse_table_name.clone();
 
-    let consumer = KafkaConsumer::new(config).unwrap();
+    let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory {
