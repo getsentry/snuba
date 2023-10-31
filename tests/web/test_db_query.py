@@ -607,10 +607,15 @@ def test_clickhouse_settings_applied_to_query() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_concurrent_limit() -> None:
-    from snuba.query.allocation_policies.concurrent_rate_limit import ConcurrentRateLimitAllocationPolicy
+    from snuba.query.allocation_policies.concurrent_rate_limit import (
+        ConcurrentRateLimitAllocationPolicy,
+    )
+
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        allocation_policies=[ConcurrentRateLimitAllocationPolicy(StorageKey("errors_ro"), [], {})]
+        allocation_policies=[
+            ConcurrentRateLimitAllocationPolicy(StorageKey("errors_ro"), [], {})
+        ],
     )
     result = db_query(
         clickhouse_query=query,
@@ -653,5 +658,3 @@ def test_db_query_ignore_consistent() -> None:
     )
     assert result.extra["stats"]["consistent"] is False
     assert result.extra["stats"]["max_threads"] == 10
-
-
