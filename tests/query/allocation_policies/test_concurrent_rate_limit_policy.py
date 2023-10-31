@@ -353,3 +353,26 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     # make sure that this can be called with cross org queries
     # and nothing raises
     policy.update_quota_balance(tenant_ids, "c", None)  # type: ignore
+
+
+@pytest.mark.redis_db
+def test_memory_leak(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+    from snuba.state.rate_limit import rds
+    policy.set_config_value("max_query_duration_s", 20000)
+    # make sure that the policy doesn't leak memory when it's called with
+    # different tenant_ids
+    for i in range(1000):
+        policy.get_quota_allowance(
+            tenant_ids={"referrer": "do_something", "project_id": i}, query_id=f"a+{i}"
+        )
+    import pdb
+    pdb.set_trace()
+    import time
+    import time
+    time.sleep(3)
+
+    keys = rds.keys("*")
+    assert len(keys) == 0
+
+
+
