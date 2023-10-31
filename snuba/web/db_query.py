@@ -188,6 +188,9 @@ def execute_query(
         with_totals=clickhouse_query.has_totals(),
         robust=robust,
     )
+    import time
+    import random
+    time.sleep(1 + (random.randint(-5, 5) / 1000))
 
     timer.mark("execute")
     stats.update(
