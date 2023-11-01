@@ -70,4 +70,4 @@ stream_loader:
     args:
       header_key: metric_type
       header_value: g
-# will add DLQ later
+  dlq_topic: snuba-dead-letter-generic-metrics
