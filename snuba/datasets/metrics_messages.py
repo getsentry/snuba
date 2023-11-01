@@ -91,15 +91,14 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
         ), f"{ILLEGAL_VALUE_IN_GAUGE} {INT_FLOAT_EXPECTED}: {values}"
 
     # Build the nested values structure Clickhouse expects
-    sum = values["sum"]
-    count = values["count"]
-
+    # Also, the current Kafka schemas are strict enough to
+    # ensure that all of these fields are present
     return {
         "metric_type": OutputType.GAUGE.value,
         "gauges_values.min": [values["min"]],
         "gauges_values.max": [values["max"]],
-        "gauges_values.sum": [sum],
-        "gauges_values.count": [count],
+        "gauges_values.sum": [values["sum"]],
+        "gauges_values.count": [values["count"]],
         "gauges_values.last": [values["last"]],
     }
 
