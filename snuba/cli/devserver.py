@@ -83,19 +83,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=errors",
             ],
         ),
-        (
-            "cdc-consumer",
-            [
-                "snuba",
-                "multistorage-consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
-                "--storage=groupedmessages",
-                "--storage=groupassignees",
-                "--consumer-group=cdc_group",
-            ],
-        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
