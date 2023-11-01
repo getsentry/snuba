@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConsumerConfig {
-    pub storages: Vec<StoragesConfig>,
+    pub storages: Vec<StorageConfig>,
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
@@ -31,9 +31,9 @@ impl ConsumerConfig {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct StoragesConfig {
+pub struct StorageConfig {
     pub name: String,
     pub clickhouse_table_name: String,
     pub clickhouse_cluster: ClickhouseConfig,

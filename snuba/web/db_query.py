@@ -711,6 +711,8 @@ def db_query(
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
     query_id = uuid.uuid4().hex
+    result = None
+    error = None
 
     try:
         _apply_allocation_policies_quota(
@@ -720,6 +722,19 @@ def db_query(
             stats,
             allocation_policies,
             query_id,
+        )
+        result = _raw_query(
+            clickhouse_query,
+            query_settings,
+            attribution_info,
+            dataset_name,
+            query_metadata_list,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            trace_id,
+            robust,
         )
     except AllocationPolicyViolations as e:
         update_query_metadata_and_stats(
@@ -736,7 +751,7 @@ def db_query(
             triggered_rate_limiter="AllocationPolicy",
         )
 
-        raise QueryException.from_args(
+        error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
             "Query cannot be run due to allocation policies",
             extra={
@@ -744,24 +759,8 @@ def db_query(
                 "sql": "no sql run",
                 "experiments": {},
             },
-        ) from e
-
-    result = None
-    error = None
-    try:
-        result = _raw_query(
-            clickhouse_query,
-            query_settings,
-            attribution_info,
-            dataset_name,
-            query_metadata_list,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            trace_id,
-            robust,
         )
+        error.__cause__ = e
     except QueryException as e:
         error = e
     except Exception as e:

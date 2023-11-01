@@ -24,11 +24,14 @@ from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
     aggregation_options_for_counter_message,
     aggregation_options_for_distribution_message,
+    aggregation_options_for_gauge_message,
     aggregation_options_for_set_message,
     is_counter_message,
     is_distribution_message,
+    is_gauge_message,
     is_set_message,
     value_for_counter_message,
+    value_for_gauge_message,
     values_for_distribution_message,
     values_for_set_message,
 )
@@ -222,3 +225,20 @@ class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
     @property
     def _resource_id(self) -> str:
         return "generic_metrics_processor_counters"
+
+
+class GenericGaugesMetricsProcessor(GenericMetricsBucketProcessor):
+    def _should_process(self, message: Mapping[str, Any]) -> bool:
+        return is_gauge_message(message)
+
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        return value_for_gauge_message(message)
+
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_gauge_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_gauges"

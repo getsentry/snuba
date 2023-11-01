@@ -14,5 +14,4 @@
   "sentry (4)" \
   "sentry (5)" \
   "sentry (6)" \
-  "sentry (7)" \
-  "Tests on multiple clickhouse versions (21.8.13.1.altinitystable)"
+  "sentry (7)"

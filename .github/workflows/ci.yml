@@ -397,12 +397,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          [
-            "21.8.13.1.altinitystable",
-            "22.3.15.34.altinitystable",
-            "22.8.15.25.altinitystable",
-          ]
+        version: ["22.3.15.34.altinitystable", "22.8.15.25.altinitystable"]
 
     steps:
       - uses: actions/checkout@v2
