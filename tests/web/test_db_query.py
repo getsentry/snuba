@@ -312,6 +312,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     query, storage, _ = _build_test_query("count(distinct(project_id))")
+    update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -332,6 +333,8 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
+            nonlocal update_called
+            update_called = True
             return
 
     with mock.patch(
@@ -374,6 +377,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
+        assert (
+            update_called
+        ), "update_quota_balance should have been called even though the query was rejected but was not"
 
 
 @pytest.mark.clickhouse_db
