@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_processor() {
-        let mut broker = build_broker();
+        let broker = build_broker();
         let consumer = Arc::new(Mutex::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
