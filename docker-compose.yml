@@ -20,7 +20,7 @@ services:
       # Uncomment this to run sentry's snuba testsuite
       #SNUBA_SETTINGS: test
   clickhouse:
-    image: yandex/clickhouse-server:20.3.9.70
+    image: altinity/clickhouse-server:21.8.13.1.altinitystable
     ports:
       - "9000:9000"
       - "9009:9009"
