@@ -226,8 +226,11 @@ def rate_limit_start_request(
     query_bucket = _get_bucket_key(
         rate_limit_prefix, rate_limit_params.bucket, bucket_shard
     )
+    use_transaction_pipe = bool(
+        state.get_config("rate_limit_use_transaction_pipe", False)
+    )
 
-    pipe = rds.pipeline(transaction=False)
+    pipe = rds.pipeline(transaction=use_transaction_pipe)
 
     # cleanup old query timestamps past our retention window
     #
