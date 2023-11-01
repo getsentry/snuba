@@ -12,7 +12,7 @@ use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::transform::Transform;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+    CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
@@ -33,19 +33,19 @@ fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
 }
 struct Noop {}
 impl ProcessingStrategy<KafkaPayload> for Noop {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        None
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(None)
     }
-    fn submit(
-        &mut self,
-        _message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         Ok(())
     }
     fn close(&mut self) {}
     fn terminate(&mut self) {}
-    fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-        None
+    fn join(
+        &mut self,
+        _timeout: Option<Duration>,
+    ) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(None)
     }
 }
 

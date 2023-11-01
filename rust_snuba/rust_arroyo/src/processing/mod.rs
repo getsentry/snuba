@@ -2,7 +2,7 @@ mod metrics_buffer;
 pub mod strategies;
 
 use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::processing::strategies::MessageRejected;
+use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
@@ -172,10 +172,13 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
             Some(strategy) => {
                 let commit_request = strategy.poll();
                 match commit_request {
-                    None => {}
-                    Some(request) => {
+                    Ok(None) => {}
+                    Ok(Some(request)) => {
                         self.consumer.stage_offsets(request.positions).unwrap();
                         self.consumer.commit_offsets().unwrap();
+                    }
+                    Err(e) => {
+                        println!("TODOO: Handle invalid message {:?}", e);
                     }
                 };
 
@@ -212,7 +215,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                 self.backpressure_timestamp = None;
                             }
                         }
-                        Err(MessageRejected { message }) => {
+                        Err(SubmitError::MessageRejected(MessageRejected { message })) => {
                             // Put back the carried over message
                             self.message = Some(message);
 
@@ -244,6 +247,10 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
                                     Err(_) => return Err(RunError::PauseError),
                                 }
                             }
+                        }
+                        Err(SubmitError::InvalidMessage(invalid_message)) => {
+                            // TODO: Put this into the DLQ once we have one
+                            log::error!("Invalid message: {:?}", invalid_message);
                         }
                     }
                 }
@@ -297,7 +304,7 @@ impl<'a, TPayload: 'static + Clone> StreamProcessor<'a, TPayload> {
 #[cfg(test)]
 mod tests {
     use super::strategies::{
-        CommitRequest, MessageRejected, ProcessingStrategy, ProcessingStrategyFactory,
+        CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
     };
     use super::StreamProcessor;
     use crate::backends::local::broker::LocalBroker;
@@ -314,16 +321,16 @@ mod tests {
     }
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Option<CommitRequest> {
-            match self.message.as_ref() {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
                     positions: HashMap::from_iter(message.committable().into_iter()),
                 }),
-            }
+            })
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), MessageRejected<String>> {
+        fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {
             self.message = Some(message);
             Ok(())
         }
@@ -332,8 +339,8 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-            None
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
         }
     }
 

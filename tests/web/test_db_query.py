@@ -312,6 +312,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     query, storage, _ = _build_test_query("count(distinct(project_id))")
+    update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -332,6 +333,8 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
+            nonlocal update_called
+            update_called = True
             return
 
     with mock.patch(
@@ -374,6 +377,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
+        assert (
+            update_called
+        ), "update_quota_balance should have been called even though the query was rejected but was not"
 
 
 @pytest.mark.clickhouse_db
@@ -596,3 +602,29 @@ def test_clickhouse_settings_applied_to_query() -> None:
         "group_by_overflow_mode" in clickhouse_settings_used
         and clickhouse_settings_used["group_by_overflow_mode"] == "any"
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_ignore_consistent() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(consistent=True),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert result.extra["stats"]["consistent"] is False
+    assert result.extra["stats"]["max_threads"] == 10

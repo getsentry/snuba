@@ -1,5 +1,6 @@
 mod config;
 mod consumer;
+mod factory;
 mod logging;
 mod metrics;
 mod processors;

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -7,27 +6,19 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
-use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
-};
-use rust_arroyo::processing::strategies::InvalidMessage;
-use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Topic};
+use rust_arroyo::types::Topic;
 use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
 use crate::config;
+use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::strategies::clickhouse::ClickhouseWriterStep;
-use crate::strategies::python::PythonTransformStep;
-use crate::strategies::validate_schema::ValidateSchema;
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
 pub fn consumer(
@@ -59,115 +50,6 @@ pub fn consumer_impl(
     concurrency: usize,
     use_rust_processor: bool,
 ) {
-    struct ConsumerStrategyFactory {
-        processor_config: config::MessageProcessorConfig,
-        logical_topic_name: String,
-        max_batch_size: usize,
-        max_batch_time: Duration,
-        clickhouse_cluster_config: config::ClickhouseConfig,
-        clickhouse_table_name: String,
-        skip_write: bool,
-        concurrency: usize,
-        use_rust_processor: bool,
-    }
-
-    impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
-        fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-            let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
-                for row in value.rows {
-                    acc.rows.push(row);
-                }
-                acc
-            });
-
-            let next_step = Reduce::new(
-                Box::new(ClickhouseWriterStep::new(
-                    CommitOffsets::new(Duration::from_secs(1)),
-                    self.clickhouse_cluster_config.clone(),
-                    self.clickhouse_table_name.clone(),
-                    self.skip_write,
-                    2,
-                )),
-                accumulator,
-                BytesInsertBatch { rows: vec![] },
-                self.max_batch_size,
-                self.max_batch_time,
-            );
-
-            match (
-                self.use_rust_processor,
-                processors::get_processing_function(&self.processor_config.python_class_name),
-            ) {
-                (true, Some(func)) => {
-                    struct MessageProcessor {
-                        func: fn(
-                            KafkaPayload,
-                            KafkaMessageMetadata,
-                        ) -> Result<BytesInsertBatch, BadMessage>,
-                    }
-
-                    impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
-                        fn get_task(
-                            &self,
-                            message: Message<KafkaPayload>,
-                        ) -> RunTaskFunc<BytesInsertBatch> {
-                            let func = self.func;
-
-                            Box::pin(async move {
-                                let broker_message = match message.inner_message {
-                                    InnerMessage::BrokerMessage(msg) => msg,
-                                    _ => panic!("Unexpected message type"),
-                                };
-
-                                let metadata = KafkaMessageMetadata {
-                                    partition: broker_message.partition.index,
-                                    offset: broker_message.offset,
-                                    timestamp: broker_message.timestamp,
-                                };
-
-                                match func(broker_message.payload, metadata) {
-                                    Ok(transformed) => Ok(Message {
-                                        inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                                            payload: transformed,
-                                            partition: broker_message.partition,
-                                            offset: broker_message.offset,
-                                            timestamp: broker_message.timestamp,
-                                        }),
-                                    }),
-                                    Err(_e) => Err(InvalidMessage {
-                                        partition: broker_message.partition,
-                                        offset: broker_message.offset,
-                                    }),
-                                }
-                            })
-                        }
-                    }
-
-                    let task_runner = MessageProcessor { func };
-                    Box::new(ValidateSchema::new(
-                        RunTaskInThreads::new(
-                            next_step,
-                            Box::new(task_runner),
-                            self.concurrency,
-                            Some("process_message"),
-                        ),
-                        self.logical_topic_name.clone(),
-                        false,
-                        self.concurrency,
-                    ))
-                }
-                _ => Box::new(
-                    PythonTransformStep::new(
-                        self.processor_config.clone(),
-                        self.concurrency,
-                        next_step,
-                    )
-                    .unwrap(),
-                ),
-            }
-        }
-    }
-
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
@@ -214,7 +96,7 @@ pub fn consumer_impl(
         procspawn::init();
     }
 
-    let first_storage = &consumer_config.storages[0];
+    let first_storage = consumer_config.storages[0].clone();
 
     log::info!("Starting consumer for {:?}", first_storage.name,);
 
@@ -239,25 +121,20 @@ pub fn consumer_impl(
         Some(broker_config),
     );
 
-    let processor_config = first_storage.message_processor.clone();
-    let clickhouse_cluster_config = first_storage.clickhouse_cluster.clone();
-    let clickhouse_table_name = first_storage.clickhouse_table_name.clone();
+    let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
-    let consumer = Box::new(KafkaConsumer::new(config));
     let mut processor = StreamProcessor::new(
         consumer,
-        Box::new(ConsumerStrategyFactory {
-            processor_config,
+        Box::new(ConsumerStrategyFactory::new(
+            first_storage,
             logical_topic_name,
             max_batch_size,
             max_batch_time,
-            clickhouse_cluster_config,
-            clickhouse_table_name,
             skip_write,
             concurrency,
             use_rust_processor,
-        }),
+        )),
     );
 
     processor.subscribe(Topic {

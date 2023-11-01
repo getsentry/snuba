@@ -60,5 +60,7 @@ class Interval(Generic[T]):
     upper: T
 
     def __post_init__(self) -> None:
+        if self.lower is None or self.upper is None:
+            raise InvalidRangeError(self.lower, self.upper)
         if not self.upper >= self.lower:
             raise InvalidRangeError(self.lower, self.upper)

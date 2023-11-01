@@ -12,7 +12,6 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import (
     RateLimitParameters,
     rate_limit_finish_request,
@@ -21,8 +20,6 @@ from snuba.state.rate_limit import (
 
 DEFAULT_CONCURRENT_QUERIES_LIMIT = 22
 DEFAULT_PER_SECOND_QUERIES_LIMIT = 50
-
-rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
