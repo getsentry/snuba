@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -180,15 +181,6 @@ def execute_query(
     """
     # Apply clickhouse query setting overrides
     clickhouse_query_settings.update(query_settings.get_clickhouse_settings())
-
-    # Force query to use the first shard replica, which
-    # should have synchronously received any cluster writes
-    # before this query is run.
-    consistent = query_settings.get_consistent()
-    stats["consistent"] = consistent
-    if consistent:
-        clickhouse_query_settings["load_balancing"] = "in_order"
-        clickhouse_query_settings["max_threads"] = 1
 
     result = reader.execute(
         formatted_query,
@@ -529,6 +521,27 @@ def _raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
+
+    # Force query to use the first shard replica, which
+    # should have synchronously received any cluster writes
+    # before this query is run.
+    consistent = query_settings.get_consistent()
+    stats["consistent"] = consistent
+    if consistent:
+        sample_rate = state.get_config(
+            f"{dataset_name}_ignore_consistent_queries_sample_rate", 0
+        )
+        assert sample_rate is not None
+        ignore_consistent = random.random() < float(sample_rate)
+        if not ignore_consistent:
+            clickhouse_query_settings["load_balancing"] = "in_order"
+            clickhouse_query_settings["max_threads"] = 1
+        else:
+            stats["consistent"] = False
+            metrics.increment(
+                "ignored_consistent_queries",
+                tags={"dataset": dataset_name, "referrer": attribution_info.referrer},
+            )
 
     update_with_status = partial(
         update_query_metadata_and_stats,

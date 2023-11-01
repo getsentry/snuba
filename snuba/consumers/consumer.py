@@ -358,6 +358,7 @@ class ProcessedMessageBatchWriter:
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
+        self.__received_timestamps.clear()
 
 
 json_row_encoder = JSONRowEncoder()

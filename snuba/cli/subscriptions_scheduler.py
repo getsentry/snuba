@@ -68,7 +68,6 @@ logger = logging.getLogger(__name__)
     help="The slice id for the corresponding storage to the given entity",
 )
 @click.option("--log-level", help="Logging level to use.")
-@click.option("--delay-seconds", type=int)
 @click.option(
     "--stale-threshold-seconds",
     type=int,
@@ -92,7 +91,6 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     slice_id: Optional[int],
     log_level: Optional[str],
-    delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     health_check_file: Optional[str],
 ) -> None:

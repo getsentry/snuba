@@ -37,11 +37,17 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         StorageKey("generic_metrics_counters"),
     }
     schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
+    raw_tables = {
+        "generic_metric_sets_raw_dist",
+        "generic_metric_counters_raw_dist",
+        "generic_metric_distributions_raw_dist",
+    }
     validate_ro_query(
         sql_query=query,
-        allowed_tables={
-            cast(TableSchema, schema).get_table_name() for schema in schemas
-        },
+        allowed_tables=(
+            {cast(TableSchema, schema).get_table_name() for schema in schemas}
+            | raw_tables
+        ),
     )
     return _stringify_result(__run_query(query))
 

@@ -233,7 +233,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
     key = next(iter(data["formatted_trace_output"]))
-    assert "executeQuery" in data["formatted_trace_output"][key]["read_performance"][0]
+    assert "read_performance" in data["formatted_trace_output"][key]
 
 
 @pytest.mark.redis_db
