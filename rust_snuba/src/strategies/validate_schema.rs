@@ -78,7 +78,6 @@ pub struct ValidateSchema {
 }
 
 impl ValidateSchema {
-    #[allow(dead_code)]
     pub fn new<N>(next_step: N, topic: String, enforce_schema: bool, concurrency: usize) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,

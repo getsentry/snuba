@@ -122,10 +122,13 @@ pub fn consumer_impl(
     );
 
     let consumer = Box::new(KafkaConsumer::new(config));
+    let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
+
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory::new(
             first_storage,
+            logical_topic_name,
             max_batch_size,
             max_batch_time,
             skip_write,
