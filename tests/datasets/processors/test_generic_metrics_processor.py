@@ -5,6 +5,7 @@ import pytest
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericCountersMetricsProcessor,
     GenericDistributionsMetricsProcessor,
+    GenericGaugesMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
 
@@ -20,11 +21,37 @@ from snuba.datasets.processors.generic_metrics_processor import (
         ),
     ],
 )
-def test__should_process(
+def test__counters_should_process(
     message: Mapping[str, Any], expected_output: Mapping[str, Any]
 ) -> None:
-    processor = GenericCountersMetricsProcessor()
-    assert processor._should_process(message) == expected_output
+    counters_processor = GenericCountersMetricsProcessor()
+    assert counters_processor._should_process(message) == expected_output
+
+
+@pytest.mark.parametrize(
+    "message, expected_output",
+    [
+        pytest.param(
+            {
+                "type": "g",
+                "metric_id": 1,
+                "value": {"min": 0, "max": 3, "sum": 3, "count": 2, "last": 3},
+            },
+            True,
+            id="gauge",
+        ),
+        pytest.param(
+            {"type": "d", "metric_id": 2, "value": 20},
+            False,
+            id="distribution",
+        ),
+    ],
+)
+def test__gauges_should_process(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any]
+) -> None:
+    gauges_processor = GenericGaugesMetricsProcessor()
+    assert gauges_processor._should_process(message) == expected_output
 
 
 @pytest.mark.parametrize(
@@ -125,6 +152,33 @@ def test__counters_aggregation_options(
 
 
 @pytest.mark.parametrize(
+    "message, expected_output, retention_days",
+    [
+        pytest.param(
+            {
+                "type": "g",
+                "metric_id": 3,
+                "value": {"min": 0.0, "max": 3.0, "sum": 3.0, "count": 2, "last": 3.0},
+                "aggregation_option": "ten_second",
+            },
+            {
+                "min_retention_days": 90,
+                "materialization_version": 2,
+                "granularities": [1, 2, 3, 0],
+            },
+            90,
+            id="ten_second",
+        ),
+    ],
+)
+def test__gauges_aggregation_options(
+    message: Mapping[str, Any], expected_output: Mapping[str, Any], retention_days: int
+) -> None:
+    processor = GenericGaugesMetricsProcessor()
+    assert processor._aggregation_options(message, retention_days) == expected_output
+
+
+@pytest.mark.parametrize(
     "message, expected_output, should_raise_exception",
     [
         pytest.param(
@@ -147,12 +201,70 @@ def test__counters_aggregation_options(
         ),
     ],
 )
-def test__process_values(
+def test__counters_process_values(
     message: Mapping[str, Any],
     expected_output: Mapping[str, Any],
     should_raise_exception: bool,
 ) -> None:
     processor = GenericCountersMetricsProcessor()
+    if should_raise_exception:
+        with pytest.raises(Exception):
+            processor._process_values(message)
+    else:
+        assert processor._process_values(message) == expected_output
+
+
+@pytest.mark.parametrize(
+    "message, expected_output, should_raise_exception",
+    [
+        pytest.param(
+            {
+                "type": "g",
+                "name": "my_gauge1",
+                "value": {"min": 0.0, "max": 3.0, "sum": 3.0, "count": 2, "last": 3.0},
+            },
+            {
+                "gauges_values.min": [0.0],
+                "gauges_values.max": [3.0],
+                "gauges_values.sum": [3.0],
+                "gauges_values.count": [2],
+                "gauges_values.last": [3.0],
+                "metric_type": "gauge",
+            },
+            False,
+            id="simple_gauge",
+        ),
+        pytest.param(
+            {
+                "type": "g",
+                "name": "my_gauge2",
+                "value": {"min": 1.0, "max": 3.0, "sum": 7.0, "count": 3, "last": 1.0},
+            },
+            {
+                "gauges_values.min": [1.0],
+                "gauges_values.max": [3.0],
+                "gauges_values.sum": [7.0],
+                "gauges_values.count": [3],
+                "gauges_values.last": [1.0],
+                "metric_type": "gauge",
+            },
+            False,
+            id="less_simple_gauge",
+        ),
+        pytest.param(
+            {"type": "g", "name": "my_gauge3", "value": [1, 2, 3]},
+            None,
+            True,
+            id="gauge_list",
+        ),
+    ],
+)
+def test__gauges_process_values(
+    message: Mapping[str, Any],
+    expected_output: Mapping[str, Any],
+    should_raise_exception: bool,
+) -> None:
+    processor = GenericGaugesMetricsProcessor()
     if should_raise_exception:
         with pytest.raises(Exception):
             processor._process_values(message)
