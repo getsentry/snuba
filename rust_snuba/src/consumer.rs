@@ -56,6 +56,8 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
+    log::info!("Starting Rust consumer with config: {:?}", consumer_config);
+
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
