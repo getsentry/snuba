@@ -137,13 +137,6 @@ storages:
   - storage: generic_metrics_gauges_raw
     is_writable: true
     translation_mappers:
-      columns:
-        - mapper: ColumnToColumn
-          args:
-            from_table_name:
-            from_col_name: timestamp
-            to_table_name:
-            to_col_name: rounded_timestamp
       functions:
         - mapper: AggregateFunctionMapper
           args:
@@ -242,6 +235,11 @@ query_processors:
         3600: 2
         86400: 3
       default_granularity: 1
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns: [timestamp]
   - processor: ReferrerRateLimiterProcessor
   - processor: OrganizationRateLimiterProcessor
     args:

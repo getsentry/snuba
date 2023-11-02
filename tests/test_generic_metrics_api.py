@@ -841,3 +841,37 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
             "project_id": 2,
             "value": 4.0,
         }
+
+    def test_bucketed_time_gauge(self) -> None:
+        query = Query(
+            match=Entity("generic_metrics_gauges"),
+            select=[
+                Column("bucketed_time"),
+                Function("last", [Column("value")], "value"),
+                Column("org_id"),
+                Column("project_id"),
+            ],
+            groupby=[Column("org_id"), Column("project_id"), Column("bucketed_time")],
+            where=[
+                Condition(Column("metric_id"), Op.EQ, self.metric_id),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
+                Condition(Column("org_id"), Op.EQ, self.org_id),
+                Condition(Column("project_id"), Op.IN, self.project_ids),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+        )
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4
