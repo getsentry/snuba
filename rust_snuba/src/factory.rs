@@ -2,6 +2,7 @@ use crate::config;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
+use crate::strategies::validate_schema::ValidateSchema;
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
@@ -13,10 +14,12 @@ use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use std::sync::Arc;
+
 use std::time::Duration;
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
+    logical_topic_name: String,
     max_batch_size: usize,
     max_batch_time: Duration,
     skip_write: bool,
@@ -27,6 +30,7 @@ pub struct ConsumerStrategyFactory {
 impl ConsumerStrategyFactory {
     pub fn new(
         storage_config: config::StorageConfig,
+        logical_topic_name: String,
         max_batch_size: usize,
         max_batch_time: Duration,
         skip_write: bool,
@@ -35,6 +39,7 @@ impl ConsumerStrategyFactory {
     ) -> Self {
         Self {
             storage_config,
+            logical_topic_name,
             max_batch_size,
             max_batch_time,
             skip_write,
@@ -119,11 +124,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 }
 
                 let task_runner = MessageProcessor { func };
-                Box::new(RunTaskInThreads::new(
-                    next_step,
-                    Box::new(task_runner),
+                Box::new(ValidateSchema::new(
+                    RunTaskInThreads::new(
+                        next_step,
+                        Box::new(task_runner),
+                        self.concurrency,
+                        Some("process_message"),
+                    ),
+                    self.logical_topic_name.clone(),
+                    false,
                     self.concurrency,
-                    Some("process_message"),
                 ))
             }
             _ => Box::new(
