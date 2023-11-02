@@ -29,7 +29,7 @@ def test_message_processors(
     topic: str, processor: Type[DatasetMessageProcessor]
 ) -> None:
     """
-    Tests the output of Python and Rust message processors is the same
+    Tests the output of Python and Rust message processors is the same.
     """
     for ex in sentry_kafka_schemas.iter_examples(topic):
         data_json = ex.load()
