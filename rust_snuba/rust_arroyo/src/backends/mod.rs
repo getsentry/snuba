@@ -41,7 +41,7 @@ pub enum ProducerError {
 
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
-pub trait AssignmentCallbacks: Send + Sync {
+pub trait AssignmentCallbacks: Send {
     fn on_assign(&mut self, partitions: HashMap<Partition, u64>);
     fn on_revoke(&mut self, partitions: Vec<Partition>);
 }
@@ -80,7 +80,7 @@ pub trait AssignmentCallbacks: Send + Sync {
 /// occurs even if the consumer retains ownership of the partition across
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
-pub trait Consumer<'a, TPayload: Clone> {
+pub trait Consumer<TPayload: Clone>: Send {
     fn subscribe(
         &mut self,
         topic: &[Topic],
