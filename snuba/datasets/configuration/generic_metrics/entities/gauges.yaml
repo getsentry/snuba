@@ -7,7 +7,7 @@ schema:
     { name: org_id, type: UInt, args: { size: 64 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: metric_id, type: UInt, args: { size: 64 } },
-    { name: rounded_timestamp, type: DateTime },
+    { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
     {
       name: tags,
@@ -51,6 +51,13 @@ schema:
 storages:
   - storage: generic_metrics_gauges
     translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name:
+            from_col_name: timestamp
+            to_table_name:
+            to_col_name: rounded_timestamp
       functions:
         - mapper: AggregateFunctionMapper
           args:
@@ -130,6 +137,13 @@ storages:
   - storage: generic_metrics_gauges_raw
     is_writable: true
     translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name:
+            from_col_name: timestamp
+            to_table_name:
+            to_col_name: rounded_timestamp
       functions:
         - mapper: AggregateFunctionMapper
           args:
@@ -228,11 +242,6 @@ query_processors:
         3600: 2
         86400: 3
       default_granularity: 1
-  - processor: TimeSeriesProcessor
-    args:
-      time_group_columns:
-        bucketed_time: rounded_timestamp
-      time_parse_columns: [rounded_timestamp]
   - processor: ReferrerRateLimiterProcessor
   - processor: OrganizationRateLimiterProcessor
     args:
@@ -251,5 +260,5 @@ validators:
   - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["org_id", "project_id"]
-required_time_column: rounded_timestamp
+required_time_column: timestamp
 partition_key_column_name: org_id
