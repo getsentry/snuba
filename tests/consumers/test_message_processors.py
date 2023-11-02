@@ -33,9 +33,11 @@ def test_message_processors(
     """
     for ex in sentry_kafka_schemas.iter_examples(topic):
         data_json = ex.load()
-        # Hack to ensure the message isn't rejected with too old
+        # Hacks to ensure the message isn't rejected with too old
         if topic == "processed-profiles":
             data_json["received"] = int(time.time())
+        elif topic == "snuba-spans":
+            data_json["start_timestamp_ms"] = int(time.time()) * 1000
 
         data_bytes = json.dumps(data_json).encode("utf-8")
 
