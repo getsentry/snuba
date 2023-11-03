@@ -1,6 +1,17 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::backends::Producer;
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    RunTaskFunc, RunTaskInThreads, TaskRunner,
+};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
+use rust_arroyo::types::{Message, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
+use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -81,6 +92,102 @@ impl TryFrom<Commit> for KafkaPayload {
     }
 }
 
+struct ProduceMessage {
+    producer: Arc<dyn Producer<KafkaPayload>>,
+    topic: Arc<TopicOrPartition>,
+    skip_produce: bool,
+}
+
+impl ProduceMessage {
+    pub fn new(
+        producer: impl Producer<KafkaPayload> + 'static,
+        topic: TopicOrPartition,
+        skip_produce: bool,
+    ) -> Self {
+        ProduceMessage {
+            producer: Arc::new(producer),
+            topic: Arc::new(topic),
+            skip_produce,
+        }
+    }
+}
+
+impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
+        let producer = self.producer.clone();
+        let topic = self.topic.clone();
+
+        Box::pin(async move {
+            if self.skip_produce {
+                return Ok(message);
+            }
+
+            let mut retries = 3;
+            while retries > 0 {
+                match producer.produce(&topic, message.payload()) {
+                    Ok(_) => {
+                        return Ok(message);
+                    }
+                    Err(e) => {
+                        retries -= 1;
+                        sleep(Duration::from_millis(100));
+                        log::warn!("{}", e);
+                    }
+                }
+            }
+            panic!("Failed to produce message");
+        })
+    }
+}
+
+pub struct ProduceCommitLog {
+    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+}
+
+impl ProduceCommitLog {
+    pub fn new<N>(
+        next_step: N,
+        producer: impl Producer<KafkaPayload> + 'static,
+        concurrency: usize,
+        topic: TopicOrPartition,
+        skip_produce: bool,
+    ) -> Self
+    where
+        N: ProcessingStrategy<KafkaPayload> + 'static,
+    {
+        let inner = Box::new(RunTaskInThreads::new(
+            next_step,
+            Box::new(ProduceMessage::new(producer, topic, skip_produce)),
+            concurrency,
+            Some("produce_commit_log"),
+        ));
+
+        ProduceCommitLog { inner }
+    }
+}
+
+impl ProcessingStrategy<KafkaPayload> for ProduceCommitLog {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        self.inner.poll()
+    }
+
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+        self.inner.submit(message)
+    }
+
+    fn close(&mut self) {
+        self.inner.close();
+    }
+
+    fn terminate(&mut self) {
+        self.inner.terminate();
+    }
+
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        self.inner.join(timeout)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,5 +207,84 @@ mod tests {
         let transformed: KafkaPayload = commit.try_into().unwrap();
         assert_eq!(transformed.key, payload_clone.key);
         assert_eq!(transformed.payload, payload_clone.payload);
+    }
+
+    #[test]
+    fn produce_commit_log() {
+        struct Noop {
+            pub payloads: Vec<KafkaPayload>,
+        }
+        impl ProcessingStrategy<KafkaPayload> for Noop {
+            fn poll(&mut self) -> Option<CommitRequest> {
+                None
+            }
+            fn submit(
+                &mut self,
+                message: Message<KafkaPayload>,
+            ) -> Result<(), MessageRejected<KafkaPayload>> {
+                self.payloads.push(message.payload());
+                Ok(())
+            }
+            fn close(&mut self) {}
+            fn terminate(&mut self) {}
+            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
+                None
+            }
+        }
+
+        struct MockProducer {
+            pub payloads: Vec<KafkaPayload>,
+        }
+
+        impl Producer<KafkaPayload> for MockProducer {
+            fn produce(
+                &self,
+                _topic: &TopicOrPartition,
+                payload: KafkaPayload,
+            ) -> Result<(), ProducerError> {
+                self.payloads.push(payload);
+                Ok(())
+            }
+        }
+
+        let payloads = vec![
+            KafkaPayload {
+                key: Some(b"topic:0:group1".to_vec()),
+                headers: None,
+                payload: Some(
+                    b"{\"offset\":5,\"orig_message_ts\":100000.0,\"received_p99\":100000.0}"
+                        .to_vec(),
+                ),
+            },
+            KafkaPayload {
+                key: Some(b"topic:0:group1".to_vec()),
+                headers: None,
+                payload: Some(
+                    b"{\"offset\":6,\"orig_message_ts\":100001.0,\"received_p99\":100001.0}"
+                        .to_vec(),
+                ),
+            },
+        ];
+
+        let producer = MockProducer { payloads: vec![] };
+
+        let next_step = Noop { payloads: vec![] };
+
+        let strategy = ProduceCommitLog::new(
+            next_step,
+            producer,
+            1,
+            TopicOrPartition::Topic(Topic {
+                name: "test".to_string(),
+            }),
+            false,
+        );
+
+        for p in payloads {
+            strategy.submit(Message::new_any_message(payload, {}));
+            strategy.poll();
+        }
+
+        assert_eq!(producer.payloads.len(), payloads.len());
     }
 }
