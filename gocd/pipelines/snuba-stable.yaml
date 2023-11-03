@@ -3,170 +3,171 @@
 # - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 format_version: 10
 pipelines:
-    deploy-snuba-stable:
-        environment_variables:
-            GCP_PROJECT: internal-sentry
-            GKE_CLUSTER: zdpwkxst
-            GKE_REGION: us-central1
-            GKE_CLUSTER_ZONE: b
-            GKE_BASTION_ZONE: b
-            # Required for checkruns.
-            GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
-        group: snuba
-        display_order: 100 # Ensure it's last pipeline in UI
-        lock_behavior: unlockWhenFinished
-        materials:
-            snuba_repo:
-                git: git@github.com:getsentry/snuba.git
-                shallow_clone: true
-                branch: master
-                destination: snuba
-        stages:
-            - checks:
-                  approval:
-                      type: manual
-                  fetch_materials: true
-                  jobs:
-                      checks:
-                          timeout: 1800
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    /devinfra/scripts/checks/githubactions/checkruns.py \
-                                    getsentry/snuba \
-                                    ${GO_REVISION_SNUBA_REPO} \
-                                    "Tests and code coverage (test)" \
-                                    "Tests and code coverage (test_distributed)" \
-                                    "Tests and code coverage (test_distributed_migrations)" \
-                                    "Dataset Config Validation" \
-                                    "sentry (0)" \
-                                    "sentry (1)" \
-                                    "sentry (2)" \
-                                    "sentry (3)" \
-                                    "sentry (4)" \
-                                    "sentry (5)" \
-                                    "sentry (6)" \
-                                    "sentry (7)"
-                              - script: |
-                                    /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-                                    ${GO_REVISION_SNUBA_REPO} \
-                                    sentryio \
-                                    "us.gcr.io/sentryio/snuba"
-                              - script: |
-                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"` && \
-                                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
-            - deploy-canary:
-                  fetch_materials: true
-                  jobs:
-                      create-sentry-release:
-                          environment_variables:
-                              SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
-                          timeout: 300
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    sentry-cli releases new "${GO_REVISION_SNUBA_REPO}"
-                                    sentry-cli releases set-commits "${GO_REVISION_SNUBA_REPO}" --commit "getsentry/snuba@${GO_REVISION_SNUBA_REPO}"
-                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e canary
-                      deploy-canary:
-                          timeout: 1200
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    /devinfra/scripts/k8s/k8stunnel \
-                                    && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                                    --label-selector="service=snuba,is_canary=true" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                    --container-name="api" \
-                                    --container-name="consumer" \
-                                    --container-name="errors-consumer" \
-                                    --container-name="errors-replacer" \
-                                    --container-name="events-subscriptions-executor" \
-                                    --container-name="events-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-counters-consumer" \
-                                    --container-name="generic-metrics-counters-subscriptions-executor" \
-                                    --container-name="generic-metrics-counters-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-distributions-consumer" \
-                                    --container-name="generic-metrics-distributions-subscriptions-executor" \
-                                    --container-name="generic-metrics-distributions-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-sets-consumer" \
-                                    --container-name="generic-metrics-sets-subscriptions-executor" \
-                                    --container-name="generic-metrics-sets-subscriptions-scheduler" \
-                                    --container-name="loadbalancer-outcomes-consumer" \
-                                    --container-name="metrics-consumer" \
-                                    --container-name="metrics-counters-subscriptions-scheduler" \
-                                    --container-name="metrics-sets-subscriptions-scheduler" \
-                                    --container-name="metrics-subscriptions-executor" \
-                                    --container-name="outcomes-billing-consumer" \
-                                    --container-name="outcomes-consumer" \
-                                    --container-name="querylog-consumer" \
-                                    --container-name="replacer" \
-                                    --container-name="snuba-admin" \
-                                    --container-name="transactions-consumer-new" \
-                                    --container-name="transactions-subscriptions-executor" \
-                                    --container-name="transactions-subscriptions-scheduler" \
-                                    && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                                    --label-selector="service=snuba,is_canary=true" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                    --type="cronjob" \
-                                    --container-name="cleanup" \
-                                    --container-name="optimize"
-            - deploy:
-                  fetch_materials: true
-                  jobs:
-                      create-sentry-release:
-                          environment_variables:
-                              SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
-                          timeout: 300
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
-                                    sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
-                      deploy:
-                          timeout: 1200
-                          elastic_profile_id: snuba
-                          tasks:
-                              - script: |
-                                    /devinfra/scripts/k8s/k8stunnel \
-                                    && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                                    --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                    --container-name="api" \
-                                    --container-name="consumer" \
-                                    --container-name="errors-consumer" \
-                                    --container-name="errors-replacer" \
-                                    --container-name="events-subscriptions-executor" \
-                                    --container-name="events-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-counters-consumer" \
-                                    --container-name="generic-metrics-counters-subscriptions-executor" \
-                                    --container-name="generic-metrics-counters-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-distributions-consumer" \
-                                    --container-name="generic-metrics-distributions-subscriptions-executor" \
-                                    --container-name="generic-metrics-distributions-subscriptions-scheduler" \
-                                    --container-name="generic-metrics-sets-consumer" \
-                                    --container-name="generic-metrics-sets-subscriptions-executor" \
-                                    --container-name="generic-metrics-sets-subscriptions-scheduler" \
-                                    --container-name="loadbalancer-outcomes-consumer" \
-                                    --container-name="metrics-consumer" \
-                                    --container-name="metrics-counters-subscriptions-scheduler" \
-                                    --container-name="metrics-sets-subscriptions-scheduler" \
-                                    --container-name="metrics-subscriptions-executor" \
-                                    --container-name="outcomes-billing-consumer" \
-                                    --container-name="outcomes-consumer" \
-                                    --container-name="querylog-consumer" \
-                                    --container-name="replacer" \
-                                    --container-name="snuba-admin" \
-                                    --container-name="transactions-consumer-new" \
-                                    --container-name="transactions-subscriptions-executor" \
-                                    --container-name="transactions-subscriptions-scheduler" \
-                                    && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
-                                    --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
-                                    --type="cronjob" \
-                                    --container-name="cleanup" \
-                                    --container-name="optimize"
+  deploy-snuba-stable:
+    environment_variables:
+      GCP_PROJECT: internal-sentry
+      GKE_CLUSTER: zdpwkxst
+      GKE_REGION: us-central1
+      GKE_CLUSTER_ZONE: b
+      GKE_BASTION_ZONE: b
+      # Required for checkruns.
+      GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+    group: snuba
+    display_order: 100 # Ensure it's last pipeline in UI
+    lock_behavior: unlockWhenFinished
+    materials:
+      snuba_repo:
+        git: git@github.com:getsentry/snuba.git
+        shallow_clone: true
+        branch: master
+        destination: snuba
+    stages:
+      - checks:
+          approval:
+            type: manual
+          fetch_materials: true
+          jobs:
+            checks:
+              timeout: 1800
+              elastic_profile_id: snuba
+              tasks:
+                - script: |
+                    /devinfra/scripts/checks/githubactions/checkruns.py \
+                    getsentry/snuba \
+                    ${GO_REVISION_SNUBA_REPO} \
+                    "Tests and code coverage (test)" \
+                    "Tests and code coverage (test_distributed)" \
+                    "Tests and code coverage (test_distributed_migrations)" \
+                    "Dataset Config Validation" \
+                    "sentry (0)" \
+                    "sentry (1)" \
+                    "sentry (2)" \
+                    "sentry (3)" \
+                    "sentry (4)" \
+                    "sentry (5)" \
+                    "sentry (6)" \
+                    "sentry (7)"
+                - script: |
+                    /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
+                    ${GO_REVISION_SNUBA_REPO} \
+                    sentryio \
+                    "us.gcr.io/sentryio/snuba"
+                - script: |
+                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"` && \
+                    snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
+      - deploy-canary:
+          fetch_materials: true
+          jobs:
+            create-sentry-release:
+              environment_variables:
+                SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
+              timeout: 300
+              elastic_profile_id: snuba
+              tasks:
+                - script: |
+                    sentry-cli releases new "${GO_REVISION_SNUBA_REPO}"
+                    sentry-cli releases set-commits "${GO_REVISION_SNUBA_REPO}" --commit "getsentry/snuba@${GO_REVISION_SNUBA_REPO}"
+                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e canary
+            deploy-canary:
+              timeout: 1200
+              elastic_profile_id: snuba
+              tasks:
+                - script: |
+                    /devinfra/scripts/k8s/k8stunnel \
+                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                    --label-selector="service=snuba,is_canary=true" \
+                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                    --container-name="api" \
+                    --container-name="consumer" \
+                    --container-name="errors-consumer" \
+                    --container-name="errors-replacer" \
+                    --container-name="events-subscriptions-executor" \
+                    --container-name="events-subscriptions-scheduler" \
+                    --container-name="generic-metrics-counters-consumer" \
+                    --container-name="generic-metrics-counters-subscriptions-executor" \
+                    --container-name="generic-metrics-counters-subscriptions-scheduler" \
+                    --container-name="generic-metrics-gauges-consumer" \
+                    --container-name="generic-metrics-distributions-consumer" \
+                    --container-name="generic-metrics-distributions-subscriptions-executor" \
+                    --container-name="generic-metrics-distributions-subscriptions-scheduler" \
+                    --container-name="generic-metrics-sets-consumer" \
+                    --container-name="generic-metrics-sets-subscriptions-executor" \
+                    --container-name="generic-metrics-sets-subscriptions-scheduler" \
+                    --container-name="loadbalancer-outcomes-consumer" \
+                    --container-name="metrics-consumer" \
+                    --container-name="metrics-counters-subscriptions-scheduler" \
+                    --container-name="metrics-sets-subscriptions-scheduler" \
+                    --container-name="metrics-subscriptions-executor" \
+                    --container-name="outcomes-billing-consumer" \
+                    --container-name="outcomes-consumer" \
+                    --container-name="querylog-consumer" \
+                    --container-name="replacer" \
+                    --container-name="snuba-admin" \
+                    --container-name="transactions-consumer-new" \
+                    --container-name="transactions-subscriptions-executor" \
+                    --container-name="transactions-subscriptions-scheduler" \
+                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                    --label-selector="service=snuba,is_canary=true" \
+                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                    --type="cronjob" \
+                    --container-name="cleanup" \
+                    --container-name="optimize"
+      - deploy:
+          fetch_materials: true
+          jobs:
+            create-sentry-release:
+              environment_variables:
+                SENTRY_AUTH_TOKEN: "{{SECRET:[devinfra-sentryio][token]}}"
+              timeout: 300
+              elastic_profile_id: snuba
+              tasks:
+                - script: |
+                    sentry-cli releases deploys "${GO_REVISION_SNUBA_REPO}" new -e production
+                    sentry-cli releases finalize "${GO_REVISION_SNUBA_REPO}"
+            deploy:
+              timeout: 1200
+              elastic_profile_id: snuba
+              tasks:
+                - script: |
+                    /devinfra/scripts/k8s/k8stunnel \
+                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                    --label-selector="service=snuba" \
+                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                    --container-name="api" \
+                    --container-name="consumer" \
+                    --container-name="errors-consumer" \
+                    --container-name="errors-replacer" \
+                    --container-name="events-subscriptions-executor" \
+                    --container-name="events-subscriptions-scheduler" \
+                    --container-name="generic-metrics-counters-consumer" \
+                    --container-name="generic-metrics-counters-subscriptions-executor" \
+                    --container-name="generic-metrics-counters-subscriptions-scheduler" \
+                    --container-name="generic-metrics-distributions-consumer" \
+                    --container-name="generic-metrics-distributions-subscriptions-executor" \
+                    --container-name="generic-metrics-distributions-subscriptions-scheduler" \
+                    --container-name="generic-metrics-sets-consumer" \
+                    --container-name="generic-metrics-sets-subscriptions-executor" \
+                    --container-name="generic-metrics-sets-subscriptions-scheduler" \
+                    --container-name="loadbalancer-outcomes-consumer" \
+                    --container-name="metrics-consumer" \
+                    --container-name="metrics-counters-subscriptions-scheduler" \
+                    --container-name="metrics-sets-subscriptions-scheduler" \
+                    --container-name="metrics-subscriptions-executor" \
+                    --container-name="outcomes-billing-consumer" \
+                    --container-name="outcomes-consumer" \
+                    --container-name="querylog-consumer" \
+                    --container-name="replacer" \
+                    --container-name="snuba-admin" \
+                    --container-name="transactions-consumer-new" \
+                    --container-name="transactions-subscriptions-executor" \
+                    --container-name="transactions-subscriptions-scheduler" \
+                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+                    --label-selector="service=snuba" \
+                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                    --type="cronjob" \
+                    --container-name="cleanup" \
+                    --container-name="optimize"
