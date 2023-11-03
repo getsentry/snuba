@@ -284,7 +284,7 @@ mod tests {
         );
 
         for p in payloads {
-            strategy.submit(Message::new_any_message(payload, {}));
+            strategy.submit(Message::new_any_message(payload, BTreeMap::new()));
             strategy.poll();
         }
 
