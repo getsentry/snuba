@@ -50,6 +50,7 @@ struct FromSpanMessage {
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
+    received: f64,
     #[serde(default = "default_retention_days")]
     retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
@@ -174,6 +175,7 @@ struct Span {
     platform: String,
     profile_id: Option<Uuid>,
     project_id: u64,
+    received: u64,
     retention_days: u16,
     segment_id: u64,
     segment_name: String,
@@ -247,6 +249,7 @@ impl TryFrom<FromSpanMessage> for Span {
             platform: from.sentry_tags.system.unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
+            received: from.received.round() as u64,
             retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.unwrap_or_default(),
