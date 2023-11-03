@@ -19,6 +19,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="generic-metrics-distributions-consumer" \
   --container-name="generic-metrics-distributions-subscriptions-executor" \
   --container-name="generic-metrics-distributions-subscriptions-scheduler" \
+  --container-name="generic-metrics-gauges-consumer" \
   --container-name="generic-metrics-sets-consumer" \
   --container-name="generic-metrics-sets-subscriptions-executor" \
   --container-name="generic-metrics-sets-subscriptions-scheduler" \
