@@ -99,6 +99,7 @@ struct ProduceMessage {
 }
 
 impl ProduceMessage {
+    #[allow(dead_code)]
     pub fn new(
         producer: impl Producer<KafkaPayload> + 'static,
         topic: TopicOrPartition,
@@ -116,9 +117,10 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
         let producer = self.producer.clone();
         let topic = self.topic.clone();
+        let skip_produce = self.skip_produce;
 
         Box::pin(async move {
-            if self.skip_produce {
+            if skip_produce {
                 return Ok(message);
             }
 
@@ -145,6 +147,7 @@ pub struct ProduceCommitLog {
 }
 
 impl ProduceCommitLog {
+    #[allow(dead_code)]
     pub fn new<N>(
         next_step: N,
         producer: impl Producer<KafkaPayload> + 'static,
