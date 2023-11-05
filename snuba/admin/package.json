@@ -17,7 +17,7 @@
     "@tiptap/extension-code-block-lowlight": "^2.0.3",
     "@tiptap/extension-placeholder": "^2.0.3",
     "@tiptap/pm": "^2.0.3",
-    "@sentry/react": "^7.56.0",
+    "@sentry/react": "^7.77.0",
     "@sentry/webpack-plugin": "^2.4.0",
     "@types/react": "^18.0.20",
     "@types/react-dom": "^18.2.6",
