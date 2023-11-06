@@ -489,12 +489,6 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings)
-    logger.info(
-        "received request with referrer: ",
-        referrer,
-        body.get("referrer", "no referrer"),
-        body.get("tenant_ids"),
-    )
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
