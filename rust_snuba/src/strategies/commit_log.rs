@@ -186,6 +186,9 @@ impl ProcessingStrategy<KafkaPayload> for ProduceCommitLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_arroyo::backends::ProducerError;
+    use rust_arroyo::types::Topic;
+    use std::collections::BTreeMap;
 
     #[test]
     fn commit() {
@@ -211,7 +214,7 @@ mod tests {
         }
         impl ProcessingStrategy<KafkaPayload> for Noop {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                None
+                Ok(None)
             }
             fn submit(
                 &mut self,
@@ -226,7 +229,7 @@ mod tests {
                 &mut self,
                 _timeout: Option<Duration>,
             ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                None
+                Ok(None)
             }
         }
 
@@ -274,7 +277,7 @@ mod tests {
 
         let strategy = ProduceCommitLog::new(next_step, producer, 1, &topic, false);
 
-        for p in payloads {
+        for payload in payloads {
             strategy.submit(Message::new_any_message(payload, BTreeMap::new()));
             strategy.poll();
         }
