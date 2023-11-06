@@ -49,6 +49,12 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=state.max_query_duration_s,
             ),
+            AllocationPolicyConfig(
+                name="rate_history_s",
+                description="""DEBUG SETTING: How long to keep around rate limit history for. This is not a useful configuration parameter. It's used for the per-second caclulation but that calculation is fundamentally flawed, this is being used to have a 1:1 comparison with the legacy rate limtier and should be removed by 11/10/2023""",
+                value_type=int,
+                default=state.max_query_duration_s,
+            ),
         ]
 
     @property
@@ -62,7 +68,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         # HACK: this is a harcoded value because this rate_history_s is not a useful
         # configuration parameter. It's used for the per-second caclulation but that calculation
         # is fundamentally flawed
-        rate_history_s = 1
+        rate_history_s = self.get_config_value("rate_history_s")
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
         assert isinstance(rate_limit_shard_factor, int)
