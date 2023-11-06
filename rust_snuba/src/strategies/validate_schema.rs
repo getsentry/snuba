@@ -1,6 +1,6 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -60,7 +60,10 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
                         let partition = broker_message.partition.clone();
                         let offset = broker_message.offset;
 
-                        Err(InvalidMessage { partition, offset })
+                        Err(RunTaskError::InvalidMessage(InvalidMessage {
+                            partition,
+                            offset,
+                        }))
                     }
                     _ => {
                         panic!("Cannot return Invalid message error");

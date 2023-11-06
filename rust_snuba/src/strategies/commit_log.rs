@@ -1,7 +1,7 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::Producer;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -10,7 +10,6 @@ use rust_arroyo::types::{Message, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
 use std::sync::Arc;
-use std::thread::sleep;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -124,20 +123,13 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
                 return Ok(message);
             }
 
-            let mut retries = 3;
-            while retries > 0 {
-                match producer.produce(&topic, message.payload()) {
-                    Ok(_) => {
-                        return Ok(message);
-                    }
-                    Err(e) => {
-                        retries -= 1;
-                        sleep(Duration::from_millis(100));
-                        log::warn!("{}", e);
-                    }
+            match producer.produce(&topic, message.payload()) {
+                Ok(_) => Ok(message),
+                Err(e) => {
+                    log::error!("Error producing message: {}", e);
+                    Err(RunTaskError::RetryableError)
                 }
             }
-            panic!("Failed to produce message");
         })
     }
 }
