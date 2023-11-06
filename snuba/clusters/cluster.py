@@ -218,6 +218,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self,
         host: str,
         port: int,
+        max_connections: int,
         user: str,
         password: str,
         database: str,
@@ -233,6 +234,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         super().__init__(storage_sets)
         self.__host = host
         self.__port = port
+        self.__max_connections = max_connections
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
@@ -304,6 +306,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return HTTPBatchWriter(
             host=self.__query_node.host_name,
             port=self.__http_port,
+            max_connections=self.__max_connections,
             user=self.__user,
             password=self.__password,
             metrics=metrics,
