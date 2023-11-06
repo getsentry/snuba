@@ -1,4 +1,4 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata, BadMessage};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -92,8 +92,7 @@ struct ProfileMessage {
 impl TryFrom<FromProfileMessage> for ProfileMessage {
     type Error = BadMessage;
     fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, BadMessage> {
-        let profile_id =
-            Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| BadMessage)?;
+        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| BadMessage)?;
         let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| BadMessage)?;
         let transaction_id =
             Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| BadMessage)?;
