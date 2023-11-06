@@ -271,11 +271,11 @@ mod tests {
 
         let next_step = Noop { payloads: vec![] };
 
-        let topic = TopicOrPartition::Topic(Topic {
+        static TOPIC: TopicOrPartition = TopicOrPartition::Topic(Topic {
             name: "test".to_string(),
         });
 
-        let strategy = ProduceCommitLog::new(next_step, producer, 1, &topic, false);
+        let mut strategy = ProduceCommitLog::new(next_step, producer, 1, &TOPIC, false);
 
         for payload in payloads {
             strategy.submit(Message::new_any_message(payload, BTreeMap::new()));
