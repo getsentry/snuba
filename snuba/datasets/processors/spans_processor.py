@@ -253,5 +253,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 )
             return None
 
-        received = datetime.utcfromtimestamp(span_event["received"])
+        received = (
+            datetime.utcfromtimestamp(span_event["received"])
+            if "received" in span_event
+            else None
+        )
         return InsertBatch(rows=processed_rows, origin_timestamp=received)
