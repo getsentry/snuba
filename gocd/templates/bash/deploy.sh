@@ -62,6 +62,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --type="cronjob" \
   --container-name="cleanup" \
   --container-name="optimize" \
+  --container-name="cardinality-report" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
