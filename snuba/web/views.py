@@ -63,6 +63,7 @@ from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
+from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -461,6 +462,14 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
+def _get_and_log_referrer(request: SnubaRequest) -> None:
+    metrics.increment(
+        "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
+    )
+    if random.random() < 0.05:
+        logger.info(f"Referrer: {request.attribution_info.referrer}")
+
+
 @with_span()
 def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
@@ -480,10 +489,16 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings)
-
+    logger.info(
+        "received request with referrer: ",
+        referrer,
+        body.get("referrer", "no referrer"),
+        body.get("tenant_ids"),
+    )
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
+    _get_and_log_referrer(request)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
