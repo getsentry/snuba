@@ -10,7 +10,9 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import StorageNotAvailable
+from snuba.query.exceptions import InvalidQueryException
 from snuba.request import Request
+from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
@@ -123,7 +125,9 @@ def get_request_status(cause: Exception | None = None) -> Status:
         slo_status = RequestStatus.CACHE_SET_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
-    elif isinstance(cause, StorageNotAvailable):
+    elif isinstance(
+        cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
+    ):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
