@@ -93,7 +93,7 @@ impl TryFrom<Commit> for KafkaPayload {
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
-    topic: &'static TopicOrPartition,
+    topic: Arc<TopicOrPartition>,
     skip_produce: bool,
 }
 
@@ -101,12 +101,12 @@ impl ProduceMessage {
     #[allow(dead_code)]
     pub fn new(
         producer: impl Producer<KafkaPayload> + 'static,
-        topic: &'static TopicOrPartition,
+        topic: TopicOrPartition,
         skip_produce: bool,
     ) -> Self {
         ProduceMessage {
             producer: Arc::new(producer),
-            topic,
+            topic: Arc::new(topic),
             skip_produce,
         }
     }
@@ -144,7 +144,7 @@ impl ProduceCommitLog {
         next_step: N,
         producer: impl Producer<KafkaPayload> + 'static,
         concurrency: usize,
-        topic: &'static TopicOrPartition,
+        topic: TopicOrPartition,
         skip_produce: bool,
     ) -> Self
     where
@@ -278,11 +278,19 @@ mod tests {
 
         let next_step = Noop { payloads: vec![] };
 
-        static TOPIC: TopicOrPartition = TopicOrPartition::Topic(Topic {
+        let topic = TopicOrPartition::Topic(Topic {
             name: "test".to_string(),
         });
 
-        let mut strategy = ProduceCommitLog::new(next_step, producer, 1, &TOPIC, false);
+        let mut strategy = ProduceCommitLog::new(
+            next_step,
+            producer,
+            1,
+            TopicOrPartition::Topic(Topic {
+                name: "test".to_string(),
+            }),
+            false,
+        );
 
         for payload in payloads {
             strategy.submit(Message::new_any_message(payload, BTreeMap::new()));
