@@ -1,3 +1,4 @@
+mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
