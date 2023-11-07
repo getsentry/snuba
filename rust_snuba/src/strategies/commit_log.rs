@@ -233,8 +233,10 @@ mod tests {
             }
         }
 
+        let produced_payloads = Arc::new(Vec::new());
+
         struct MockProducer {
-            pub payloads: Vec<KafkaPayload>,
+            pub payloads: Arc<Vec<KafkaPayload>>,
         }
 
         impl Producer<KafkaPayload> for MockProducer {
@@ -267,7 +269,9 @@ mod tests {
             },
         ];
 
-        let producer = MockProducer { payloads: vec![] };
+        let producer = MockProducer {
+            payloads: produced_payloads,
+        };
 
         let next_step = Noop { payloads: vec![] };
 
@@ -282,6 +286,6 @@ mod tests {
             strategy.poll();
         }
 
-        assert_eq!(producer.payloads.len(), payloads.len());
+        assert_eq!(produced_payloads.len(), payloads.len());
     }
 }
