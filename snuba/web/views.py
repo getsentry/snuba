@@ -495,7 +495,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
-    _get_and_log_referrer(request)
+    _get_and_log_referrer(request, body)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
