@@ -67,6 +67,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -466,8 +467,8 @@ def _get_and_log_referrer(request: SnubaRequest) -> None:
     metrics.increment(
         "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
     )
-    if random.random() < 0.05:
-        logger.info(f"Referrer: {request.attribution_info.referrer}")
+    if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
+        logger.info(f"Received referrer: {request.attribution_info.referrer}")
 
 
 @with_span()
