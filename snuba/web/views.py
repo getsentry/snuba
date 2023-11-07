@@ -463,12 +463,14 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-def _get_and_log_referrer(request: SnubaRequest) -> None:
+def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
     metrics.increment(
         "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
     )
     if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
         logger.info(f"Received referrer: {request.attribution_info.referrer}")
+        if request.attribution_info.referrer == "<unknown>":
+            logger.info(f"Received unknown referrer from request: {request}, {body}")
 
 
 @with_span()
