@@ -115,7 +115,7 @@ impl ProduceMessage {
 impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
         let producer = self.producer.clone();
-        let topic = self.topic;
+        let topic = self.topic.clone();
         let skip_produce = self.skip_produce;
 
         Box::pin(async move {
@@ -123,7 +123,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
                 return Ok(message);
             }
 
-            match producer.produce(topic, message.payload()) {
+            match producer.produce(&topic, message.payload()) {
                 Ok(_) => Ok(message),
                 Err(e) => {
                     log::error!("Error producing message: {}", e);
