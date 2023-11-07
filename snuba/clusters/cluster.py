@@ -219,6 +219,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         host: str,
         port: int,
         max_connections: int,
+        block_connections: bool,
         user: str,
         password: str,
         database: str,
@@ -235,6 +236,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__host = host
         self.__port = port
         self.__max_connections = max_connections
+        self.__block_connections = block_connections
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
@@ -307,6 +309,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             host=self.__query_node.host_name,
             port=self.__http_port,
             max_connections=self.__max_connections,
+            block_connections=self.__block_connections,
             user=self.__user,
             password=self.__password,
             metrics=metrics,

@@ -4,7 +4,8 @@ CLUSTERS = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 100)),
+        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
+        "block_connections": bool(os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
