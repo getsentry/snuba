@@ -189,6 +189,7 @@ mod tests {
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
+    use std::sync::Mutex;
 
     #[test]
     fn commit() {
@@ -233,10 +234,10 @@ mod tests {
             }
         }
 
-        let produced_payloads = Arc::new(Vec::new());
+        let produced_payloads = Arc::new(Mutex::new(Vec::new()));
 
         struct MockProducer {
-            pub payloads: Arc<Vec<KafkaPayload>>,
+            pub payloads: Arc<Mutex<Vec<KafkaPayload>>>,
         }
 
         impl Producer<KafkaPayload> for MockProducer {
@@ -245,7 +246,7 @@ mod tests {
                 _topic: &TopicOrPartition,
                 payload: KafkaPayload,
             ) -> Result<(), ProducerError> {
-                self.payloads.push(payload);
+                self.payloads.lock().unwrap().push(payload);
                 Ok(())
             }
         }
@@ -269,8 +270,10 @@ mod tests {
             },
         ];
 
+        let expected_len = payloads.len();
+
         let producer = MockProducer {
-            payloads: produced_payloads,
+            payloads: produced_payloads.clone(),
         };
 
         let next_step = Noop { payloads: vec![] };
@@ -286,6 +289,6 @@ mod tests {
             strategy.poll();
         }
 
-        assert_eq!(produced_payloads.len(), payloads.len());
+        assert_eq!(produced_payloads.lock().unwrap().len(), expected_len);
     }
 }
