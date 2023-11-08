@@ -81,3 +81,9 @@ allocation_policies:
 query_processors:
   - processor: TableRateLimit
   - processor: TupleUnaliaser
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _raw_tags_hash
+      killswitch: generic_metrics/tags_hash_map_enabled
+      value_subcolumn_name: raw_value
