@@ -77,6 +77,26 @@ class TestSnQLApi(BaseApiTest):
             [get_raw_transaction()],
         )
 
+    def test_raw_tags_hash(self) -> None:
+        query = """MATCH (generic_metrics_counters) SELECT countIf(value, equals(metric_id, 87269613)) AS `count(g:custom/gauge@none)` WHERE org_id = 447951 AND project_id IN array(5572016) AND timestamp >= toDateTime('2023-10-25T08:00:00') AND timestamp < toDateTime('2023-11-08T12:00:00') AND tags_raw[9223372036854776010] = 'dev' AND metric_id IN array(87269613) LIMIT 21 OFFSET 0 GRANULARITY 14400"""
+
+        response = self.post(
+            "/metrics/snql",
+            data=json.dumps(
+                {
+                    "query": query,
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+
     def test_simple_query(self) -> None:
         response = self.post(
             "/discover/snql",
