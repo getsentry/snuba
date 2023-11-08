@@ -463,12 +463,14 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-def _get_and_log_referrer(request: SnubaRequest) -> None:
+def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
     metrics.increment(
         "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
     )
     if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
         logger.info(f"Received referrer: {request.attribution_info.referrer}")
+        if request.attribution_info.referrer == "<unknown>":
+            logger.info(f"Received unknown referrer from request: {request}, {body}")
 
 
 @with_span()
@@ -493,7 +495,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
-    _get_and_log_referrer(request)
+    _get_and_log_referrer(request, body)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
