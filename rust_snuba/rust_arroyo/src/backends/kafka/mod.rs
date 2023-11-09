@@ -389,8 +389,8 @@ mod tests {
         consumer.subscribe(&[topic], my_callbacks).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
-        // Getting the assignment may take a while, wait up to 10 seconds
-        consumer.poll(Some(Duration::from_millis(10_000))).unwrap();
+        // Getting the assignment may take a while, wait up to 5 seconds
+        consumer.poll(Some(Duration::from_millis(5000))).unwrap();
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
