@@ -299,7 +299,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         assert rows[0]["status_code"] == self.tags[1][1]
         assert (
             data["totals"]["aggregate_value"] > 180
-        )  # Should be more than the number of data points111
+        )  # Should be more than the number of data points
 
 
 @pytest.mark.clickhouse_db
