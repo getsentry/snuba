@@ -278,10 +278,6 @@ mod tests {
 
         let next_step = Noop { payloads: vec![] };
 
-        let topic = TopicOrPartition::Topic(Topic {
-            name: "test".to_string(),
-        });
-
         let mut strategy = ProduceCommitLog::new(
             next_step,
             producer,
@@ -293,9 +289,14 @@ mod tests {
         );
 
         for payload in payloads {
-            strategy.submit(Message::new_any_message(payload, BTreeMap::new()));
-            strategy.poll();
+            strategy
+                .submit(Message::new_any_message(payload, BTreeMap::new()))
+                .unwrap();
+            strategy.poll().unwrap();
         }
+
+        strategy.close();
+        strategy.join(None);
 
         assert_eq!(produced_payloads.lock().unwrap().len(), expected_len);
     }
