@@ -12,8 +12,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
-    dist_table_name = "generic_metrics_sets_aggregated_dist"
-    local_table_name = "generic_metrics_sets_aggregated_local"
+    dist_table_name = "generic_metric_sets_aggregated_dist"
     storage_set_key = StorageSetKey.GENERIC_METRICS_GAUGES
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
