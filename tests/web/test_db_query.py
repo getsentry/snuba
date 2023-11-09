@@ -44,6 +44,7 @@ test_data = [
         },
         None,
         False,
+        None,
         id="no override when query settings prefix empty",
     ),
     pytest.param(
@@ -59,6 +60,7 @@ test_data = [
         },
         "other-query-prefix",
         False,
+        None,
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -74,6 +76,7 @@ test_data = [
         },
         "some-query-prefix",
         False,
+        None,
         id="override for same query prefix",
     ),
     pytest.param(
@@ -89,6 +92,7 @@ test_data = [
         },
         None,
         True,
+        None,
         id="no override when no async settings",
     ),
     pytest.param(
@@ -104,6 +108,7 @@ test_data = [
         },
         "other-query-prefix",
         True,
+        None,
         id="override for async settings with no prefix override",
     ),
     pytest.param(
@@ -120,22 +125,81 @@ test_data = [
         },
         "some-query-prefix",
         True,
+        None,
         id="no override for async settings with prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "referrer/some-referrer/query_settings/max_read_replicas": 4,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+            "max_read_replicas": 4,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override does its job",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 30,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override takes precedence over all other settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-other-referrer",
+        id="referrer override does not apply to other referrers",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix,async_override", test_data)
+@pytest.mark.parametrize(
+    "query_config,expected,query_prefix,async_override,referrer", test_data
+)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
     async_override: bool,
+    referrer: str,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix, async_override) == expected
+    assert (
+        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
+        == expected
+    )
 
 
 def _build_test_query(

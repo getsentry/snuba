@@ -461,9 +461,14 @@ def _get_cache_wait_timeout(
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
     async_override: bool,
+    referrer: Optional[str],
 ) -> MutableMapping[str, Any]:
     """
-    Helper function to get the query settings from the config.
+    Helper function to get the query settings from the config. Order of precedence
+    for overlapping config wihtin this method is:
+    1. referrer/<referrer>/query_settings/<setting>
+    2. <override_prefix>/query_settings/<setting>
+    3. query_settings/<setting>
 
     #TODO: Make this configurable by entity/dataset. Since we want to use
     #      different settings across different clusters belonging to the
@@ -489,6 +494,11 @@ def _get_query_settings_from_config(
             if k.startswith(f"{override_prefix}/query_settings/"):
                 clickhouse_query_settings[k.split("/", 2)[2]] = v
 
+    if referrer:
+        for k, v in all_confs.items():
+            if k.startswith(f"referrer/{referrer}/query_settings/"):
+                clickhouse_query_settings[k.split("/", 3)[3]] = v
+
     return clickhouse_query_settings
 
 
@@ -512,7 +522,9 @@ def _raw_query(
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
     clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix(), query_settings.get_asynchronous()
+        reader.get_query_settings_prefix(),
+        query_settings.get_asynchronous(),
+        referrer=attribution_info.referrer,
     )
     resource_quota = query_settings.get_resource_quota()
     max_threads = resource_quota.max_threads if resource_quota else None
