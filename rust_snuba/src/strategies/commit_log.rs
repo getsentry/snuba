@@ -135,7 +135,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 }
 
 pub struct ProduceCommitLog {
-    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
 }
 
 impl ProduceCommitLog {
@@ -150,12 +150,12 @@ impl ProduceCommitLog {
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ProduceMessage::new(producer, topic, skip_produce)),
             concurrency,
             Some("produce_commit_log"),
-        ));
+        );
 
         ProduceCommitLog { inner }
     }
