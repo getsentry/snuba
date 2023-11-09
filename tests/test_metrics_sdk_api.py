@@ -7,8 +7,10 @@ import pytest
 import simplejson as json
 from snuba_sdk import (
     AliasedExpression,
+    ArithmeticOperator,
     Column,
     Condition,
+    Formula,
     Metric,
     MetricsQuery,
     MetricsScope,
@@ -300,6 +302,68 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         assert (
             data["totals"]["aggregate_value"] > 180
         )  # Should be more than the number of data points
+
+    def test_formula(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.MULTIPLY,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            TRANSACTION_MRI,
+                            self.metric_id,
+                            test_entity,
+                        ),
+                        aggregate="sum",
+                        filters=[
+                            Condition(
+                                Column(f"{tag_column}[{self.tags[0][0]}]"),
+                                Op.EQ,
+                                self.tags[0][1],
+                            )
+                        ],
+                        groupby=[
+                            AliasedExpression(
+                                Column(f"{tag_column}[{self.tags[1][0]}]"),
+                                "status_code",
+                            )
+                        ],
+                    ),
+                    100,
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+        )
+
+        response = self.app.post(
+            self.snql_route,
+            data=json.dumps(
+                {
+                    "query": query.serialize(),
+                    "dataset": test_dataset,
+                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        rows = data["data"]
+        assert len(rows) == 180, rows
+
+        assert rows[0]["status_code"] == self.tags[1][1]
+        for row in rows:
+            assert row["aggregate_value"] % 100 == 0, "multiplying by 100"
 
 
 @pytest.mark.clickhouse_db
