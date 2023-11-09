@@ -713,7 +713,6 @@ def db_query(
     query_id = uuid.uuid4().hex
     result = None
     error = None
-    print("QUERY : ", clickhouse_query)
 
     try:
         _apply_allocation_policies_quota(

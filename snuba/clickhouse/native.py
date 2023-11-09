@@ -148,7 +148,6 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
-        print("RAW_QUERY", query)
         fallback_mode = False
 
         try:
