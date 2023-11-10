@@ -921,7 +921,6 @@ def parse_snql_query_initial(
     try:
         exp_tree = snql_grammar.parse(body)
         parsed = SnQLVisitor().visit(exp_tree)
-        print(parsed.__dict__)
     except ParsingException as e:
         logger.warning(f"Invalid SnQL query ({e}): {body}")
         raise e
