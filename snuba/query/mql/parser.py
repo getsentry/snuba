@@ -4,7 +4,6 @@ import logging
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
-from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, Op
 from snuba_sdk.dsl.dsl import EXPRESSION_OPERATORS, GRAMMAR, TERM_OPERATORS
@@ -13,12 +12,11 @@ from snuba_sdk.timeseries import Metric
 from snuba.datasets.dataset import Dataset
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, Expression, FunctionCall
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
 
 logger = logging.getLogger("snuba.mql.parser")
@@ -51,8 +49,8 @@ class MQLVisitor(NodeVisitor):
         """
         Top level node, simply returns the expression.
         """
-        expr, zero_or_more_others = children
-        return LogicalQuery()
+        args, zero_or_more_others = children
+        return args
 
     def visit_expr_op(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Arithmetic function not supported yet")
@@ -80,18 +78,28 @@ class MQLVisitor(NodeVisitor):
 
     def visit_filter(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
         """ """
-        target, packed_filters, packed_groupbys, *_ = children
-        ret = {"target": target, "filters": [], "groupby": []}
+        args, packed_filters, packed_groupbys, *_ = children
+        assert isinstance(args, dict)
         if packed_filters:
             _, _, first, zero_or_more_others, *_ = packed_filters[0]
-            filters = [first, *(v for _, _, _, v in zero_or_more_others)]
-            ret["filters"] = filters
+            new_filters = combine_and_conditions(
+                [first, *(v for _, _, _, v in zero_or_more_others)]
+            )
+            if "filters" in args:
+                args["filters"] = combine_and_conditions([args["filters"], new_filters])
+            else:
+                args["filters"] = new_filters
+
         if packed_groupbys:
             group_by = packed_groupbys[0]
             if not isinstance(group_by, list):
                 group_by = [group_by]
-            ret["groupby"] = group_by
-        return ret
+            if "groupby" in args:
+                args["groupby"] = args["groupby"] + group_by
+            else:
+                args["groupby"] = group_by
+
+        return args
 
     def visit_condition(self, node: Node, children: Sequence[Any]) -> Expression:
         condition_op, lhs, _, _, _, rhs = children
@@ -103,18 +111,20 @@ class MQLVisitor(NodeVisitor):
                 op = Op.NEQ
             elif isinstance(rhs, list):
                 op = Op.NOT_IN
-        return binary_condition(OPERATOR_TO_FUNCTION[op].value, lhs[0], rhs)
+        return binary_condition(
+            OPERATOR_TO_FUNCTION[op].value, lhs[0], Literal(alias=None, value=rhs)
+        )
 
     def visit_function(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
         """ """
         target, packed_groupbys = children
-        ret = {"target": SelectedExpression(target), "groupby": []}
         if packed_groupbys:
             group_by = packed_groupbys[0]
             if not isinstance(group_by, list):
                 group_by = [group_by]
-            ret["groupby"] = group_by
-        return ret
+            target["groupby"] = group_by
+
+        return target
 
     def visit_group_by(self, node: Node, children: Sequence[Any]) -> Any:
         *_, groupby = children
@@ -125,7 +135,7 @@ class MQLVisitor(NodeVisitor):
         return Op(node.text)
 
     def visit_tag_key(self, node: Node, children: Sequence[Any]) -> Column:
-        return Column(node.text)
+        return Column(alias=None, table_name=None, column_name=node.text)
 
     def visit_tag_value(
         self, node: Node, children: Sequence[Union[str, Sequence[str]]]
@@ -145,7 +155,10 @@ class MQLVisitor(NodeVisitor):
     def visit_group_by_name(
         self, node: Node, children: Sequence[Any]
     ) -> SelectedExpression:
-        return SelectedExpression(expression=Column(node.text))
+        return SelectedExpression(
+            name=None,
+            expression=Column(alias=None, table_name=None, column_name=node.text),
+        )
 
     def visit_group_by_name_tuple(
         self, node: Node, children: Sequence[Any]
@@ -154,15 +167,10 @@ class MQLVisitor(NodeVisitor):
         return [first, *(v for _, _, _, v in zero_or_more_others)]
 
     def visit_target(self, node: Node, children: Sequence[Any]) -> Any:
-        """ """
         target = children[0]
-        ret = {"target": target}
         if isinstance(children[0], list):
             target = children[0][0]
-        if isinstance(target, Metric):
-            # TODO: need to resolve metric indexer
-            ret["metric"] = target
-        return ret
+        return target
 
     def visit_variable(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Variables are not supported yet")
@@ -172,27 +180,33 @@ class MQLVisitor(NodeVisitor):
         return children[2]
 
     def visit_aggregate(self, node: Node, children: Sequence[Any]) -> FunctionCall:
-        """ """
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
-        return FunctionCall(
-            function_name=aggregate_name, parameters=(Column(column_name="value"),)
+        target["aggregate"] = SelectedExpression(
+            name=None,
+            expression=FunctionCall(
+                alias=None,
+                function_name=aggregate_name,
+                parameters=[Column(alias=None, table_name=None, column_name="value")],
+            ),
         )
+
+        return target
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
 
     def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
-        return Metric(mri=str(node.text[1:-1]))
+        return {"metric_name": {"mri": str(node.text[1:-1]), "public_name": ""}}
 
     def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
-        return Metric(mri=str(node.text))
+        return {"metric_name": {"mri": str(node.text), "public_name": ""}}
 
     def visit_quoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
-        return Metric(public_name=str(node.text[1:-1]))
+        return {"metric_name": {"mri": "", "public_name": str(node.text[1:-1])}}
 
     def visit_unquoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
-        return Metric(public_name=str(node.text))
+        return {"metric_name": {"mri": "", "public_name": str(node.text)}}
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
@@ -213,41 +227,8 @@ def parse_mql_query_initial(
     try:
         exp_tree = GRAMMAR.parse(body)
         parsed = MQLVisitor().visit(exp_tree)
-    except ParsingException as e:
-        logger.warning(f"Invalid MQL query ({e}): {body}")
-        raise e
-    except IncompleteParseError as e:
-        lines = body.split("\n")
-        if e.line() > len(lines):
-            line = body
-        else:
-            line = lines[e.line() - 1]
-
-        idx = e.column()
-        prefix = line[max(0, idx - 3) : idx]
-        suffix = line[idx : (idx + 10)]
-        raise ParsingException(
-            f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
-        )
     except Exception as e:
-        message = str(e)
-        if "\n" in message:
-            message, _ = message.split("\n", 1)
-        raise ParsingException(message)
-
-    assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
-
-    # Add these defaults here to avoid them getting applied to subqueries
-    limit = parsed.get_limit()
-    if limit is None:
-        parsed.set_limit(1000)
-    elif limit > 10000:
-        raise ParsingException(
-            "queries cannot have a limit higher than 10000", should_report=False
-        )
-
-    if parsed.get_offset() is None:
-        parsed.set_offset(0)
+        raise e
 
     return parsed
 
@@ -266,39 +247,4 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         parse_mql_query_initial(body)
 
-    # if settings and settings.get_dry_run():
-    #     explain_meta.set_original_ast(str(query))
-
-    # # NOTE (volo): The anonymizer that runs after this function call chokes on
-    # # OR and AND clauses with multiple parameters so we have to treeify them
-    # # before we run the anonymizer and the rest of the post processors
-    # with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
-    #     _post_process(query, [_treeify_or_and_conditions], settings)
-
-    # with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-    #     snql_anonymized = format_snql_anonymized(query).get_sql()
-
-    # with sentry_sdk.start_span(op="processor", description="post_processors"):
-    #     _post_process(
-    #         query,
-    #         POST_PROCESSORS,
-    #         settings,
-    #     )
-
-    # # Custom processing to tweak the AST before validation
-    # with sentry_sdk.start_span(op="processor", description="custom_processing"):
-    #     if custom_processing is not None:
-    #         _post_process(query, custom_processing, settings)
-
-    # # Time based processing
-    # with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-    #     _post_process(query, [_replace_time_condition], settings)
-
-    # # XXX: Select the entity to be used for the query. This step is temporary. Eventually
-    # # entity selection will be moved to Sentry and specified for all SnQL queries.
-    # _post_process(query, [_select_entity_for_dataset(dataset)], settings)
-
-    # # Validating
-    # with sentry_sdk.start_span(op="validate", description="expression_validators"):
-    #     _post_process(query, VALIDATORS)
-    # return query, snql_anonymized
+    # TODO: Create post processors for adding mql context fields into the query.

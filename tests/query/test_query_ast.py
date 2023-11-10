@@ -19,6 +19,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.mql.parser import parse_mql_query_initial
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
 
@@ -229,7 +230,7 @@ def test_get_all_columns() -> None:
     }
 
 
-def test_initial_parsing() -> None:
+def test_initial_parsing_snql() -> None:
     # Initial parsing created a map object for groupby clause, should be a list
     body = "MATCH (events) SELECT col BY title"
     query = parse_snql_query_initial(body)
@@ -237,6 +238,13 @@ def test_initial_parsing() -> None:
     assert list(query.get_groupby()) != []
     assert list(query.get_groupby()) != []
     assert isinstance(query.get_groupby(), list)
+
+
+def test_initial_parsing_mql() -> None:
+    # Initial parsing created a map object for groupby clause, should be a list
+    body = 'sum(`d:transactions/duration@millisecond`{foo:"foz", hee:"haw"}){bar:"baz"} by transaction'
+    query = parse_mql_query_initial(body)
+    print(query)
 
 
 def test_alias_regex_allows_parentheses() -> None:

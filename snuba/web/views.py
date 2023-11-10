@@ -154,7 +154,7 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
             for storage in storages
         }
 
-        for (cluster_key, cluster) in unique_clusters.items():
+        for cluster_key, cluster in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             clickhouse_tables = clickhouse.execute("show tables").results
             known_table_names = connection_grouped_table_names[cluster_key]
