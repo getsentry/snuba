@@ -369,7 +369,7 @@ mod tests {
             Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable().into_iter()),
+                    positions: HashMap::from_iter(message.committable()),
                 }),
             })
         }

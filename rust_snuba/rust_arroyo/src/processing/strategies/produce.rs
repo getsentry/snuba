@@ -148,7 +148,7 @@ mod tests {
                     headers: None,
                     payload: Some(payload_str.clone()),
                 },
-                partition: partition,
+                partition,
                 offset: 0,
                 timestamp: Utc::now(),
             }),
