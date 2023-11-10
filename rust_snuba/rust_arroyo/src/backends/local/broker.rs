@@ -75,7 +75,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
                 let mut non_matches = subscribed_topics
                     .iter()
                     .zip(&topics)
-                    .filter(|&(a, b)| a.name != b.name);
+                    .filter(|&(a, b)| a != b);
                 if non_matches.next().is_some() {
                     return Err(BrokerError::RebalanceNotSupported);
                 }
@@ -127,10 +127,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
         for topic in subscribed_topics.iter() {
             let partitions = self.storage.get_partition_count(topic)?;
             for n in 0..partitions {
-                ret_partitions.push(Partition {
-                    topic: topic.clone(),
-                    index: n,
-                });
+                ret_partitions.push(Partition::new(topic.clone(), n));
             }
         }
         group_subscriptions.remove(&id);
@@ -165,9 +162,7 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let res = broker.create_topic(topic.clone(), 16);
         assert!(res.is_ok());
 
@@ -184,18 +179,8 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
-        let _ = broker.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            1,
-        );
+        let partition = Partition::new(Topic::new("test"), 0);
+        let _ = broker.create_topic(Topic::new("test"), 1);
         let r_prod = broker.produce(&partition, "message".to_string());
         assert!(r_prod.is_ok());
         assert_eq!(r_prod.unwrap(), 0);
@@ -211,12 +196,8 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         let _ = broker.create_topic(topic1, 2);
         let _ = broker.create_topic(topic2, 1);
@@ -227,12 +208,8 @@ mod tests {
     fn test_assignment() {
         let mut broker = build_broker();
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         let r_assignments = broker.subscribe(
             Uuid::nil(),
@@ -241,45 +218,18 @@ mod tests {
         );
         assert!(r_assignments.is_ok());
         let expected = HashMap::from([
-            (
-                Partition {
-                    topic: topic1.clone(),
-                    index: 0,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic1.clone(),
-                    index: 1,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic2.clone(),
-                    index: 0,
-                },
-                0,
-            ),
+            (Partition::new(topic1.clone(), 0), 0),
+            (Partition::new(topic1.clone(), 1), 0),
+            (Partition::new(topic2.clone(), 0), 0),
         ]);
         assert_eq!(r_assignments.unwrap(), expected);
 
         let unassignmnts = broker.unsubscribe(Uuid::nil(), "group".to_string());
         assert!(unassignmnts.is_ok());
         let expected = vec![
-            Partition {
-                topic: topic1.clone(),
-                index: 0,
-            },
-            Partition {
-                topic: topic1,
-                index: 1,
-            },
-            Partition {
-                topic: topic2,
-                index: 0,
-            },
+            Partition::new(topic1.clone(), 0),
+            Partition::new(topic1, 1),
+            Partition::new(topic2, 0),
         ];
         assert_eq!(unassignmnts.unwrap(), expected);
     }

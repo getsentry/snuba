@@ -79,14 +79,10 @@ async fn main() {
         consumer,
         Box::new(ReverseStringAndProduceStrategyFactory {
             config: config.clone(),
-            topic: Topic {
-                name: "test_out".to_string(),
-            },
+            topic: Topic::new("test_out"),
         }),
     );
-    processor.subscribe(Topic {
-        name: "test_in".to_string(),
-    });
+    processor.subscribe(Topic::new("test_in"));
     println!("running processor. transforming from test_in to test_out");
     processor.run().unwrap();
 }

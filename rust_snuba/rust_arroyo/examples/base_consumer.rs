@@ -22,9 +22,7 @@ fn main() {
         None,
     );
     let mut consumer = KafkaConsumer::new(config);
-    let topic = Topic {
-        name: "test_static".to_string(),
-    };
+    let topic = Topic::new("test_static");
     let res = consumer.subscribe(&[topic], Box::new(EmptyCallbacks {}));
     assert!(res.is_ok());
     println!("Subscribed");
