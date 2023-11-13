@@ -113,7 +113,7 @@ pub struct StreamProcessor<TPayload> {
     metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
-impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
+impl<TPayload: 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
