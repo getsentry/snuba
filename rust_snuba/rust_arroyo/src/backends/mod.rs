@@ -80,7 +80,7 @@ pub trait AssignmentCallbacks: Send {
 /// occurs even if the consumer retains ownership of the partition across
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
-pub trait Consumer<TPayload: Clone>: Send {
+pub trait Consumer<TPayload>: Send {
     fn subscribe(
         &mut self,
         topic: &[Topic],

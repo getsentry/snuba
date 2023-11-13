@@ -29,7 +29,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
         Box::pin(async move {
             let len = message.payload().rows.len();
             let mut data = vec![];
-            for row in message.payload().rows {
+            for row in &message.payload().rows {
                 data.extend(row);
                 data.extend(b"\n");
             }

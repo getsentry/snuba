@@ -49,11 +49,11 @@ impl<TPayload> TopicMessages<TPayload> {
     }
 }
 
-pub struct MemoryMessageStorage<TPayload: Clone> {
+pub struct MemoryMessageStorage<TPayload> {
     topics: HashMap<Topic, TopicMessages<TPayload>>,
 }
 
-impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
+impl<TPayload> Default for MemoryMessageStorage<TPayload> {
     fn default() -> Self {
         MemoryMessageStorage {
             topics: HashMap::new(),
