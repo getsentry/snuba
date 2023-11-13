@@ -5,23 +5,35 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+/// Stores a list of messages for each partition of a topic.
+///
+/// `self.messages[i][j]` is the `j`-th message of the `i`-th partition.
 struct TopicMessages<TPayload> {
     messages: Vec<Vec<BrokerMessage<TPayload>>>,
 }
 
 impl<TPayload> TopicMessages<TPayload> {
-    pub fn new(partitions: u16) -> Self {
+    /// Creates empty messsage queues for the given number of partitions.
+    fn new(partitions: u16) -> Self {
         Self {
             messages: (0..partitions).map(|_| Vec::new()).collect(),
         }
     }
 
+    /// Returns the messages of the given partition.
+    ///
+    /// # Errors
+    /// Returns `ConsumeError::PartitionDoesNotExist` if the partition number is out of bounds.
     fn get_messages(&self, partition: u16) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
         self.messages
             .get(partition as usize)
             .ok_or(ConsumeError::PartitionDoesNotExist)
     }
 
+    /// Appends the given message to its partition's message queue.
+    ///
+    /// # Errors
+    /// Returns `ConsumeError::PartitionDoesNotExist` if the message's partition number is out of bounds.
     fn add_message(&mut self, message: BrokerMessage<TPayload>) -> Result<(), ConsumeError> {
         let stream = self
             .messages
@@ -31,7 +43,8 @@ impl<TPayload> TopicMessages<TPayload> {
         Ok(())
     }
 
-    fn get_partition_count(&self) -> u16 {
+    /// Returns the number of partitions.
+    fn partition_count(&self) -> u16 {
         u16::try_from(self.messages.len()).unwrap()
     }
 }
@@ -77,7 +90,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
 
     fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
         match self.topics.get(topic) {
-            Some(x) => Ok(x.get_partition_count()),
+            Some(x) => Ok(x.partition_count()),
             None => Err(TopicDoesNotExist),
         }
     }
@@ -87,7 +100,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             .topics
             .get(topic)
             .ok_or(ConsumeError::TopicDoesNotExist)?;
-        if content.get_partition_count() > index {
+        if content.partition_count() > index {
             Ok(Partition {
                 topic: topic.clone(),
                 index,
@@ -143,7 +156,7 @@ mod tests {
     #[test]
     fn test_partition_count() {
         let topic: TopicMessages<String> = TopicMessages::new(64);
-        assert_eq!(topic.get_partition_count(), 64);
+        assert_eq!(topic.partition_count(), 64);
     }
 
     #[test]
