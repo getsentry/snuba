@@ -47,7 +47,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
     }
 
     pub fn get_topic_partition_count(self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
-        self.storage.get_partition_count(topic)
+        self.storage.partition_count(topic)
     }
 
     pub fn produce(
@@ -90,7 +90,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
         for topic in topics.iter() {
             if !assigned_topics.contains(topic) {
                 assigned_topics.insert(topic);
-                let partition_count = self.storage.get_partition_count(topic)?;
+                let partition_count = self.storage.partition_count(topic)?;
                 if !self.offsets.contains_key(&consumer_group) {
                     self.offsets.insert(consumer_group.clone(), HashMap::new());
                 }
@@ -125,7 +125,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
         let group_subscriptions = self.subscriptions.get_mut(&group).unwrap();
         let subscribed_topics = group_subscriptions.get(&id).unwrap();
         for topic in subscribed_topics.iter() {
-            let partitions = self.storage.get_partition_count(topic)?;
+            let partitions = self.storage.partition_count(topic)?;
             for n in 0..partitions {
                 ret_partitions.push(Partition::new(*topic, n));
             }

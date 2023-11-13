@@ -42,7 +42,7 @@ pub trait MessageStorage<TPayload>: Send {
     ///
     /// # Errors
     /// If the topic does not exist, [`TopicDoesNotExist`] will be returned.
-    fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist>;
+    fn partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist>;
 
     /// Consume a message from the provided partition, reading from the given
     /// offset. If no message exists at the given offset when reading from

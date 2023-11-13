@@ -80,7 +80,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         Ok(())
     }
 
-    fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
+    fn partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
         match self.topics.get(topic) {
             Some(x) => Ok(x.partition_count()),
             None => Err(TopicDoesNotExist),
@@ -182,7 +182,7 @@ mod tests {
         let mut m: MemoryMessageStorage<String> = Default::default();
         let _ = m.create_topic(Topic::new("test"), 16);
 
-        assert_eq!(m.get_partition_count(&Topic::new("test")).unwrap(), 16);
+        assert_eq!(m.partition_count(&Topic::new("test")).unwrap(), 16);
     }
 
     #[test]
