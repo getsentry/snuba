@@ -52,6 +52,7 @@ impl<TPayload> TopicContent<TPayload> {
     }
 }
 
+/// An implementation of [`MessageStorage`] that holds messages in memory.
 pub struct MemoryMessageStorage<TPayload> {
     topics: HashMap<Topic, TopicContent<TPayload>>,
 }
@@ -75,19 +76,11 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
     }
 
     fn list_topics(&self) -> Vec<&Topic> {
-        let it = self.topics.keys();
-        let mut ret: Vec<&Topic> = Vec::new();
-        for x in it {
-            ret.push(x);
-        }
-        ret
+        self.topics.keys().collect()
     }
 
     fn delete_topic(&mut self, topic: &Topic) -> Result<(), TopicDoesNotExist> {
-        if !self.topics.contains_key(topic) {
-            return Err(TopicDoesNotExist);
-        }
-        self.topics.remove(topic);
+        self.topics.remove(topic).ok_or(TopicDoesNotExist)?;
         Ok(())
     }
 
@@ -103,10 +96,10 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         partition: &Partition,
         offset: u64,
     ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError> {
-        let n_offset = usize::try_from(offset).unwrap();
+        let offset = usize::try_from(offset).unwrap();
         let messages = self.topics[&partition.topic].get_messages(partition)?;
-        match messages.len().cmp(&n_offset) {
-            Ordering::Greater => Ok(Some(messages[n_offset].clone())),
+        match messages.len().cmp(&offset) {
+            Ordering::Greater => Ok(Some(messages[offset].clone())),
             Ordering::Less => Err(ConsumeError::OffsetOutOfRange),
             Ordering::Equal => Ok(None),
         }
@@ -123,13 +116,14 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             .get_mut(&partition.topic)
             .ok_or(ConsumeError::TopicDoesNotExist)?;
         let offset = messages.get_messages(partition)?.len();
+        let offset = u64::try_from(offset).unwrap();
         let _ = messages.add_message(BrokerMessage::new(
             payload,
             partition.clone(),
-            u64::try_from(offset).unwrap(),
+            offset,
             timestamp,
         ));
-        Ok(u64::try_from(offset).unwrap())
+        Ok(offset)
     }
 }
 
