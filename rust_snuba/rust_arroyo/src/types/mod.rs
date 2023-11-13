@@ -315,6 +315,7 @@ impl<T> From<AnyMessage<T>> for Message<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 enum CommittableInner<'a> {
     Any(std::collections::btree_map::Iter<'a, Partition, u64>),
     Broker(std::iter::Once<(Partition, u64)>),
@@ -323,6 +324,7 @@ enum CommittableInner<'a> {
 /// An iterator over a `Message`'s committable offsets.
 ///
 /// This is produced by [`Message::committable`].
+#[derive(Debug, Clone)]
 pub struct Committable<'a>(CommittableInner<'a>);
 
 impl<'a> Iterator for Committable<'a> {
