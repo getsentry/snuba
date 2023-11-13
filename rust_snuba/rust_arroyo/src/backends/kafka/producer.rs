@@ -28,8 +28,8 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
         payload: KafkaPayload,
     ) -> Result<(), ProducerError> {
         let topic = match destination {
-            TopicOrPartition::Topic(topic) => topic.name.as_ref(),
-            TopicOrPartition::Partition(partition) => partition.topic.name.as_ref(),
+            TopicOrPartition::Topic(topic) => topic.as_str(),
+            TopicOrPartition::Partition(partition) => partition.topic.as_str(),
         };
 
         let msg_key = payload.key.unwrap_or_default();
@@ -63,9 +63,7 @@ mod tests {
     use crate::types::{Topic, TopicOrPartition};
     #[test]
     fn test_producer() {
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let destination = TopicOrPartition::Topic(topic);
         let configuration =
             KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);

@@ -176,12 +176,7 @@ mod tests {
     fn test_add_messages() {
         let mut topic: TopicMessages<String> = TopicMessages::new(2);
         let now = Utc::now();
-        let p = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let p = Partition::new(Topic::new("test"), 0);
         let res = topic.add_message(BrokerMessage::new("payload".to_string(), p, 10, now));
 
         assert!(res.is_ok());
@@ -196,20 +191,13 @@ mod tests {
     #[test]
     fn create_manage_topic() {
         let mut m: MemoryMessageStorage<String> = Default::default();
-        let res = m.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            16,
-        );
+        let res = m.create_topic(Topic::new("test"), 16);
         assert!(res.is_ok());
         let b = m.list_topics();
         assert_eq!(b.len(), 1);
-        assert_eq!(b[0].name, "test".to_string());
+        assert_eq!(b[0].as_str(), "test");
 
-        let t = Topic {
-            name: "test".to_string(),
-        };
+        let t = Topic::new("test");
         let res2 = m.delete_topic(&t);
         assert!(res2.is_ok());
         let b2 = m.list_topics();
@@ -219,37 +207,16 @@ mod tests {
     #[test]
     fn test_mem_partition_count() {
         let mut m: MemoryMessageStorage<String> = Default::default();
-        let _ = m.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            16,
-        );
+        let _ = m.create_topic(Topic::new("test"), 16);
 
-        assert_eq!(
-            m.get_partition_count(&Topic {
-                name: "test".to_string()
-            })
-            .unwrap(),
-            16
-        );
+        assert_eq!(m.get_partition_count(&Topic::new("test")).unwrap(), 16);
     }
 
     #[test]
     fn test_consume_empty() {
         let mut m: MemoryMessageStorage<String> = Default::default();
-        let _ = m.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            16,
-        );
-        let p = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let _ = m.create_topic(Topic::new("test"), 16);
+        let p = Partition::new(Topic::new("test"), 0);
         let message = m.consume(&p, 0);
         assert!(message.is_ok());
         assert!(message.unwrap().is_none());
@@ -261,18 +228,8 @@ mod tests {
     #[test]
     fn test_produce() {
         let mut m: MemoryMessageStorage<String> = Default::default();
-        let _ = m.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            2,
-        );
-        let p = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let _ = m.create_topic(Topic::new("test"), 2);
+        let p = Partition::new(Topic::new("test"), 0);
         let time = Utc::now();
         let offset = m.produce(&p, "test".to_string(), time).unwrap();
         assert_eq!(offset, 0);
