@@ -1741,6 +1741,7 @@ dependencies = [
  "env_logger 0.9.3",
  "futures",
  "log",
+ "once_cell",
  "rdkafka",
  "serde",
  "serde_json",

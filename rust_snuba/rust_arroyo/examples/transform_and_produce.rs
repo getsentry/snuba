@@ -59,7 +59,7 @@ async fn main() {
     impl ProcessingStrategyFactory<KafkaPayload> for ReverseStringAndProduceStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let producer = KafkaProducer::new(self.config.clone());
-            let topic = TopicOrPartition::Topic(self.topic.clone());
+            let topic = TopicOrPartition::Topic(self.topic);
             let reverse_string_and_produce_strategy =
                 Transform::new(reverse_string, Produce::new(Noop {}, producer, 5, topic));
             Box::new(reverse_string_and_produce_strategy)

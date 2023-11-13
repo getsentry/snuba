@@ -259,7 +259,7 @@ mod tests {
             let msg = Message {
                 inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
                     i,
-                    partition1.clone(),
+                    partition1,
                     i,
                     chrono::Utc::now(),
                 )),

@@ -208,22 +208,22 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
     fn pause(&mut self, partitions: HashSet<Partition>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut topic_map = HashMap::new();
-        for partition in partitions {
-            let offset = *self
-                .offsets
-                .lock()
-                .unwrap()
-                .get(&partition)
-                .ok_or(ConsumerError::UnassignedPartition)?;
-            topic_map.insert(
-                (partition.topic.as_str().into(), partition.index as i32),
-                Offset::from_raw(offset as i64),
-            );
+        let mut topic_partition_list = TopicPartitionList::with_capacity(partitions.len());
+        {
+            let offsets = self.offsets.lock().unwrap();
+            for partition in partitions {
+                let offset = offsets
+                    .get(&partition)
+                    .ok_or(ConsumerError::UnassignedPartition)?;
+                topic_partition_list.add_partition_offset(
+                    partition.topic.as_str(),
+                    partition.index as i32,
+                    Offset::from_raw(*offset as i64),
+                )?;
+            }
         }
 
         let consumer = self.consumer.as_ref().unwrap();
-        let topic_partition_list = TopicPartitionList::from_topic_map(&topic_map).unwrap();
         consumer.pause(&topic_partition_list)?;
 
         Ok(())
@@ -271,16 +271,16 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
     fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut topic_map = HashMap::new();
-        for (partition, offset) in self.staged_offsets.iter() {
-            topic_map.insert(
-                (partition.topic.as_str().into(), partition.index as i32),
+        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
+        for (partition, offset) in &self.staged_offsets {
+            partitions.add_partition_offset(
+                partition.topic.as_str(),
+                partition.index as i32,
                 Offset::from_raw(*offset as i64),
-            );
+            )?;
         }
 
         let consumer = self.consumer.as_mut().unwrap();
-        let partitions = TopicPartitionList::from_topic_map(&topic_map).unwrap();
         consumer.commit(&partitions, CommitMode::Sync).unwrap();
 
         // Clear staged offsets
@@ -408,7 +408,7 @@ mod tests {
         let topic = Topic::new("test2");
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        consumer.subscribe(&[topic.clone()], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], my_callbacks).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 

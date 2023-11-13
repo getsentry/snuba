@@ -66,8 +66,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         if self.topics.contains_key(&topic) {
             return Err(TopicExists);
         }
-        self.topics
-            .insert(topic.clone(), TopicMessages::new(partitions));
+        self.topics.insert(topic, TopicMessages::new(partitions));
         Ok(())
     }
 
@@ -102,7 +101,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             .ok_or(ConsumeError::TopicDoesNotExist)?;
         if content.partition_count() > index {
             Ok(Partition {
-                topic: topic.clone(),
+                topic: *topic,
                 index,
             })
         } else {
@@ -137,7 +136,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         let offset = messages.get_messages(partition.index)?.len();
         let _ = messages.add_message(BrokerMessage::new(
             payload,
-            partition.clone(),
+            *partition,
             u64::try_from(offset).unwrap(),
             timestamp,
         ));
