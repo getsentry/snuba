@@ -57,7 +57,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             if errored {
                 match message.inner_message {
                     InnerMessage::BrokerMessage(ref broker_message) => {
-                        let partition = broker_message.partition.clone();
+                        let partition = broker_message.partition;
                         let offset = broker_message.offset;
 
                         Err(InvalidMessage { partition, offset })

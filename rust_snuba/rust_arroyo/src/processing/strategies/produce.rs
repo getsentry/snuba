@@ -132,7 +132,7 @@ mod tests {
             Noop {},
             producer,
             10,
-            TopicOrPartition::Topic(partition.topic.clone()),
+            TopicOrPartition::Topic(partition.topic),
         );
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();

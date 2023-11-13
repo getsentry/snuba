@@ -3,20 +3,37 @@ use std::cmp::Eq;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::Hash;
-use std::sync::Arc;
+use std::sync::RwLock;
 
 use chrono::{DateTime, Utc};
+use indexmap::IndexSet;
+use once_cell::sync::Lazy;
 
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct Topic(Arc<str>);
+static INTERNED_TOPICS: Lazy<RwLock<IndexSet<String>>> = Lazy::new(Default::default);
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct Topic(u16);
 
 impl Topic {
     pub fn new(name: &str) -> Self {
-        Self(name.into())
+        let mut interner = INTERNED_TOPICS.write().unwrap();
+        let (idx, _) = interner.insert_full(name.into());
+        let idx = idx
+            .try_into()
+            .expect("exceeded maximum number of unique topics");
+        Self(idx)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        let interner = INTERNED_TOPICS.read().unwrap();
+        let s = interner
+            .get_index(self.0 as usize)
+            .expect("invalid internet `Topic`");
+
+        // SAFETY:
+        // - The interner is static and append-only, so it essentially leaks.
+        // - We insert heap-allocated `String`s that do not move.
+        unsafe { std::mem::transmute::<&str, &'static str>(s) }
     }
 }
 
@@ -33,7 +50,7 @@ impl fmt::Display for Topic {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Partition {
     pub topic: Topic,
     pub index: u16,
@@ -174,7 +191,7 @@ impl<T: Clone> Message<T> {
             }) => {
                 let mut map = BTreeMap::new();
                 // TODO: Get rid of the clone
-                map.insert(partition.clone(), offset + 1);
+                map.insert(*partition, offset + 1);
                 map
             }
             InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),

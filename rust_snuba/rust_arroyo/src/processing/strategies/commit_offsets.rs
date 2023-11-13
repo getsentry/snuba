@@ -84,7 +84,7 @@ mod tests {
 
         let m1 = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                partition: partition1.clone(),
+                partition: partition1,
                 offset: 1000,
                 payload: KafkaPayload {
                     key: None,
@@ -97,7 +97,7 @@ mod tests {
 
         let m2 = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                partition: partition2.clone(),
+                partition: partition2,
                 offset: 2000,
                 payload: KafkaPayload {
                     key: None,

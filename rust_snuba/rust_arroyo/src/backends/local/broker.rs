@@ -127,7 +127,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
         for topic in subscribed_topics.iter() {
             let partitions = self.storage.get_partition_count(topic)?;
             for n in 0..partitions {
-                ret_partitions.push(Partition::new(topic.clone(), n));
+                ret_partitions.push(Partition::new(*topic, n));
             }
         }
         group_subscriptions.remove(&id);
@@ -163,10 +163,10 @@ mod tests {
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
         let topic = Topic::new("test");
-        let res = broker.create_topic(topic.clone(), 16);
+        let res = broker.create_topic(topic, 16);
         assert!(res.is_ok());
 
-        let res2 = broker.create_topic(topic.clone(), 16);
+        let res2 = broker.create_topic(topic, 16);
         assert!(res2.is_err());
 
         let partitions = broker.get_topic_partition_count(&topic);
@@ -211,23 +211,20 @@ mod tests {
         let topic1 = Topic::new("test1");
         let topic2 = Topic::new("test2");
 
-        let r_assignments = broker.subscribe(
-            Uuid::nil(),
-            "group".to_string(),
-            vec![topic1.clone(), topic2.clone()],
-        );
+        let r_assignments =
+            broker.subscribe(Uuid::nil(), "group".to_string(), vec![topic1, topic2]);
         assert!(r_assignments.is_ok());
         let expected = HashMap::from([
-            (Partition::new(topic1.clone(), 0), 0),
-            (Partition::new(topic1.clone(), 1), 0),
-            (Partition::new(topic2.clone(), 0), 0),
+            (Partition::new(topic1, 0), 0),
+            (Partition::new(topic1, 1), 0),
+            (Partition::new(topic2, 0), 0),
         ]);
         assert_eq!(r_assignments.unwrap(), expected);
 
         let unassignmnts = broker.unsubscribe(Uuid::nil(), "group".to_string());
         assert!(unassignmnts.is_ok());
         let expected = vec![
-            Partition::new(topic1.clone(), 0),
+            Partition::new(topic1, 0),
             Partition::new(topic1, 1),
             Partition::new(topic2, 0),
         ];
