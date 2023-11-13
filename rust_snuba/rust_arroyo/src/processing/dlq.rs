@@ -24,7 +24,7 @@ impl<TPayload> BufferedMessages<TPayload> {
             }
             None => {
                 self.buffered_messages
-                    .insert(message.partition.clone(), VecDeque::from([message]));
+                    .insert(message.partition, VecDeque::from([message]));
             }
         };
     }
@@ -69,9 +69,7 @@ mod tests {
     fn test_buffered_messages() {
         let mut buffer = BufferedMessages::new();
         let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
+            topic: Topic::new("test"),
             index: 1,
         };
 
