@@ -465,7 +465,7 @@ def _get_query_settings_from_config(
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config. Order of precedence
-    for overlapping config wihtin this method is:
+    for overlapping config within this method is:
     1. referrer/<referrer>/query_settings/<setting>
     2. <override_prefix>/query_settings/<setting>
     3. query_settings/<setting>
