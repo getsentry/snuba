@@ -313,12 +313,8 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         let _ = broker.create_topic(topic1, 2);
         let _ = broker.create_topic(topic2, 1);
@@ -329,12 +325,8 @@ mod tests {
     fn test_consumer_subscription() {
         let broker = build_broker();
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
@@ -346,27 +338,9 @@ mod tests {
 
         let _ = consumer.poll(Some(Duration::from_millis(100)));
         let expected = HashMap::from([
-            (
-                Partition {
-                    topic: topic1.clone(),
-                    index: 0,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic1,
-                    index: 1,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic2,
-                    index: 0,
-                },
-                0,
-            ),
+            (Partition::new(topic1.clone(), 0), 0),
+            (Partition::new(topic1, 1), 0),
+            (Partition::new(topic2, 0), 0),
         ]);
         assert_eq!(consumer.subscription_state.offsets, expected);
         assert_eq!(consumer.pending_callback.len(), 0);
@@ -382,22 +356,14 @@ mod tests {
     fn test_subscription_callback() {
         let broker = build_broker();
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         struct TheseCallbacks {}
         impl AssignmentCallbacks for TheseCallbacks {
             fn on_assign(&mut self, partitions: HashMap<Partition, u64>) {
-                let topic1 = Topic {
-                    name: "test1".to_string(),
-                };
-                let topic2 = Topic {
-                    name: "test2".to_string(),
-                };
+                let topic1 = Topic::new("test1");
+                let topic2 = Topic::new("test2");
                 assert_eq!(
                     partitions,
                     HashMap::from([
@@ -426,12 +392,8 @@ mod tests {
                 )
             }
             fn on_revoke(&mut self, partitions: Vec<Partition>) {
-                let topic1 = Topic {
-                    name: "test1".to_string(),
-                };
-                let topic2 = Topic {
-                    name: "test2".to_string(),
-                };
+                let topic1 = Topic::new("test1");
+                let topic2 = Topic::new("test2");
                 assert_eq!(
                     partitions,
                     vec![
@@ -467,22 +429,15 @@ mod tests {
     fn test_consume() {
         let mut broker = build_broker();
 
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
-        let partition = Partition {
-            topic: topic2.clone(),
-            index: 0,
-        };
+        let topic2 = Topic::new("test2");
+        let partition = Partition::new(topic2.clone(), 0);
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
         struct TheseCallbacks {}
         impl AssignmentCallbacks for TheseCallbacks {
             fn on_assign(&mut self, partitions: HashMap<Partition, u64>) {
-                let topic2 = Topic {
-                    name: "test2".to_string(),
-                };
+                let topic2 = Topic::new("test2");
                 assert_eq!(
                     partitions,
                     HashMap::from([(
@@ -521,13 +476,8 @@ mod tests {
     #[test]
     fn test_paused() {
         let broker = build_broker();
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
-        let partition = Partition {
-            topic: topic2.clone(),
-            index: 0,
-        };
+        let topic2 = Topic::new("test2");
+        let partition = Partition::new(topic2.clone(), 0);
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let _ = consumer.subscribe(&[topic2], my_callbacks);
@@ -548,18 +498,10 @@ mod tests {
         let broker = build_broker();
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic2 = Topic::new("test2");
         let _ = consumer.subscribe(&[topic2.clone()], my_callbacks);
         let _ = consumer.poll(None);
-        let positions = HashMap::from([(
-            Partition {
-                topic: topic2.clone(),
-                index: 0,
-            },
-            100,
-        )]);
+        let positions = HashMap::from([(Partition::new(topic2.clone(), 0), 100)]);
         let stage_result = consumer.stage_offsets(positions.clone());
         assert!(stage_result.is_ok());
 
@@ -568,13 +510,7 @@ mod tests {
         assert_eq!(offsets.unwrap(), positions);
 
         // Stage invalid positions
-        let invalid_positions = HashMap::from([(
-            Partition {
-                topic: topic2,
-                index: 1,
-            },
-            100,
-        )]);
+        let invalid_positions = HashMap::from([(Partition::new(topic2, 1), 100)]);
 
         let stage_result = consumer.stage_offsets(invalid_positions);
         assert!(stage_result.is_err());

@@ -134,18 +134,8 @@ mod tests {
 
     #[test]
     fn merge() {
-        let partition = Partition {
-            topic: Topic {
-                name: "topic".to_string(),
-            },
-            index: 0,
-        };
-        let partition_2 = Partition {
-            topic: Topic {
-                name: "topic".to_string(),
-            },
-            index: 1,
-        };
+        let partition = Partition::new(Topic::new("topic"), 0);
+        let partition_2 = Partition::new(Topic::new("topic"), 1);
 
         let a = Some(CommitRequest {
             positions: HashMap::from([(partition.clone(), 1)]),

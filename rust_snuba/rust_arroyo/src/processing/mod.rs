@@ -400,9 +400,7 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
+        let topic1 = Topic::new("test1");
 
         let _ = broker.create_topic(topic1, 1);
         broker
@@ -419,9 +417,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -429,13 +425,8 @@ mod tests {
     #[test]
     fn test_consume() {
         let mut broker = build_broker();
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let partition = Partition {
-            topic: topic1,
-            index: 0,
-        };
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
@@ -447,9 +438,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();

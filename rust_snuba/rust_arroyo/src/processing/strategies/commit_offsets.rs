@@ -78,18 +78,8 @@ mod tests {
     #[test]
     fn test_commit_offsets() {
         env_logger::init();
-        let partition1 = Partition {
-            topic: Topic {
-                name: "noop-commit".to_string(),
-            },
-            index: 0,
-        };
-        let partition2 = Partition {
-            topic: Topic {
-                name: "noop-commit".to_string(),
-            },
-            index: 1,
-        };
+        let partition1 = Partition::new(Topic::new("noop-commit"), 0);
+        let partition2 = Partition::new(Topic::new("noop-commit"), 1);
         let timestamp = DateTime::from(SystemTime::now());
 
         let m1 = Message {
