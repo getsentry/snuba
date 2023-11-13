@@ -136,12 +136,7 @@ mod tests {
 
         let mut strategy = Transform::new(identity, Noop {});
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         strategy
             .submit(Message {

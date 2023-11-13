@@ -35,6 +35,7 @@ struct Strategies<TPayload: Clone> {
 
 struct Callbacks<TPayload: Clone> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
+    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,9 +69,11 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                // TODO: We need to actually call consumer.commit() with the commit request.
-                // Right now we are never committing during consumer shutdown.
-                let _ = s.join(None);
+                if let Ok(Some(commit_request)) = s.join(None) {
+                    let mut consumer = self.consumer.lock().unwrap();
+                    consumer.stage_offsets(commit_request.positions).unwrap();
+                    consumer.commit_offsets().unwrap();
+                }
             }
         }
         stg.strategy = None;
@@ -86,8 +89,14 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
 }
 
 impl<TPayload: Clone> Callbacks<TPayload> {
-    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>) -> Self {
-        Self { strategies }
+    pub fn new(
+        strategies: Arc<Mutex<Strategies<TPayload>>>,
+        consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+    ) -> Self {
+        Self {
+            strategies,
+            consumer,
+        }
     }
 }
 
@@ -129,8 +138,10 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks: Box<dyn AssignmentCallbacks> =
-            Box::new(Callbacks::new(self.strategies.clone()));
+        let callbacks: Box<dyn AssignmentCallbacks> = Box::new(Callbacks::new(
+            self.strategies.clone(),
+            self.consumer.clone(),
+        ));
         self.consumer
             .lock()
             .unwrap()
@@ -213,7 +224,7 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                         Ok(()) => {
                             // Resume if we are currently in a paused state
                             if self.is_paused {
-                                let partitions: std::collections::HashSet<Partition> = self
+                                let partitions = self
                                     .consumer
                                     .lock()
                                     .unwrap()
@@ -359,7 +370,7 @@ mod tests {
             Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable().into_iter()),
+                    positions: HashMap::from_iter(message.committable()),
                 }),
             })
         }
@@ -390,9 +401,7 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
+        let topic1 = Topic::new("test1");
 
         let _ = broker.create_topic(topic1, 1);
         broker
@@ -409,9 +418,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -419,13 +426,8 @@ mod tests {
     #[test]
     fn test_consume() {
         let mut broker = build_broker();
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let partition = Partition {
-            topic: topic1,
-            index: 0,
-        };
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
@@ -437,9 +439,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();

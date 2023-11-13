@@ -26,9 +26,7 @@ fn main() {
         None,
     );
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
-    let topic = Topic {
-        name: "test_static".to_string(),
-    };
+    let topic = Topic::new("test_static");
 
     let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
     processor.subscribe(topic);

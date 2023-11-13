@@ -232,12 +232,7 @@ mod tests {
             }
         }
 
-        let partition1 = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition1 = Partition::new(Topic::new("test"), 0);
 
         let max_batch_size = 2;
         let max_batch_time = Duration::from_secs(1);
@@ -264,7 +259,7 @@ mod tests {
             let msg = Message {
                 inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
                     i,
-                    partition1.clone(),
+                    partition1,
                     i,
                     chrono::Utc::now(),
                 )),

@@ -134,29 +134,19 @@ mod tests {
 
     #[test]
     fn merge() {
-        let partition = Partition {
-            topic: Topic {
-                name: "topic".to_string(),
-            },
-            index: 0,
-        };
-        let partition_2 = Partition {
-            topic: Topic {
-                name: "topic".to_string(),
-            },
-            index: 1,
-        };
+        let partition = Partition::new(Topic::new("topic"), 0);
+        let partition_2 = Partition::new(Topic::new("topic"), 1);
 
         let a = Some(CommitRequest {
-            positions: HashMap::from([(partition.clone(), 1)]),
+            positions: HashMap::from([(partition, 1)]),
         });
 
         let b = Some(CommitRequest {
-            positions: HashMap::from([(partition.clone(), 2)]),
+            positions: HashMap::from([(partition, 2)]),
         });
 
         let c = Some(CommitRequest {
-            positions: HashMap::from([(partition_2.clone(), 2)]),
+            positions: HashMap::from([(partition_2, 2)]),
         });
 
         assert_eq!(merge_commit_request(a.clone(), b.clone()), b.clone());
@@ -164,7 +154,7 @@ mod tests {
         assert_eq!(
             merge_commit_request(a.clone(), c.clone()),
             Some(CommitRequest {
-                positions: HashMap::from([(partition.clone(), 1), (partition_2.clone(), 2)]),
+                positions: HashMap::from([(partition, 1), (partition_2, 2)]),
             })
         );
 
