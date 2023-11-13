@@ -10,7 +10,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     dist_table_name = "generic_metric_counters_aggregated_dist"
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
