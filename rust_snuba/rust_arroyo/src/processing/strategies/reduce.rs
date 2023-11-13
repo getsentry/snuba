@@ -165,12 +165,8 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
                 BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
             );
 
-            let next_message = Message {
-                inner_message: InnerMessage::AnyMessage(AnyMessage::new(
-                    batch_state.value.unwrap(),
-                    batch_state.offsets,
-                )),
-            };
+            let next_message =
+                Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
 
             match self.next_step.submit(next_message) {
                 Err(SubmitError::MessageRejected(MessageRejected {
