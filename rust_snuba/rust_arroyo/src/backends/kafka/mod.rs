@@ -48,9 +48,7 @@ impl KafkaConsumerState {
 }
 
 fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
-    let topic = Topic {
-        name: msg.topic().to_string(),
-    };
+    let topic = Topic::new(msg.topic());
     let partition = Partition {
         topic,
         index: msg.partition() as u16,
@@ -90,10 +88,9 @@ impl ConsumerContext for CustomContext {
             for partition in list.elements().iter() {
                 let topic = partition.topic();
                 let partition_number = partition.partition();
+                // TODO(swatinem)
                 partitions.push(Partition {
-                    topic: Topic {
-                        name: topic.to_string(),
-                    },
+                    topic: Topic::new(topic),
                     index: partition_number as u16,
                 });
             }
@@ -115,10 +112,9 @@ impl ConsumerContext for CustomContext {
                 let partition_number = partition.partition();
                 let offset = partition.offset().to_raw().unwrap();
                 map.insert(
+                    // TODO(swatinem)
                     Partition {
-                        topic: Topic {
-                            name: topic.to_string(),
-                        },
+                        topic: Topic::new(topic),
                         index: partition_number as u16,
                     },
                     offset as u64,
@@ -176,7 +172,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         let consumer: BaseConsumer<CustomContext> = config_obj
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
-        let topic_str: Vec<&str> = topics.iter().map(|t| t.name.as_ref()).collect();
+        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         consumer.subscribe(&topic_str)?;
         self.consumer = Some(consumer);
         self.state = KafkaConsumerState::Consuming;
@@ -212,22 +208,22 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
     fn pause(&mut self, partitions: HashSet<Partition>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut topic_map = HashMap::new();
-        for partition in partitions {
-            let offset = *self
-                .offsets
-                .lock()
-                .unwrap()
-                .get(&partition)
-                .ok_or(ConsumerError::UnassignedPartition)?;
-            topic_map.insert(
-                (partition.topic.name, partition.index as i32),
-                Offset::from_raw(offset as i64),
-            );
+        let mut topic_partition_list = TopicPartitionList::with_capacity(partitions.len());
+        {
+            let offsets = self.offsets.lock().unwrap();
+            for partition in partitions {
+                let offset = offsets
+                    .get(&partition)
+                    .ok_or(ConsumerError::UnassignedPartition)?;
+                topic_partition_list.add_partition_offset(
+                    partition.topic.as_str(),
+                    partition.index as i32,
+                    Offset::from_raw(*offset as i64),
+                )?;
+            }
         }
 
         let consumer = self.consumer.as_ref().unwrap();
-        let topic_partition_list = TopicPartitionList::from_topic_map(&topic_map).unwrap();
         consumer.pause(&topic_partition_list)?;
 
         Ok(())
@@ -241,7 +237,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
             if !self.offsets.lock().unwrap().contains_key(&partition) {
                 return Err(ConsumerError::UnassignedPartition);
             }
-            topic_partition_list.add_partition(&partition.topic.name, partition.index as i32);
+            topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
         }
 
         let consumer = self.consumer.as_mut().unwrap();
@@ -275,16 +271,16 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
     fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut topic_map = HashMap::new();
-        for (partition, offset) in self.staged_offsets.iter() {
-            topic_map.insert(
-                (partition.topic.name.clone(), partition.index as i32),
+        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
+        for (partition, offset) in &self.staged_offsets {
+            partitions.add_partition_offset(
+                partition.topic.as_str(),
+                partition.index as i32,
                 Offset::from_raw(*offset as i64),
-            );
+            )?;
         }
 
         let consumer = self.consumer.as_mut().unwrap();
-        let partitions = TopicPartitionList::from_topic_map(&topic_map).unwrap();
         consumer.commit(&partitions, CommitMode::Sync).unwrap();
 
         // Clear staged offsets
@@ -363,9 +359,7 @@ mod tests {
             None,
         );
         let mut consumer = KafkaConsumer::new(configuration);
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
@@ -382,9 +376,7 @@ mod tests {
             None,
         );
         let mut consumer = KafkaConsumer::new(configuration);
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         assert!(consumer.tell().is_err()); // Not subscribed yet
         consumer.subscribe(&[topic], my_callbacks).unwrap();
@@ -413,12 +405,10 @@ mod tests {
         );
 
         let mut consumer = KafkaConsumer::new(configuration);
-        let topic = Topic {
-            name: "test2".to_string(),
-        };
+        let topic = Topic::new("test2");
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        consumer.subscribe(&[topic.clone()], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], my_callbacks).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 

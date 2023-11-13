@@ -139,9 +139,7 @@ pub fn consumer_impl(
         )),
     );
 
-    processor.subscribe(Topic {
-        name: consumer_config.raw_topic.physical_topic_name.to_owned(),
-    });
+    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 
     let mut handle = processor.get_handle();
 

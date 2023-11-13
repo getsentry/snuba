@@ -104,12 +104,7 @@ mod tests {
             None,
         );
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
@@ -137,7 +132,7 @@ mod tests {
             Noop {},
             producer,
             10,
-            TopicOrPartition::Topic(partition.topic.clone()),
+            TopicOrPartition::Topic(partition.topic),
         );
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
