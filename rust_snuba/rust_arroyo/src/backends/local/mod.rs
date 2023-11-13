@@ -66,6 +66,11 @@ impl<TPayload: Clone> LocalConsumer<TPayload> {
             closed: false,
         }
     }
+
+    fn is_subscribed<'p>(&self, mut partitions: impl Iterator<Item = &'p Partition>) -> bool {
+        let subscribed = &self.subscription_state.offsets;
+        partitions.all(|partition| subscribed.contains_key(partition))
+    }
 }
 
 impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
@@ -184,10 +189,7 @@ impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
-
-        let subscribed = self.subscription_state.offsets.keys().cloned().collect();
-        let diff: HashSet<_> = partitions.difference(&subscribed).collect();
-        if !diff.is_empty() {
+        if !self.is_subscribed(partitions.iter()) {
             return Err(ConsumerError::EndOfPartition);
         }
 
@@ -199,10 +201,7 @@ impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
-
-        let subscribed = self.subscription_state.offsets.keys().cloned().collect();
-        let diff: HashSet<_> = partitions.difference(&subscribed).collect();
-        if !diff.is_empty() {
+        if !self.is_subscribed(partitions.iter()) {
             return Err(ConsumerError::UnassignedPartition);
         }
 
@@ -237,19 +236,11 @@ impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
-        let assigned_partitions: HashSet<&Partition> =
-            self.subscription_state.offsets.keys().collect();
-        let requested_partitions: HashSet<&Partition> = offsets.keys().collect();
-        let diff = requested_partitions.difference(&assigned_partitions);
-
-        if diff.count() > 0 {
+        if !self.is_subscribed(offsets.keys()) {
             return Err(ConsumerError::UnassignedPartition);
         }
-        for (partition, offset) in offsets {
-            self.subscription_state
-                .staged_positions
-                .insert(partition, offset);
-        }
+
+        self.subscription_state.staged_positions.extend(offsets);
         Ok(())
     }
 
@@ -257,14 +248,9 @@ impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
-        let positions = self.subscription_state.staged_positions.clone();
 
-        let offsets = positions
-            .iter()
-            .map(|(part, offset)| (*part, *offset))
-            .collect();
-        self.broker.commit(&self.group, offsets);
-        self.subscription_state.staged_positions.clear();
+        let positions = std::mem::take(&mut self.subscription_state.staged_positions);
+        self.broker.commit(&self.group, positions.clone());
         self.commit_offset_calls += 1;
 
         Ok(positions)
