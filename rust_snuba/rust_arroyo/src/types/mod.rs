@@ -1,39 +1,32 @@
 use std::any::type_name;
 use std::cmp::Eq;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::hash::Hash;
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-use indexmap::IndexSet;
 use once_cell::sync::Lazy;
 
-static INTERNED_TOPICS: Lazy<RwLock<IndexSet<String>>> = Lazy::new(Default::default);
-
 #[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct Topic(u16);
+pub struct Topic(&'static str);
 
 impl Topic {
     pub fn new(name: &str) -> Self {
-        let mut interner = INTERNED_TOPICS.write().unwrap();
-        let (idx, _) = interner.insert_full(name.into());
-        let idx = idx
-            .try_into()
-            .expect("exceeded maximum number of unique topics");
-        Self(idx)
+        static INTERNED_TOPICS: Lazy<Mutex<HashSet<String>>> = Lazy::new(Default::default);
+        let mut interner = INTERNED_TOPICS.lock().unwrap();
+        interner.insert(name.into());
+        let interned_name = interner.get(name).unwrap();
+
+        // SAFETY:
+        // - The interner is static, append-only, and only defined within this function.
+        // - We insert heap-allocated `String`s that do not move.
+        let interned_name = unsafe { std::mem::transmute::<&str, &'static str>(interned_name) };
+        Self(interned_name)
     }
 
     pub fn as_str(&self) -> &str {
-        let interner = INTERNED_TOPICS.read().unwrap();
-        let s = interner
-            .get_index(self.0 as usize)
-            .expect("invalid internet `Topic`");
-
-        // SAFETY:
-        // - The interner is static and append-only, so it essentially leaks.
-        // - We insert heap-allocated `String`s that do not move.
-        unsafe { std::mem::transmute::<&str, &'static str>(s) }
+        self.0
     }
 }
 
