@@ -95,10 +95,7 @@ impl<TPayload: Clone + Send> LocalBroker<TPayload> {
                     self.offsets.insert(consumer_group.clone(), HashMap::new());
                 }
                 for n in 0..partition_count {
-                    let p = Partition {
-                        topic: topic.clone(),
-                        index: n,
-                    };
+                    let p = Partition::new(*topic, n);
                     let offset = match self.offsets[&consumer_group].get(&p) {
                         None => 0,
                         Some(x) => *x,
