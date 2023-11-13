@@ -172,7 +172,7 @@ mod tests {
             "default",
         );
 
-        println!("{}", "running test");
+        println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())

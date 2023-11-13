@@ -31,11 +31,8 @@ fn main() {
     for _ in 0..20 {
         println!("Polling");
         let res = consumer.poll(None);
-        match res.unwrap() {
-            Some(x) => {
-                println!("MSG {:?}", x)
-            }
-            None => {}
+        if let Some(x) = res.unwrap() {
+            println!("MSG {:?}", x)
         }
     }
 }
