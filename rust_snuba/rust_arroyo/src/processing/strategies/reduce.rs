@@ -2,7 +2,7 @@ use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
-use crate::types::{AnyMessage, InnerMessage, Message, Partition};
+use crate::types::{Message, Partition};
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
