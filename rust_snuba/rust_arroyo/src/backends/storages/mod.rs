@@ -21,7 +21,7 @@ pub enum ConsumeError {
     OffsetOutOfRange,
 }
 
-pub trait MessageStorage<TPayload: Clone + Send>: Send {
+pub trait MessageStorage<TPayload>: Send {
     // Create a topic with the given number of partitions.
     //
     // If the topic already exists, a ``TopicExists`` exception will be
@@ -42,8 +42,6 @@ pub trait MessageStorage<TPayload: Clone + Send>: Send {
     // If the topic does not exist, a ``TopicDoesNotExist`` exception will
     // be raised.
     fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist>;
-
-    fn get_partition(&self, topic: &Topic, index: u16) -> Result<Partition, ConsumeError>;
 
     // Consume a message from the provided partition, reading from the given
     // offset. If no message exists at the given offset when reading from

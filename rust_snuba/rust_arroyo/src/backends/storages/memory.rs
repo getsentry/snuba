@@ -5,12 +5,12 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-struct TopicContent<TPayload: Clone> {
+struct TopicContent<TPayload> {
     partition_meta: Vec<Partition>,
     partitions: HashMap<Partition, Vec<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload: Clone> TopicContent<TPayload> {
+impl<TPayload> TopicContent<TPayload> {
     pub fn new(topic: &Topic, partitions: u16) -> Self {
         let mut queues = HashMap::new();
         let mut part_meta = Vec::new();
@@ -47,20 +47,16 @@ impl<TPayload: Clone> TopicContent<TPayload> {
         Ok(())
     }
 
-    fn get_partitions(&self) -> &Vec<Partition> {
-        &self.partition_meta
-    }
-
     fn get_partition_count(&self) -> u16 {
         u16::try_from(self.partitions.len()).unwrap()
     }
 }
 
-pub struct MemoryMessageStorage<TPayload: Clone> {
+pub struct MemoryMessageStorage<TPayload> {
     topics: HashMap<Topic, TopicContent<TPayload>>,
 }
 
-impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
+impl<TPayload> Default for MemoryMessageStorage<TPayload> {
     fn default() -> Self {
         MemoryMessageStorage {
             topics: HashMap::new(),
@@ -99,20 +95,6 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         match self.topics.get(topic) {
             Some(x) => Ok(x.get_partition_count()),
             None => Err(TopicDoesNotExist),
-        }
-    }
-
-    fn get_partition(&self, topic: &Topic, index: u16) -> Result<Partition, ConsumeError> {
-        match self.topics.get(topic) {
-            Some(x) => {
-                let partitions = x.get_partitions();
-                let p = partitions.get(usize::from(index));
-                match p {
-                    Some(y) => Ok(y.clone()),
-                    None => Err(ConsumeError::PartitionDoesNotExist),
-                }
-            }
-            None => Err(ConsumeError::TopicDoesNotExist),
         }
     }
 
