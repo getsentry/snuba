@@ -16,11 +16,11 @@ impl<TPayload: Clone> TopicContent<TPayload> {
         let mut part_meta = Vec::new();
         for i in 0..partitions {
             let p = Partition {
-                topic: topic.clone(),
+                topic: *topic,
                 index: i,
             };
-            part_meta.push(p.clone());
-            queues.insert(p.clone(), Vec::new());
+            part_meta.push(p);
+            queues.insert(p, Vec::new());
         }
         Self {
             partitions: queues,
@@ -74,7 +74,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             return Err(TopicExists);
         }
         self.topics
-            .insert(topic.clone(), TopicContent::new(&topic, partitions));
+            .insert(topic, TopicContent::new(&topic, partitions));
         Ok(())
     }
 
@@ -108,7 +108,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
                 let partitions = x.get_partitions();
                 let p = partitions.get(usize::from(index));
                 match p {
-                    Some(y) => Ok(y.clone()),
+                    Some(y) => Ok(*y),
                     None => Err(ConsumeError::PartitionDoesNotExist),
                 }
             }
@@ -143,7 +143,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         let offset = messages.get_messages(partition)?.len();
         let _ = messages.add_message(BrokerMessage::new(
             payload,
-            partition.clone(),
+            *partition,
             u64::try_from(offset).unwrap(),
             timestamp,
         ));
@@ -169,8 +169,8 @@ mod tests {
     #[test]
     fn test_empty_partitions() {
         let t = Topic::new("test");
-        let p1 = Partition::new(t.clone(), 0);
-        let p2 = Partition::new(t.clone(), 1);
+        let p1 = Partition::new(t, 0);
+        let p2 = Partition::new(t, 1);
         let topic: TopicContent<String> = TopicContent::new(&t, 2);
         assert_eq!(topic.get_messages(&p1).unwrap().len(), 0);
         assert_eq!(topic.get_messages(&p2).unwrap().len(), 0);

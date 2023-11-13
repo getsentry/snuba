@@ -408,7 +408,7 @@ mod tests {
         let topic = Topic::new("test2");
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        consumer.subscribe(&[topic.clone()], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], my_callbacks).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 

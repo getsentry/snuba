@@ -1,22 +1,32 @@
 use std::any::type_name;
 use std::cmp::Eq;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::hash::Hash;
-use std::sync::Arc;
+use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
 
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct Topic(Arc<str>);
+#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct Topic(&'static str);
 
 impl Topic {
     pub fn new(name: &str) -> Self {
-        Self(name.into())
+        static INTERNED_TOPICS: Lazy<Mutex<HashSet<String>>> = Lazy::new(Default::default);
+        let mut interner = INTERNED_TOPICS.lock().unwrap();
+        interner.insert(name.into());
+        let interned_name = interner.get(name).unwrap();
+
+        // SAFETY:
+        // - The interner is static, append-only, and only defined within this function.
+        // - We insert heap-allocated `String`s that do not move.
+        let interned_name = unsafe { std::mem::transmute::<&str, &'static str>(interned_name) };
+        Self(interned_name)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0
     }
 }
 
@@ -33,7 +43,7 @@ impl fmt::Display for Topic {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Partition {
     pub topic: Topic,
     pub index: u16,
@@ -174,7 +184,7 @@ impl<T: Clone> Message<T> {
             }) => {
                 let mut map = BTreeMap::new();
                 // TODO: Get rid of the clone
-                map.insert(partition.clone(), offset + 1);
+                map.insert(*partition, offset + 1);
                 map
             }
             InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),
