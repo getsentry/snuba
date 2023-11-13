@@ -5,11 +5,11 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-struct TopicContent<TPayload> {
+struct TopicMessages<TPayload> {
     messages: Vec<Vec<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload> TopicContent<TPayload> {
+impl<TPayload> TopicMessages<TPayload> {
     pub fn new(partitions: u16) -> Self {
         Self {
             messages: (0..partitions).map(|_| Vec::new()).collect(),
@@ -37,7 +37,7 @@ impl<TPayload> TopicContent<TPayload> {
 }
 
 pub struct MemoryMessageStorage<TPayload: Clone> {
-    topics: HashMap<Topic, TopicContent<TPayload>>,
+    topics: HashMap<Topic, TopicMessages<TPayload>>,
 }
 
 impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
@@ -54,7 +54,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             return Err(TopicExists);
         }
         self.topics
-            .insert(topic.clone(), TopicContent::new(partitions));
+            .insert(topic.clone(), TopicMessages::new(partitions));
         Ok(())
     }
 
@@ -135,33 +135,33 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
 #[cfg(test)]
 mod tests {
     use super::MemoryMessageStorage;
-    use super::TopicContent;
+    use super::TopicMessages;
     use crate::backends::storages::MessageStorage;
     use crate::types::{BrokerMessage, Partition, Topic};
     use chrono::Utc;
 
     #[test]
     fn test_partition_count() {
-        let topic: TopicContent<String> = TopicContent::new(64);
+        let topic: TopicMessages<String> = TopicMessages::new(64);
         assert_eq!(topic.get_partition_count(), 64);
     }
 
     #[test]
     fn test_empty_partitions() {
-        let topic: TopicContent<String> = TopicContent::new(2);
+        let topic: TopicMessages<String> = TopicMessages::new(2);
         assert_eq!(topic.get_messages(0).unwrap().len(), 0);
         assert_eq!(topic.get_messages(1).unwrap().len(), 0);
     }
 
     #[test]
     fn test_invalid_partition() {
-        let topic: TopicContent<String> = TopicContent::new(2);
+        let topic: TopicMessages<String> = TopicMessages::new(2);
         assert!(topic.get_messages(10).is_err());
     }
 
     #[test]
     fn test_add_messages() {
-        let mut topic: TopicContent<String> = TopicContent::new(2);
+        let mut topic: TopicMessages<String> = TopicMessages::new(2);
         let now = Utc::now();
         let p = Partition {
             topic: Topic {
