@@ -217,7 +217,7 @@ impl<T> Message<T> {
         }
     }
 
-    /// Consumes the method and returns its payload.
+    /// Consumes the message and returns its payload.
     pub fn into_payload(self) -> T {
         match self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload,
