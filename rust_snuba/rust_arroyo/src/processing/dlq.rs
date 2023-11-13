@@ -47,8 +47,6 @@ impl<TPayload> BufferedMessages<TPayload> {
                     }
                 };
             }
-
-            return None;
         }
 
         None
