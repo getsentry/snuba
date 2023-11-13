@@ -5,59 +5,52 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-struct TopicContent<TPayload: Clone> {
-    partition_meta: Vec<Partition>,
-    partitions: HashMap<Partition, Vec<BrokerMessage<TPayload>>>,
+/// Stores a list of messages for each partition of a topic.
+///
+/// `self.messages[i][j]` is the `j`-th message of the `i`-th partition.
+struct TopicMessages<TPayload> {
+    messages: Vec<Vec<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload: Clone> TopicContent<TPayload> {
-    pub fn new(topic: &Topic, partitions: u16) -> Self {
-        let mut queues = HashMap::new();
-        let mut part_meta = Vec::new();
-        for i in 0..partitions {
-            let p = Partition {
-                topic: *topic,
-                index: i,
-            };
-            part_meta.push(p);
-            queues.insert(p, Vec::new());
-        }
+impl<TPayload> TopicMessages<TPayload> {
+    /// Creates empty messsage queues for the given number of partitions.
+    fn new(partitions: u16) -> Self {
         Self {
-            partitions: queues,
-            partition_meta: part_meta,
+            messages: (0..partitions).map(|_| Vec::new()).collect(),
         }
     }
 
-    fn get_messages(
-        &self,
-        partition: &Partition,
-    ) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
-        if !self.partition_meta.contains(partition) {
-            return Err(ConsumeError::PartitionDoesNotExist);
-        }
-        Ok(&self.partitions[partition])
+    /// Returns the messages of the given partition.
+    ///
+    /// # Errors
+    /// Returns `ConsumeError::PartitionDoesNotExist` if the partition number is out of bounds.
+    fn get_messages(&self, partition: u16) -> Result<&Vec<BrokerMessage<TPayload>>, ConsumeError> {
+        self.messages
+            .get(partition as usize)
+            .ok_or(ConsumeError::PartitionDoesNotExist)
     }
 
+    /// Appends the given message to its partition's message queue.
+    ///
+    /// # Errors
+    /// Returns `ConsumeError::PartitionDoesNotExist` if the message's partition number is out of bounds.
     fn add_message(&mut self, message: BrokerMessage<TPayload>) -> Result<(), ConsumeError> {
-        if !self.partition_meta.contains(&message.partition) {
-            return Err(ConsumeError::PartitionDoesNotExist);
-        }
-        let stream = self.partitions.get_mut(&message.partition).unwrap();
+        let stream = self
+            .messages
+            .get_mut(message.partition.index as usize)
+            .ok_or(ConsumeError::PartitionDoesNotExist)?;
         stream.push(message);
         Ok(())
     }
 
-    fn get_partitions(&self) -> &Vec<Partition> {
-        &self.partition_meta
-    }
-
-    fn get_partition_count(&self) -> u16 {
-        u16::try_from(self.partitions.len()).unwrap()
+    /// Returns the number of partitions.
+    fn partition_count(&self) -> u16 {
+        u16::try_from(self.messages.len()).unwrap()
     }
 }
 
 pub struct MemoryMessageStorage<TPayload: Clone> {
-    topics: HashMap<Topic, TopicContent<TPayload>>,
+    topics: HashMap<Topic, TopicMessages<TPayload>>,
 }
 
 impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
@@ -73,8 +66,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         if self.topics.contains_key(&topic) {
             return Err(TopicExists);
         }
-        self.topics
-            .insert(topic, TopicContent::new(&topic, partitions));
+        self.topics.insert(topic, TopicMessages::new(partitions));
         Ok(())
     }
 
@@ -97,22 +89,23 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
 
     fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
         match self.topics.get(topic) {
-            Some(x) => Ok(x.get_partition_count()),
+            Some(x) => Ok(x.partition_count()),
             None => Err(TopicDoesNotExist),
         }
     }
 
     fn get_partition(&self, topic: &Topic, index: u16) -> Result<Partition, ConsumeError> {
-        match self.topics.get(topic) {
-            Some(x) => {
-                let partitions = x.get_partitions();
-                let p = partitions.get(usize::from(index));
-                match p {
-                    Some(y) => Ok(*y),
-                    None => Err(ConsumeError::PartitionDoesNotExist),
-                }
-            }
-            None => Err(ConsumeError::TopicDoesNotExist),
+        let content = self
+            .topics
+            .get(topic)
+            .ok_or(ConsumeError::TopicDoesNotExist)?;
+        if content.partition_count() > index {
+            Ok(Partition {
+                topic: *topic,
+                index,
+            })
+        } else {
+            Err(ConsumeError::PartitionDoesNotExist)
         }
     }
 
@@ -122,7 +115,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         offset: u64,
     ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError> {
         let n_offset = usize::try_from(offset).unwrap();
-        let messages = self.topics[&partition.topic].get_messages(partition)?;
+        let messages = self.topics[&partition.topic].get_messages(partition.index)?;
         match messages.len().cmp(&n_offset) {
             Ordering::Greater => Ok(Some(messages[n_offset].clone())),
             Ordering::Less => Err(ConsumeError::OffsetOutOfRange),
@@ -140,7 +133,7 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             .topics
             .get_mut(&partition.topic)
             .ok_or(ConsumeError::TopicDoesNotExist)?;
-        let offset = messages.get_messages(partition)?.len();
+        let offset = messages.get_messages(partition.index)?.len();
         let _ = messages.add_message(BrokerMessage::new(
             payload,
             *partition,
@@ -154,53 +147,44 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
 #[cfg(test)]
 mod tests {
     use super::MemoryMessageStorage;
-    use super::TopicContent;
+    use super::TopicMessages;
     use crate::backends::storages::MessageStorage;
     use crate::types::{BrokerMessage, Partition, Topic};
     use chrono::Utc;
 
     #[test]
     fn test_partition_count() {
-        let t = Topic::new("test");
-        let topic: TopicContent<String> = TopicContent::new(&t, 64);
-        assert_eq!(topic.get_partition_count(), 64);
+        let topic: TopicMessages<String> = TopicMessages::new(64);
+        assert_eq!(topic.partition_count(), 64);
     }
 
     #[test]
     fn test_empty_partitions() {
-        let t = Topic::new("test");
-        let p1 = Partition::new(t, 0);
-        let p2 = Partition::new(t, 1);
-        let topic: TopicContent<String> = TopicContent::new(&t, 2);
-        assert_eq!(topic.get_messages(&p1).unwrap().len(), 0);
-        assert_eq!(topic.get_messages(&p2).unwrap().len(), 0);
+        let topic: TopicMessages<String> = TopicMessages::new(2);
+        assert_eq!(topic.get_messages(0).unwrap().len(), 0);
+        assert_eq!(topic.get_messages(1).unwrap().len(), 0);
     }
 
     #[test]
     fn test_invalid_partition() {
-        let t = Topic::new("test");
-        let topic: TopicContent<String> = TopicContent::new(&t, 2);
-        let p1 = Partition::new(t, 10);
-        assert!(topic.get_messages(&p1).is_err());
+        let topic: TopicMessages<String> = TopicMessages::new(2);
+        assert!(topic.get_messages(10).is_err());
     }
 
     #[test]
     fn test_add_messages() {
-        let t = Topic::new("test");
-        let mut topic: TopicContent<String> = TopicContent::new(&t, 2);
+        let mut topic: TopicMessages<String> = TopicMessages::new(2);
         let now = Utc::now();
         let p = Partition::new(Topic::new("test"), 0);
         let res = topic.add_message(BrokerMessage::new("payload".to_string(), p, 10, now));
 
-        let p0 = Partition::new(Topic::new("test"), 0);
         assert!(res.is_ok());
-        assert_eq!(topic.get_messages(&p0).unwrap().len(), 1);
+        assert_eq!(topic.get_messages(0).unwrap().len(), 1);
 
-        let queue = topic.get_messages(&p0).unwrap();
+        let queue = topic.get_messages(0).unwrap();
         assert_eq!(queue[0].offset, 10);
 
-        let p1 = Partition::new(Topic::new("test"), 1);
-        assert_eq!(topic.get_messages(&p1).unwrap().len(), 0);
+        assert_eq!(topic.get_messages(1).unwrap().len(), 0);
     }
 
     #[test]
