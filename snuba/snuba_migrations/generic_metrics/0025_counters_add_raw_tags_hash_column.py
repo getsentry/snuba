@@ -10,15 +10,12 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     dist_table_name = "generic_metric_counters_aggregated_dist"
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return []
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=self.storage_set_key,
@@ -34,6 +31,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                         ),
                     ),
                 ),
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.AddColumn(
                 storage_set=self.storage_set_key,
@@ -49,22 +47,22 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                         ),
                     ),
                 ),
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return []
-
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 column_name="_raw_tags_hash",
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropColumn(
                 column_name="_indexed_tags_hash",
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]
