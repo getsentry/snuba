@@ -6,7 +6,7 @@ pub mod commit_offsets;
 pub mod produce;
 pub mod reduce;
 pub mod run_task_in_threads;
-pub mod transform;
+pub mod run_task;
 
 #[derive(Debug, Clone)]
 pub enum SubmitError<T> {
