@@ -71,11 +71,7 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
 }
 
 pub struct CustomContext {
-    // This is horrible. I want to mutate callbacks (to invoke on_assign)
-    // From the pre_rebalance function.
-    // But pre_rebalance gets &self and not &mut self.
-    // I am sure there has to be a better way to do this.
-    callbacks: Mutex<Box<dyn AssignmentCallbacks>>,
+    callbacks: Box<dyn AssignmentCallbacks>,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
@@ -100,7 +96,7 @@ impl ConsumerContext for CustomContext {
                 offsets.remove(partition);
             }
 
-            self.callbacks.lock().unwrap().on_revoke(partitions);
+            self.callbacks.on_revoke(partitions);
         }
     }
 
@@ -124,7 +120,7 @@ impl ConsumerContext for CustomContext {
             for (partition, offset) in map.clone() {
                 offsets.insert(partition, offset);
             }
-            self.callbacks.lock().unwrap().on_assign(map);
+            self.callbacks.on_assign(map);
         }
     }
 
@@ -163,7 +159,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         callbacks: Box<dyn AssignmentCallbacks>,
     ) -> Result<(), ConsumerError> {
         let context = CustomContext {
-            callbacks: Mutex::new(callbacks),
+            callbacks,
             consumer_offsets: self.offsets.clone(),
         };
 
@@ -315,8 +311,8 @@ mod tests {
 
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
-        fn on_assign(&mut self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&mut self, _: Vec<Partition>) {}
+        fn on_assign(&self, _: HashMap<Partition, u64>) {}
+        fn on_revoke(&self, _: Vec<Partition>) {}
     }
 
     fn get_admin_client() -> AdminClient<DefaultClientContext> {

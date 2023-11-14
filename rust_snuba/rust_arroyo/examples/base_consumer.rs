@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 struct EmptyCallbacks {}
 impl AssignmentCallbacks for EmptyCallbacks {
-    fn on_assign(&mut self, _: HashMap<Partition, u64>) {}
-    fn on_revoke(&mut self, _: Vec<Partition>) {}
+    fn on_assign(&self, _: HashMap<Partition, u64>) {}
+    fn on_revoke(&self, _: Vec<Partition>) {}
 }
 
 fn main() {
