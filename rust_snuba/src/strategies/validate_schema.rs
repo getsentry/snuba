@@ -41,9 +41,9 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
         let mut errored = false;
 
         if let Some(schema) = &self.schema {
-            let payload = message.payload().payload.unwrap();
+            let payload = message.payload().payload.as_ref().unwrap();
 
-            let res = schema.validate_json(&payload);
+            let res = schema.validate_json(payload);
 
             if let Err(err) = res {
                 log::error!("Validation error {}", err);

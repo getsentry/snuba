@@ -67,7 +67,7 @@ pub fn merge_commit_request(
 ///
 /// This interface is intentionally not prescriptive, and affords a
 /// significant degree of flexibility for the various implementations.
-pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
+pub trait ProcessingStrategy<TPayload>: Send + Sync {
     /// Poll the processor to check on the status of asynchronous tasks or
     /// perform other scheduled work.
     ///
@@ -119,7 +119,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
 }
 
-pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {
+pub trait ProcessingStrategyFactory<TPayload>: Send + Sync {
     /// Instantiate and return a ``ProcessingStrategy`` instance.
     ///
     /// :param commit: A function that accepts a mapping of ``Partition``

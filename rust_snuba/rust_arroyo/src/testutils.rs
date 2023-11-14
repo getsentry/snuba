@@ -25,7 +25,7 @@ impl<T> TestStrategy<T> {
     }
 }
 
-impl<T: Send + Clone> ProcessingStrategy<T> for TestStrategy<T> {
+impl<T: Send> ProcessingStrategy<T> for TestStrategy<T> {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(None)
     }

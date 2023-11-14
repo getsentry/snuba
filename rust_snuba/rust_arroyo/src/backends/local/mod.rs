@@ -24,7 +24,7 @@ struct SubscriptionState {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-pub struct LocalConsumer<TPayload: Clone> {
+pub struct LocalConsumer<TPayload> {
     id: Uuid,
     group: String,
     broker: LocalBroker<TPayload>,
@@ -40,7 +40,7 @@ pub struct LocalConsumer<TPayload: Clone> {
     closed: bool,
 }
 
-impl<TPayload: Clone> LocalConsumer<TPayload> {
+impl<TPayload> LocalConsumer<TPayload> {
     pub fn new(
         id: Uuid,
         broker: LocalBroker<TPayload>,
@@ -73,7 +73,7 @@ impl<TPayload: Clone> LocalConsumer<TPayload> {
     }
 }
 
-impl<TPayload: Clone + Send> Consumer<TPayload> for LocalConsumer<TPayload> {
+impl<TPayload: Send> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn subscribe(
         &mut self,
         topics: &[Topic],
@@ -290,8 +290,8 @@ mod tests {
 
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
-        fn on_assign(&mut self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&mut self, _: Vec<Partition>) {}
+        fn on_assign(&self, _: HashMap<Partition, u64>) {}
+        fn on_revoke(&self, _: Vec<Partition>) {}
     }
 
     fn build_broker() -> LocalBroker<String> {
@@ -347,7 +347,7 @@ mod tests {
 
         struct TheseCallbacks {}
         impl AssignmentCallbacks for TheseCallbacks {
-            fn on_assign(&mut self, partitions: HashMap<Partition, u64>) {
+            fn on_assign(&self, partitions: HashMap<Partition, u64>) {
                 let topic1 = Topic::new("test1");
                 let topic2 = Topic::new("test2");
                 assert_eq!(
@@ -377,7 +377,7 @@ mod tests {
                     ])
                 )
             }
-            fn on_revoke(&mut self, partitions: Vec<Partition>) {
+            fn on_revoke(&self, partitions: Vec<Partition>) {
                 let topic1 = Topic::new("test1");
                 let topic2 = Topic::new("test2");
                 assert_eq!(
@@ -422,7 +422,7 @@ mod tests {
 
         struct TheseCallbacks {}
         impl AssignmentCallbacks for TheseCallbacks {
-            fn on_assign(&mut self, partitions: HashMap<Partition, u64>) {
+            fn on_assign(&self, partitions: HashMap<Partition, u64>) {
                 let topic2 = Topic::new("test2");
                 assert_eq!(
                     partitions,
@@ -435,7 +435,7 @@ mod tests {
                     ),])
                 );
             }
-            fn on_revoke(&mut self, _: Vec<Partition>) {}
+            fn on_revoke(&self, _: Vec<Partition>) {}
         }
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
