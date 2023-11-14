@@ -449,6 +449,7 @@ mod tests {
         let span = valid_span();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
+        println!("{}", data.as_ref().unwrap());
         let payload = KafkaPayload {
             key: None,
             headers: None,
