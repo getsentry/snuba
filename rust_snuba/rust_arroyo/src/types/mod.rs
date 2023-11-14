@@ -1,26 +1,58 @@
-use chrono::{DateTime, Utc};
 use std::any::type_name;
 use std::cmp::Eq;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::hash::Hash;
+use std::sync::Mutex;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct Topic {
-    pub name: String,
+use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct Topic(&'static str);
+
+impl Topic {
+    pub fn new(name: &str) -> Self {
+        static INTERNED_TOPICS: Lazy<Mutex<HashSet<String>>> = Lazy::new(Default::default);
+        let mut interner = INTERNED_TOPICS.lock().unwrap();
+        interner.insert(name.into());
+        let interned_name = interner.get(name).unwrap();
+
+        // SAFETY:
+        // - The interner is static, append-only, and only defined within this function.
+        // - We insert heap-allocated `String`s that do not move.
+        let interned_name = unsafe { std::mem::transmute::<&str, &'static str>(interned_name) };
+        Self(interned_name)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0
+    }
+}
+
+impl fmt::Debug for Topic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = self.as_str();
+        f.debug_tuple("Topic").field(&s).finish()
+    }
 }
 
 impl fmt::Display for Topic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Topic({})", self.name)
+        write!(f, "Topic({})", self.as_str())
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Partition {
-    // TODO: Make this a reference to 'static Topic.
     pub topic: Topic,
     pub index: u16,
+}
+
+impl Partition {
+    pub fn new(topic: Topic, index: u16) -> Self {
+        Self { topic, index }
+    }
 }
 
 impl fmt::Display for Partition {
@@ -43,7 +75,7 @@ pub struct BrokerMessage<T> {
     pub timestamp: DateTime<Utc>,
 }
 
-impl<T: Clone> BrokerMessage<T> {
+impl<T> BrokerMessage<T> {
     pub fn new(payload: T, partition: Partition, offset: u64, timestamp: DateTime<Utc>) -> Self {
         Self {
             payload,
@@ -53,7 +85,7 @@ impl<T: Clone> BrokerMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
         BrokerMessage {
             payload: replacement,
             partition: self.partition,
@@ -61,9 +93,31 @@ impl<T: Clone> BrokerMessage<T> {
             timestamp: self.timestamp,
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<BrokerMessage<TReplaced>, E> {
+        let Self {
+            payload,
+            partition,
+            offset,
+            timestamp,
+        } = self;
+
+        let payload = f(payload)?;
+
+        Ok(BrokerMessage {
+            payload,
+            partition,
+            offset,
+            timestamp,
+        })
+    }
 }
 
-impl<T: Clone> fmt::Display for BrokerMessage<T> {
+impl<T> fmt::Display for BrokerMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -79,7 +133,7 @@ pub struct AnyMessage<T> {
     pub committable: BTreeMap<Partition, u64>,
 }
 
-impl<T: Clone> AnyMessage<T> {
+impl<T> AnyMessage<T> {
     pub fn new(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
         Self {
             payload,
@@ -87,15 +141,33 @@ impl<T: Clone> AnyMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
         AnyMessage {
             payload: replacement,
             committable: self.committable,
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<AnyMessage<TReplaced>, E> {
+        let Self {
+            payload,
+            committable,
+        } = self;
+
+        let payload = f(payload)?;
+
+        Ok(AnyMessage {
+            payload,
+            committable,
+        })
+    }
 }
 
-impl<T: Clone> fmt::Display for AnyMessage<T> {
+impl<T> fmt::Display for AnyMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "AnyMessage(committable={:?})", self.committable)
     }
@@ -112,7 +184,7 @@ pub struct Message<T> {
     pub inner_message: InnerMessage<T>,
 }
 
-impl<T: Clone> Message<T> {
+impl<T> Message<T> {
     pub fn new_broker_message(
         payload: T,
         partition: Partition,
@@ -138,28 +210,37 @@ impl<T: Clone> Message<T> {
         }
     }
 
-    pub fn payload(&self) -> T {
+    pub fn payload(&self) -> &T {
         match &self.inner_message {
-            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload.clone(),
-            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload.clone(),
+            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload,
+            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload,
         }
     }
 
-    pub fn committable(&self) -> BTreeMap<Partition, u64> {
+    /// Consumes the message and returns its payload.
+    pub fn into_payload(self) -> T {
+        match self.inner_message {
+            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload,
+            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload,
+        }
+    }
+
+    /// Returns an iterator over this message's committable offsets.
+    pub fn committable(&self) -> Committable {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage {
                 partition, offset, ..
-            }) => {
-                let mut map = BTreeMap::new();
-                // TODO: Get rid of the clone
-                map.insert(partition.clone(), offset + 1);
-                map
+            }) => Committable(CommittableInner::Broker(std::iter::once((
+                *partition,
+                offset + 1,
+            )))),
+            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
+                Committable(CommittableInner::Any(committable.iter()))
             }
-            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> Message<TReplaced> {
         match self.inner_message {
             InnerMessage::BrokerMessage(inner) => Message {
                 inner_message: InnerMessage::BrokerMessage(inner.replace(replacement)),
@@ -169,9 +250,26 @@ impl<T: Clone> Message<T> {
             },
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<Message<TReplaced>, E> {
+        match self.inner_message {
+            InnerMessage::BrokerMessage(inner) => {
+                let inner = inner.try_map(f)?;
+                Ok(inner.into())
+            }
+            InnerMessage::AnyMessage(inner) => {
+                let inner = inner.try_map(f)?;
+                Ok(inner.into())
+            }
+        }
+    }
 }
 
-impl<T: Clone> fmt::Display for Message<T> {
+impl<T> fmt::Display for Message<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage {
@@ -201,22 +299,58 @@ impl<T: Clone> fmt::Display for Message<T> {
     }
 }
 
+impl<T> From<BrokerMessage<T>> for Message<T> {
+    fn from(value: BrokerMessage<T>) -> Self {
+        Self {
+            inner_message: InnerMessage::BrokerMessage(value),
+        }
+    }
+}
+
+impl<T> From<AnyMessage<T>> for Message<T> {
+    fn from(value: AnyMessage<T>) -> Self {
+        Self {
+            inner_message: InnerMessage::AnyMessage(value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum CommittableInner<'a> {
+    Any(std::collections::btree_map::Iter<'a, Partition, u64>),
+    Broker(std::iter::Once<(Partition, u64)>),
+}
+
+/// An iterator over a `Message`'s committable offsets.
+///
+/// This is produced by [`Message::committable`].
+#[derive(Debug, Clone)]
+pub struct Committable<'a>(CommittableInner<'a>);
+
+impl<'a> Iterator for Committable<'a> {
+    type Item = (Partition, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0 {
+            CommittableInner::Any(ref mut inner) => inner.next().map(|(k, v)| (*k, *v)),
+            CommittableInner::Broker(ref mut inner) => inner.next(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{BrokerMessage, Partition, Topic};
     use chrono::Utc;
-    use std::collections::HashMap;
 
     #[test]
     fn message() {
         let now = Utc::now();
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let part = Partition { topic, index: 10 };
         let message = BrokerMessage::new("payload".to_string(), part, 10, now);
 
-        assert_eq!(message.partition.topic.name, "test");
+        assert_eq!(message.partition.topic.as_str(), "test");
         assert_eq!(message.partition.index, 10);
         assert_eq!(message.offset, 10);
         assert_eq!(message.payload, "payload");
@@ -227,9 +361,7 @@ mod tests {
     fn fmt_display() {
         let now = Utc::now();
         let part = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
+            topic: Topic::new("test"),
             index: 10,
         };
         let message = BrokerMessage::new("payload".to_string(), part, 10, now);
@@ -238,60 +370,5 @@ mod tests {
             message.to_string(),
             "BrokerMessage(partition=Partition(10 topic=Topic(test)) offset=10)"
         )
-    }
-
-    #[test]
-    fn test_eq() {
-        let a = Topic {
-            name: "test".to_string(),
-        };
-        let b = Topic {
-            name: "test".to_string(),
-        };
-        assert!(a == b);
-
-        let c = Topic {
-            name: "test2".to_string(),
-        };
-        assert!(a != c);
-    }
-
-    #[test]
-    fn test_hash() {
-        let mut content = HashMap::new();
-        content.insert(
-            Topic {
-                name: "test".to_string(),
-            },
-            "test_value".to_string(),
-        );
-
-        let b = Topic {
-            name: "test".to_string(),
-        };
-        let c = content.get(&b).unwrap();
-        assert_eq!(&"test_value".to_string(), c);
-    }
-
-    #[test]
-    fn test_clone() {
-        let topic = Topic {
-            name: "test".to_string(),
-        };
-        let part = Partition { topic, index: 10 };
-
-        let part2 = part.clone();
-        assert_eq!(part, part2);
-        assert_ne!(&part as *const Partition, &part2 as *const Partition);
-
-        let now = Utc::now();
-        let message = BrokerMessage::new("payload".to_string(), part, 10, now);
-        let message2 = message.clone();
-
-        assert_eq!(message, message2);
-        assert_ne!(
-            &message as *const BrokerMessage<String>,
-            &message2 as *const BrokerMessage<String>
-        );
     }
 }

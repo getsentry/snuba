@@ -8,7 +8,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -114,10 +114,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                                         timestamp: broker_message.timestamp,
                                     }),
                                 }),
-                                Err(_e) => Err(InvalidMessage {
+                                Err(_e) => Err(RunTaskError::InvalidMessage(InvalidMessage {
                                     partition: broker_message.partition,
                                     offset: broker_message.offset,
-                                }),
+                                })),
                             }
                         })
                     }

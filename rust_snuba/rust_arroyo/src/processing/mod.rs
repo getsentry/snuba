@@ -1,3 +1,4 @@
+mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
@@ -27,13 +28,14 @@ pub enum RunError {
     PauseError,
 }
 
-struct Strategies<TPayload: Clone> {
+struct Strategies<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
 }
 
-struct Callbacks<TPayload: Clone> {
+struct Callbacks<TPayload> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
+    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,18 +49,18 @@ impl ProcessorHandle {
     }
 }
 
-impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
+impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // TODO: Having the initialization of the strategy here
     // means that ProcessingStrategy and ProcessingStrategyFactory
     // have to be Send and Sync, which is really limiting and unnecessary.
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
-    fn on_assign(&mut self, _: HashMap<Partition, u64>) {
+    fn on_assign(&self, _: HashMap<Partition, u64>) {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&mut self, _: Vec<Partition>) {
+    fn on_revoke(&self, _: Vec<Partition>) {
         let mut metrics = get_metrics();
         let start = Instant::now();
 
@@ -67,9 +69,11 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                // TODO: We need to actually call consumer.commit() with the commit request.
-                // Right now we are never committing during consumer shutdown.
-                let _ = s.join(None);
+                if let Ok(Some(commit_request)) = s.join(None) {
+                    let mut consumer = self.consumer.lock().unwrap();
+                    consumer.stage_offsets(commit_request.positions).unwrap();
+                    consumer.commit_offsets().unwrap();
+                }
             }
         }
         stg.strategy = None;
@@ -84,9 +88,15 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
     }
 }
 
-impl<TPayload: Clone> Callbacks<TPayload> {
-    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>) -> Self {
-        Self { strategies }
+impl<TPayload> Callbacks<TPayload> {
+    pub fn new(
+        strategies: Arc<Mutex<Strategies<TPayload>>>,
+        consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+    ) -> Self {
+        Self {
+            strategies,
+            consumer,
+        }
     }
 }
 
@@ -94,7 +104,7 @@ impl<TPayload: Clone> Callbacks<TPayload> {
 /// instance and a ``ProcessingStrategy``, ensuring that processing
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
-pub struct StreamProcessor<TPayload: Clone> {
+pub struct StreamProcessor<TPayload> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
@@ -104,7 +114,7 @@ pub struct StreamProcessor<TPayload: Clone> {
     metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
-impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
+impl<TPayload: 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
@@ -128,8 +138,10 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks: Box<dyn AssignmentCallbacks> =
-            Box::new(Callbacks::new(self.strategies.clone()));
+        let callbacks: Box<dyn AssignmentCallbacks> = Box::new(Callbacks::new(
+            self.strategies.clone(),
+            self.consumer.clone(),
+        ));
         self.consumer
             .lock()
             .unwrap()
@@ -212,7 +224,7 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                         Ok(()) => {
                             // Resume if we are currently in a paused state
                             if self.is_paused {
-                                let partitions: std::collections::HashSet<Partition> = self
+                                let partitions = self
                                     .consumer
                                     .lock()
                                     .unwrap()
@@ -358,7 +370,7 @@ mod tests {
             Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable().into_iter()),
+                    positions: HashMap::from_iter(message.committable()),
                 }),
             })
         }
@@ -389,9 +401,7 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
+        let topic1 = Topic::new("test1");
 
         let _ = broker.create_topic(topic1, 1);
         broker
@@ -408,9 +418,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -418,13 +426,8 @@ mod tests {
     #[test]
     fn test_consume() {
         let mut broker = build_broker();
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let partition = Partition {
-            topic: topic1,
-            index: 0,
-        };
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
@@ -436,9 +439,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();
