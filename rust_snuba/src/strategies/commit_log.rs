@@ -221,7 +221,7 @@ mod tests {
                 &mut self,
                 message: Message<KafkaPayload>,
             ) -> Result<(), SubmitError<KafkaPayload>> {
-                self.payloads.push(message.payload());
+                self.payloads.push(message.payload().clone());
                 Ok(())
             }
             fn close(&mut self) {}
@@ -282,9 +282,7 @@ mod tests {
             next_step,
             producer,
             1,
-            TopicOrPartition::Topic(Topic {
-                name: "test".to_string(),
-            }),
+            TopicOrPartition::Topic(Topic::new("test")),
             false,
         );
 
