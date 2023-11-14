@@ -12,14 +12,14 @@ use std::time::Duration;
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
-    topic: Arc<TopicOrPartition>,
+    topic: TopicOrPartition,
 }
 
 impl ProduceMessage {
     pub fn new(producer: impl Producer<KafkaPayload> + 'static, topic: TopicOrPartition) -> Self {
         ProduceMessage {
             producer: Arc::new(producer),
-            topic: Arc::new(topic),
+            topic,
         }
     }
 }
@@ -27,7 +27,7 @@ impl ProduceMessage {
 impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
         let producer = self.producer.clone();
-        let topic = self.topic.clone();
+        let topic = self.topic;
 
         Box::pin(async move {
             producer

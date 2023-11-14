@@ -190,114 +190,111 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
         }
 
         let mut trait_callbacks = self.strategies.lock().unwrap();
-        match trait_callbacks.strategy.as_mut() {
-            None => match self.message.as_ref() {
-                None => {}
+        let Some(strategy) = trait_callbacks.strategy.as_mut() else {
+            match self.message.as_ref() {
+                None => return Ok(()),
                 Some(_) => return Err(RunError::InvalidState),
-            },
-            Some(strategy) => {
-                let commit_request = strategy.poll();
-                match commit_request {
-                    Ok(None) => {}
-                    Ok(Some(request)) => {
-                        self.consumer
-                            .lock()
-                            .unwrap()
-                            .stage_offsets(request.positions)
-                            .unwrap();
-                        self.consumer.lock().unwrap().commit_offsets().unwrap();
-                    }
-                    Err(e) => {
-                        println!("TODOO: Handle invalid message {:?}", e);
-                    }
-                };
+            }
+        };
+        let commit_request = strategy.poll();
+        match commit_request {
+            Ok(None) => {}
+            Ok(Some(request)) => {
+                self.consumer
+                    .lock()
+                    .unwrap()
+                    .stage_offsets(request.positions)
+                    .unwrap();
+                self.consumer.lock().unwrap().commit_offsets().unwrap();
+            }
+            Err(e) => {
+                println!("TODOO: Handle invalid message {:?}", e);
+            }
+        };
 
-                let msg = self.message.take();
-                if let Some(msg_s) = msg {
-                    let processing_start = Instant::now();
-                    let ret = strategy.submit(msg_s);
-                    self.metrics_buffer.incr_timing(
-                        "arroyo.consumer.processing.time",
-                        processing_start.elapsed(),
-                    );
-                    match ret {
+        let Some(msg_s) = self.message.take() else {
+            return Ok(());
+        };
+        let processing_start = Instant::now();
+        let ret = strategy.submit(msg_s);
+        self.metrics_buffer.incr_timing(
+            "arroyo.consumer.processing.time",
+            processing_start.elapsed(),
+        );
+        match ret {
+            Ok(()) => {
+                // Resume if we are currently in a paused state
+                if self.is_paused {
+                    let partitions = self
+                        .consumer
+                        .lock()
+                        .unwrap()
+                        .tell()
+                        .unwrap()
+                        .keys()
+                        .cloned()
+                        .collect();
+
+                    let res = self.consumer.lock().unwrap().resume(partitions);
+                    match res {
                         Ok(()) => {
-                            // Resume if we are currently in a paused state
-                            if self.is_paused {
-                                let partitions = self
-                                    .consumer
-                                    .lock()
-                                    .unwrap()
-                                    .tell()
-                                    .unwrap()
-                                    .keys()
-                                    .cloned()
-                                    .collect();
-
-                                let res = self.consumer.lock().unwrap().resume(partitions);
-                                match res {
-                                    Ok(()) => {
-                                        self.is_paused = false;
-                                    }
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            }
-
-                            // Clear backpressure timestamp if it is set
-                            if self.backpressure_timestamp.is_some() {
-                                self.metrics_buffer.incr_timing(
-                                    "arroyo.consumer.backpressure.time",
-                                    self.backpressure_timestamp.unwrap().elapsed(),
-                                );
-                                self.backpressure_timestamp = None;
-                            }
+                            self.is_paused = false;
                         }
-                        Err(SubmitError::MessageRejected(MessageRejected { message })) => {
-                            // Put back the carried over message
-                            self.message = Some(message);
-
-                            if self.backpressure_timestamp.is_none() {
-                                self.backpressure_timestamp = Some(Instant::now());
-                            }
-
-                            // If we are in the backpressure state for more than 1 second,
-                            // we pause the consumer and hold the message until it is
-                            // accepted, at which point we can resume consuming.
-                            if !self.is_paused && self.backpressure_timestamp.is_some() {
-                                let backpressure_duration =
-                                    self.backpressure_timestamp.unwrap().elapsed();
-
-                                if backpressure_duration < Duration::from_secs(1) {
-                                    return Ok(());
-                                }
-
-                                log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
-
-                                let partitions = self
-                                    .consumer
-                                    .lock()
-                                    .unwrap()
-                                    .tell()
-                                    .unwrap()
-                                    .keys()
-                                    .cloned()
-                                    .collect();
-
-                                let res = self.consumer.lock().unwrap().pause(partitions);
-                                match res {
-                                    Ok(()) => {
-                                        self.is_paused = true;
-                                    }
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            }
-                        }
-                        Err(SubmitError::InvalidMessage(invalid_message)) => {
-                            // TODO: Put this into the DLQ once we have one
-                            log::error!("Invalid message: {:?}", invalid_message);
-                        }
+                        Err(_) => return Err(RunError::PauseError),
                     }
                 }
+
+                // Clear backpressure timestamp if it is set
+                if self.backpressure_timestamp.is_some() {
+                    self.metrics_buffer.incr_timing(
+                        "arroyo.consumer.backpressure.time",
+                        self.backpressure_timestamp.unwrap().elapsed(),
+                    );
+                    self.backpressure_timestamp = None;
+                }
+            }
+            Err(SubmitError::MessageRejected(MessageRejected { message })) => {
+                // Put back the carried over message
+                self.message = Some(message);
+
+                if self.backpressure_timestamp.is_none() {
+                    self.backpressure_timestamp = Some(Instant::now());
+                }
+
+                // If we are in the backpressure state for more than 1 second,
+                // we pause the consumer and hold the message until it is
+                // accepted, at which point we can resume consuming.
+                if !self.is_paused && self.backpressure_timestamp.is_some() {
+                    let backpressure_duration = self.backpressure_timestamp.unwrap().elapsed();
+
+                    if backpressure_duration < Duration::from_secs(1) {
+                        return Ok(());
+                    }
+
+                    log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
+
+                    let partitions = self
+                        .consumer
+                        .lock()
+                        .unwrap()
+                        .tell()
+                        .unwrap()
+                        .keys()
+                        .cloned()
+                        .collect();
+
+                    let res = self.consumer.lock().unwrap().pause(partitions);
+                    match res {
+                        Ok(()) => {
+                            self.is_paused = true;
+                        }
+                        Err(_) => return Err(RunError::PauseError),
+                    }
+                }
+            }
+            Err(SubmitError::InvalidMessage(invalid_message)) => {
+                // TODO: Put this into the DLQ once we have one
+                log::error!("Invalid message: {:?}", invalid_message);
             }
         }
         Ok(())
@@ -310,22 +307,16 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
             .shutdown_requested
             .load(Ordering::Relaxed)
         {
-            let ret = self.run_once();
-            match ret {
-                Ok(()) => {}
-                Err(e) => {
-                    let mut trait_callbacks = self.strategies.lock().unwrap();
+            if let Err(e) = self.run_once() {
+                let mut trait_callbacks = self.strategies.lock().unwrap();
 
-                    match trait_callbacks.strategy.as_mut() {
-                        None => {}
-                        Some(strategy) => {
-                            strategy.terminate();
-                        }
-                    }
-                    drop(trait_callbacks); // unlock mutex so we can close consumer
-                    self.consumer.lock().unwrap().close();
-                    return Err(e);
+                if let Some(strategy) = trait_callbacks.strategy.as_mut() {
+                    strategy.terminate();
                 }
+
+                drop(trait_callbacks); // unlock mutex so we can close consumer
+                self.consumer.lock().unwrap().close();
+                return Err(e);
             }
         }
         self.shutdown();

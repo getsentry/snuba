@@ -6,28 +6,26 @@ use uuid::Uuid;
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            BadMessage
-        })?;
-        let mut span: Span = msg.try_into()?;
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+    let mut span: Span = msg.try_into()?;
 
-        span.offset = _metadata.offset;
-        span.partition = _metadata.partition;
+    span.offset = metadata.offset;
+    span.partition = metadata.partition;
 
-        let serialized = serde_json::to_vec(&span).map_err(|err| {
-            log::error!("Failed to serialize processed message: {}", err);
-            BadMessage
-        })?;
+    let serialized = serde_json::to_vec(&span).map_err(|err| {
+        log::error!("Failed to serialize processed message: {}", err);
+        BadMessage
+    })?;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-    Err(BadMessage)
+    Ok(BytesInsertBatch {
+        rows: vec![serialized],
+    })
 }
 
 const DEFAULT_RETENTION_DAYS: u16 = 90;
