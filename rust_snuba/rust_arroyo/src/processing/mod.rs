@@ -61,7 +61,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&self, _: Vec<Partition>) {
-        let mut metrics = get_metrics();
+        let metrics = get_metrics();
         let start = Instant::now();
 
         let mut stg = self.strategies.lock().unwrap();
