@@ -1,3 +1,4 @@
+mod utils;
 mod functions;
 mod profiles;
 mod querylog;
