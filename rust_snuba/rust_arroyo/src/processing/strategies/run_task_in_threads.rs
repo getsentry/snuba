@@ -173,17 +173,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         self.handles.clear();
         self.metrics_buffer.flush();
 
-        let remaining = match timeout {
-            Some(t) => {
-                let elapsed = start.elapsed();
-                if elapsed > t {
-                    Some(Duration::ZERO)
-                } else {
-                    Some(t - elapsed)
-                }
-            }
-            None => None,
-        };
+        let remaining = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 

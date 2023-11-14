@@ -101,17 +101,7 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
             self.flush(true)?;
         }
 
-        let remaining = match timeout {
-            Some(t) => {
-                let elapsed = start.elapsed();
-                if elapsed > t {
-                    Some(Duration::ZERO)
-                } else {
-                    Some(t - elapsed)
-                }
-            }
-            None => None,
-        };
+        let remaining: Option<Duration> = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 
