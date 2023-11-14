@@ -84,24 +84,35 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
                 let next_commit = self.next_step.poll()?;
                 self.commit_request_carried_over =
                     merge_commit_request(self.commit_request_carried_over.take(), next_commit);
                 self.flush(true)?;
-                if let Some(t) = remaining {
-                    if t <= Duration::from_secs(0) {
+                if let Some(t) = timeout {
+                    if start.elapsed() > t {
                         log::warn!("Timeout reached while waiting for tasks to finish");
                         break;
                     }
-                    remaining = Some(t - start.elapsed());
                 }
             }
         } else {
             self.flush(true)?;
         }
+
+        let remaining = match timeout {
+            Some(t) => {
+                let elapsed = start.elapsed();
+                if elapsed > t {
+                    Some(Duration::ZERO)
+                } else {
+                    Some(t - elapsed)
+                }
+            }
+            None => None,
+        };
+
         let next_commit = self.next_step.join(remaining)?;
 
         Ok(merge_commit_request(

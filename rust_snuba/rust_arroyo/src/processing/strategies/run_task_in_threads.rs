@@ -148,13 +148,11 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
-            if let Some(t) = remaining {
-                remaining = Some(t - start.elapsed());
-                if remaining.unwrap() <= Duration::from_secs(0) {
+            if let Some(t) = timeout {
+                if start.elapsed() > t {
                     log::warn!(
                         "[{}] Timeout reached while waiting for tasks to finish",
                         self.metric_name
@@ -174,6 +172,18 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
         self.handles.clear();
         self.metrics_buffer.flush();
+
+        let remaining = match timeout {
+            Some(t) => {
+                let elapsed = start.elapsed();
+                if elapsed > t {
+                    Some(Duration::ZERO)
+                } else {
+                    Some(t - elapsed)
+                }
+            }
+            None => None,
+        };
 
         let next_commit = self.next_step.join(remaining)?;
 
