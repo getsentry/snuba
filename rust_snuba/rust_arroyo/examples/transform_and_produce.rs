@@ -1,4 +1,4 @@
-// An example of using the Transform and Produce strategies together.
+// An example of using the RunTask and Produce strategies together.
 // inspired by https://github.com/getsentry/arroyo/blob/main/examples/transform_and_produce/script.py
 // This creates a consumer that reads from a topic test_in, reverses the string message,
 // and then produces it to topic test_out.
@@ -10,7 +10,7 @@ use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::produce::Produce;
-use rust_arroyo::processing::strategies::run_task::Transform;
+use rust_arroyo::processing::strategies::run_task::RunTask;
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
 };
@@ -61,7 +61,7 @@ async fn main() {
             let producer = KafkaProducer::new(self.config.clone());
             let topic = TopicOrPartition::Topic(self.topic);
             let reverse_string_and_produce_strategy =
-                Transform::new(reverse_string, Produce::new(Noop {}, producer, 5, topic));
+                RunTask::new(reverse_string, Produce::new(Noop {}, producer, 5, topic));
             Box::new(reverse_string_and_produce_strategy)
         }
     }
