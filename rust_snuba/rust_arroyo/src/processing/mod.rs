@@ -56,11 +56,11 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
-    fn on_assign(&mut self, _: HashMap<Partition, u64>) {
+    fn on_assign(&self, _: HashMap<Partition, u64>) {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&mut self, _: Vec<Partition>) {
+    fn on_revoke(&self, _: Vec<Partition>) {
         let mut metrics = get_metrics();
         let start = Instant::now();
 
