@@ -123,7 +123,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
                 return Ok(message);
             }
 
-            match producer.produce(&topic, message.payload()) {
+            match producer.produce(&topic, message.payload().clone()) {
                 Ok(_) => Ok(message),
                 Err(e) => {
                     log::error!("Error producing message: {}", e);
