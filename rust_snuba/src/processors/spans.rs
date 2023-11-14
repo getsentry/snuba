@@ -1,8 +1,9 @@
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
+use crate::processors::utils::{default_retention_days, DEFAULT_RETENTION_DAYS, hex_to_u64};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -28,12 +29,6 @@ pub fn process_message(
         });
     }
     Err(BadMessage)
-}
-
-const DEFAULT_RETENTION_DAYS: u16 = 90;
-
-fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -265,14 +260,6 @@ impl TryFrom<FromSpanMessage> for Span {
             ..Default::default()
         })
     }
-}
-
-fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
 }
 
 #[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
