@@ -29,7 +29,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
         Box::pin(async move {
             let len = message.payload().rows.len();
             let mut data = vec![];
-            for row in message.payload().rows {
+            for row in &message.payload().rows {
                 data.extend(row);
                 data.extend(b"\n");
             }
@@ -172,7 +172,7 @@ mod tests {
             "default",
         );
 
-        println!("{}", "running test");
+        println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())

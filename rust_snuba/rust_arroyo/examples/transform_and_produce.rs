@@ -16,6 +16,7 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
@@ -58,7 +59,7 @@ async fn main() {
     impl ProcessingStrategyFactory<KafkaPayload> for ReverseStringAndProduceStrategyFactory {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let producer = KafkaProducer::new(self.config.clone());
-            let topic = TopicOrPartition::Topic(self.topic.clone());
+            let topic = TopicOrPartition::Topic(self.topic);
             let reverse_string_and_produce_strategy =
                 Transform::new(reverse_string, Produce::new(Noop {}, producer, 5, topic));
             Box::new(reverse_string_and_produce_strategy)
@@ -73,19 +74,15 @@ async fn main() {
         None,
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config.clone()));
+    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config.clone())));
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ReverseStringAndProduceStrategyFactory {
             config: config.clone(),
-            topic: Topic {
-                name: "test_out".to_string(),
-            },
+            topic: Topic::new("test_out"),
         }),
     );
-    processor.subscribe(Topic {
-        name: "test_in".to_string(),
-    });
+    processor.subscribe(Topic::new("test_in"));
     println!("running processor. transforming from test_in to test_out");
     processor.run().unwrap();
 }

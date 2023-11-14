@@ -92,6 +92,9 @@ class TestSpansApi(BaseApiTest):
                                         self.base_time + timedelta(minutes=tick)
                                     )
                                 ),
+                                "received": datetime.timestamp(
+                                    self.base_time + timedelta(minutes=tick)
+                                ),
                                 "exclusive_time_ms": int(1000 * 0.1234),
                                 "trace_id": self.trace_id,
                                 "span_id": span_id,

@@ -41,9 +41,9 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
         let mut errored = false;
 
         if let Some(schema) = &self.schema {
-            let payload = message.payload().payload.unwrap();
+            let payload = message.payload().payload.as_ref().unwrap();
 
-            let res = schema.validate_json(&payload);
+            let res = schema.validate_json(payload);
 
             if let Err(err) = res {
                 log::error!("Validation error {}", err);
@@ -57,7 +57,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             if errored {
                 match message.inner_message {
                     InnerMessage::BrokerMessage(ref broker_message) => {
-                        let partition = broker_message.partition.clone();
+                        let partition = broker_message.partition;
                         let offset = broker_message.offset;
 
                         Err(RunTaskError::InvalidMessage(InvalidMessage {
@@ -131,12 +131,7 @@ mod tests {
 
     #[test]
     fn validate_schema() {
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
@@ -179,7 +174,7 @@ mod tests {
                     headers: None,
                     payload: Some(payload_str.clone()),
                 },
-                partition: partition,
+                partition,
                 offset: 0,
                 timestamp: Utc::now(),
             }),

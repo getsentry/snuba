@@ -18,11 +18,11 @@ pub enum RunTaskError {
 pub type RunTaskFunc<TTransformed> =
     Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
 
-pub trait TaskRunner<TPayload: Clone, TTransformed: Clone + Send + Sync>: Send + Sync {
+pub trait TaskRunner<TPayload, TTransformed: Send + Sync>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
-pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
+pub struct RunTaskInThreads<TPayload: Send + Sync, TTransformed: Send + Sync> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
@@ -34,9 +34,7 @@ pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone +
     metric_name: String,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
-    RunTaskInThreads<TPayload, TTransformed>
-{
+impl<TPayload: Send + Sync, TTransformed: Send + Sync> RunTaskInThreads<TPayload, TTransformed> {
     pub fn new<N>(
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
@@ -67,8 +65,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
     }
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
-    ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
+impl<TPayload: Send + Sync, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
+    for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
@@ -219,7 +217,7 @@ mod tests {
 
         struct IdentityTaskRunner {}
 
-        impl<T: Clone + Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
+        impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
             fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
                 Box::pin(async move { Ok(message) })
             }

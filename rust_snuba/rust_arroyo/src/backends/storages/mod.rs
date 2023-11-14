@@ -21,7 +21,7 @@ pub enum ConsumeError {
     OffsetOutOfRange,
 }
 
-pub trait MessageStorage<TPayload: Clone> {
+pub trait MessageStorage<TPayload: Send>: Send {
     // Create a topic with the given number of partitions.
     //
     // If the topic already exists, a ``TopicExists`` exception will be

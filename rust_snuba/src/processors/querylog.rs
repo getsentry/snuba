@@ -36,16 +36,6 @@ struct RequestBody {
     fields: BTreeMap<String, Value>,
 }
 
-fn serialize_uuid<S>(input: &str, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let uuid = Uuid::parse_str(input)
-        .map_err(S::Error::custom)?
-        .to_string();
-    s.serialize_str(&uuid)
-}
-
 fn nullable_result_profile<'de, D>(deserializer: D) -> Result<ResultProfile, D::Error>
 where
     D: Deserializer<'de>,
@@ -64,8 +54,8 @@ where
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
-    #[serde(rename(serialize = "request_id"), serialize_with = "serialize_uuid")]
-    id: String,
+    #[serde(rename(serialize = "request_id"))]
+    id: Uuid,
     #[serde(
         rename(serialize = "request_body"),
         serialize_with = "serialize_json_str"

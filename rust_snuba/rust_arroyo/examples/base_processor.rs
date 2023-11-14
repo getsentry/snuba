@@ -7,6 +7,7 @@ use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct TestFactory {}
@@ -24,10 +25,8 @@ fn main() {
         false,
         None,
     );
-    let consumer = Box::new(KafkaConsumer::new(config));
-    let topic = Topic {
-        name: "test_static".to_string(),
-    };
+    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
+    let topic = Topic::new("test_static");
 
     let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
     processor.subscribe(topic);

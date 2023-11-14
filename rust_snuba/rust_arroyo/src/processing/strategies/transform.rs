@@ -5,16 +5,14 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use std::time::Duration;
 
-pub struct Transform<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
+pub struct Transform<TPayload: Send + Sync, TTransformed: Send + Sync> {
     pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
     pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     pub message_carried_over: Option<Message<TTransformed>>,
     pub commit_request_carried_over: Option<CommitRequest>,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
-    Transform<TPayload, TTransformed>
-{
+impl<TPayload: Send + Sync, TTransformed: Send + Sync> Transform<TPayload, TTransformed> {
     pub fn new<N>(
         function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
         next_step: N,
@@ -31,7 +29,7 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
     }
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> ProcessingStrategy<TPayload>
+impl<TPayload: Send + Sync, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
     for Transform<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
@@ -65,25 +63,21 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> Processin
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
-        match (self.function)(message.payload()) {
-            Err(invalid_message) => {
+        let next_message = message
+            .try_map(self.function)
+            .map_err(SubmitError::InvalidMessage)?;
+
+        match self.next_step.submit(next_message) {
+            Err(SubmitError::MessageRejected(MessageRejected {
+                message: transformed_message,
+            })) => {
+                self.message_carried_over = Some(transformed_message);
+            }
+            Err(SubmitError::InvalidMessage(invalid_message)) => {
                 return Err(SubmitError::InvalidMessage(invalid_message));
             }
-            Ok(transformed) => {
-                let next_message = message.replace(transformed);
-                match self.next_step.submit(next_message) {
-                    Err(SubmitError::MessageRejected(MessageRejected {
-                        message: transformed_message,
-                    })) => {
-                        self.message_carried_over = Some(transformed_message);
-                    }
-                    Err(SubmitError::InvalidMessage(invalid_message)) => {
-                        return Err(SubmitError::InvalidMessage(invalid_message));
-                    }
-                    Ok(_) => {}
-                }
-            }
-        };
+            Ok(_) => {}
+        }
         Ok(())
     }
 
@@ -136,12 +130,7 @@ mod tests {
 
         let mut strategy = Transform::new(identity, Noop {});
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         strategy
             .submit(Message {
