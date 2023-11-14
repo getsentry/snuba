@@ -73,7 +73,7 @@ impl<TPayload> LocalConsumer<TPayload> {
     }
 }
 
-impl<TPayload: Send> Consumer<TPayload> for LocalConsumer<TPayload> {
+impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn subscribe(
         &mut self,
         topics: &[Topic],

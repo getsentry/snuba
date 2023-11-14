@@ -75,7 +75,7 @@ mod tests {
 
         for i in 0..10 {
             buffer.append(BrokerMessage {
-                partition: partition.clone(),
+                partition,
                 offset: i,
                 payload: i,
                 timestamp: Utc::now(),

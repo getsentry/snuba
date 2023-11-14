@@ -13,11 +13,11 @@ use tokio::task::JoinHandle;
 pub type RunTaskFunc<TTransformed> =
     Pin<Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>>;
 
-pub trait TaskRunner<TPayload, TTransformed: Send + Sync>: Send + Sync {
+pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
-pub struct RunTaskInThreads<TPayload: Send + Sync, TTransformed: Send + Sync> {
+pub struct RunTaskInThreads<TPayload, TTransformed> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
@@ -29,7 +29,7 @@ pub struct RunTaskInThreads<TPayload: Send + Sync, TTransformed: Send + Sync> {
     metric_name: String,
 }
 
-impl<TPayload: Send + Sync, TTransformed: Send + Sync> RunTaskInThreads<TPayload, TTransformed> {
+impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
     pub fn new<N>(
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
@@ -60,7 +60,7 @@ impl<TPayload: Send + Sync, TTransformed: Send + Sync> RunTaskInThreads<TPayload
     }
 }
 
-impl<TPayload: Send + Sync, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
+impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
     for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
