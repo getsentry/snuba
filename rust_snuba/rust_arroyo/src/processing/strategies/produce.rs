@@ -31,7 +31,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 
         Box::pin(async move {
             producer
-                .produce(&topic, message.payload())
+                .produce(&topic, message.payload().clone())
                 .expect("Message was produced");
             Ok(message)
         })
