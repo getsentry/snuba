@@ -110,7 +110,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
     }
 }
 
-impl<T: Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
+impl<T, TResult: Clone> Reduce<T, TResult> {
     pub fn new(
         next_step: Box<dyn ProcessingStrategy<TResult>>,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
