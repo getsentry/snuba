@@ -248,6 +248,7 @@ mod tests {
                 python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
             },
             processes,
+            None,
             sink.clone(),
         )
         .unwrap();
