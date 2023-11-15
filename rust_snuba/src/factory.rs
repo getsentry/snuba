@@ -78,11 +78,11 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
                         timestamp: broker_message.timestamp,
                     }),
                 }),
-                Err(err) => {
+                Err(error) => {
                     // TODO: after moving to `tracing`, we can properly attach `err` to the log.
                     // however, as Sentry captures `error` logs as errors by default,
                     // we would double-log this error here:
-                    log::error!("Failed processing message: {err}");
+                    tracing::error!(%error, "Failed processing message");
                     sentry::with_scope(
                         |_scope| {
                             // FIXME(swatinem): we already moved `broker_message.payload`
@@ -95,7 +95,7 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
                             // scope.set_extra("payload", payload)
                         },
                         || {
-                            sentry::integrations::anyhow::capture_anyhow(&err);
+                            sentry::integrations::anyhow::capture_anyhow(&error);
                         },
                     );
 
