@@ -18,11 +18,11 @@ impl SchemaValidator {
     pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
         let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
             Ok(s) => Some(s),
-            Err(e) => {
+            Err(error) => {
                 if enforce_schema {
-                    panic!("Schema error: {}", e);
+                    panic!("Schema error: {error}");
                 } else {
-                    log::error!("Schema error: {}", e);
+                    tracing::error!(%error, "Schema error");
                 }
 
                 None
@@ -45,8 +45,8 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
 
             let res = schema.validate_json(payload);
 
-            if let Err(err) = res {
-                log::error!("Validation error {}", err);
+            if let Err(error) = res {
+                tracing::error!(%error, "Validation error");
                 if self.enforce_schema {
                     errored = true;
                 };

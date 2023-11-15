@@ -57,7 +57,7 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    log::info!("Starting Rust consumer with config: {:?}", consumer_config);
+    tracing::info!(?consumer_config, "Starting Rust consumer");
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
@@ -68,7 +68,7 @@ pub fn consumer_impl(
 
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
-        log::debug!("Using sentry dsn {:?}", dsn);
+        tracing::debug!(sentry_dsn = dsn);
         _sentry_guard = Some(setup_sentry(dsn));
     }
 
@@ -101,7 +101,11 @@ pub fn consumer_impl(
 
     let first_storage = consumer_config.storages[0].clone();
 
-    log::info!("Starting consumer for {:?}", first_storage.name,);
+    tracing::info!(
+        storage = first_storage.name,
+        "Starting consumer for {:?}",
+        first_storage.name,
+    );
 
     let broker_config: HashMap<_, _> = consumer_config
         .raw_topic

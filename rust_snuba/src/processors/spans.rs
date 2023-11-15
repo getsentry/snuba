@@ -1,17 +1,17 @@
+use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
-use crate::processors::utils::{default_retention_days, DEFAULT_RETENTION_DAYS, hex_to_u64};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
     let payload_bytes = payload.payload.ok_or(BadMessage)?;
-    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-        log::error!("Failed to deserialize message: {}", err);
+    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|error| {
+        tracing::error!(%error, "Failed to deserialize message");
         BadMessage
     })?;
     let mut span: Span = msg.try_into()?;
@@ -19,8 +19,8 @@ pub fn process_message(
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&span).map_err(|err| {
-        log::error!("Failed to serialize processed message: {}", err);
+    let serialized = serde_json::to_vec(&span).map_err(|error| {
+        tracing::error!(%error, "Failed to serialize processed message");
         BadMessage
     })?;
 

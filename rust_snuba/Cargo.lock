@@ -1760,7 +1760,6 @@ dependencies = [
  "ctrlc",
  "futures",
  "glob",
- "log",
  "pretty_env_logger",
  "procspawn",
  "pyo3",
@@ -1773,6 +1772,7 @@ dependencies = [
  "serde_yaml",
  "thiserror",
  "tokio",
+ "tracing",
  "uuid 1.5.0",
 ]
 

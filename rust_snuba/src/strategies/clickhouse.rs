@@ -35,15 +35,15 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             }
 
             if skip_write {
-                log::info!("skipping write of {} rows", len);
+                tracing::info!("skipping write of {} rows", len);
                 return Ok(message);
             }
 
-            log::debug!("performing write");
+            tracing::debug!("performing write");
             let response = client.send(data).await.unwrap();
 
-            log::debug!("response: {:?}", response);
-            log::info!("Inserted {} rows", len);
+            tracing::debug!(?response);
+            tracing::info!("Inserted {} rows", len);
             Ok(message)
         })
     }

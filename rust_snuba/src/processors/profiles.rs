@@ -9,8 +9,8 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
     let payload_bytes = payload.payload.ok_or(BadMessage)?;
-    let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-        log::error!("Failed to deserialize message: {}", err);
+    let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|error| {
+        tracing::error!(%error, "Failed to deserialize message");
         BadMessage
     })?;
     let mut profile_msg: ProfileMessage = msg.try_into()?;
@@ -18,8 +18,8 @@ pub fn process_message(
     profile_msg.offset = metadata.offset;
     profile_msg.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&profile_msg).map_err(|err| {
-        log::error!("Failed to serialize message: {}", err);
+    let serialized = serde_json::to_vec(&profile_msg).map_err(|error| {
+        tracing::error!(%error, "Failed to serialize message");
         BadMessage
     })?;
 
