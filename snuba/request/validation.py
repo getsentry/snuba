@@ -67,8 +67,8 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 
 
 def update_attribution_info(
-    request_parts: RequestParts, referrer: str, query_project_id: int
-) -> dict[str, str]:
+    request_parts: RequestParts, referrer: str, query_project_id: Optional[int]
+) -> dict[str, Any]:
     attribution_info = dict(request_parts.attribution_info)
 
     attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
