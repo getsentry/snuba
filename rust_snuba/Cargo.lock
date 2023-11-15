@@ -2165,7 +2165,7 @@ dependencies = [
 [[package]]
 name = "statsdproxy"
 version = "0.1.0"
-source = "git+https://github.com/getsentry/statsdproxy#1a862915c326807df4ec58ea318675383759ae4b"
+source = "git+https://github.com/getsentry/statsdproxy#07b51e05107882226d94c27207bb968c1181e3d9"
 dependencies = [
  "anyhow",
  "cadence",
