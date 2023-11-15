@@ -92,7 +92,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
                 self.flush(true)?;
                 if let Some(t) = remaining {
                     if t <= Duration::from_secs(0) {
-                        log::warn!("Timeout reached while waiting for tasks to finish");
+                        tracing::warn!("Timeout reached while waiting for tasks to finish");
                         break;
                     }
                     remaining = Some(t - start.elapsed());

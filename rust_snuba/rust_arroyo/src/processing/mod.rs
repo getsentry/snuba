@@ -182,8 +182,8 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
-                Err(e) => {
-                    log::error!("poll error: {}", e);
+                Err(error) => {
+                    tracing::error!(%error, "poll error");
                     return Err(RunError::PollError);
                 }
             }
@@ -271,7 +271,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         return Ok(());
                     }
 
-                    log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
+                    tracing::warn!(
+                        "Consumer is in backpressure state for more than 1 second, pausing",
+                    );
 
                     let partitions = self
                         .consumer
@@ -292,9 +294,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                     }
                 }
             }
-            Err(SubmitError::InvalidMessage(invalid_message)) => {
+            Err(SubmitError::InvalidMessage(message)) => {
                 // TODO: Put this into the DLQ once we have one
-                log::error!("Invalid message: {:?}", invalid_message);
+                tracing::error!(?message, "Invalid message");
             }
         }
         Ok(())
