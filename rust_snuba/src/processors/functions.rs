@@ -167,11 +167,11 @@ mod tests {
             "device_class": 2,
             "retention_days": 30
         }"#;
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

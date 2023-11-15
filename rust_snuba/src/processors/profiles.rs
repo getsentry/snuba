@@ -94,11 +94,11 @@ mod tests {
             "version_code": "1337",
             "version_name": "v42.0.0"
         }"#;
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

@@ -426,11 +426,11 @@ mod tests {
             "snql_anonymized": "MATCH Entity(events) SELECT tags_key, tags_value, (count() AS count), (min(timestamp) AS first_seen), (max(timestamp) AS last_seen) GROUP BY tags_key, tags_value WHERE greaterOrEquals(timestamp, toDateTime('$S')) AND less(timestamp, toDateTime('$S')) AND in(project_id, tuple(-1337)) AND in(project_id, tuple(-1337)) AND in(group_id, tuple(-1337)) ORDER BY count DESC LIMIT 4 BY tags_key LIMIT 1000 OFFSET 0"
           }"#;
 
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

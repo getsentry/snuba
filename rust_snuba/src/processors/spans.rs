@@ -450,11 +450,11 @@ mod tests {
         let span = valid_span();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -469,11 +469,11 @@ mod tests {
         span.sentry_tags.status = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -488,11 +488,11 @@ mod tests {
         span.sentry_tags.status = Some("".into());
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -507,11 +507,11 @@ mod tests {
         span.retention_days = default_retention_days();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -526,11 +526,11 @@ mod tests {
         span.tags = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
+        let payload = Arc::new(KafkaPayload {
             key: None,
             headers: None,
             payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        });
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
