@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -56,6 +57,8 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
+    log::info!("Starting Rust consumer with config: {:?}", consumer_config);
+
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
@@ -66,6 +69,8 @@ pub fn consumer_impl(
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
         log::debug!("Using sentry dsn {:?}", dsn);
+        // this forces anyhow to record stack traces when capturing an error:
+        std::env::set_var("RUST_BACKTRACE", "1");
         _sentry_guard = Some(setup_sentry(dsn));
     }
 
@@ -121,9 +126,8 @@ pub fn consumer_impl(
         Some(broker_config),
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config));
+    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
-
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory::new(
@@ -137,9 +141,7 @@ pub fn consumer_impl(
         )),
     );
 
-    processor.subscribe(Topic {
-        name: consumer_config.raw_topic.physical_topic_name.to_owned(),
-    });
+    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 
     let mut handle = processor.get_handle();
 

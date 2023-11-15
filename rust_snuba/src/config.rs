@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ConsumerConfig {
     pub storages: Vec<StorageConfig>,
@@ -15,7 +15,7 @@ pub struct ConsumerConfig {
     pub env: EnvConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct TopicConfig {
     pub physical_topic_name: String,
     pub logical_topic_name: String,
@@ -31,7 +31,7 @@ impl ConsumerConfig {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct StorageConfig {
     pub name: String,
@@ -40,7 +40,7 @@ pub struct StorageConfig {
     pub message_processor: MessageProcessorConfig,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ClickhouseConfig {
     pub host: String,
@@ -51,14 +51,14 @@ pub struct ClickhouseConfig {
     pub database: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct MessageProcessorConfig {
     pub python_class_name: String,
     pub python_module: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,

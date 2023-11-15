@@ -12,14 +12,14 @@ use std::time::Duration;
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
-    topic: Arc<TopicOrPartition>,
+    topic: TopicOrPartition,
 }
 
 impl ProduceMessage {
     pub fn new(producer: impl Producer<KafkaPayload> + 'static, topic: TopicOrPartition) -> Self {
         ProduceMessage {
             producer: Arc::new(producer),
-            topic: Arc::new(topic),
+            topic,
         }
     }
 }
@@ -27,11 +27,11 @@ impl ProduceMessage {
 impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
         let producer = self.producer.clone();
-        let topic = self.topic.clone();
+        let topic = self.topic;
 
         Box::pin(async move {
             producer
-                .produce(&topic, message.payload())
+                .produce(&topic, message.payload().clone())
                 .expect("Message was produced");
             Ok(message)
         })
@@ -104,12 +104,7 @@ mod tests {
             None,
         );
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
@@ -137,7 +132,7 @@ mod tests {
             Noop {},
             producer,
             10,
-            TopicOrPartition::Topic(partition.topic.clone()),
+            TopicOrPartition::Topic(partition.topic),
         );
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
@@ -148,7 +143,7 @@ mod tests {
                     headers: None,
                     payload: Some(payload_str.clone()),
                 },
-                partition: partition,
+                partition,
                 offset: 0,
                 timestamp: Utc::now(),
             }),

@@ -149,7 +149,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         log::debug!("processing message,  message={}", message);
 
-        match &message.inner_message {
+        match message.inner_message {
             InnerMessage::AnyMessage(..) => {
                 panic!("AnyMessage cannot be processed");
             }
@@ -159,12 +159,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (
-                    payload.payload.clone(),
-                    *offset,
-                    partition.index,
-                    *timestamp,
-                );
+                let args = (payload.payload, offset, partition.index, timestamp);
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
@@ -183,7 +178,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     .map_err(|pyerr| pyerr.to_string())
                 };
 
-                let original_message_meta = message.clone().replace(());
+                let original_message_meta =
+                    Message::new_broker_message((), partition, offset, timestamp);
 
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
@@ -267,12 +263,7 @@ mod tests {
                 headers: None,
                 payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
             },
-            Partition {
-                topic: Topic {
-                    name: "test".to_owned(),
-                },
-                index: 1,
-            },
+            Partition::new(Topic::new("test"), 1),
             1,
             Utc::now(),
         ))

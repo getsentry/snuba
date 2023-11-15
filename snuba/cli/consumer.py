@@ -8,11 +8,13 @@ from arroyo import configure_metrics
 
 from snuba import environment, settings
 from snuba.cogs.accountant import close_cogs_recorder
-from snuba.consumers.consumer_builder import (ConsumerBuilder, KafkaParameters,
-                                              ProcessingParameters)
+from snuba.consumers.consumer_builder import (
+    ConsumerBuilder,
+    KafkaParameters,
+    ProcessingParameters,
+)
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.datasets.storages.factory import (get_storage,
-                                             get_writable_storage_keys)
+from snuba.datasets.storages.factory import get_storage, get_writable_storage_keys
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.migrations.connect import check_clickhouse_connections
@@ -189,13 +191,13 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    join_timeout: int = 5,
-    enforce_schema: bool = False,
-    log_level: Optional[str] = None,
-    profile_path: Optional[str] = None,
-    max_poll_interval_ms: int = 30000,
-    health_check_file: Optional[str] = None,
-    group_instance_id: Optional[str] = None,
+    join_timeout: int,
+    enforce_schema: bool,
+    log_level: Optional[str],
+    profile_path: Optional[str],
+    max_poll_interval_ms: int,
+    health_check_file: Optional[str],
+    group_instance_id: Optional[str],
     skip_write: bool,
 ) -> None:
 

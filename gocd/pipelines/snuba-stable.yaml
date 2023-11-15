@@ -112,7 +112,8 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"
             - deploy:
                   fetch_materials: true
                   jobs:
@@ -169,4 +170,5 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"

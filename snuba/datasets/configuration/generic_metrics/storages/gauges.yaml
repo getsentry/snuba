@@ -4,7 +4,7 @@ name: generic_metrics_gauges
 storage:
   key: generic_metrics_gauges
   set_key: generic_metrics_gauges
-readiness_state: limited
+readiness_state: complete
 schema:
   columns:
     [

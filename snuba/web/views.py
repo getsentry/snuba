@@ -63,9 +63,11 @@ from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
+from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -461,6 +463,16 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
+def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
+    metrics.increment(
+        "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
+    )
+    if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
+        logger.info(f"Received referrer: {request.attribution_info.referrer}")
+        if request.attribution_info.referrer == "<unknown>":
+            logger.info(f"Received unknown referrer from request: {request}, {body}")
+
+
 @with_span()
 def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
@@ -480,10 +492,10 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings)
-
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
+    _get_and_log_referrer(request, body)
 
     try:
         result = parse_and_run_query(dataset, request, timer)

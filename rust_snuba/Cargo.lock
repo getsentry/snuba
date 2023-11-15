@@ -116,6 +116,9 @@ name = "anyhow"
 version = "1.0.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
+dependencies = [
+ "backtrace",
+]
 
 [[package]]
 name = "atty"
@@ -387,7 +390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -865,9 +868,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.0.2"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
+checksum = "d530e1a18b1cb4c484e6e34556a0d948706958449fca0cab753d649f2bce3d1f"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.1",
@@ -903,7 +906,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "tempfile",
- "uuid 1.5.0",
+ "uuid",
  "winapi 0.3.9",
 ]
 
@@ -975,7 +978,7 @@ dependencies = [
  "serde_json",
  "time",
  "url",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1608,9 +1611,9 @@ dependencies = [
 
 [[package]]
 name = "rdkafka"
-version = "0.34.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "053adfa02fab06e86c01d586cc68aa47ee0ff4489a59469081dc12cbcde578bf"
+checksum = "d54f02a5a40220f8a2dfa47ddb38ba9064475a5807a69504b6f91711df2eea63"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1626,9 +1629,9 @@ dependencies = [
 
 [[package]]
 name = "rdkafka-sys"
-version = "4.6.0+2.2.0"
+version = "4.7.0+2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad63c279fca41a27c231c450a2d2ad18288032e9cbb159ad16c9d96eba35aaaf"
+checksum = "55e0d2f9ba6253f6ec72385e453294f8618e9e15c2c6aba2a5c01ccf9622d615"
 dependencies = [
  "cmake",
  "libc",
@@ -1741,12 +1744,13 @@ dependencies = [
  "env_logger 0.9.3",
  "futures",
  "log",
+ "once_cell",
  "rdkafka",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
- "uuid 0.8.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1772,7 +1776,7 @@ dependencies = [
  "serde_yaml",
  "thiserror",
  "tokio",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1886,6 +1890,7 @@ dependencies = [
  "httpdate",
  "native-tls",
  "reqwest",
+ "sentry-anyhow",
  "sentry-backtrace",
  "sentry-contexts",
  "sentry-core",
@@ -1895,6 +1900,17 @@ dependencies = [
  "sentry-tracing",
  "tokio",
  "ureq",
+]
+
+[[package]]
+name = "sentry-anyhow"
+version = "0.31.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4fd76cd5c14676228996a31aa214adb049920b103bbc5b5a4114d05323995c5"
+dependencies = [
+ "anyhow",
+ "sentry-backtrace",
+ "sentry-core",
 ]
 
 [[package]]
@@ -2011,7 +2027,7 @@ dependencies = [
  "thiserror",
  "time",
  "url",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -2085,7 +2101,7 @@ version = "0.9.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a49e178e4452f45cb61d0cd8cebc1b0fafd3e41929e996cef79aa3aca91f574"
 dependencies = [
- "indexmap 2.0.2",
+ "indexmap 2.1.0",
  "itoa",
  "ryu",
  "serde",
@@ -2358,7 +2374,7 @@ version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 2.0.2",
+ "indexmap 2.1.0",
  "toml_datetime",
  "winnow",
 ]
@@ -2526,12 +2542,6 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "uuid"
