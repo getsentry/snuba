@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -77,20 +77,25 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
 }
 
 pub struct ValidateSchema {
-    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
 }
 
 impl ValidateSchema {
-    pub fn new<N>(next_step: N, topic: &str, enforce_schema: bool, concurrency: usize) -> Self
+    pub fn new<N>(
+        next_step: N,
+        topic: &str,
+        enforce_schema: bool,
+        concurrency: &ConcurrencyConfig,
+    ) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(SchemaValidator::new(topic, enforce_schema)),
             concurrency,
             Some("validate_schema"),
-        ));
+        );
 
         ValidateSchema { inner }
     }
@@ -154,7 +159,8 @@ mod tests {
             }
         }
 
-        let mut strategy = ValidateSchema::new(Noop {}, "outcomes", true, 5);
+        let concurrency = ConcurrencyConfig::new(5);
+        let mut strategy = ValidateSchema::new(Noop {}, "outcomes", true, &concurrency);
 
         let example = "{
             \"project_id\": 1,

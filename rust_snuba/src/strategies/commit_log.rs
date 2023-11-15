@@ -1,7 +1,7 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::Producer;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -143,7 +143,7 @@ impl ProduceCommitLog {
     pub fn new<N>(
         next_step: N,
         producer: impl Producer<KafkaPayload> + 'static,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
         topic: TopicOrPartition,
         skip_produce: bool,
     ) -> Self
@@ -278,10 +278,11 @@ mod tests {
 
         let next_step = Noop { payloads: vec![] };
 
+        let concurrency = ConcurrencyConfig::new(1);
         let mut strategy = ProduceCommitLog::new(
             next_step,
             producer,
-            1,
+            &concurrency,
             TopicOrPartition::Topic(Topic::new("test")),
             false,
         );

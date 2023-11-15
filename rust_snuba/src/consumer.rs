@@ -8,6 +8,7 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 
+use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
 use rust_arroyo::utils::metrics::configure_metrics;
@@ -144,7 +145,7 @@ pub fn consumer_impl(
             max_batch_size,
             max_batch_time,
             skip_write,
-            concurrency,
+            ConcurrencyConfig::new(concurrency),
             python_max_queue_depth,
             use_rust_processor,
         )),

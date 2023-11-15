@@ -11,6 +11,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::run_task::RunTask;
+use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
 };
@@ -55,6 +56,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     struct ReverseStringAndProduceStrategyFactory {
+        concurrency: ConcurrencyConfig,
         config: KafkaConfig,
         topic: Topic,
     }
@@ -62,8 +64,10 @@ async fn main() {
         fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
             let producer = KafkaProducer::new(self.config.clone());
             let topic = TopicOrPartition::Topic(self.topic);
-            let reverse_string_and_produce_strategy =
-                RunTask::new(reverse_string, Produce::new(Noop {}, producer, 5, topic));
+            let reverse_string_and_produce_strategy = RunTask::new(
+                reverse_string,
+                Produce::new(Noop {}, producer, &self.concurrency, topic),
+            );
             Box::new(reverse_string_and_produce_strategy)
         }
     }
@@ -80,7 +84,8 @@ async fn main() {
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ReverseStringAndProduceStrategyFactory {
-            config: config.clone(),
+            concurrency: ConcurrencyConfig::new(5),
+            config,
             topic: Topic::new("test_out"),
         }),
     );
