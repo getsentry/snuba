@@ -18,6 +18,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     let config = KafkaConfig::new_consumer_config(
         vec!["127.0.0.1:9092".to_string()],
         "my_group".to_string(),
