@@ -24,6 +24,7 @@ pub struct ConsumerStrategyFactory {
     max_batch_time: Duration,
     skip_write: bool,
     concurrency: usize,
+    python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
 }
 
@@ -35,6 +36,7 @@ impl ConsumerStrategyFactory {
         max_batch_time: Duration,
         skip_write: bool,
         concurrency: usize,
+        python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
     ) -> Self {
         Self {
@@ -44,6 +46,7 @@ impl ConsumerStrategyFactory {
             max_batch_time,
             skip_write,
             concurrency,
+            python_max_queue_depth,
             use_rust_processor,
         }
     }
@@ -140,6 +143,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 PythonTransformStep::new(
                     self.storage_config.message_processor.clone(),
                     self.concurrency,
+                    self.python_max_queue_depth,
                     next_step,
                 )
                 .unwrap(),
