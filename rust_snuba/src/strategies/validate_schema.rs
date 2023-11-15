@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
@@ -7,17 +10,16 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::types::{InnerMessage, Message};
 use sentry_kafka_schemas;
-use std::time::Duration;
 
 pub struct SchemaValidator {
-    schema: Option<sentry_kafka_schemas::Schema>,
+    schema: Option<Arc<sentry_kafka_schemas::Schema>>,
     enforce_schema: bool,
 }
 
 impl SchemaValidator {
-    pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
-        let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
-            Ok(s) => Some(s),
+    pub fn new(logical_topic: &str, enforce_schema: bool) -> Self {
+        let schema = match sentry_kafka_schemas::get_schema(logical_topic, None) {
+            Ok(s) => Some(Arc::new(s)),
             Err(e) => {
                 if enforce_schema {
                     panic!("Schema error: {}", e);
@@ -38,39 +40,37 @@ impl SchemaValidator {
 
 impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
-        let mut errored = false;
-
-        if let Some(schema) = &self.schema {
-            let payload = message.payload().payload.as_ref().unwrap();
-
-            let res = schema.validate_json(payload);
-
-            if let Err(err) = res {
-                log::error!("Validation error {}", err);
-                if self.enforce_schema {
-                    errored = true;
-                };
-            }
-        }
+        let Some(schema) = self.schema.clone() else {
+            return Box::pin(async move { Ok(message) });
+        };
+        let enforce_schema = self.enforce_schema;
 
         Box::pin(async move {
-            if errored {
-                match message.inner_message {
-                    InnerMessage::BrokerMessage(ref broker_message) => {
-                        let partition = broker_message.partition;
-                        let offset = broker_message.offset;
+            // FIXME: this will panic when the payload is empty
+            let payload = message.payload().payload.as_ref().unwrap();
 
-                        Err(RunTaskError::InvalidMessage(InvalidMessage {
-                            partition,
-                            offset,
-                        }))
-                    }
-                    _ => {
-                        panic!("Cannot return Invalid message error");
-                    }
+            let Err(err) = schema.validate_json(payload) else {
+                return Ok(message);
+            };
+
+            log::error!("Validation error {}", err);
+            if !enforce_schema {
+                return Ok(message);
+            };
+
+            match message.inner_message {
+                InnerMessage::BrokerMessage(ref broker_message) => {
+                    let partition = broker_message.partition;
+                    let offset = broker_message.offset;
+
+                    Err(RunTaskError::InvalidMessage(InvalidMessage {
+                        partition,
+                        offset,
+                    }))
                 }
-            } else {
-                Ok(message)
+                _ => {
+                    panic!("Cannot return Invalid message error");
+                }
             }
         })
     }
@@ -81,7 +81,7 @@ pub struct ValidateSchema {
 }
 
 impl ValidateSchema {
-    pub fn new<N>(next_step: N, topic: String, enforce_schema: bool, concurrency: usize) -> Self
+    pub fn new<N>(next_step: N, topic: &str, enforce_schema: bool, concurrency: usize) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
@@ -154,7 +154,7 @@ mod tests {
             }
         }
 
-        let mut strategy = ValidateSchema::new(Noop {}, "outcomes".to_string(), true, 5);
+        let mut strategy = ValidateSchema::new(Noop {}, "outcomes", true, 5);
 
         let example = "{
             \"project_id\": 1,
