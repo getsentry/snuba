@@ -209,7 +209,7 @@ mod tests {
             pub submitted: Arc<Mutex<Vec<T>>>,
         }
 
-        impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
+        impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 Ok(None)
             }

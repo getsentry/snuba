@@ -217,7 +217,7 @@ mod tests {
 
         struct IdentityTaskRunner {}
 
-        impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
+        impl<T: Clone + Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
             fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
                 Box::pin(async move { Ok(message) })
             }
