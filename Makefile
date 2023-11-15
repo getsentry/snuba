@@ -77,14 +77,14 @@ watch-rust-snuba:
 
 test-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba/rust_arroyo/ && cargo test) && \
-		cd rust_snuba && cargo test
+		cd rust_snuba && \
+		cargo test --workspace
 .PHONY: test-rust
 
 lint-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings) && \
-		(cd rust_snuba && cargo clippy -- -D warnings)
+		cd rust_snuba && \
+		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 
 format-rust:
