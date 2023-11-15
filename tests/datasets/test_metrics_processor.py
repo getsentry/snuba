@@ -60,7 +60,7 @@ MAPPING_META_TAG_VALUES_STRINGS = {
 }
 
 SET_MESSAGE_SHARED = {
-    "use_case_id": "release-health",
+    "use_case_id": "sessions",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -76,7 +76,7 @@ SET_MESSAGE_SHARED = {
 
 SET_MESSAGE_TAG_VALUES_STRINGS = {
     "version": 2,
-    "use_case_id": "release-health",
+    "use_case_id": "sessions",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -91,7 +91,7 @@ SET_MESSAGE_TAG_VALUES_STRINGS = {
 }
 
 COUNTER_MESSAGE_SHARED = {
-    "use_case_id": "release-health",
+    "use_case_id": "sessions",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -107,7 +107,7 @@ COUNTER_MESSAGE_SHARED = {
 
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 DIST_MESSAGE_SHARED = {
-    "use_case_id": "release-health",
+    "use_case_id": "sessions",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -129,6 +129,7 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -152,6 +153,7 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -175,6 +177,7 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -242,6 +245,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
@@ -271,6 +275,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
@@ -296,6 +301,7 @@ TEST_CASES_AGGREGATES = [
                 "org_id": _literal(1),
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
+                "use_case_id": _literal("sessions"),
                 "timestamp": _call(
                     "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
@@ -438,6 +444,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -458,6 +465,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -478,6 +486,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
+                "use_case_id": "sessions",
                 "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -529,7 +538,7 @@ TEST_CASES_GENERIC = [
         SET_MESSAGE_SHARED,
         [
             {
-                "use_case_id": "release-health",
+                "use_case_id": "sessions",
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
@@ -543,6 +552,7 @@ TEST_CASES_GENERIC = [
                 "timeseries_id": ANY,
                 "retention_days": 30,
                 "granularities": [1, 2, 3],
+                "min_retention_days": 30,
             }
         ],
         id="all tag values ints",
@@ -551,7 +561,7 @@ TEST_CASES_GENERIC = [
         SET_MESSAGE_TAG_VALUES_STRINGS,
         [
             {
-                "use_case_id": "release-health",
+                "use_case_id": "sessions",
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
@@ -565,6 +575,7 @@ TEST_CASES_GENERIC = [
                 "timeseries_id": ANY,
                 "retention_days": 30,
                 "granularities": [1, 2, 3],
+                "min_retention_days": 30,
             }
         ],
         id="all tag values strings",
@@ -574,7 +585,54 @@ TEST_CASES_GENERIC = [
 
 @pytest.mark.parametrize(
     "message, expected_output",
-    TEST_CASES_GENERIC,
+    [
+        pytest.param(
+            SET_MESSAGE_SHARED,
+            [
+                {
+                    "use_case_id": "sessions",
+                    "org_id": 1,
+                    "project_id": 2,
+                    "metric_id": 1232341,
+                    "timestamp": expected_timestamp,
+                    "tags.key": [10, 20, 30],
+                    "tags.indexed_value": [11, 22, 33],
+                    "tags.raw_value": ["value-1", "value-2", "value-3"],
+                    "metric_type": "set",
+                    "set_values": [324234, 345345, 456456, 567567],
+                    "materialization_version": 2,
+                    "timeseries_id": ANY,
+                    "retention_days": 30,
+                    "granularities": [1, 2, 3],
+                    "min_retention_days": 30,
+                }
+            ],
+            id="all tag values ints",
+        ),
+        pytest.param(
+            SET_MESSAGE_TAG_VALUES_STRINGS,
+            [
+                {
+                    "use_case_id": "sessions",
+                    "org_id": 1,
+                    "project_id": 2,
+                    "metric_id": 1232341,
+                    "timestamp": expected_timestamp,
+                    "tags.key": [10, 20, 30],
+                    "tags.indexed_value": [0, 0, 0],
+                    "tags.raw_value": ["value-1", "value-2", "value-3"],
+                    "metric_type": "set",
+                    "set_values": [324234, 345345, 456456, 567567],
+                    "materialization_version": 2,
+                    "timeseries_id": ANY,
+                    "retention_days": 30,
+                    "granularities": [1, 2, 3],
+                    "min_retention_days": 30,
+                }
+            ],
+            id="all tag values strings",
+        ),
+    ],
 )
 def test_generic_metrics_sets_processor(
     message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]]

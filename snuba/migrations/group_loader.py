@@ -176,6 +176,7 @@ class ReplaysLoader(DirectoryLoader):
             "0013_add_low_cardinality_codecs",
             "0014_add_id_event_columns",
             "0015_index_frequently_accessed_columns",
+            "0016_materialize_new_event_counts",
         ]
 
 
@@ -303,6 +304,14 @@ class GenericMetricsLoader(DirectoryLoader):
             "0015_sets_add_options",
             "0016_counters_add_options",
             "0017_distributions_mv2",
+            "0018_sets_update_opt_default",
+            "0019_counters_update_opt_default",
+            "0020_sets_mv2",
+            "0021_counters_mv2",
+            "0022_gauges_aggregate_table",
+            "0023_gauges_raw_table",
+            "0024_gauges_mv",
+            "0025_counters_add_raw_tags_hash_column",
         ]
 
 
@@ -335,6 +344,7 @@ class SpansLoader(DirectoryLoader):
             "0003_spans_add_ms_columns",
             "0004_spans_group_raw_col",
             "0005_spans_add_sentry_tags",
+            "0006_spans_add_profile_id",
         ]
 
 

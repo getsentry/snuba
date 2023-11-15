@@ -3,12 +3,11 @@ from __future__ import annotations
 import calendar
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pytz
 import simplejson as json
 from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
@@ -266,7 +265,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["time"],
                         "groupby": "time",
                         "from_date": (self.base_time + skew)
-                        .replace(tzinfo=pytz.utc)
+                        .replace(tzinfo=timezone.utc)
                         .isoformat(),
                         "to_date": (
                             self.base_time + skew + timedelta(minutes=self.minutes)
@@ -1990,7 +1989,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(response.data)
 
         val = (
-            "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "SELECT (arrayMap(x -> replaceAll(toString(x), '-', ''), "
             "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
         )
         assert result["sql"].startswith(val)
@@ -2040,7 +2039,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(response.data)
 
         val = (
-            "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "SELECT (arrayJoin((arrayMap(x -> replaceAll(toString(x), '-', ''), "
             "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
         )
         assert result["sql"].startswith(val)
@@ -2242,6 +2241,49 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
+
+    def test_tenant_ids(self) -> None:
+        expected_uuid = uuid.uuid1()
+
+        tenant_ids = {
+            "organization_id": 1,
+            "referrer": "my-referrer",
+            "use_case_id": "transactions",
+        }
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "tenant_ids": tenant_ids,
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+
+        _, data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey.EVENTS,
+                partition,
+            ).all()
+        )[0]
+        assert data.tenant_ids == dict()  # not saved to the redis store
+        assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
 
     def test_selected_entity_is_used(self) -> None:
         """

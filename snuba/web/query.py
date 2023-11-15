@@ -34,6 +34,7 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.subscriptions.data import SUBSCRIPTION_REFERRER
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
@@ -196,7 +197,8 @@ def _run_query_pipeline(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
 
-    record_missing_tenant_ids(request)
+    record_missing_use_case_id(request, dataset)
+    record_subscription_created_missing_tenant_ids(request)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -205,20 +207,45 @@ def _run_query_pipeline(
     )
 
 
-def record_missing_tenant_ids(request: Request) -> None:
+def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
     """
-    Used to track how often the new `tenant_ids` field is not included in
-    a Snuba Request. Ideally, all requests contain this information and this
-    metric will be removed once all API calls from Sentry do include this info.
+    Used to track how often the new `use_case_id` Tenant ID is not included in
+    a Generic Metrics request.
     """
-    if (
-        not (tenant_ids := request.attribution_info.tenant_ids)
-        or tenant_ids.get("referrer") is None
-        or tenant_ids.get("organization_id") is None
-    ):
-        metrics.increment(
-            "request_without_tenant_ids", tags={"referrer": request.referrer}
-        )
+    if get_dataset_name(dataset) == "generic_metrics":
+        if (
+            not (tenant_ids := request.attribution_info.tenant_ids)
+            or (use_case_id := tenant_ids.get("use_case_id")) is None
+        ):
+            metrics.increment(
+                "gen_metrics_request_without_use_case_id",
+                tags={"referrer": request.referrer},
+            )
+        else:
+            metrics.increment(
+                "gen_metrics_request_with_use_case_id",
+                tags={
+                    "referrer": request.referrer,
+                    "use_case_id": str(use_case_id),
+                },
+            )
+
+
+def record_subscription_created_missing_tenant_ids(request: Request) -> None:
+    """
+    Used to track how often new subscriptions are created without Tenant IDs.
+    """
+    if request.referrer == SUBSCRIPTION_REFERRER:
+        if not (tenant_ids := request.attribution_info.tenant_ids):
+            metrics.increment("subscription_created_without_tenant_ids")
+        else:
+            metrics.increment(
+                "subscription_created_with_tenant_ids",
+                tags={
+                    "use_case_id": str(tenant_ids.get("use_case_id")),
+                    "has_org_id": str(tenant_ids.get("organization_id") is not None),
+                },
+            )
 
 
 def _dry_run_query_runner(

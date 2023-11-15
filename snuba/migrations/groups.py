@@ -138,6 +138,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
             StorageSetKey.GENERIC_METRICS_SETS,
             StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
             StorageSetKey.GENERIC_METRICS_COUNTERS,
+            StorageSetKey.GENERIC_METRICS_GAUGES,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),

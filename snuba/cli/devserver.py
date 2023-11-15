@@ -2,6 +2,13 @@ import click
 
 from snuba import settings
 
+COMMON_CONSUMER_DEV_OPTIONS = [
+    "--auto-offset-reset=latest",
+    "--no-strict-offset-reset",
+    "--log-level=debug",
+    "--enforce-schema",
+]
+
 
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
@@ -41,24 +48,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
                 "--storage=transactions",
                 "--consumer-group=transactions_group",
-                "--enforce-schema",
-            ],
-        ),
-        (
-            "sessions-consumer",
-            [
-                "snuba",
-                "consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
-                "--storage=sessions_raw",
-                "--consumer-group=sessions_group",
+                *COMMON_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
@@ -66,12 +58,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
                 "--storage=outcomes_raw",
                 "--consumer-group=outcomes_group",
-                "--enforce-schema",
+                *COMMON_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
@@ -79,11 +68,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
                 "--storage=errors",
-                "--enforce-schema",
+                *COMMON_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
@@ -95,19 +81,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--no-strict-offset-reset",
                 "--log-level=debug",
                 "--storage=errors",
-            ],
-        ),
-        (
-            "cdc-consumer",
-            [
-                "snuba",
-                "multistorage-consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
-                "--storage=groupedmessages",
-                "--storage=groupassignees",
-                "--consumer-group=cdc_group",
             ],
         ),
     ]
@@ -124,7 +97,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--followed-consumer-group=snuba-consumers",
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
-                    "--delay-seconds=1",
                     "--schedule-ttl=10",
                 ],
             ),
@@ -149,7 +121,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--followed-consumer-group=transactions_group",
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
-                    "--delay-seconds=1",
                     "--schedule-ttl=10",
                 ],
             ),
@@ -180,7 +151,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     "--log-level=debug",
-                    "--delay-seconds=1",
                     "--schedule-ttl=10",
                     "--stale-threshold-seconds=900",
                 ],
@@ -197,7 +167,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     "--log-level=debug",
-                    "--delay-seconds=1",
                     "--schedule-ttl=10",
                     "--stale-threshold-seconds=900",
                 ],
@@ -212,11 +181,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "consumer",
                     "--storage=metrics_raw",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--consumer-group=snuba-metrics-consumers",
-                    "--enforce-schema",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -225,11 +191,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "consumer",
                     "--storage=generic_metrics_distributions_raw",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-distributions-consumers",
-                    "--enforce-schema",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -238,11 +201,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "consumer",
                     "--storage=generic_metrics_sets_raw",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
-                    "--enforce-schema",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -251,11 +211,18 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "consumer",
                     "--storage=generic_metrics_counters_raw",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
-                    "--enforce-schema",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
+            (
+                "generic-metrics-gauges-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_gauges_raw",
+                    "--consumer-group=snuba-gen-metrics-gauges-consumers",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -272,7 +239,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-metrics-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -286,7 +252,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-metrics-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -300,7 +265,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-generic-metrics-distributions-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -314,7 +278,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-generic-metrics-sets-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -328,7 +291,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-generic-metrics-counters-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -360,7 +322,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--auto-offset-reset=latest",
                             "--no-strict-offset-reset",
                             "--log-level=debug",
-                            "--delay-seconds=1",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -373,10 +334,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=profiles",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -384,10 +343,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=functions_raw",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -399,10 +356,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=replays",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -414,11 +369,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -430,12 +383,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=spans",
                     "--consumer-group=spans_group",
-                    "--enforce-schema",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -447,11 +397,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "consumer",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
                     "--storage=group_attributes",
                     "--consumer-group=group_attributes_group",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]

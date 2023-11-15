@@ -56,7 +56,7 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
         QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT}},
+                result={"profile": {"progress_bytes": ORG_SCAN_LIMIT}},
                 extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
@@ -244,3 +244,41 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
         == 1
     )
+
+
+@pytest.mark.redis_db
+def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "organization_id": 1,
+    }
+    no_bytes_scanned_info_result = QueryResultOrError(
+        query_result=QueryResult(
+            result={
+                "profile": {
+                    # bytes scanned info is missing
+                }
+            },
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+        error=None,
+    )
+    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+
+
+@pytest.mark.redis_db
+def test_cross_org(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "cross_org_query": 1,
+    }
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).can_run
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == policy.max_threads
+    )
+    # make sure that this can be called with cross org queries
+    # and nothing raises
+    policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore

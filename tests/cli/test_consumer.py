@@ -26,6 +26,8 @@ def test_consumer_cli(*_mocks: Sequence[Mock]) -> None:
             "latest",
             "--health-check-file",
             "/tmp/test",
+            "--group-instance-id",
+            "test_group_instance_id",
         ],
     )
     assert result.exit_code == 0, result.output

@@ -23,6 +23,9 @@ from snuba.admin.clickhouse.capacity_management import (
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
+    CardinalityQuery,
+)
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -308,6 +311,13 @@ def clickhouse_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.QUERYLOG])
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/cardinality_queries")
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_queries() -> Response:
+    res = [q.to_json() for q in CardinalityQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -999,3 +1009,8 @@ def production_snql_query() -> Response:
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def get_allowed_projects() -> Response:
     return make_response(jsonify(settings.ADMIN_ALLOWED_PROD_PROJECTS), 200)
+
+
+@application.route("/admin_regions", methods=["GET"])
+def get_admin_regions() -> Response:
+    return make_response(jsonify(settings.ADMIN_REGIONS), 200)

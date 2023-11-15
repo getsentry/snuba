@@ -1,21 +1,24 @@
 from enum import Enum
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, MutableMapping
 
 
 class InputType(Enum):
     SET = "s"
     COUNTER = "c"
     DISTRIBUTION = "d"
+    GAUGE = "g"
 
 
 class OutputType(Enum):
     SET = "set"
     COUNTER = "counter"
     DIST = "distribution"
+    GAUGE = "gauge"
 
 
 class AggregationOption(Enum):
     HIST = "hist"
+    TEN_SECOND = "ten_second"
 
 
 ILLEGAL_VALUE_IN_SET = "Illegal value in set."
@@ -23,8 +26,10 @@ INT_EXPECTED = "Int expected"
 ILLEGAL_VALUE_IN_DIST = "Illegal value in distribution."
 ILLEGAL_VALUE_IN_COUNTER = "Illegal value in counter."
 INT_FLOAT_EXPECTED = "Int or Float expected"
+ILLEGAL_VALUE_IN_GAUGE = "Illegal value in gauge."
 
 # These are the hardcoded values from the materialized view
+GRANULARITY_TEN_SECONDS = 0
 GRANULARITY_ONE_MINUTE = 1
 GRANULARITY_ONE_HOUR = 2
 GRANULARITY_ONE_DAY = 3
@@ -42,6 +47,10 @@ def is_distribution_message(message: Mapping[str, Any]) -> bool:
 
 def is_counter_message(message: Mapping[str, Any]) -> bool:
     return message["type"] is not None and message["type"] == InputType.COUNTER.value
+
+
+def is_gauge_message(message: Mapping[str, Any]) -> bool:
+    return message["type"] is not None and message["type"] == InputType.GAUGE.value
 
 
 def values_for_set_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -72,51 +81,112 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
 
 
+def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
+    values = message["value"]
+    assert isinstance(values, Mapping), "expected mapping for gauges"
+
+    for k in values:
+        assert isinstance(
+            values[k], (int, float)
+        ), f"{ILLEGAL_VALUE_IN_GAUGE} {INT_FLOAT_EXPECTED}: {values}"
+
+    # Build the nested values structure Clickhouse expects
+    # Also, the current Kafka schemas are strict enough to
+    # ensure that all of these fields are present
+    return {
+        "metric_type": OutputType.GAUGE.value,
+        "gauges_values.min": [values["min"]],
+        "gauges_values.max": [values["max"]],
+        "gauges_values.sum": [values["sum"]],
+        "gauges_values.count": [values["count"]],
+        "gauges_values.last": [values["last"]],
+    }
+
+
+def apply_aggregation_option(
+    settings: MutableMapping[str, Any], option: AggregationOption
+) -> None:
+    if option is AggregationOption.TEN_SECOND:
+        settings["granularities"].append(GRANULARITY_TEN_SECONDS)
+    elif option is AggregationOption.HIST:
+        settings["enable_histogram"] = 1
+
+
 def aggregation_options_for_set_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    return {
-        "materialization_version": 1,
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
+        "min_retention_days": retention_days,
+        "materialization_version": 2,
     }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        apply_aggregation_option(settings, parsed_aggregation_setting)
+
+    return settings
 
 
 def aggregation_options_for_distribution_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    aggregation_options = {
-        "min_retention_days": retention_days,
-        "materialization_version": 2,
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
+        "min_retention_days": retention_days,
+        "materialization_version": 2,
     }
 
     if aggregation_setting := message.get("aggregation_option"):
         parsed_aggregation_setting = AggregationOption(aggregation_setting)
-        if parsed_aggregation_setting is AggregationOption.HIST:
-            return {
-                **aggregation_options,
-                "enable_histogram": 1,
-            }
+        apply_aggregation_option(settings, parsed_aggregation_setting)
 
-    return aggregation_options
+    return settings
 
 
 def aggregation_options_for_counter_message(
     message: Mapping[str, Any], retention_days: int
 ) -> Mapping[str, Any]:
-    return {
-        "materialization_version": 1,
+    settings = {
         "granularities": [
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ],
+        "min_retention_days": retention_days,
+        "materialization_version": 2,
     }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        apply_aggregation_option(settings, parsed_aggregation_setting)
+
+    return settings
+
+
+def aggregation_options_for_gauge_message(
+    message: Mapping[str, Any], retention_days: int
+) -> Mapping[str, Any]:
+    settings = {
+        "granularities": [
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ],
+        "min_retention_days": retention_days,
+        "materialization_version": 2,
+    }
+
+    if aggregation_setting := message.get("aggregation_option"):
+        parsed_aggregation_setting = AggregationOption(aggregation_setting)
+        apply_aggregation_option(settings, parsed_aggregation_setting)
+
+    return settings

@@ -39,4 +39,6 @@ stream_loader:
   commit_log_topic: snuba-sessions-commit-log
   subscription_result_topic: sessions-subscription-results
   subscription_scheduler_mode: global
+  subscription_synchronization_timestamp: orig_message_ts
   subscription_scheduled_topic: scheduled-subscriptions-sessions
+  subscription_delay_seconds: 60

@@ -12,6 +12,7 @@ from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
+from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 
 
@@ -21,6 +22,7 @@ from snuba.processor import InsertBatch
         ("processed-profiles", ProfilesMessageProcessor),
         ("profiles-call-tree", FunctionsMessageProcessor),
         ("snuba-queries", QuerylogProcessor),
+        ("snuba-spans", SpansMessageProcessor),
     ],
 )
 def test_message_processors(
@@ -31,6 +33,12 @@ def test_message_processors(
     """
     for ex in sentry_kafka_schemas.iter_examples(topic):
         data_json = ex.load()
+        # Hacks to ensure the message isn't rejected with too old
+        if topic == "processed-profiles":
+            data_json["received"] = int(time.time())
+        elif topic == "snuba-spans":
+            data_json["start_timestamp_ms"] = int(time.time()) * 1000
+
         data_bytes = json.dumps(data_json).encode("utf-8")
 
         processor_name = processor.__qualname__
@@ -49,6 +57,7 @@ def test_message_processors(
                 timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
             ),
         )
+
         assert isinstance(python_processed_message, InsertBatch)
 
         assert (

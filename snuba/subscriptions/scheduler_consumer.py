@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 from arroyo.backends.abstract import Consumer, Producer
@@ -25,10 +25,10 @@ from snuba.subscriptions.scheduler_processing_strategy import (
     TickBuffer,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval, InvalidRangeError
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
-from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,10 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 class MessageDetails(NamedTuple):
     offset: int
-    orig_message_ts: datetime
+    orig_message_ts: float
+    # The timestamp the message was first received by Sentry (Relay)
+    # It is optional since it is not currently present on all topics
+    received_p99: Optional[float]
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -94,12 +97,17 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self,
         consumer: Consumer[KafkaPayload],
         followed_consumer_group: str,
+        metrics: MetricsBackend,
+        synchronization_timestamp: str,
         time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__consumer = consumer
         self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
-        self.__time_shift = time_shift if time_shift is not None else timedelta()
+        self.__metrics = metrics
+        assert synchronization_timestamp in ("orig_message_ts", "received_p99")
+        self.__synchronization_timestamp = synchronization_timestamp
+        self.__time_shift = time_shift.total_seconds() if time_shift is not None else 0
 
     def subscribe(
         self,
@@ -127,7 +135,6 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         try:
             commit = commit_codec.decode(value.payload)
-            assert commit.orig_message_ts is not None
         except Exception:
             logger.error(
                 f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
@@ -145,16 +152,12 @@ class CommitLogTickConsumer(Consumer[Tick]):
         if previous_message is not None:
             try:
                 time_interval = Interval(
-                    previous_message.orig_message_ts, commit.orig_message_ts
+                    getattr(previous_message, self.__synchronization_timestamp),
+                    getattr(commit, self.__synchronization_timestamp),
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
-                logger.warning(
-                    "Could not construct valid interval between %r and %r!",
-                    previous_message,
-                    MessageDetails(commit.offset, commit.orig_message_ts),
-                    exc_info=True,
-                )
+                self.__metrics.increment("invalid_interval")
                 return None
             else:
                 result = BrokerValue(
@@ -172,7 +175,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             result = None
 
         self.__previous_messages[commit.partition] = MessageDetails(
-            commit.offset, commit.orig_message_ts
+            commit.offset, commit.orig_message_ts, commit.received_p99
         )
 
         return result
@@ -219,7 +222,6 @@ class SchedulerBuilder:
         auto_offset_reset: str,
         strict_offset_reset: Optional[bool],
         schedule_ttl: int,
-        delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
@@ -245,8 +247,13 @@ class SchedulerBuilder:
 
         mode = stream_loader.get_subscription_scheduler_mode()
         assert mode is not None
-
         self.__mode = mode
+
+        synchronization_timestamp = (
+            stream_loader.get_subscription_sychronization_timestamp()
+        )
+        assert synchronization_timestamp is not None
+        self.__synchronization_timestamp = synchronization_timestamp
 
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
@@ -257,6 +264,9 @@ class SchedulerBuilder:
         self.__auto_offset_reset = auto_offset_reset
         self.__strict_offset_reset = strict_offset_reset
         self.__schedule_ttl = schedule_ttl
+
+        delay_seconds = stream_loader.get_subscription_delay_seconds()
+        assert delay_seconds is not None
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
@@ -300,6 +310,8 @@ class SchedulerBuilder:
         return CommitLogTickConsumer(
             KafkaConsumer(consumer_configuration),
             followed_consumer_group=self.__followed_consumer_group,
+            metrics=self.__metrics,
+            synchronization_timestamp=self.__synchronization_timestamp,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
                 if self.__delay_seconds is not None

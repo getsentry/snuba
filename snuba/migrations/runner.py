@@ -30,7 +30,7 @@ from snuba.migrations.groups import (
     get_group_readiness_state,
 )
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
-from snuba.migrations.operations import OperationTarget, SqlOperation
+from snuba.migrations.operations import RunSqlAsCode
 from snuba.migrations.status import Status
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -543,22 +543,9 @@ class Runner:
 
         for migration in migrations:
             if isinstance(migration, ClickhouseNodeMigration):
-                operations = [
-                    op
-                    for op in migration.forwards_ops()
-                    if (
-                        op.target == OperationTarget.LOCAL
-                        if node_type == ClickhouseNodeType.LOCAL
-                        else op.target == OperationTarget.DISTRIBUTED
-                    )
-                ]
-
-                for sql_op in operations:
-                    if isinstance(sql_op, SqlOperation):
-                        if sql_op._storage_set in storage_sets:
-                            sql = sql_op.format_sql()
-                            logger.info(f"Executing {sql}")
-                            clickhouse.execute(sql)
+                for sql_op in migration.forwards_ops():
+                    op = RunSqlAsCode(sql_op)
+                    op.execute_new_node(storage_sets, node_type, clickhouse)
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():
-                    python_op.execute_new_node(storage_sets)
+                    python_op.execute_new_node(storage_sets, node_type, clickhouse)

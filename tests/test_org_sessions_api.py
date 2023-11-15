@@ -1,10 +1,9 @@
 import itertools
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
 import pytest
-import pytz
 import simplejson as json
 from snuba_sdk import Request
 from snuba_sdk.column import Column
@@ -32,7 +31,7 @@ class TestOrgSessionsApi(BaseApiTest):
     def setup_teardown(self, clickhouse_db: None) -> None:
         # values for test data
         self.started = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
         )
 
         self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)

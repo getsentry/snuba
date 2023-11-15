@@ -55,9 +55,12 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
-
 ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
+
+# All available regions where region is:
+# https://snuba-admin.<region>.getsentry.net/
+ADMIN_REGIONS: Sequence[str] = []
 
 ######################
 # End Admin Settings #
@@ -102,6 +105,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_counters",
             "spans",
             "group_attributes",
+            "generic_metrics_gauges",
         },
         "single_node": True,
     },
@@ -190,6 +194,7 @@ SENTRY_TRACE_SAMPLE_RATE = 0
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
 SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
+STARFISH_SLACK_CHANNEL_ID = os.environ.get("STARFISH_SLACK_CHANNEL_ID")
 
 # Snuba Options
 

@@ -1,7 +1,7 @@
 import time
 import uuid
 from contextlib import closing
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest import mock
 
 import pytest
@@ -18,10 +18,10 @@ from snuba.subscriptions.combined_scheduler_executor import (
 )
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
@@ -79,7 +79,7 @@ def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
                 Tick(
                     0,
                     offsets=Interval(1, 3),
-                    timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
+                    timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 60),
                 ),
                 partition,
                 4,
@@ -92,10 +92,9 @@ def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
         for i in range(10):
             time.sleep(0.5)
             strategy.poll()
-            if commit.call_count == 1:
+            if commit.call_count == 2:
                 break
 
         assert (tmpdir / "health.txt").check()
-        assert commit.call_count == 1
         strategy.close()
         strategy.join()

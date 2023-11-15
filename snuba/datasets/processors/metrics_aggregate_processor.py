@@ -83,6 +83,7 @@ class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
                 "org_id": _literal(message["org_id"]),
                 "project_id": _literal(message["project_id"]),
                 "metric_id": _literal(message["metric_id"]),
+                "use_case_id": _literal(message.get("use_case_id", "sessions")),
                 "timestamp": _call(
                     "toDateTime",
                     (

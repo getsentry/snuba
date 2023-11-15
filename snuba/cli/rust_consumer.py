@@ -79,7 +79,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--log-level",
     "log_level",
-    type=click.Choice(["error", "warn", "info", "debug", "trace"]),
+    type=click.Choice(["error", "warn", "info", "debug", "trace"], False),
     help="Logging level to use.",
     default="info",
 )
@@ -93,17 +93,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--concurrency",
     type=int,
 )
-# To be deprecated in favor of concurrency
-@click.option(
-    "--processes",
-    type=int,
-)
 @click.option(
     "--use-rust-processor",
     "use_rust_processor",
     is_flag=True,
     help="Use the Rust instead of Python message processor (if available)",
     default=False,
+)
+@click.option(
+    "--group-instance-id",
+    type=str,
+    default=None,
+    help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
 def rust_consumer(
     *,
@@ -122,8 +123,8 @@ def rust_consumer(
     log_level: str,
     skip_write: bool,
     concurrency: Optional[int],
-    processes: Optional[int],
     use_rust_processor: bool,
+    group_instance_id: Optional[str],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -140,6 +141,7 @@ def rust_consumer(
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         slice_id=slice_id,
+        group_instance_id=group_instance_id,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -148,7 +150,7 @@ def rust_consumer(
 
     import rust_snuba
 
-    os.environ["RUST_LOG"] = log_level
+    os.environ["RUST_LOG"] = log_level.lower()
 
     # XXX: Temporary way to quickly test different values for concurrency
     # Should be removed before this is put into  prod
@@ -161,6 +163,6 @@ def rust_consumer(
         auto_offset_reset,
         consumer_config_raw,
         skip_write,
-        concurrency_override or concurrency or processes or 1,
+        concurrency_override or concurrency or 1,
         use_rust_processor,
     )

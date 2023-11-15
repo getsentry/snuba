@@ -368,5 +368,7 @@ stream_loader:
   replacement_topic: event-replacements
   commit_log_topic: snuba-commit-log
   subscription_scheduler_mode: partition
+  subscription_synchronization_timestamp: received_p99
+  subscription_delay_seconds: 30
   subscription_scheduled_topic: scheduled-subscriptions-events
   subscription_result_topic: events-subscription-results

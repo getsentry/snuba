@@ -63,6 +63,8 @@ class Topic(Enum):
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
     SPANS = "snuba-spans"
 
+    COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
+
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     config = {
@@ -78,5 +80,38 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
         Topic.QUERYLOG: {"max.message.bytes": "2000000"},
         Topic.GROUP_ATTRIBUTES: {"message.timestamp.type": "LogAppendTime"},
+        Topic.COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.TRANSACTIONS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.SESSIONS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.METRICS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.GENERIC_METRICS_SETS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.GENERIC_METRICS_COUNTERS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
+        Topic.GENERIC_EVENTS_COMMIT_LOG: {
+            "cleanup.policy": "compact,delete",
+            "min.compaction.lag.ms": "3600000",
+        },
     }
+
     return config.get(topic, {})

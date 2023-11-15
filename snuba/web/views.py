@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import functools
 import itertools
 import logging
@@ -44,6 +45,7 @@ from snuba.clusters.cluster import (
     ConnectionId,
     UndefinedClickhouseCluster,
 )
+from snuba.cogs.accountant import close_cogs_recorder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
@@ -61,9 +63,11 @@ from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
+from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -215,6 +219,7 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
+atexit.register(close_cogs_recorder)
 
 
 @application.errorhandler(InvalidJsonRequestException)
@@ -415,6 +420,59 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
+def _sanitize_payload(
+    payload: MutableMapping[str, Any], res: MutableMapping[str, Any]
+) -> None:
+    def hex_encode_if_bytes(value: Any) -> Any:
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                # encode the byte string in a hex string
+                return "RAW_BYTESTRING__" + value.hex()
+
+        return value
+
+    for k, v in payload.items():
+        if isinstance(v, dict):
+            res[hex_encode_if_bytes(k)] = {}
+            _sanitize_payload(v, res[hex_encode_if_bytes(k)])
+        elif isinstance(v, list):
+            res[hex_encode_if_bytes(k)] = []
+            for item in v:
+                if isinstance(item, dict):
+                    res[hex_encode_if_bytes(k)].append({})
+                    _sanitize_payload(item, res[hex_encode_if_bytes(k)][-1])
+                else:
+                    res[hex_encode_if_bytes(k)].append(hex_encode_if_bytes(item))
+        else:
+            res[hex_encode_if_bytes(k)] = hex_encode_if_bytes(v)
+
+
+def dump_payload(payload: MutableMapping[str, Any]) -> str:
+    try:
+        return json.dumps(payload, default=str)
+    except UnicodeDecodeError:
+        # If there were any string that could not be decoded, we
+        # encode the problematic bytes in a hex string.
+        # this is to prevent other clients downstream of us from having
+        # to deal with potentially malicious strings and to prevent one
+        # bad string from breaking the entire payload.
+        sanitized_payload: MutableMapping[str, Any] = {}
+        _sanitize_payload(payload, sanitized_payload)
+        return json.dumps(sanitized_payload, default=str)
+
+
+def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
+    metrics.increment(
+        "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
+    )
+    if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
+        logger.info(f"Received referrer: {request.attribution_info.referrer}")
+        if request.attribution_info.referrer == "<unknown>":
+            logger.info(f"Received unknown referrer from request: {request}, {body}")
+
+
 @with_span()
 def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
     assert http_request.method == "POST"
@@ -434,10 +492,10 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings)
-
     request = build_request(
         body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
+    _get_and_log_referrer(request, body)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
@@ -500,9 +558,7 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
-    return Response(
-        json.dumps(payload, default=str), 200, {"Content-Type": "application/json"}
-    )
+    return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
 
 
 @application.errorhandler(InvalidSubscriptionError)

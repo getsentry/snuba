@@ -1,69 +1,60 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::Context;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::processors::spans::SpanStatus;
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
-        })?;
+) -> anyhow::Result<BytesInsertBatch> {
+    let payload_bytes = payload.payload.context("Expected payload")?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes)?;
 
-        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
-        let timestamp = match msg.timestamp {
-            Some(timestamp) => timestamp,
-            _ => SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_err| InvalidMessage)?.as_secs(),
+    let timestamp = match msg.timestamp {
+        Some(timestamp) => timestamp,
+        _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+    };
+    let device_classification = msg.device_class.unwrap_or_default();
+
+    let mut rows = Vec::with_capacity(msg.functions.len());
+    for from in msg.functions {
+        let function = Function {
+            profile_id: msg.profile_id,
+            project_id: msg.project_id,
+            // Profile metadata
+            browser_name: msg.browser_name.clone(),
+            device_classification,
+            dist: msg.dist.clone(),
+            environment: msg.environment.clone(),
+            http_method: msg.http_method.clone(),
+            platform: msg.platform.clone(),
+            release: msg.release.clone(),
+            retention_days: msg.retention_days,
+            timestamp,
+            transaction_name: msg.transaction_name.clone(),
+            transaction_op: msg.transaction_op.clone(),
+            transaction_status: msg.transaction_status as u8,
+
+            // Function metadata
+            fingerprint: from.fingerprint,
+            durations: from.self_times_ns,
+            function: from.function.clone(),
+            package: from.package.clone(),
+            name: from.function,
+            is_application: from.in_app as u8,
+
+            ..Default::default()
         };
-        let device_classification = match msg.device_class {
-            Some(device_classification) => device_classification,
-            _ => 0,
-        };
-        let mut rows = Vec::with_capacity(msg.functions.len());
-
-        for from in &msg.functions {
-            let function = Function{
-                // Profile metadata
-                browser_name: msg.browser_name.clone(),
-                device_classification,
-                dist: msg.dist.clone(),
-                environment: msg.environment.clone(),
-                http_method: msg.http_method.clone(),
-                platform: msg.platform.clone(),
-                profile_id: profile_id.to_string(),
-                project_id: msg.project_id,
-                release: msg.release.clone(),
-                retention_days: msg.retention_days,
-                timestamp,
-                transaction_name: msg.transaction_name.clone(),
-                transaction_op: msg.transaction_op.clone(),
-                transaction_status: msg.transaction_status as u8,
-
-                // Function metadata
-                fingerprint: from.fingerprint,
-                durations: from.self_times_ns.clone(),
-                function: from.function.clone(),
-                package: from.package.clone(),
-                name: from.function.clone(),
-                is_application: from.in_app as u8,
-
-                ..Default::default()
-            };
-            let serialized = serde_json::to_vec(&function).map_err(|err| {
-                log::error!("Failed to serialize message: {}", err);
-                InvalidMessage
-            })?;
-            rows.push(serialized);
-        }
-
-        return Ok(BytesInsertBatch{rows});
+        let serialized = serde_json::to_vec(&function)?;
+        rows.push(serialized);
     }
-    Err(InvalidMessage)
+
+    Ok(BytesInsertBatch { rows })
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +68,8 @@ struct FromFunction {
 
 #[derive(Debug, Deserialize)]
 struct FromFunctionsMessage {
+    profile_id: Uuid,
+    project_id: u64,
     #[serde(default)]
     browser_name: Option<String>,
     #[serde(default)]
@@ -89,8 +82,6 @@ struct FromFunctionsMessage {
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
-    profile_id: String,
-    project_id: u64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
@@ -103,6 +94,8 @@ struct FromFunctionsMessage {
 
 #[derive(Default, Debug, Serialize)]
 struct Function {
+    profile_id: Uuid,
+    project_id: u64,
     browser_name: Option<String>,
     device_classification: u32,
     dist: Option<String>,
@@ -117,8 +110,6 @@ struct Function {
     name: String,
     package: String,
     platform: String,
-    profile_id: String,
-    project_id: u64,
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
@@ -132,87 +123,6 @@ struct Function {
     os_version: String,
     parent_fingerprint: u8,
     path: String,
-}
-
-#[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[repr(u8)] // size limit in clickhouse
-pub enum SpanStatus {
-    /// The operation completed successfully.
-    ///
-    /// HTTP status 100..299 + successful redirects from the 3xx range.
-    Ok = 0,
-
-    /// The operation was cancelled (typically by the user).
-    Cancelled = 1,
-
-    /// Unknown. Any non-standard HTTP status code.
-    ///
-    /// "We do not know whether the transaction failed or succeeded"
-    #[default]
-    Unknown = 2,
-
-    /// Client specified an invalid argument. 4xx.
-    ///
-    /// Note that this differs from FailedPrecondition. InvalidArgument indicates arguments that
-    /// are problematic regardless of the state of the system.
-    InvalidArgument = 3,
-
-    /// Deadline expired before operation could complete.
-    ///
-    /// For operations that change the state of the system, this error may be returned even if the
-    /// operation has been completed successfully.
-    ///
-    /// HTTP redirect loops and 504 Gateway Timeout
-    DeadlineExceeded = 4,
-
-    /// 404 Not Found. Some requested entity (file or directory) was not found.
-    NotFound = 5,
-
-    /// Already exists (409)
-    ///
-    /// Some entity that we attempted to create already exists.
-    AlreadyExists = 6,
-
-    /// 403 Forbidden
-    ///
-    /// The caller does not have permission to execute the specified operation.
-    PermissionDenied = 7,
-
-    /// 429 Too Many Requests
-    ///
-    /// Some resource has been exhausted, perhaps a per-user quota or perhaps the entire file
-    /// system is out of space.
-    ResourceExhausted = 8,
-
-    /// Operation was rejected because the system is not in a state required for the operation's
-    /// execution
-    FailedPrecondition = 9,
-
-    /// The operation was aborted, typically due to a concurrency issue.
-    Aborted = 10,
-
-    /// Operation was attempted past the valid range.
-    OutOfRange = 11,
-
-    /// 501 Not Implemented
-    ///
-    /// Operation is not implemented or not enabled.
-    Unimplemented = 12,
-
-    /// Other/generic 5xx.
-    InternalError = 13,
-
-    /// 503 Service Unavailable
-    Unavailable = 14,
-
-    /// Unrecoverable data loss or corruption
-    DataLoss = 15,
-
-    /// 401 Unauthorized (actually does mean unauthenticated according to RFC 7235)
-    ///
-    /// Prefer PermissionDenied if a user is logged in.
-    Unauthenticated = 16,
 }
 
 #[cfg(test)]

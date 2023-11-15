@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use cadence::prelude::*;
 use cadence::{MetricBuilder, MetricError, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
@@ -54,10 +52,8 @@ impl StatsDBackend {
 }
 
 impl ArroyoMetrics for StatsDBackend {
-    fn increment(&self, key: &str, value: Option<i64>, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) =
-            self.send_with_tags(self.client.count_with_tags(key, value.unwrap_or(1)), tags)
-        {
+    fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
+        if let Err(e) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
             log::debug!("Error sending metric: {}", e);
         }
     }
@@ -82,9 +78,10 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
+        let mut backend =
+            StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
 
-        backend.increment("a", Some(1), Some(HashMap::from([("tag1", "value1")])));
+        backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
         backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));
         backend.timing("c", 30, Some(HashMap::from([("tag3", "value3")])));
     }

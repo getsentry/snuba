@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub struct LocalBroker<TPayload: Clone> {
+pub struct LocalBroker<TPayload> {
     storage: Box<dyn MessageStorage<TPayload>>,
     clock: Box<dyn Clock>,
     offsets: HashMap<String, HashMap<Partition, u64>>,
@@ -22,7 +22,7 @@ pub enum BrokerError {
     #[error("Rebalance not supported")]
     RebalanceNotSupported,
 
-    #[error("Topci does not exist")]
+    #[error("Topic does not exist")]
     TopicDoesNotExist,
 }
 
@@ -32,7 +32,7 @@ impl From<TopicDoesNotExist> for BrokerError {
     }
 }
 
-impl<TPayload: Clone> LocalBroker<TPayload> {
+impl<TPayload> LocalBroker<TPayload> {
     pub fn new(storage: Box<dyn MessageStorage<TPayload>>, clock: Box<dyn Clock>) -> Self {
         Self {
             storage,
@@ -75,7 +75,7 @@ impl<TPayload: Clone> LocalBroker<TPayload> {
                 let mut non_matches = subscribed_topics
                     .iter()
                     .zip(&topics)
-                    .filter(|&(a, b)| a.name != b.name);
+                    .filter(|&(a, b)| a != b);
                 if non_matches.next().is_some() {
                     return Err(BrokerError::RebalanceNotSupported);
                 }
@@ -127,10 +127,7 @@ impl<TPayload: Clone> LocalBroker<TPayload> {
         for topic in subscribed_topics.iter() {
             let partitions = self.storage.get_partition_count(topic)?;
             for n in 0..partitions {
-                ret_partitions.push(Partition {
-                    topic: topic.clone(),
-                    index: n,
-                });
+                ret_partitions.push(Partition::new(*topic, n));
             }
         }
         group_subscriptions.remove(&id);
@@ -165,13 +162,11 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic = Topic {
-            name: "test".to_string(),
-        };
-        let res = broker.create_topic(topic.clone(), 16);
+        let topic = Topic::new("test");
+        let res = broker.create_topic(topic, 16);
         assert!(res.is_ok());
 
-        let res2 = broker.create_topic(topic.clone(), 16);
+        let res2 = broker.create_topic(topic, 16);
         assert!(res2.is_err());
 
         let partitions = broker.get_topic_partition_count(&topic);
@@ -184,18 +179,8 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
-        let _ = broker.create_topic(
-            Topic {
-                name: "test".to_string(),
-            },
-            1,
-        );
+        let partition = Partition::new(Topic::new("test"), 0);
+        let _ = broker.create_topic(Topic::new("test"), 1);
         let r_prod = broker.produce(&partition, "message".to_string());
         assert!(r_prod.is_ok());
         assert_eq!(r_prod.unwrap(), 0);
@@ -211,12 +196,8 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
         let _ = broker.create_topic(topic1, 2);
         let _ = broker.create_topic(topic2, 1);
@@ -227,59 +208,25 @@ mod tests {
     fn test_assignment() {
         let mut broker = build_broker();
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let topic2 = Topic {
-            name: "test2".to_string(),
-        };
+        let topic1 = Topic::new("test1");
+        let topic2 = Topic::new("test2");
 
-        let r_assignments = broker.subscribe(
-            Uuid::nil(),
-            "group".to_string(),
-            vec![topic1.clone(), topic2.clone()],
-        );
+        let r_assignments =
+            broker.subscribe(Uuid::nil(), "group".to_string(), vec![topic1, topic2]);
         assert!(r_assignments.is_ok());
         let expected = HashMap::from([
-            (
-                Partition {
-                    topic: topic1.clone(),
-                    index: 0,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic1.clone(),
-                    index: 1,
-                },
-                0,
-            ),
-            (
-                Partition {
-                    topic: topic2.clone(),
-                    index: 0,
-                },
-                0,
-            ),
+            (Partition::new(topic1, 0), 0),
+            (Partition::new(topic1, 1), 0),
+            (Partition::new(topic2, 0), 0),
         ]);
         assert_eq!(r_assignments.unwrap(), expected);
 
         let unassignmnts = broker.unsubscribe(Uuid::nil(), "group".to_string());
         assert!(unassignmnts.is_ok());
         let expected = vec![
-            Partition {
-                topic: topic1.clone(),
-                index: 0,
-            },
-            Partition {
-                topic: topic1,
-                index: 1,
-            },
-            Partition {
-                topic: topic2,
-                index: 0,
-            },
+            Partition::new(topic1, 0),
+            Partition::new(topic1, 1),
+            Partition::new(topic2, 0),
         ];
         assert_eq!(unassignmnts.unwrap(), expected);
     }

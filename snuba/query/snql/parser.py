@@ -988,6 +988,33 @@ def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) ->
     query.transform_expressions(transform)
 
 
+def _treeify_or_and_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
+                              and(a, b, c) and turn them into and(a, and(b, c))
+
+    even though clickhouse sql supports arbitrary amount of arguments there are other parts of the
+    codebase which assume `or` and `and` have two arguments
+
+    Adding this post-process step is easier than changing the rest of the query pipeline
+    """
+
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, FunctionCall):
+            return exp
+
+        if exp.function_name == "and":
+            return combine_and_conditions(exp.parameters)
+        elif exp.function_name == "or":
+            return combine_or_conditions(exp.parameters)
+        else:
+            return exp
+
+    query.transform_expressions(transform)
+
+
 DATETIME_MATCH = FunctionCallMatch(
     StringMatch("toDateTime"), (Param("date_string", LiteralMatch(AnyMatch(str))),)
 )
@@ -1242,6 +1269,7 @@ def validate_identifiers_in_lambda(
 def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
+
     condition = query.get_condition()
     top_level = (
         get_first_level_and_conditions(condition) if condition is not None else []
@@ -1433,8 +1461,8 @@ def _post_process(
         # custom processors can be partials instead of functions but partials don't
         # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(func, "__name__", "custom")
-
         with sentry_sdk.start_span(op="processor", description=description):
+
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("snql_parsing", description, query):
                     func(query)
@@ -1478,11 +1506,18 @@ def parse_snql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
+
+    # NOTE (volo): The anonymizer that runs after this function call chokes on
+    # OR and AND clauses with multiple parameters so we have to treeify them
+    # before we run the anonymizer and the rest of the post processors
+    with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+        _post_process(query, [_treeify_or_and_conditions], settings)
 
     with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
         snql_anonymized = format_snql_anonymized(query).get_sql()

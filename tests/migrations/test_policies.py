@@ -26,7 +26,7 @@ def code_migration_key() -> MigrationKey:
     """
     Code Migration with blocking == True
     """
-    return MigrationKey(MigrationGroup("events"), "0014_backfill_errors")
+    return MigrationKey(MigrationGroup("querylog"), "0006_sorting_key_change")
 
 
 def sql_migration_key() -> MigrationKey:

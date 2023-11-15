@@ -5,7 +5,9 @@ use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::Message;
 use std::time::Duration;
 
@@ -27,7 +29,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
         Box::pin(async move {
             let len = message.payload().rows.len();
             let mut data = vec![];
-            for row in message.payload().rows {
+            for row in &message.payload().rows {
                 data.extend(row);
                 data.extend(b"\n");
             }
@@ -73,6 +75,7 @@ impl ClickhouseWriterStep {
                 skip_write,
             )),
             concurrency,
+            Some("clickhouse"),
         ));
 
         ClickhouseWriterStep { inner }
@@ -80,14 +83,14 @@ impl ClickhouseWriterStep {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
         message: Message<BytesInsertBatch>,
-    ) -> Result<(), MessageRejected<BytesInsertBatch>> {
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
         self.inner.submit(message)
     }
 
@@ -99,7 +102,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.join(timeout)
     }
 }
@@ -169,7 +172,7 @@ mod tests {
             "default",
         );
 
-        println!("{}", "running test");
+        println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())

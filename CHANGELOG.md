@@ -1,5 +1,105 @@
 # Changelog
 
+## 23.10.1
+
+### Various fixes & improvements
+
+- feat(cardinality): Cardinalily analysis reporting (#4893) by @nikhars
+- ref(rust): Skip procspawn::init() if pure rust (#4899) by @lynnagara
+- fix(rust): Fix the consumer pause condition when backpressure happens (#4898) by @lynnagara
+- fix(clickhouse-v23.3): Fix function tuple can't have lambda expression as arguments bug (#4853) by @enochtangg
+- feat(subscriptions): Record received_p99 - take 2 (#4894) by @lynnagara
+- fix: fix 0001_functions and 0001_querylog for clickhouse 23 (#4842) by @untitaker
+- feat: Squash errors migrations (#4854) by @lynnagara
+- Revert "feat: Write received_p99 to commit log (#4872)" (2d3fc182) by @getsentry-bot
+- feat: Write received_p99 to commit log (#4872) by @lynnagara
+- feat(rust): Update all dependencies in lockfile (#4892) by @lynnagara
+- feat(generic-metrics): Add gauges storage set locally (#4888) by @ayirr7
+- deps: bump node to 20.8.1 (#4884) by @mdtro
+- feat(CoGS): Record bytes scanned for Generic Metrics queries by use case (#4748) by @rahul-kumar-saini
+- ref: bump sentry-arroyo to 2.14.13 (#4887) by @getsentry-bot
+- lint(generic-metrics): Remove feature flag for gen-metrics counters mat view version (#4891) by @john-z-yang
+- feat(subscriptions): Add mechanism for storage to define timestamp used for scheduling (#4873) by @lynnagara
+- configure dependabot and dependency review (#4885) by @mdtro
+- fix: Log step name in run_task_in_threads (#4875) by @untitaker
+- bump to debian 12 and configure dependabot for docker + gh actions (#4874) by @mdtro
+- ref(23.3) Fix test so it runs on 23.3 (#4863) by @evanh
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4869) by @john-z-yang
+- feat: Make subscription scheduler invalid interval a metric not warning (#4855) by @lynnagara
+- feat(generic-metrics): Add new mat view for generic counter metrics (#4867) by @john-z-yang
+- lint(generic-metrics): Remove feature flag for gen-metrics sets mat view version (#4866) by @john-z-yang
+
+_Plus 1 more_
+
+## 23.10.0
+
+### Various fixes & improvements
+
+- feat(slack): Allow sending files in slack client (#4865) by @nikhars
+- ref: Simplify collector / processed message batch writer (#4848) by @lynnagara
+- deploy static experimental consumers with statefulsets (#4856) by @dbanda
+- feat: Mark first migration blocking (#4849) by @lynnagara
+- deploy to experimental static membership consumers (#4851) by @dbanda
+- feat: Reduce more logging (#4852) by @lynnagara
+- test: Run full Sentry test suite if any migrations changed (#4850) by @lynnagara
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4820) by @john-z-yang
+- feat(generic-metrics): Add new mat view for generic set metrics (#4803) by @john-z-yang
+- feat(generic-metrics): Write `retention_days` to `min_retention_days` columns for sets and counters (#4819) by @john-z-yang
+- docs(migrations): document --fake (#4844) by @MeredithAnya
+- remove `--force` from ST migrations (#4840) by @dbanda
+- Add 10s granularity to generic metrics granularity processors (#4834) by @ayirr7
+- fix: Fix rust logging setup and sentry integration (#4843) by @untitaker
+- Upgrade Python to 3.8.18 (#4841) by @oioki
+- feat: Reduce logging in Rust consumers (#4845) by @lynnagara
+- fix(slack): Allow slack to talk to different channels. (#4810) by @nikhars
+- fix(dlq): Add sane defaults to the dlq policy (#4817) by @nikhars
+- fix(cardinality-analyzer): Add more storage keys to cardinality analyzer (#4839) by @john-z-yang
+- fix: Fix committing in the no-skip-write python consumer (#4838) by @lynnagara
+- ref(spans): Refactor spans Rust processor (#4833) by @phacops
+- fix(spans): Handle null and no tags values (#4830) by @phacops
+- ref: bump sentry-arroyo to 2.14.12 (#4829) by @getsentry-bot
+- fix: deploy new dummy rust consumers (#4828) by @untitaker
+
+_Plus 65 more_
+
+## 23.9.1
+
+### Various fixes & improvements
+
+- feat(spans): Port the processor to Rust (#4712) by @john-z-yang
+- meta: Bump new development version (2432b27d)
+
+## 23.9.0
+
+### Various fixes & improvements
+
+- feat(rust): Add processor metrics for Rust consumer (#4737) by @lynnagara
+- feat: metrics.increment() no longer supports option (#4738) by @lynnagara
+- ref: bump sentry-kafka-schemas to 0.1.27 (#4739) by @getsentry-bot
+- Update snuba-sdk version to latest 2.0.1 (#4735) by @enochtangg
+- make sure possible API changes are tested against sentry (#4736) by @volokluev
+- test: Run different Sentry tests depending on files changed (#4727) by @lynnagara
+- fix(ci): no more sentry shards (#4725) by @joshuarli
+- fix(CI): Unblock deploys as they hard check for sentry matrix'd tests (#4724) by @rahul-kumar-saini
+- fix(on-call): Negative org ID in Tenant IDs crashes Querylog consumer (#4722) by @rahul-kumar-saini
+- ref: bump sentry-kafka-schemas to 0.1.26 (#4721) by @getsentry-bot
+- test: No need to run Sentry CI in a matrix (#4720) by @lynnagara
+- Use snuba-admin spec for ST and SaaS (#4716) by @dbanda
+- feat(rust-arroyo): Processor calls consumer.poll() with timeout of 1 second (#4719) by @lynnagara
+- experiment(on-call): Profile bytes scanned potentially incorrect (#4714) by @rahul-kumar-saini
+- feat(reduce): Avoid clone and ensure all messages are processed in join (#4718) by @lynnagara
+- improvement(visibility): make the replacer log project_ids for slow replacements (#4717) by @onewland
+- feat(profiling): Add a functions processor in Rust (#4705) by @phacops
+- fix(spans): Handle bad group and group_raw values (#4715) by @phacops
+- feat(profiling): Add a profiles processor in Rust (#4698) by @phacops
+- Remove canary deploys in non-US regions (#4696) by @mattgauntseo-sentry
+- feat(spans): write tags to sentry_tags col (#4706) by @dbanda
+- sort lists before compare (#4711) by @dbanda
+- fix(rust-arroyo): Fix timeout in RunTaskInThreads::join() (#4704) by @lynnagara
+- ref(rust): Rewrite check_for_results to use better way of joining process pool (#4703) by @untitaker
+
+_Plus 78 more_
+
 ## 23.8.0
 
 ### Various fixes & improvements

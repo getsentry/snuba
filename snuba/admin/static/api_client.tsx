@@ -62,6 +62,7 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
   executeCardinalityQuery: (
     req: CardinalityQueryRequest
   ) => Promise<CardinalityQueryResult>;
@@ -90,6 +91,7 @@ interface Client {
     instruction: ReplayInstruction
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
+  getAdminRegions: () => Promise<string[]>;
 }
 
 function Client() {
@@ -191,6 +193,11 @@ function Client() {
 
     getAllowedProjects: () => {
       const url = baseUrl + "allowed_projects";
+      return fetch(url).then((resp) => resp.json());
+    },
+
+    getAdminRegions: () => {
+      const url = baseUrl + "admin_regions";
       return fetch(url).then((resp) => resp.json());
     },
 
@@ -298,6 +305,10 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
+    getPredefinedCardinalityQueryOptions: () => {
+      const url = baseUrl + "cardinality_queries";
+      return fetch(url).then((resp) => resp.json());
     },
     executeCardinalityQuery: (query: CardinalityQueryRequest) => {
       const url = baseUrl + "cardinality_query";

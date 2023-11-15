@@ -219,9 +219,6 @@ class InsertBatchWriter:
             self.__writer,
         )
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
-
 
 class ReplacementBatchWriter:
     def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
@@ -260,20 +257,7 @@ class ReplacementBatchWriter:
                     on_delivery=self.__delivery_callback,
                 )
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        args = []
-        if timeout is not None:
-            args.append(timeout)
-
-        start = time.time()
-        self.__producer.flush(*args)
-
-        logger.debug(
-            "Waited %0.4f seconds for %r replacements to be flushed to %r.",
-            time.time() - start,
-            sum(len(message.payload.values) for message in self.__messages),
-            self.__producer,
-        )
+        self.__producer.flush()
 
 
 class ProcessedMessageBatchWriter:
@@ -284,11 +268,15 @@ class ProcessedMessageBatchWriter:
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
+        metrics: Optional[MetricsBackend] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
+        self.__received_timestamps: MutableMapping[
+            Partition, List[float]
+        ] = defaultdict(list)
 
         self.__closed = False
 
@@ -300,19 +288,25 @@ class ProcessedMessageBatchWriter:
         if message.payload is None:
             return
 
+        assert isinstance(message.value, BrokerValue)
+
         if isinstance(message.payload, BytesInsertBatch):
-            self.__insert_batch_writer.submit(cast(Message[BytesInsertBatch], message))
+            insert_message = cast(Message[BytesInsertBatch], message)
+            self.__insert_batch_writer.submit(insert_message)
+            origin_timestamp = insert_message.payload.origin_timestamp
+            if origin_timestamp is not None:
+                self.__received_timestamps[message.value.partition].append(
+                    datetime.timestamp(origin_timestamp)
+                )
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
-
             self.__replacement_batch_writer.submit(
                 cast(Message[ReplacementBatch], message)
             )
         else:
             raise TypeError("unexpected payload type")
 
-        assert isinstance(message.value, BrokerValue)
         self.__offsets_to_produce[message.value.partition] = (
             message.value.next_offset,
             message.value.timestamp,
@@ -333,10 +327,26 @@ class ProcessedMessageBatchWriter:
             self.__replacement_batch_writer.close()
 
         if self.__commit_log_config is not None:
-            for partition, (offset, timestamp) in self.__offsets_to_produce.items():
+            for partition, (
+                offset,
+                timestamp,
+            ) in self.__offsets_to_produce.items():
+                received_timestamps = self.__received_timestamps.pop(partition, [])
+                received_timestamps.sort()
+                if len(received_timestamps):
+                    received_p99 = received_timestamps[
+                        int(len(received_timestamps) * 0.99)
+                    ]
+                else:
+                    received_p99 = None
+
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        received_p99,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -348,16 +358,7 @@ class ProcessedMessageBatchWriter:
                 )
                 self.__commit_log_config.producer.poll(0.0)
         self.__offsets_to_produce.clear()
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        start = time.time()
-        self.__insert_batch_writer.join(timeout)
-
-        if self.__replacement_batch_writer is not None:
-            if timeout is not None:
-                timeout = max(timeout - (time.time() - start), 0)
-
-            self.__replacement_batch_writer.join(timeout)
+        self.__received_timestamps.clear()
 
 
 json_row_encoder = JSONRowEncoder()
@@ -396,9 +397,7 @@ def build_batch_writer(
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
-        insert_batch_writer = InsertBatchWriter(
-            writer, MetricsWrapper(metrics, "insertions")
-        )
+        insert_metrics = MetricsWrapper(metrics, "insertions")
 
         replacement_batch_writer: Optional[ReplacementBatchWriter]
         if supports_replacements:
@@ -411,7 +410,10 @@ def build_batch_writer(
             replacement_batch_writer = None
 
         return ProcessedMessageBatchWriter(
-            insert_batch_writer, replacement_batch_writer, commit_log_config
+            InsertBatchWriter(writer, insert_metrics),
+            replacement_batch_writer,
+            commit_log_config,
+            metrics=insert_metrics,
         )
 
     return build_writer
@@ -469,24 +471,15 @@ class MultistorageCollector:
         for storage_key, step in self.__steps.items():
             step.close()
 
-    def join(self, timeout: Optional[float] = None) -> None:
-        start = time.time()
-
-        for step in self.__steps.values():
-            if timeout is not None:
-                timeout_remaining: Optional[float] = max(
-                    timeout - (time.time() - start), 0
-                )
-            else:
-                timeout_remaining = None
-
-            step.join(timeout_remaining)
-
         if self.__commit_log_config is not None:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
-                        self.__commit_log_config.group_id, partition, offset, timestamp
+                        self.__commit_log_config.group_id,
+                        partition,
+                        offset,
+                        datetime.timestamp(timestamp),
+                        None,
                     )
                 )
                 self.__commit_log_config.producer.produce(
@@ -574,7 +567,9 @@ def process_message(
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
                     if enforce_schema:
-                        raise
+                        raise Exception(
+                            f"Validation Error - {snuba_logical_topic.value}"
+                        ) from err
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be
@@ -709,6 +704,12 @@ def build_multistorage_batch_writer(
     else:
         replacement_batch_writer = None
 
+    insertion_metrics = MetricsWrapper(
+        metrics,
+        "insertions",
+        {"storage": storage.get_storage_key().value},
+    )
+
     return ProcessedMessageBatchWriter(
         InsertBatchWriter(
             storage.get_table_writer().get_batch_writer(
@@ -716,13 +717,10 @@ def build_multistorage_batch_writer(
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 slice_id=slice_id,
             ),
-            MetricsWrapper(
-                metrics,
-                "insertions",
-                {"storage": storage.get_storage_key().value},
-            ),
+            insertion_metrics,
         ),
         replacement_batch_writer,
+        metrics=insertion_metrics,
     )
 
 
@@ -816,7 +814,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             message: Message[MultistorageCollector],
         ) -> Message[MultistorageCollector]:
             message.payload.close()
-            message.payload.join()
             return message
 
         collect = Reduce[MultistorageProcessedMessage, MultistorageCollector](

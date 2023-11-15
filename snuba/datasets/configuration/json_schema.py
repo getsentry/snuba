@@ -36,13 +36,26 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the subscription scheduled Kafka topic",
         },
+        "subscription_result_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the subscription result Kafka topic",
+        },
         "subscription_scheduler_mode": {
             "type": ["string", "null"],
             "description": "The subscription scheduler mode used (e.g. partition or global). This must be specified if subscriptions are supported for this storage",
         },
-        "subscription_result_topic": {
-            "type": ["string", "null"],
-            "description": "Name of the subscription result Kafka topic",
+        "subscription_synchronization_timestamp": {
+            "anyOf": [
+                {"type": "string", "enum": ["orig_message_ts", "received_p99"]},
+                {"type": "null"},
+            ],
+            "description": "Field to be used for timestamp synchronization by the scheduler",
+        },
+        "subscription_delay_seconds": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 120,
+            "description": "Additional delay in seconds to be added before scheduling. Amount added depends on the synchronization timestamp used. For orig_message_ts, we typically add 60 seconds to account for ingest time as it is not included.",
         },
         "replacement_topic": {
             "type": ["string", "null"],
