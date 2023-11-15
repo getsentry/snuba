@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import random
 import textwrap
 import uuid
@@ -30,8 +29,6 @@ from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
-
-logger = logging.getLogger("snuba.request.validation")
 
 
 class Parser(Protocol):
@@ -73,24 +70,11 @@ def update_attribution_info(
     request_parts: RequestParts, referrer: str, query_project_id: int
 ) -> dict[str, str]:
     attribution_info = dict(request_parts.attribution_info)
+
     attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
-
-    if "referrer" not in request_parts.attribution_info["tenant_ids"]:
-        tenant_ids_referrer = "<unknown>"
-    else:
-        tenant_ids_referrer = request_parts.attribution_info["tenant_ids"]["referrer"]
-
-    if referrer != tenant_ids_referrer:
-        logger.info(
-            f"Received request contains different referrers: {referrer} != {tenant_ids_referrer}. Default to tenant_ids referrer."
-        )
-
-    if referrer != "<unknown>":
-        attribution_info["referrer"] = referrer
-    else:
-        attribution_info["referrer"] = tenant_ids_referrer
-
+    attribution_info["referrer"] = referrer
     attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
+
     if (
         "project_id" not in attribution_info["tenant_ids"]
         and query_project_id is not None
@@ -113,6 +97,14 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
+            if state.get_config("only_use_tenant_id_referrer", False):
+                if "referrer" not in request_parts.attribution_info["tenant_ids"]:
+                    referrer = "<unknown>"
+                else:
+                    referrer = str(
+                        request_parts.attribution_info["tenant_ids"]["referrer"]
+                    )
+
             if settings_class == HTTPQuerySettings:
                 query_settings: MutableMapping[str, bool | str] = {
                     **request_parts.query_settings,
