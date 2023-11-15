@@ -5,14 +5,14 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use std::time::Duration;
 
-pub struct RunTask<TPayload: Send + Sync, TTransformed: Send + Sync> {
+pub struct RunTask<TPayload, TTransformed> {
     pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
     pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     pub message_carried_over: Option<Message<TTransformed>>,
     pub commit_request_carried_over: Option<CommitRequest>,
 }
 
-impl<TPayload: Send + Sync, TTransformed: Send + Sync> RunTask<TPayload, TTransformed> {
+impl<TPayload, TTransformed> RunTask<TPayload, TTransformed> {
     pub fn new<N>(
         function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
         next_step: N,
@@ -29,7 +29,7 @@ impl<TPayload: Send + Sync, TTransformed: Send + Sync> RunTask<TPayload, TTransf
     }
 }
 
-impl<TPayload: Send + Sync, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
+impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
     for RunTask<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
