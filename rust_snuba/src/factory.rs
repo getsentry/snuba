@@ -29,6 +29,7 @@ pub struct ConsumerStrategyFactory {
 }
 
 impl ConsumerStrategyFactory {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage_config: config::StorageConfig,
         logical_topic_name: String,

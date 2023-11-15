@@ -22,6 +22,7 @@ use crate::processors;
 use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
