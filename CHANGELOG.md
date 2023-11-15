@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.11.0
+
+### Various fixes & improvements
+
+- Move `SchemaValidator` into async task  (#5037) by @Swatinem
+- Micro-optimize `ClickhouseWriter` (#5035) by @Swatinem
+- ref(rust): Add source information to `RunError` (#5034) by @loewenheim
+- fix(cli): Remove misleading defaults (#4837) by @untitaker
+- Remove `BadMessage` in favor of `anyhow::Error` (#5032) by @Swatinem
+- Remove some unused Send/Sync bounds (#5029) by @loewenheim
+- Use more early-returns (#5023) by @Swatinem
+- ref(rust): Fix inconsistency in metrics trait (#5027) by @lynnagara
+- feat(rust): Add strategy that produces the commit log topic (#4976) by @lynnagara
+- chore(rust): Move common functionality out (#5026) by @nikhars
+- ref(rust): Rename Transform to RunTask (#5021) by @lynnagara
+- Avoid Mutex on `AssignmentCallbacks` (#5025) by @Swatinem
+- ref: Remove most Clone bounds (#5020) by @loewenheim
+- feat(rust): Port the buffered messages class to Rust (#4993) by @lynnagara
+- fix(migration): move metrics migration into the right place (#5007) by @volokluev
+- feat(settings): Allow runtime configurable referrer overrides (#5005) by @nikhars
+- Optimize subset checks (#5018) by @Swatinem
+- ref: Rename and simplify TopicContent struct (#5017) by @loewenheim
+- Intern `Topic` and make it `Copy` (#5016) by @Swatinem
+- Avoid intermediate `HashMap` in TopicPartitionList (#5015) by @Swatinem
+- Give `Topic` and `Partition` a `new` fn (#5014) by @Swatinem
+- Apply clippy suggestions (#5008) by @Swatinem
+- ref: rust-rdkafka 0.36 (#5004) by @lynnagara
+- fix(metrics): add _raw_tags_hash column to distributed table (counters) (#4998) by @volokluev
+
+_Plus 75 more_
+
 ## 23.10.1
 
 ### Various fixes & improvements
