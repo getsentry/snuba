@@ -110,7 +110,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--python-max-queue-depth",
     type=int,
     default=None,
-    help="How many messages should be queued up before the Python message processor before backpressure kicks in. Defaults to the number of processes.",
+    help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
 def rust_consumer(
     *,
