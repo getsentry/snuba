@@ -1,5 +1,6 @@
-use crate::config::ClickhouseConfig;
-use crate::types::BytesInsertBatch;
+use std::sync::Arc;
+use std::time::Duration;
+
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
@@ -9,27 +10,35 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::Message;
-use std::time::Duration;
+
+use crate::config::ClickhouseConfig;
+use crate::types::BytesInsertBatch;
 
 struct ClickhouseWriter {
-    client: ClickhouseClient,
+    client: Arc<ClickhouseClient>,
     skip_write: bool,
 }
 
 impl ClickhouseWriter {
     pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
-        ClickhouseWriter { client, skip_write }
+        ClickhouseWriter {
+            client: Arc::new(client),
+            skip_write,
+        }
     }
 }
 
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
-        let client: ClickhouseClient = self.client.clone();
+        let client = self.client.clone();
+
         Box::pin(async move {
-            let len = message.payload().rows.len();
+            let rows = &message.payload().rows;
+
+            let len = rows.len();
             let mut data = vec![];
-            for row in &message.payload().rows {
+            for row in rows {
                 data.extend(row);
                 data.extend(b"\n");
             }
@@ -110,50 +119,44 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
 #[derive(Clone)]
 pub struct ClickhouseClient {
     client: Client,
-    url: String,
     headers: HeaderMap<HeaderValue>,
-    table: String,
+    url: String,
+    query: String,
 }
+
 impl ClickhouseClient {
     pub fn new(hostname: &str, http_port: u16, table: &str, database: &str) -> ClickhouseClient {
-        let mut client = ClickhouseClient {
-            client: Client::new(),
-            url: format!("http://{}:{}", hostname, http_port),
-            headers: HeaderMap::new(),
-            table: table.to_string(),
-        };
-
-        client
-            .headers
-            .insert(CONNECTION, HeaderValue::from_static("keep-alive"));
-        client
-            .headers
-            .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
-        client.headers.insert(
+        let mut headers = HeaderMap::with_capacity(3);
+        headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
+        headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
-        client
+
+        let url = format!("http://{hostname}:{http_port}");
+        let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
+
+        ClickhouseClient {
+            client: Client::new(),
+            headers,
+            url,
+            query,
+        }
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> Result<Response, anyhow::Error> {
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         let res = self
             .client
-            .post(self.url.clone())
+            .post(&self.url)
             .headers(self.headers.clone())
+            .query(&[("query", &self.query)])
             .body(body)
-            .query(&[(
-                "query",
-                format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
-            )])
             .send()
             .await?;
 
         if res.status() != reqwest::StatusCode::OK {
-            return Err(anyhow::anyhow!(
-                "error writing to clickhouse: {}",
-                res.text().await?
-            ));
+            anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
         }
 
         Ok(res)
