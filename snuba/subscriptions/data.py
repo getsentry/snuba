@@ -9,11 +9,11 @@ from functools import partial
 from typing import (
     Any,
     Iterator,
+    List,
     Mapping,
     NamedTuple,
     NewType,
     Optional,
-    Sequence,
     Tuple,
     Union,
 )
@@ -96,7 +96,7 @@ class SubscriptionData:
     ) -> None:
         added_timestamp_column = False
         from_clause = query.get_from_clause()
-        entities = []
+        entities: List[Tuple[Optional[str], Entity]] = []
         if isinstance(from_clause, JoinClause):
             for alias, node in from_clause.get_alias_node_map().items():
                 assert isinstance(node.data_source, EntityDS), node.data_source
@@ -107,11 +107,11 @@ class SubscriptionData:
             raise InvalidSubscriptionError(
                 "Only simple queries and join queries are supported"
             )
-        for alias, entity in entities:
-            conditions_to_add: Sequence[Expression] = [
+        for entity_alias, entity in entities:
+            conditions_to_add: List[Expression] = [
                 binary_condition(
                     ConditionFunctions.EQ,
-                    Column(None, alias, "project_id"),
+                    Column(None, entity_alias, "project_id"),
                     Literal(None, self.project_id),
                 ),
             ]
@@ -123,7 +123,7 @@ class SubscriptionData:
                     [
                         binary_condition(
                             ConditionFunctions.GTE,
-                            Column(None, alias, required_timestamp_column),
+                            Column(None, entity_alias, required_timestamp_column),
                             Literal(
                                 None,
                                 (timestamp - timedelta(seconds=self.time_window_sec)),
@@ -131,7 +131,7 @@ class SubscriptionData:
                         ),
                         binary_condition(
                             ConditionFunctions.LT,
-                            Column(None, alias, required_timestamp_column),
+                            Column(None, entity_alias, required_timestamp_column),
                             Literal(None, timestamp),
                         ),
                     ]
