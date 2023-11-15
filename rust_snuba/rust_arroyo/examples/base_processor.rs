@@ -33,6 +33,6 @@ fn main() {
     let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
     processor.subscribe(topic);
     for _ in 0..20 {
-        let _ = processor.run_once();
+        processor.run_once().unwrap();
     }
 }

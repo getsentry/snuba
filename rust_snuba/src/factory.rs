@@ -145,7 +145,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         self.concurrency,
                         Some("process_message"),
                     ),
-                    self.logical_topic_name.clone(),
+                    &self.logical_topic_name,
                     false,
                     self.concurrency,
                 ))

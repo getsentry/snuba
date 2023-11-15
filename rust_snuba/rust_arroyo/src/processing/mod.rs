@@ -2,14 +2,17 @@ mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
-use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use thiserror::Error;
+
+use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::strategies::{MessageRejected, SubmitError};
+use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -21,11 +24,14 @@ pub struct PollError;
 #[derive(Debug, Clone)]
 pub struct PauseError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Error)]
 pub enum RunError {
+    #[error("invalid state")]
     InvalidState,
-    PollError,
-    PauseError,
+    #[error("poll error")]
+    Poll(#[source] ConsumerError),
+    #[error("pause error")]
+    Pause(#[source] ConsumerError),
 }
 
 struct Strategies<TPayload> {
@@ -184,7 +190,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 }
                 Err(error) => {
                     tracing::error!(%error, "poll error");
-                    return Err(RunError::PollError);
+                    return Err(RunError::Poll(error));
                 }
             }
         }
@@ -240,7 +246,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             self.is_paused = false;
                         }
-                        Err(_) => return Err(RunError::PauseError),
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
+                        }
                     }
                 }
 
@@ -290,7 +299,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             self.is_paused = true;
                         }
-                        Err(_) => return Err(RunError::PauseError),
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
+                        }
                     }
                 }
             }
