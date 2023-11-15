@@ -89,10 +89,15 @@ lint-rust:
 
 format-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba && rustup component add rustfmt --toolchain stable 2> /dev/null) && \
-		(cd rust_snuba/rust_arroyo/ && cargo +stable fmt --all) && \
-		(cd rust_snuba && cargo +stable fmt --all)
+		cd rust_snuba && \
+		cargo +stable fmt --all
 .PHONY: format-rust
+
+format-rust-ci:
+	. scripts/rust-envvars && \
+		cd rust_snuba && \
+		cargo +stable fmt --all --check
+.PHONY: format-rust-ci
 
 gocd:
 	rm -rf ./gocd/generated-pipelines

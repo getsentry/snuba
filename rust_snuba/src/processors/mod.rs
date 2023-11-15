@@ -1,8 +1,8 @@
-mod utils;
 mod functions;
 mod profiles;
 mod querylog;
 mod spans;
+mod utils;
 
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;

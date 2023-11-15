@@ -1,9 +1,9 @@
+use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
-use crate::processors::utils::{default_retention_days, DEFAULT_RETENTION_DAYS, hex_to_u64};
 
 pub fn process_message(
     payload: KafkaPayload,
