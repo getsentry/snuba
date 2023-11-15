@@ -17,8 +17,8 @@ pub struct SchemaValidator {
 }
 
 impl SchemaValidator {
-    pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
-        let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
+    pub fn new(logical_topic: &str, enforce_schema: bool) -> Self {
+        let schema = match sentry_kafka_schemas::get_schema(logical_topic, None) {
             Ok(s) => Some(Arc::new(s)),
             Err(e) => {
                 if enforce_schema {
@@ -81,7 +81,7 @@ pub struct ValidateSchema {
 }
 
 impl ValidateSchema {
-    pub fn new<N>(next_step: N, topic: String, enforce_schema: bool, concurrency: usize) -> Self
+    pub fn new<N>(next_step: N, topic: &str, enforce_schema: bool, concurrency: usize) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
@@ -154,7 +154,7 @@ mod tests {
             }
         }
 
-        let mut strategy = ValidateSchema::new(Noop {}, "outcomes".to_string(), true, 5);
+        let mut strategy = ValidateSchema::new(Noop {}, "outcomes", true, 5);
 
         let example = "{
             \"project_id\": 1,
