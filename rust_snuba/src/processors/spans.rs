@@ -1,28 +1,26 @@
-use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
+use std::collections::BTreeMap;
+
+use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use uuid::Uuid;
+
+use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, BadMessage> {
-    let payload_bytes = payload.payload.ok_or(BadMessage)?;
-    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|error| {
-        tracing::error!(%error, "Failed to deserialize message");
-        BadMessage
-    })?;
+) -> anyhow::Result<BytesInsertBatch> {
+    let payload_bytes = payload.payload.context("Expected payload")?;
+    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes)?;
+
     let mut span: Span = msg.try_into()?;
 
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&span).map_err(|error| {
-        tracing::error!(%error, "Failed to serialize processed message");
-        BadMessage
-    })?;
+    let serialized = serde_json::to_vec(&span)?;
 
     Ok(BytesInsertBatch {
         rows: vec![serialized],
@@ -132,10 +130,7 @@ impl FromSentryTags {
             tags.insert(key.into(), value.into());
         }
 
-        (
-            tags.keys().cloned().collect(),
-            tags.values().cloned().collect(),
-        )
+        tags.into_iter().unzip()
     }
 }
 
@@ -191,12 +186,12 @@ struct Span {
 }
 
 impl TryFrom<FromSpanMessage> for Span {
-    type Error = BadMessage;
+    type Error = anyhow::Error;
 
-    fn try_from(from: FromSpanMessage) -> Result<Span, BadMessage> {
+    fn try_from(from: FromSpanMessage) -> anyhow::Result<Span> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let group = if let Some(group) = &from.sentry_tags.group {
-            u64::from_str_radix(group, 16).map_err(|_| BadMessage)?
+            u64::from_str_radix(group, 16)?
         } else {
             0
         };
@@ -205,8 +200,7 @@ impl TryFrom<FromSpanMessage> for Span {
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
         let tags = from.tags.unwrap_or_default();
-        let mut tag_keys: Vec<String> = tags.clone().into_keys().collect();
-        let mut tag_values: Vec<String> = tags.into_values().collect();
+        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = tags.into_iter().unzip();
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());

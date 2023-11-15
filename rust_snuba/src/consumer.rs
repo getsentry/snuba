@@ -69,6 +69,8 @@ pub fn consumer_impl(
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
         tracing::debug!(sentry_dsn = dsn);
+        // this forces anyhow to record stack traces when capturing an error:
+        std::env::set_var("RUST_BACKTRACE", "1");
         _sentry_guard = Some(setup_sentry(dsn));
     }
 

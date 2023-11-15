@@ -1,35 +1,31 @@
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
+use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use uuid::Uuid;
+
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, BadMessage> {
-    let payload_bytes = payload.payload.ok_or(BadMessage)?;
-    let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|error| {
-        tracing::error!(%error, "Failed to deserialize message");
-        BadMessage
-    })?;
-    let mut profile_msg: ProfileMessage = msg.try_into()?;
+) -> anyhow::Result<BytesInsertBatch> {
+    let payload_bytes = payload.payload.context("Expected payload")?;
+    let mut msg: ProfileMessage = serde_json::from_slice(&payload_bytes)?;
 
-    profile_msg.offset = metadata.offset;
-    profile_msg.partition = metadata.partition;
+    // we always want an empty string at least
+    msg.device_classification = Some(msg.device_classification.unwrap_or_default());
+    msg.offset = metadata.offset;
+    msg.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&profile_msg).map_err(|error| {
-        tracing::error!(%error, "Failed to serialize message");
-        BadMessage
-    })?;
+    let serialized = serde_json::to_vec(&msg)?;
 
     Ok(BytesInsertBatch {
         rows: vec![serialized],
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct FromProfileMessage {
+#[derive(Debug, Deserialize, Serialize)]
+struct ProfileMessage {
     #[serde(default)]
     android_api_level: Option<u32>,
     #[serde(default)]
@@ -48,78 +44,20 @@ struct FromProfileMessage {
     environment: Option<String>,
     organization_id: u64,
     platform: String,
-    profile_id: String,
+    profile_id: Uuid,
     project_id: u64,
     received: i64,
     retention_days: u32,
-    trace_id: String,
-    transaction_id: String,
+    trace_id: Uuid,
+    transaction_id: Uuid,
     transaction_name: String,
     version_code: String,
     version_name: String,
-}
 
-#[derive(Default, Debug, Serialize)]
-struct ProfileMessage {
-    android_api_level: Option<u32>,
-    architecture: Option<String>,
-    device_classification: String,
-    device_locale: String,
-    device_manufacturer: String,
-    device_model: String,
-    device_os_build_number: Option<String>,
-    device_os_name: String,
-    device_os_version: String,
-    duration_ns: u64,
-    environment: Option<String>,
+    #[serde(default)]
     offset: u64,
-    organization_id: u64,
+    #[serde(default)]
     partition: u16,
-    platform: String,
-    profile_id: String,
-    project_id: u64,
-    received: i64,
-    retention_days: u32,
-    trace_id: String,
-    transaction_id: String,
-    transaction_name: String,
-    version_code: String,
-    version_name: String,
-}
-
-impl TryFrom<FromProfileMessage> for ProfileMessage {
-    type Error = BadMessage;
-    fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, BadMessage> {
-        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| BadMessage)?;
-        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| BadMessage)?;
-        let transaction_id =
-            Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| BadMessage)?;
-        Ok(Self {
-            android_api_level: from.android_api_level,
-            architecture: from.architecture,
-            device_classification: from.device_classification.unwrap_or_default(),
-            device_locale: from.device_locale,
-            device_manufacturer: from.device_manufacturer,
-            device_model: from.device_model,
-            device_os_build_number: from.device_os_build_number,
-            device_os_name: from.device_os_name,
-            device_os_version: from.device_os_version,
-            duration_ns: from.duration_ns,
-            environment: from.environment,
-            organization_id: from.organization_id,
-            platform: from.platform,
-            profile_id: profile_id.to_string(),
-            project_id: from.project_id,
-            received: from.received,
-            retention_days: from.retention_days,
-            trace_id: trace_id.to_string(),
-            transaction_id: transaction_id.to_string(),
-            transaction_name: from.transaction_name,
-            version_code: from.version_code,
-            version_name: from.version_name,
-            ..Default::default()
-        })
-    }
 }
 
 #[cfg(test)]

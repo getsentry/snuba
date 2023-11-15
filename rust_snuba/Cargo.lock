@@ -116,6 +116,9 @@ name = "anyhow"
 version = "1.0.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
+dependencies = [
+ "backtrace",
+]
 
 [[package]]
 name = "atty"
@@ -387,7 +390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -903,7 +906,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "tempfile",
- "uuid 1.5.0",
+ "uuid",
  "winapi 0.3.9",
 ]
 
@@ -975,7 +978,7 @@ dependencies = [
  "serde_json",
  "time",
  "url",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1788,7 +1791,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid 0.8.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1815,7 +1818,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1929,6 +1932,7 @@ dependencies = [
  "httpdate",
  "native-tls",
  "reqwest",
+ "sentry-anyhow",
  "sentry-backtrace",
  "sentry-contexts",
  "sentry-core",
@@ -1937,6 +1941,17 @@ dependencies = [
  "sentry-tracing",
  "tokio",
  "ureq",
+]
+
+[[package]]
+name = "sentry-anyhow"
+version = "0.31.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4fd76cd5c14676228996a31aa214adb049920b103bbc5b5a4114d05323995c5"
+dependencies = [
+ "anyhow",
+ "sentry-backtrace",
+ "sentry-core",
 ]
 
 [[package]]
@@ -2043,7 +2058,7 @@ dependencies = [
  "thiserror",
  "time",
  "url",
- "uuid 1.5.0",
+ "uuid",
 ]
 
 [[package]]
@@ -2609,12 +2624,6 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "uuid"
