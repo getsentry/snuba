@@ -83,14 +83,14 @@ impl TryFrom<FromOutcomeMessage> for Outcome {
 
         Ok(Self {
             timestamp: todo!(),
-            org_id: from.org_id.map_or(0, |v| v),
-            project_id: from.project_id.map_or(0, |v| v),
+            org_id: from.org_id.unwrap_or_default(),
+            project_id: from.project_id.unwrap_or_default(),
             key_id: from.key_id,
             outcome: from.outcome,
             reason: reason,
             event_id: todo!(),
-            category: from.category.map_or(1, |v| v), // Use DataCategory.ERROR instead
-            quantity: from.quantity.map_or(1, |v| v),
+            category: from.category.unwrap_or(1), // Use DataCategory.ERROR instead
+            quantity: from.quantity.unwrap_or(1),
         })
     }
 }
