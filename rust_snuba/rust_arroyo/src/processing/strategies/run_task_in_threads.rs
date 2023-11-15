@@ -18,11 +18,11 @@ pub enum RunTaskError {
 pub type RunTaskFunc<TTransformed> =
     Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
 
-pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
+pub trait TaskRunner<TPayload: Clone, TTransformed: Clone>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
-pub struct RunTaskInThreads<TPayload, TTransformed> {
+pub struct RunTaskInThreads<TPayload, TTransformed: Clone> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
@@ -34,7 +34,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed> {
     metric_name: String,
 }
 
-impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
+impl<TPayload, TTransformed: Clone> RunTaskInThreads<TPayload, TTransformed> {
     pub fn new<N>(
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
@@ -65,7 +65,7 @@ impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
     }
 }
 
-impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
+impl<TPayload: Clone, TTransformed: Clone + Send + Sync + 'static> ProcessingStrategy<TPayload>
     for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {

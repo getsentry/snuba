@@ -8,7 +8,7 @@ use std::mem;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-struct BatchState<T, TResult> {
+struct BatchState<T: Clone, TResult: Clone> {
     value: Option<TResult>,
     accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     offsets: BTreeMap<Partition, u64>,
@@ -16,7 +16,7 @@ struct BatchState<T, TResult> {
     message_count: usize,
 }
 
-impl<T, TResult> BatchState<T, TResult> {
+impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
     fn new(
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
@@ -41,7 +41,7 @@ impl<T, TResult> BatchState<T, TResult> {
     }
 }
 
-pub struct Reduce<T, TResult> {
+pub struct Reduce<T: Clone, TResult: Clone> {
     next_step: Box<dyn ProcessingStrategy<TResult>>,
     accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     initial_value: TResult,
@@ -52,7 +52,9 @@ pub struct Reduce<T, TResult> {
     commit_request_carried_over: Option<CommitRequest>,
 }
 
-impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
+impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
+    for Reduce<T, TResult>
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
@@ -100,7 +102,8 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
             self.flush(true)?;
         }
 
-        let remaining: Option<Duration> = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
+        let remaining: Option<Duration> =
+            timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 
@@ -111,7 +114,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
     }
 }
 
-impl<T, TResult: Clone> Reduce<T, TResult> {
+impl<T: Clone, TResult: Clone> Reduce<T, TResult> {
     pub fn new(
         next_step: Box<dyn ProcessingStrategy<TResult>>,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,

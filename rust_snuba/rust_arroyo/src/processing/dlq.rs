@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, VecDeque};
 
 /// Stores messages that are pending commit. This is used to retreive raw messages
 // in case they need to be placed in the DLQ.
-pub struct BufferedMessages<TPayload> {
+pub struct BufferedMessages<TPayload: Clone> {
     buffered_messages: BTreeMap<Partition, VecDeque<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload> BufferedMessages<TPayload> {
+impl<TPayload: Clone> BufferedMessages<TPayload> {
     pub fn new() -> Self {
         BufferedMessages {
             buffered_messages: BTreeMap::new(),

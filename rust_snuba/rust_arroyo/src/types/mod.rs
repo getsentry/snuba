@@ -68,14 +68,14 @@ pub enum TopicOrPartition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct BrokerMessage<T> {
+pub struct BrokerMessage<T: Clone> {
     pub payload: T,
     pub partition: Partition,
     pub offset: u64,
     pub timestamp: DateTime<Utc>,
 }
 
-impl<T> BrokerMessage<T> {
+impl<T: Clone> BrokerMessage<T> {
     pub fn new(payload: T, partition: Partition, offset: u64, timestamp: DateTime<Utc>) -> Self {
         Self {
             payload,
@@ -85,7 +85,7 @@ impl<T> BrokerMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
         BrokerMessage {
             payload: replacement,
             partition: self.partition,
@@ -95,7 +95,7 @@ impl<T> BrokerMessage<T> {
     }
 
     /// Map a fallible function over this messages's payload.
-    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+    pub fn try_map<TReplaced: Clone, E, F: FnOnce(T) -> Result<TReplaced, E>>(
         self,
         f: F,
     ) -> Result<BrokerMessage<TReplaced>, E> {
@@ -117,7 +117,7 @@ impl<T> BrokerMessage<T> {
     }
 }
 
-impl<T> fmt::Display for BrokerMessage<T> {
+impl<T: Clone> fmt::Display for BrokerMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -174,17 +174,17 @@ impl<T> fmt::Display for AnyMessage<T> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum InnerMessage<T> {
+pub enum InnerMessage<T: Clone> {
     BrokerMessage(BrokerMessage<T>),
     AnyMessage(AnyMessage<T>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Message<T> {
+pub struct Message<T: Clone> {
     pub inner_message: InnerMessage<T>,
 }
 
-impl<T> Message<T> {
+impl<T: Clone> Message<T> {
     pub fn new_broker_message(
         payload: T,
         partition: Partition,
@@ -240,7 +240,7 @@ impl<T> Message<T> {
         }
     }
 
-    pub fn replace<TReplaced>(self, replacement: TReplaced) -> Message<TReplaced> {
+    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
         match self.inner_message {
             InnerMessage::BrokerMessage(inner) => Message {
                 inner_message: InnerMessage::BrokerMessage(inner.replace(replacement)),
@@ -252,7 +252,7 @@ impl<T> Message<T> {
     }
 
     /// Map a fallible function over this messages's payload.
-    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+    pub fn try_map<TReplaced: Clone, E, F: FnOnce(T) -> Result<TReplaced, E>>(
         self,
         f: F,
     ) -> Result<Message<TReplaced>, E> {
@@ -269,7 +269,7 @@ impl<T> Message<T> {
     }
 }
 
-impl<T> fmt::Display for Message<T> {
+impl<T: Clone> fmt::Display for Message<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage {
@@ -299,7 +299,7 @@ impl<T> fmt::Display for Message<T> {
     }
 }
 
-impl<T> From<BrokerMessage<T>> for Message<T> {
+impl<T: Clone> From<BrokerMessage<T>> for Message<T> {
     fn from(value: BrokerMessage<T>) -> Self {
         Self {
             inner_message: InnerMessage::BrokerMessage(value),
@@ -307,7 +307,7 @@ impl<T> From<BrokerMessage<T>> for Message<T> {
     }
 }
 
-impl<T> From<AnyMessage<T>> for Message<T> {
+impl<T: Clone> From<AnyMessage<T>> for Message<T> {
     fn from(value: AnyMessage<T>) -> Self {
         Self {
             inner_message: InnerMessage::AnyMessage(value),

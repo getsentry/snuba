@@ -7,11 +7,11 @@ use crate::processing::strategies::{
 use crate::types::Message;
 
 #[derive(Clone)]
-pub struct TestStrategy<T> {
+pub struct TestStrategy<T: Clone> {
     pub messages: Arc<Mutex<Vec<Message<T>>>>,
 }
 
-impl<T> Default for TestStrategy<T> {
+impl<T: Clone> Default for TestStrategy<T> {
     fn default() -> Self {
         TestStrategy {
             messages: Arc::new(Mutex::new(Vec::new())),
@@ -19,13 +19,13 @@ impl<T> Default for TestStrategy<T> {
     }
 }
 
-impl<T> TestStrategy<T> {
+impl<T: Clone> TestStrategy<T> {
     pub fn new() -> Self {
         TestStrategy::default()
     }
 }
 
-impl<T: Send> ProcessingStrategy<T> for TestStrategy<T> {
+impl<T: Clone + Send> ProcessingStrategy<T> for TestStrategy<T> {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(None)
     }

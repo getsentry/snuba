@@ -10,7 +10,7 @@ pub struct CommitOffsets {
     last_commit_time: SystemTime,
     commit_frequency: Duration,
 }
-impl<T> ProcessingStrategy<T> for CommitOffsets {
+impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(self.commit(false))
     }

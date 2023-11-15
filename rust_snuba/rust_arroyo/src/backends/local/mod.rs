@@ -24,7 +24,7 @@ struct SubscriptionState {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-pub struct LocalConsumer<TPayload> {
+pub struct LocalConsumer<TPayload: Clone> {
     id: Uuid,
     group: String,
     broker: LocalBroker<TPayload>,
@@ -40,7 +40,7 @@ pub struct LocalConsumer<TPayload> {
     closed: bool,
 }
 
-impl<TPayload> LocalConsumer<TPayload> {
+impl<TPayload: Clone> LocalConsumer<TPayload> {
     pub fn new(
         id: Uuid,
         broker: LocalBroker<TPayload>,
@@ -73,7 +73,7 @@ impl<TPayload> LocalConsumer<TPayload> {
     }
 }
 
-impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
+impl<TPayload: Clone> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn subscribe(
         &mut self,
         topics: &[Topic],

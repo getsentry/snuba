@@ -8,11 +8,11 @@ use std::convert::TryFrom;
 /// Stores a list of messages for each partition of a topic.
 ///
 /// `self.messages[i][j]` is the `j`-th message of the `i`-th partition.
-struct TopicMessages<TPayload> {
+struct TopicMessages<TPayload: Clone> {
     messages: Vec<Vec<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload> TopicMessages<TPayload> {
+impl<TPayload: Clone> TopicMessages<TPayload> {
     /// Creates empty messsage queues for the given number of partitions.
     fn new(partitions: u16) -> Self {
         Self {
@@ -49,11 +49,11 @@ impl<TPayload> TopicMessages<TPayload> {
     }
 }
 
-pub struct MemoryMessageStorage<TPayload> {
+pub struct MemoryMessageStorage<TPayload: Clone> {
     topics: HashMap<Topic, TopicMessages<TPayload>>,
 }
 
-impl<TPayload> Default for MemoryMessageStorage<TPayload> {
+impl<TPayload: Clone> Default for MemoryMessageStorage<TPayload> {
     fn default() -> Self {
         MemoryMessageStorage {
             topics: HashMap::new(),

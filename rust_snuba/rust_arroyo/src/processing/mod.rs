@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::dlq::BufferedMessages;
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -55,7 +56,7 @@ impl ProcessorHandle {
     }
 }
 
-impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
+impl<TPayload: Clone + 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // TODO: Having the initialization of the strategy here
     // means that ProcessingStrategy and ProcessingStrategyFactory
     // have to be Send and Sync, which is really limiting and unnecessary.
@@ -110,7 +111,7 @@ impl<TPayload> Callbacks<TPayload> {
 /// instance and a ``ProcessingStrategy``, ensuring that processing
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
-pub struct StreamProcessor<TPayload> {
+pub struct StreamProcessor<TPayload: Clone> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
@@ -118,9 +119,12 @@ pub struct StreamProcessor<TPayload> {
     backpressure_timestamp: Option<Instant>,
     is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
+    // Stores messages that are pending commit. Untransformed messages are buffered here
+    // so that they can be produced to the DLQ if they are determined to be invalid.
+    buffered_messages: BufferedMessages<TPayload>,
 }
 
-impl<TPayload: 'static> StreamProcessor<TPayload> {
+impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
@@ -140,6 +144,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             backpressure_timestamp: None,
             is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+            buffered_messages: BufferedMessages::new(),
         }
     }
 
@@ -182,9 +187,14 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 .poll(Some(Duration::from_secs(1)))
             {
                 Ok(msg) => {
-                    self.message = msg.map(|inner| Message {
+                    self.message = msg.clone().map(|inner| Message {
                         inner_message: InnerMessage::BrokerMessage(inner),
                     });
+
+                    if let Some(m) = msg {
+                        self.buffered_messages.append(m);
+                    }
+
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
@@ -206,6 +216,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
+                for (partition, offset) in &request.positions {
+                    self.buffered_messages.pop(partition, offset - 1);
+                }
+
                 self.consumer
                     .lock()
                     .unwrap()

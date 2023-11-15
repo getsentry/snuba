@@ -5,17 +5,17 @@ use std::time::Duration;
 pub mod commit_offsets;
 pub mod produce;
 pub mod reduce;
-pub mod run_task_in_threads;
 pub mod run_task;
+pub mod run_task_in_threads;
 
 #[derive(Debug, Clone)]
-pub enum SubmitError<T> {
+pub enum SubmitError<T: Clone> {
     MessageRejected(MessageRejected<T>),
     InvalidMessage(InvalidMessage),
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageRejected<T> {
+pub struct MessageRejected<T: Clone> {
     pub message: Message<T>,
 }
 
@@ -65,7 +65,7 @@ pub fn merge_commit_request(
 ///
 /// This interface is intentionally not prescriptive, and affords a
 /// significant degree of flexibility for the various implementations.
-pub trait ProcessingStrategy<TPayload>: Send + Sync {
+pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     /// Poll the processor to check on the status of asynchronous tasks or
     /// perform other scheduled work.
     ///
