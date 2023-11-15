@@ -125,6 +125,7 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
+    "--concurrency",
     type=int,
 )
 @click.option(
