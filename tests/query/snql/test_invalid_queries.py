@@ -99,7 +99,6 @@ def test_failures(query_body: str, message: str) -> None:
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
         "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
-        "activity": (EntityKey.SESSIONS, "org_id"),
     }
 
     def events_mock(relationship: str) -> Optional[JoinRelationship]:

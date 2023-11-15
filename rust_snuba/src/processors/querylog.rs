@@ -1,6 +1,5 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -10,41 +9,28 @@ use uuid::Uuid;
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
-        })?;
-        let querylog_msg: QuerylogMessage = msg.try_into()?;
+) -> Result<BytesInsertBatch, BadMessage> {
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+    let querylog_msg: QuerylogMessage = msg.try_into()?;
 
-        let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
-            log::error!("Failed to serialize message: {}", err);
-            InvalidMessage
-        })?;
+    let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
+        log::error!("Failed to serialize message: {}", err);
+        BadMessage
+    })?;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-
-    Err(InvalidMessage)
+    Ok(BytesInsertBatch {
+        rows: vec![serialized],
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RequestBody {
     #[serde(flatten)]
     fields: BTreeMap<String, Value>,
-}
-
-fn serialize_uuid<S>(input: &str, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let uuid = Uuid::parse_str(input)
-        .map_err(S::Error::custom)?
-        .to_string();
-    s.serialize_str(&uuid)
 }
 
 fn nullable_result_profile<'de, D>(deserializer: D) -> Result<ResultProfile, D::Error>
@@ -65,8 +51,8 @@ where
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
-    #[serde(rename(serialize = "request_id"), serialize_with = "serialize_uuid")]
-    id: String,
+    #[serde(rename(serialize = "request_id"))]
+    id: Uuid,
     #[serde(
         rename(serialize = "request_body"),
         serialize_with = "serialize_json_str"
@@ -224,8 +210,8 @@ struct QueryList {
 }
 
 impl TryFrom<Vec<FromQuery>> for QueryList {
-    type Error = InvalidMessage;
-    fn try_from(from: Vec<FromQuery>) -> Result<QueryList, InvalidMessage> {
+    type Error = BadMessage;
+    fn try_from(from: Vec<FromQuery>) -> Result<QueryList, BadMessage> {
         let mut sql = vec![];
         let mut status = vec![];
         let mut trace_id = vec![];
@@ -253,12 +239,12 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             status.push(q.status);
             trace_id.push(
                 Uuid::parse_str(&q.trace_id)
-                    .map_err(|_| InvalidMessage)?
+                    .map_err(|_| BadMessage)?
                     .to_string(),
             );
             stats.push(
                 serde_json::to_string(&SortedStats::from(q.stats.clone()))
-                    .map_err(|_| InvalidMessage)?,
+                    .map_err(|_| BadMessage)?,
             );
             r#final.push(q.stats.r#final as u8);
             cache_hit.push(q.stats.cache_hit.unwrap_or(0));
@@ -334,8 +320,8 @@ struct QuerylogMessage {
 }
 
 impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
-    type Error = InvalidMessage;
-    fn try_from(from: FromQuerylogMessage) -> Result<QuerylogMessage, InvalidMessage> {
+    type Error = BadMessage;
+    fn try_from(from: FromQuerylogMessage) -> Result<QuerylogMessage, BadMessage> {
         Ok(Self {
             request: from.request,
             dataset: from.dataset,

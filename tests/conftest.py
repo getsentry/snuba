@@ -161,7 +161,17 @@ def _build_migrations_cache() -> None:
                 rows = connection.execute(
                     f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
                 )
+                mv_tables = []
+                non_mv_tables = []
                 for table_name, create_table_query in rows.results:
+                    if "MATERIALIZED VIEW" in create_table_query:
+                        mv_tables.append((table_name, create_table_query))
+                    else:
+                        non_mv_tables.append((table_name, create_table_query))
+                # when using the MIGRATIONS_CACHE we should make sure local
+                # tables are created before materialized views that depend on them
+                all_tables = mv_tables + non_mv_tables
+                for table_name, create_table_query in all_tables:
                     MIGRATIONS_CACHE.setdefault((cluster, node), {})[
                         table_name
                     ] = create_table_query

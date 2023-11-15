@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import partial
 from typing import (
@@ -46,7 +46,13 @@ from snuba.utils.metrics.timer import Timer
 SUBSCRIPTION_REFERRER = "subscription"
 
 # These are subscription payload keys which need to be set as attributes in SubscriptionData.
-SUBSCRIPTION_DATA_PAYLOAD_KEYS = {"project_id", "time_window", "resolution", "query"}
+SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
+    "project_id",
+    "time_window",
+    "resolution",
+    "query",
+    "tenant_ids",
+}
 
 logger = logging.getLogger("snuba.subscriptions")
 
@@ -80,6 +86,7 @@ class SubscriptionData:
     entity: Entity
     query: str
     metadata: Mapping[str, Any]
+    tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
     def add_conditions(
         self,
@@ -163,13 +170,16 @@ class SubscriptionData:
                 custom_processing.append(validator.validate)
         custom_processing.append(partial(self.add_conditions, timestamp, offset))
 
+        tenant_ids = {**self.tenant_ids}
+        tenant_ids["referrer"] = referrer
+        if "organization_id" not in tenant_ids:
+            # TODO: Subscriptions queries should have an org ID
+            tenant_ids["organization_id"] = 1
+
         request = build_request(
             {
                 "query": self.query,
-                "tenant_ids": {
-                    "organization_id": 1,  # TODO: Defaulting to 1 for now, should be the Org ID of the subscription
-                    "referrer": referrer,
-                },
+                "tenant_ids": tenant_ids,
             },
             parse_snql_query,
             SubscriptionQuerySettings,
@@ -200,6 +210,7 @@ class SubscriptionData:
             query=data["query"],
             entity=entity,
             metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -209,6 +220,7 @@ class SubscriptionData:
             "resolution": self.resolution_sec,
             "query": self.query,
         }
+
         subscription_processors = self.entity.get_subscription_processors()
         if subscription_processors:
             for processor in subscription_processors:

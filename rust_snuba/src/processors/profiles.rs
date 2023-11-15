@@ -1,34 +1,31 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use uuid::Uuid;
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
-        })?;
-        let mut profile_msg: ProfileMessage = msg.try_into()?;
+    metadata: KafkaMessageMetadata,
+) -> Result<BytesInsertBatch, BadMessage> {
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromProfileMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+    let mut profile_msg: ProfileMessage = msg.try_into()?;
 
-        profile_msg.offset = _metadata.offset;
-        profile_msg.partition = _metadata.partition;
+    profile_msg.offset = metadata.offset;
+    profile_msg.partition = metadata.partition;
 
-        let serialized = serde_json::to_vec(&profile_msg).map_err(|err| {
-            log::error!("Failed to serialize message: {}", err);
-            InvalidMessage
-        })?;
+    let serialized = serde_json::to_vec(&profile_msg).map_err(|err| {
+        log::error!("Failed to serialize message: {}", err);
+        BadMessage
+    })?;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-    Err(InvalidMessage)
+    Ok(BytesInsertBatch {
+        rows: vec![serialized],
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,13 +88,12 @@ struct ProfileMessage {
 }
 
 impl TryFrom<FromProfileMessage> for ProfileMessage {
-    type Error = InvalidMessage;
-    fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, InvalidMessage> {
-        let profile_id =
-            Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| InvalidMessage)?;
-        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| InvalidMessage)?;
+    type Error = BadMessage;
+    fn try_from(from: FromProfileMessage) -> Result<ProfileMessage, BadMessage> {
+        let profile_id = Uuid::parse_str(from.profile_id.as_str()).map_err(|_err| BadMessage)?;
+        let trace_id = Uuid::parse_str(from.trace_id.as_str()).map_err(|_err| BadMessage)?;
         let transaction_id =
-            Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| InvalidMessage)?;
+            Uuid::parse_str(from.transaction_id.as_str()).map_err(|_err| BadMessage)?;
         Ok(Self {
             android_api_level: from.android_api_level,
             architecture: from.architecture,

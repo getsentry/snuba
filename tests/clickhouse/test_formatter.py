@@ -139,8 +139,8 @@ test_expressions = [
                 Column(None, None, "test"),
             ),
         ),
-        "arrayExists((x, y -> testFunc(x, y)), test)",
-        "arrayExists((x, y -> testFunc(x, y)), test)",
+        "arrayExists(x, y -> testFunc(x, y), test)",
+        "arrayExists(x, y -> testFunc(x, y), test)",
     ),  # Lambda expression
     (
         FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),

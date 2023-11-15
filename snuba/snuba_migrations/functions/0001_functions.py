@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import List, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -10,8 +10,9 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations, table_engines
+from snuba.migrations import migration, migration_utilities, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 common_columns: List[Column[Modifiers]] = [
@@ -54,7 +55,7 @@ agg_columns: List[Column[Modifiers]] = common_columns + [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.CodeMigration):
     blocking = False
     index_granularity = "2048"
     storage_set = StorageSetKey.FUNCTIONS
@@ -69,83 +70,139 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     local_view_table = "functions_local"
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
+    def _create_functions_mv_table(
+        self, clickhouse: Optional[ClickhousePool]
+    ) -> operations.SqlOperation:
+        table_settings: MutableMapping[str, Union[int, str]] = {
+            "index_granularity": self.index_granularity,
+        }
+
+        clickhouse_version = migration_utilities.get_clickhouse_version_for_storage_set(
+            self.storage_set, clickhouse
+        )
+        if migration_utilities.supports_setting(
+            clickhouse_version, "allow_nullable_key"
+        ):
+            table_settings["allow_nullable_key"] = 1
+
+        return operations.CreateTable(
+            storage_set=self.storage_set,
+            table_name=self.local_materialized_table,
+            columns=agg_columns,
+            engine=table_engines.AggregatingMergeTree(
                 storage_set=self.storage_set,
-                table_name=self.local_raw_table,
-                columns=raw_columns,
-                engine=table_engines.MergeTree(
+                order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, name, package, path, is_application, platform, environment, release, os_name, os_version, retention_days)",
+                primary_key="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
+                partition_by="(retention_days, toMonday(timestamp))",
+                settings=table_settings,
+                ttl="timestamp + toIntervalDay(retention_days)",
+            ),
+            target=operations.OperationTarget.LOCAL,
+        )
+
+    def forwards_global(self) -> Sequence[operations.GenericOperation]:
+        return [*self._forwards_local(), *self._forwards_dist()]
+
+    def backwards_global(self) -> Sequence[operations.GenericOperation]:
+        return [*self._backwards_dist(), *self._backwards_local()]
+
+    def _forwards_local(self) -> Sequence[operations.GenericOperation]:
+        return [
+            operations.RunSqlAsCode(
+                operations.CreateTable(
                     storage_set=self.storage_set,
-                    order_by="(project_id, transaction_name, timestamp)",
-                    partition_by="(toStartOfInterval(timestamp, INTERVAL 12 HOUR))",
-                    ttl="timestamp + toIntervalDay(1)",
-                ),
+                    table_name=self.local_raw_table,
+                    columns=raw_columns,
+                    engine=table_engines.MergeTree(
+                        storage_set=self.storage_set,
+                        order_by="(project_id, transaction_name, timestamp)",
+                        partition_by="(toStartOfInterval(timestamp, INTERVAL 12 HOUR))",
+                        ttl="timestamp + toIntervalDay(1)",
+                    ),
+                    target=operations.OperationTarget.LOCAL,
+                )
             ),
-            operations.CreateTable(
-                storage_set=self.storage_set,
-                table_name=self.local_materialized_table,
-                columns=agg_columns,
-                engine=table_engines.AggregatingMergeTree(
+            operations.RunSqlAsCode(self._create_functions_mv_table),
+            operations.RunSqlAsCode(
+                operations.CreateMaterializedView(
                     storage_set=self.storage_set,
-                    order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, name, package, path, is_application, platform, environment, release, os_name, os_version, retention_days)",
-                    primary_key="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
-                    partition_by="(retention_days, toMonday(timestamp))",
-                    settings={"index_granularity": self.index_granularity},
-                    ttl="timestamp + toIntervalDay(retention_days)",
-                ),
-            ),
-            operations.CreateMaterializedView(
-                storage_set=self.storage_set,
-                view_name=self.local_view_table,
-                destination_table_name=self.local_materialized_table,
-                columns=agg_columns,
-                query=self.__MATVIEW_STATEMENT,
+                    view_name=self.local_view_table,
+                    destination_table_name=self.local_materialized_table,
+                    columns=agg_columns,
+                    query=self.__MATVIEW_STATEMENT,
+                    target=operations.OperationTarget.LOCAL,
+                )
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
+    def _backwards_local(self) -> Sequence[operations.GenericOperation]:
         return [
-            operations.DropTable(
-                storage_set=self.storage_set, table_name=self.local_raw_table
+            operations.RunSqlAsCode(
+                operations.DropTable(
+                    storage_set=self.storage_set,
+                    table_name=self.local_raw_table,
+                    target=operations.OperationTarget.LOCAL,
+                )
             ),
-            operations.DropTable(
-                storage_set=self.storage_set, table_name=self.local_materialized_table
+            operations.RunSqlAsCode(
+                operations.DropTable(
+                    storage_set=self.storage_set,
+                    table_name=self.local_materialized_table,
+                    target=operations.OperationTarget.LOCAL,
+                )
             ),
-            operations.DropTable(
-                storage_set=self.storage_set, table_name=self.local_view_table
+            operations.RunSqlAsCode(
+                operations.DropTable(
+                    storage_set=self.storage_set,
+                    table_name=self.local_view_table,
+                    target=operations.OperationTarget.LOCAL,
+                )
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def _forwards_dist(self) -> Sequence[operations.GenericOperation]:
         return [
-            operations.CreateTable(
-                storage_set=self.storage_set,
-                table_name=self.dist_raw_table,
-                columns=raw_columns,
-                engine=table_engines.Distributed(
-                    local_table_name=self.local_raw_table,
-                    sharding_key=None,
-                ),
+            operations.RunSqlAsCode(
+                operations.CreateTable(
+                    storage_set=self.storage_set,
+                    table_name=self.dist_raw_table,
+                    columns=raw_columns,
+                    engine=table_engines.Distributed(
+                        local_table_name=self.local_raw_table,
+                        sharding_key=None,
+                    ),
+                    target=operations.OperationTarget.DISTRIBUTED,
+                )
             ),
-            operations.CreateTable(
-                storage_set=self.storage_set,
-                table_name=self.dist_materialized_table,
-                columns=agg_columns,
-                engine=table_engines.Distributed(
-                    local_table_name=self.local_materialized_table,
-                    sharding_key=None,
-                ),
+            operations.RunSqlAsCode(
+                operations.CreateTable(
+                    storage_set=self.storage_set,
+                    table_name=self.dist_materialized_table,
+                    columns=agg_columns,
+                    engine=table_engines.Distributed(
+                        local_table_name=self.local_materialized_table,
+                        sharding_key=None,
+                    ),
+                    target=operations.OperationTarget.DISTRIBUTED,
+                )
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def _backwards_dist(self) -> Sequence[operations.GenericOperation]:
         return [
-            operations.DropTable(
-                storage_set=self.storage_set, table_name=self.dist_raw_table
+            operations.RunSqlAsCode(
+                operations.DropTable(
+                    storage_set=self.storage_set,
+                    table_name=self.dist_raw_table,
+                    target=operations.OperationTarget.DISTRIBUTED,
+                )
             ),
-            operations.DropTable(
-                storage_set=self.storage_set, table_name=self.dist_materialized_table
+            operations.RunSqlAsCode(
+                operations.DropTable(
+                    storage_set=self.storage_set,
+                    table_name=self.dist_materialized_table,
+                    target=operations.OperationTarget.DISTRIBUTED,
+                )
             ),
         ]
 

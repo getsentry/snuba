@@ -18,9 +18,9 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.types import Interval
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -45,7 +45,14 @@ class TestSubscriptionScheduler:
         )
 
     def build_tick(self, lower: timedelta, upper: timedelta) -> Tick:
-        return Tick(1, Interval(1, 5), Interval(self.now + lower, self.now + upper))
+        return Tick(
+            1,
+            Interval(1, 5),
+            Interval(
+                self.now.timestamp() + lower.total_seconds(),
+                self.now.timestamp() + upper.total_seconds(),
+            ),
+        )
 
     def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task.subscription.identifier.uuid

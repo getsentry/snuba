@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.utils.types import Interval, InvalidRangeError
+from snuba.subscriptions.types import Interval, InvalidRangeError
 
 
 def test_interval_validation() -> None:
@@ -9,6 +9,9 @@ def test_interval_validation() -> None:
 
     with pytest.raises(InvalidRangeError) as e:
         Interval(10, 1)
+
+    with pytest.raises(InvalidRangeError):
+        Interval(1, None)  # type: ignore
 
     assert e.value.lower == 10
     assert e.value.upper == 1

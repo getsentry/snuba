@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -180,15 +181,6 @@ def execute_query(
     """
     # Apply clickhouse query setting overrides
     clickhouse_query_settings.update(query_settings.get_clickhouse_settings())
-
-    # Force query to use the first shard replica, which
-    # should have synchronously received any cluster writes
-    # before this query is run.
-    consistent = query_settings.get_consistent()
-    stats["consistent"] = consistent
-    if consistent:
-        clickhouse_query_settings["load_balancing"] = "in_order"
-        clickhouse_query_settings["max_threads"] = 1
 
     result = reader.execute(
         formatted_query,
@@ -469,9 +461,14 @@ def _get_cache_wait_timeout(
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
     async_override: bool,
+    referrer: Optional[str],
 ) -> MutableMapping[str, Any]:
     """
-    Helper function to get the query settings from the config.
+    Helper function to get the query settings from the config. Order of precedence
+    for overlapping config within this method is:
+    1. referrer/<referrer>/query_settings/<setting>
+    2. <override_prefix>/query_settings/<setting>
+    3. query_settings/<setting>
 
     #TODO: Make this configurable by entity/dataset. Since we want to use
     #      different settings across different clusters belonging to the
@@ -497,6 +494,11 @@ def _get_query_settings_from_config(
             if k.startswith(f"{override_prefix}/query_settings/"):
                 clickhouse_query_settings[k.split("/", 2)[2]] = v
 
+    if referrer:
+        for k, v in all_confs.items():
+            if k.startswith(f"referrer/{referrer}/query_settings/"):
+                clickhouse_query_settings[k.split("/", 3)[3]] = v
+
     return clickhouse_query_settings
 
 
@@ -520,7 +522,9 @@ def _raw_query(
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
     """
     clickhouse_query_settings = _get_query_settings_from_config(
-        reader.get_query_settings_prefix(), query_settings.get_asynchronous()
+        reader.get_query_settings_prefix(),
+        query_settings.get_asynchronous(),
+        referrer=attribution_info.referrer,
     )
     resource_quota = query_settings.get_resource_quota()
     max_threads = resource_quota.max_threads if resource_quota else None
@@ -529,6 +533,27 @@ def _raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
+
+    # Force query to use the first shard replica, which
+    # should have synchronously received any cluster writes
+    # before this query is run.
+    consistent = query_settings.get_consistent()
+    stats["consistent"] = consistent
+    if consistent:
+        sample_rate = state.get_config(
+            f"{dataset_name}_ignore_consistent_queries_sample_rate", 0
+        )
+        assert sample_rate is not None
+        ignore_consistent = random.random() < float(sample_rate)
+        if not ignore_consistent:
+            clickhouse_query_settings["load_balancing"] = "in_order"
+            clickhouse_query_settings["max_threads"] = 1
+        else:
+            stats["consistent"] = False
+            metrics.increment(
+                "ignored_consistent_queries",
+                tags={"dataset": dataset_name, "referrer": attribution_info.referrer},
+            )
 
     update_with_status = partial(
         update_query_metadata_and_stats,
@@ -698,6 +723,8 @@ def db_query(
 
     allocation_policies = _get_allocation_policies(clickhouse_query)
     query_id = uuid.uuid4().hex
+    result = None
+    error = None
 
     try:
         _apply_allocation_policies_quota(
@@ -707,6 +734,19 @@ def db_query(
             stats,
             allocation_policies,
             query_id,
+        )
+        result = _raw_query(
+            clickhouse_query,
+            query_settings,
+            attribution_info,
+            dataset_name,
+            query_metadata_list,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            trace_id,
+            robust,
         )
     except AllocationPolicyViolations as e:
         update_query_metadata_and_stats(
@@ -723,7 +763,7 @@ def db_query(
             triggered_rate_limiter="AllocationPolicy",
         )
 
-        raise QueryException.from_args(
+        error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
             "Query cannot be run due to allocation policies",
             extra={
@@ -731,24 +771,8 @@ def db_query(
                 "sql": "no sql run",
                 "experiments": {},
             },
-        ) from e
-
-    result = None
-    error = None
-    try:
-        result = _raw_query(
-            clickhouse_query,
-            query_settings,
-            attribution_info,
-            dataset_name,
-            query_metadata_list,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            trace_id,
-            robust,
         )
+        error.__cause__ = e
     except QueryException as e:
         error = e
     except Exception as e:

@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use crate::types::Message;
 
 #[derive(Clone)]
@@ -23,19 +25,22 @@ impl<T> TestStrategy<T> {
     }
 }
 
-impl<T: Send + Clone> ProcessingStrategy<T> for TestStrategy<T> {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        None
+impl<T: Send> ProcessingStrategy<T> for TestStrategy<T> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(None)
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+    fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
         self.messages.lock().unwrap().push(message);
         Ok(())
     }
 
     fn close(&mut self) {}
     fn terminate(&mut self) {}
-    fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-        None
+    fn join(
+        &mut self,
+        _timeout: Option<Duration>,
+    ) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(None)
     }
 }

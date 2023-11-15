@@ -7,3 +7,4 @@ entities:
   - generic_metrics_distributions
   - generic_metrics_counters
   - generic_org_metrics_counters
+  - generic_metrics_gauges

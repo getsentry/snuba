@@ -86,6 +86,8 @@ class ClickhouseClientSettings(Enum):
             # Allow more threads for faster processing since cardinality queries
             # need more resources.
             "max_threads": 10,
+            # Don't use up production cache for cardinality analyzer queries.
+            "use_uncompressed_cache": 0,
         },
         None,
     )

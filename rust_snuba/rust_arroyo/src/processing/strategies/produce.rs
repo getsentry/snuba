@@ -3,21 +3,23 @@ use crate::backends::Producer;
 use crate::processing::strategies::run_task_in_threads::{
     RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use crate::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use crate::types::{Message, TopicOrPartition};
 use std::sync::Arc;
 use std::time::Duration;
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
-    topic: Arc<TopicOrPartition>,
+    topic: TopicOrPartition,
 }
 
 impl ProduceMessage {
     pub fn new(producer: impl Producer<KafkaPayload> + 'static, topic: TopicOrPartition) -> Self {
         ProduceMessage {
             producer: Arc::new(producer),
-            topic: Arc::new(topic),
+            topic,
         }
     }
 }
@@ -25,11 +27,11 @@ impl ProduceMessage {
 impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
         let producer = self.producer.clone();
-        let topic = self.topic.clone();
+        let topic = self.topic;
 
         Box::pin(async move {
             producer
-                .produce(&topic, message.payload())
+                .produce(&topic, message.payload().clone())
                 .expect("Message was produced");
             Ok(message)
         })
@@ -62,14 +64,11 @@ impl Produce {
 }
 
 impl ProcessingStrategy<KafkaPayload> for Produce {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(
-        &mut self,
-        message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         self.inner.submit(message)
     }
 
@@ -81,22 +80,19 @@ impl ProcessingStrategy<KafkaPayload> for Produce {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.join(timeout)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Produce;
+    use super::*;
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
-    use crate::backends::kafka::types::KafkaPayload;
-    use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
-    use crate::types::{BrokerMessage, InnerMessage};
-    use crate::types::{Message, Partition, Topic, TopicOrPartition};
+    use crate::processing::strategies::InvalidMessage;
+    use crate::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use chrono::Utc;
-    use std::time::Duration;
 
     #[test]
     fn test_produce() {
@@ -108,28 +104,26 @@ mod tests {
             None,
         );
 
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
-            fn poll(&mut self) -> Option<CommitRequest> {
-                None
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
             fn submit(
                 &mut self,
                 _message: Message<KafkaPayload>,
-            ) -> Result<(), MessageRejected<KafkaPayload>> {
+            ) -> Result<(), SubmitError<KafkaPayload>> {
                 Ok(())
             }
             fn close(&mut self) {}
             fn terminate(&mut self) {}
-            fn join(&mut self, _timeout: Option<Duration>) -> Option<CommitRequest> {
-                None
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                Ok(None)
             }
         }
 
@@ -138,7 +132,7 @@ mod tests {
             Noop {},
             producer,
             10,
-            TopicOrPartition::Topic(partition.topic.clone()),
+            TopicOrPartition::Topic(partition.topic),
         );
 
         let payload_str = "hello world".to_string().as_bytes().to_vec();
@@ -149,7 +143,7 @@ mod tests {
                     headers: None,
                     payload: Some(payload_str.clone()),
                 },
-                partition: partition,
+                partition,
                 offset: 0,
                 timestamp: Utc::now(),
             }),

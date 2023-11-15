@@ -34,6 +34,7 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.subscriptions.data import SUBSCRIPTION_REFERRER
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
@@ -197,6 +198,7 @@ def _run_query_pipeline(
         )
 
     record_missing_use_case_id(request, dataset)
+    record_subscription_created_missing_tenant_ids(request)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -225,6 +227,23 @@ def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
                 tags={
                     "referrer": request.referrer,
                     "use_case_id": str(use_case_id),
+                },
+            )
+
+
+def record_subscription_created_missing_tenant_ids(request: Request) -> None:
+    """
+    Used to track how often new subscriptions are created without Tenant IDs.
+    """
+    if request.referrer == SUBSCRIPTION_REFERRER:
+        if not (tenant_ids := request.attribution_info.tenant_ids):
+            metrics.increment("subscription_created_without_tenant_ids")
+        else:
+            metrics.increment(
+                "subscription_created_with_tenant_ids",
+                tags={
+                    "use_case_id": str(tenant_ids.get("use_case_id")),
+                    "has_org_id": str(tenant_ids.get("organization_id") is not None),
                 },
             )
 

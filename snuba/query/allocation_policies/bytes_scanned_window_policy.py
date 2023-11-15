@@ -85,7 +85,6 @@ DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):
-
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
@@ -109,12 +108,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 description="Number of threads any throttled query gets assigned.",
                 value_type=int,
                 default=1,
-            ),
-            AllocationPolicyConfig(
-                name="use_progress_bytes_scanned",
-                description="whether to use the progress.bytes scanned metric to determine the number of bytes scanned in a query, this option should be removed once this metric is used across policies",
-                value_type=int,
-                default=0,
             ),
         ]
 
@@ -203,22 +196,14 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> int:
         progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
-        profile_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("bytes", None))  # type: ignore
         if isinstance(progress_bytes_scanned, (int, float)):
             self.metrics.increment(
                 "progress_bytes_scanned",
                 progress_bytes_scanned,
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
             )
-        if isinstance(profile_bytes_scanned, (int, float)):
-            self.metrics.increment(
-                "profile_bytes_scanned",
-                profile_bytes_scanned,
-                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-            )
-        if self.get_config_value("use_progress_bytes_scanned"):
-            return progress_bytes_scanned
-        return profile_bytes_scanned
+
+        return progress_bytes_scanned
 
     def _update_quota_balance(
         self,

@@ -149,6 +149,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--max-poll-interval-ms",
     type=int,
+    default=30000,
 )
 @click.option(
     "--health-check-file",
@@ -194,10 +195,10 @@ def consumer(
     enforce_schema: bool,
     log_level: Optional[str],
     profile_path: Optional[str],
-    max_poll_interval_ms: Optional[int],
+    max_poll_interval_ms: int,
     health_check_file: Optional[str],
     group_instance_id: Optional[str],
-    skip_write: bool
+    skip_write: bool,
 ) -> None:
 
     setup_logging(log_level)
@@ -208,10 +209,13 @@ def consumer(
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
 
-    logger.info("Checking Clickhouse connections")
+    logger.info("Checking Clickhouse connections...")
     storage = get_storage(storage_key)
     cluster = storage.get_cluster()
     check_clickhouse_connections([cluster])
+    logger.info(
+        f"Successfully connected to Clickhouse: cluster_name={cluster.get_clickhouse_cluster_name()}"
+    )
 
     metrics_tags = {
         "consumer_group": consumer_group,

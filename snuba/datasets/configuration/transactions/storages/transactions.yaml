@@ -259,5 +259,7 @@ stream_loader:
   default_topic: transactions
   commit_log_topic: snuba-transactions-commit-log
   subscription_scheduler_mode: global
+  subscription_synchronization_timestamp: received_p99
+  subscription_delay_seconds: 30
   subscription_scheduled_topic: scheduled-subscriptions-transactions
   subscription_result_topic: transactions-subscription-results

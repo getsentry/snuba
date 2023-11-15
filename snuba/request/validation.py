@@ -137,11 +137,15 @@ def build_request(
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
-            record_invalid_request(timer, request_status, referrer)
+            record_invalid_request(
+                timer, request_status, referrer, str(type(exception).__name__)
+            )
             raise exception
         except Exception as exception:
             request_status = get_request_status(exception)
-            record_error_building_request(timer, request_status, referrer)
+            record_error_building_request(
+                timer, request_status, referrer, str(type(exception).__name__)
+            )
             raise exception
 
         span.set_data(

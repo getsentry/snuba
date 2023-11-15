@@ -1,3 +1,5 @@
+from typing import cast
+
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -29,14 +31,23 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
     table in ClickHouse. `user` param is necessary for audit_log
     decorator.
     """
-    schema = get_storage(StorageKey("generic_metrics_distributions")).get_schema()
-    assert isinstance(schema, TableSchema)
+    storage_keys = {
+        StorageKey("generic_metrics_distributions"),
+        StorageKey("generic_metrics_sets"),
+        StorageKey("generic_metrics_counters"),
+    }
+    schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
+    raw_tables = {
+        "generic_metric_sets_raw_dist",
+        "generic_metric_counters_raw_dist",
+        "generic_metric_distributions_raw_dist",
+    }
     validate_ro_query(
         sql_query=query,
-        allowed_tables={
-            schema.get_table_name(),
-            "generic_metric_distributions_aggregated_dist",
-        },
+        allowed_tables=(
+            {cast(TableSchema, schema).get_table_name() for schema in schemas}
+            | raw_tables
+        ),
     )
     return _stringify_result(__run_query(query))
 

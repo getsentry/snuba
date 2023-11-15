@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use cadence::prelude::*;
 use cadence::{BufferedUdpMetricSink, MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
@@ -51,13 +49,13 @@ impl ArroyoMetrics for StatsDBackend {
         }
     }
 
-    fn gauge(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
             log::debug!("Error sending metric: {}", e);
         }
     }
 
-    fn timing(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         if let Err(e) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
             log::debug!("Error sending metric: {}", e);
         }

@@ -122,7 +122,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         assert response.status_code == 200
         expected_json = [
             {
-                "blocking": False,
+                "blocking": True,
                 "migration_id": "0001_migrations",
                 "status": "completed",
             }
@@ -182,6 +182,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             generate_migration_test_role("system", "all"),
             generate_migration_test_role("generic_metrics", "none"),
             generate_migration_test_role("events", "non_blocking", True),
+            generate_migration_test_role("querylog", "non_blocking", True),
             generate_tool_test_role("all"),
         ],
     ):
@@ -259,7 +260,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         with patch.object(Runner, method) as mock_run_migration:
             # not allowed non blocking
             response = admin_api.post(
-                f"/migrations/events/{action}/0014_backfill_errors"
+                f"/migrations/querylog/{action}/0006_sorting_key_change"
             )
             assert response.status_code == 403
             assert json.loads(response.data) == {
@@ -270,11 +271,11 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             if action == "run":
                 # allowed non blocking
                 response = admin_api.post(
-                    f"/migrations/events/{action}/0015_truncate_events"
+                    f"/migrations/querylog/{action}/0001_querylog"
                 )
                 assert response.status_code == 200
                 migration_key = MigrationKey(
-                    group=MigrationGroup.EVENTS, migration_id="0015_truncate_events"
+                    group=MigrationGroup.QUERYLOG, migration_id="0001_querylog"
                 )
                 mock_run_migration.assert_called_once_with(
                     migration_key, force=False, fake=False, dry_run=False
@@ -288,11 +289,11 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                         return_value=(Status.IN_PROGRESS, None),
                     ):
                         migration_key = MigrationKey(
-                            group=MigrationGroup.EVENTS,
-                            migration_id="0016_drop_legacy_events",
+                            group=MigrationGroup.QUERYLOG,
+                            migration_id="0001_querylog",
                         )
                         response = admin_api.post(
-                            f"/migrations/events/{action}/0016_drop_legacy_events"
+                            f"/migrations/querylog/{action}/0001_querylog"
                         )
                         assert response.status_code == 200
                         mock_run_migration.assert_called_once_with(
@@ -307,7 +308,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
             mock_run_migration.side_effect = print_something
             response = admin_api.post(
-                f"/migrations/events/{action}/0014_backfill_errors?dry_run=true"
+                f"/migrations/querylog/{action}/0001_querylog?dry_run=true"
             )
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}

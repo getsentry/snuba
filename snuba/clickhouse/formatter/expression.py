@@ -172,7 +172,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
 
     def visit_lambda(self, exp: Lambda) -> str:
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
-        ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
+        ret = f"{', '.join(parameters)} -> {exp.transformation.accept(self)}"
         return self._alias(ret, exp.alias)
 
 

@@ -44,6 +44,7 @@ test_data = [
         },
         None,
         False,
+        None,
         id="no override when query settings prefix empty",
     ),
     pytest.param(
@@ -59,6 +60,7 @@ test_data = [
         },
         "other-query-prefix",
         False,
+        None,
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -74,6 +76,7 @@ test_data = [
         },
         "some-query-prefix",
         False,
+        None,
         id="override for same query prefix",
     ),
     pytest.param(
@@ -89,6 +92,7 @@ test_data = [
         },
         None,
         True,
+        None,
         id="no override when no async settings",
     ),
     pytest.param(
@@ -104,6 +108,7 @@ test_data = [
         },
         "other-query-prefix",
         True,
+        None,
         id="override for async settings with no prefix override",
     ),
     pytest.param(
@@ -120,22 +125,81 @@ test_data = [
         },
         "some-query-prefix",
         True,
+        None,
         id="no override for async settings with prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "referrer/some-referrer/query_settings/max_read_replicas": 4,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+            "max_read_replicas": 4,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override does its job",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 30,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override takes precedence over all other settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-other-referrer",
+        id="referrer override does not apply to other referrers",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix,async_override", test_data)
+@pytest.mark.parametrize(
+    "query_config,expected,query_prefix,async_override,referrer", test_data
+)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
     async_override: bool,
+    referrer: str,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix, async_override) == expected
+    assert (
+        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
+        == expected
+    )
 
 
 def _build_test_query(
@@ -312,6 +376,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
     query, storage, _ = _build_test_query("count(distinct(project_id))")
+    update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -332,6 +397,8 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
+            nonlocal update_called
+            update_called = True
             return
 
     with mock.patch(
@@ -374,6 +441,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
+        assert (
+            update_called
+        ), "update_quota_balance should have been called even though the query was rejected but was not"
 
 
 @pytest.mark.clickhouse_db
@@ -596,3 +666,29 @@ def test_clickhouse_settings_applied_to_query() -> None:
         "group_by_overflow_mode" in clickhouse_settings_used
         and clickhouse_settings_used["group_by_overflow_mode"] == "any"
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_ignore_consistent() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(consistent=True),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert result.extra["stats"]["consistent"] is False
+    assert result.extra["stats"]["max_threads"] == 10

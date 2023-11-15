@@ -1,5 +1,7 @@
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
 use std::collections::VecDeque;
@@ -107,9 +109,9 @@ impl PythonTransformStep {
             };
             match message_result {
                 Ok(data) => {
-                    if let Err(MessageRejected {
+                    if let Err(SubmitError::MessageRejected(MessageRejected {
                         message: transformed_message,
-                    }) = self.next_step.submit(original_message_meta.replace(data))
+                    })) = self.next_step.submit(original_message_meta.replace(data))
                     {
                         self.message_carried_over = Some(transformed_message);
                     }
@@ -123,15 +125,12 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.check_for_results();
         self.next_step.poll()
     }
 
-    fn submit(
-        &mut self,
-        message: Message<KafkaPayload>,
-    ) -> Result<(), MessageRejected<KafkaPayload>> {
+    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         self.check_for_results();
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
@@ -144,13 +143,13 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         if let Some(ref processing_pool) = self.processing_pool {
             if processing_pool.queued_count() > processing_pool.active_count() {
                 log::debug!("python strategy provides backpressure");
-                return Err(MessageRejected { message });
+                return Err(SubmitError::MessageRejected(MessageRejected { message }));
             }
         }
 
         log::debug!("processing message,  message={}", message);
 
-        match &message.inner_message {
+        match message.inner_message {
             InnerMessage::AnyMessage(..) => {
                 panic!("AnyMessage cannot be processed");
             }
@@ -160,12 +159,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (
-                    payload.payload.clone(),
-                    *offset,
-                    partition.index,
-                    *timestamp,
-                );
+                let args = (payload.payload, offset, partition.index, timestamp);
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);
@@ -184,7 +178,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     .map_err(|pyerr| pyerr.to_string())
                 };
 
-                let original_message_meta = message.clone().replace(());
+                let original_message_meta =
+                    Message::new_broker_message((), partition, offset, timestamp);
 
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
@@ -216,7 +211,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let now = Instant::now();
 
         let deadline = timeout.map(|x| now + x);
@@ -268,12 +263,7 @@ mod tests {
                 headers: None,
                 payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
             },
-            Partition {
-                topic: Topic {
-                    name: "test".to_owned(),
-                },
-                index: 1,
-            },
+            Partition::new(Topic::new("test"), 1),
             1,
             Utc::now(),
         ))

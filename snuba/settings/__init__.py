@@ -105,6 +105,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_counters",
             "spans",
             "group_attributes",
+            "generic_metrics_gauges",
         },
         "single_node": True,
     },
@@ -190,6 +191,7 @@ SENTRY_TRACE_SAMPLE_RATE = 0
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
 SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
+STARFISH_SLACK_CHANNEL_ID = os.environ.get("STARFISH_SLACK_CHANNEL_ID")
 
 # Snuba Options
 
