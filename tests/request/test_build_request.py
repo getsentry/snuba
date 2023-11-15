@@ -159,7 +159,7 @@ TENANT_ID_TESTS = [
         {"organization_id": 1, "referrer": "test"},
         "test",
         1,
-        id="multiple projects, no project tenant",
+        id="only use tenant_id referrer in request",
     ),
 ]
 
