@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let mut backend =
+        let backend =
             StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
 
         backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
