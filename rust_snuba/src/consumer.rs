@@ -92,7 +92,7 @@ pub fn consumer_impl(
         configure_metrics(Box::new(StatsDBackend::new(
             &host,
             port,
-            "snuba.rust_consumer",
+            "snuba.consumer",
             tags,
         )));
     }
