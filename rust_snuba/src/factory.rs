@@ -50,11 +50,11 @@ impl ConsumerStrategyFactory {
 }
 
 struct MessageProcessor {
-    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>,
+    func: fn(Arc<KafkaPayload>, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>,
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<Arc<KafkaPayload>, BytesInsertBatch> for MessageProcessor {
+    fn get_task(&self, message: Message<Arc<KafkaPayload>>) -> RunTaskFunc<BytesInsertBatch> {
         let func = self.func;
 
         Box::pin(async move {
@@ -109,8 +109,8 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
     }
 }
 
-impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
-    fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+impl ProcessingStrategyFactory<Arc<KafkaPayload>> for ConsumerStrategyFactory {
+    fn create(&self) -> Box<dyn ProcessingStrategy<Arc<KafkaPayload>>> {
         let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
             acc.rows.extend(value.rows);
             acc

@@ -6,9 +6,10 @@ mod utils;
 
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use std::sync::Arc;
 
 type ProcessingFunction =
-    fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>;
+    fn(Arc<KafkaPayload>, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>;
 
 pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
     match name {

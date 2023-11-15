@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
 use crate::processing::dlq::BufferedMessages;
 use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
@@ -41,7 +41,7 @@ struct Strategies<TPayload> {
 }
 
 struct Callbacks<TPayload> {
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
+    strategies: Arc<Mutex<Strategies<Arc<TPayload>>>>,
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
@@ -97,7 +97,7 @@ impl<TPayload: Clone + 'static> AssignmentCallbacks for Callbacks<TPayload> {
 
 impl<TPayload> Callbacks<TPayload> {
     pub fn new(
-        strategies: Arc<Mutex<Strategies<TPayload>>>,
+        strategies: Arc<Mutex<Strategies<Arc<TPayload>>>>,
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
     ) -> Self {
         Self {
@@ -113,21 +113,21 @@ impl<TPayload> Callbacks<TPayload> {
 /// partition revocation.
 pub struct StreamProcessor<TPayload: Clone> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
-    message: Option<Message<TPayload>>,
+    strategies: Arc<Mutex<Strategies<Arc<TPayload>>>>,
+    message: Option<Message<Arc<TPayload>>>,
     processor_handle: ProcessorHandle,
     backpressure_timestamp: Option<Instant>,
     is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     // Stores messages that are pending commit. Untransformed messages are buffered here
     // so that they can be produced to the DLQ if they are determined to be invalid.
-    buffered_messages: BufferedMessages<TPayload>,
+    buffered_messages: BufferedMessages<Arc<TPayload>>,
 }
 
 impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-        processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
+        processing_factory: Box<dyn ProcessingStrategyFactory<Arc<TPayload>>>,
     ) -> Self {
         let strategies = Arc::new(Mutex::new(Strategies {
             processing_factory,
@@ -187,12 +187,19 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 .poll(Some(Duration::from_secs(1)))
             {
                 Ok(msg) => {
-                    self.message = msg.clone().map(|inner| Message {
-                        inner_message: InnerMessage::BrokerMessage(inner),
-                    });
+                    if let Some(broker_msg) = msg {
+                        let new_msg = BrokerMessage::new(
+                            Arc::new(broker_msg.payload),
+                            broker_msg.partition,
+                            broker_msg.offset,
+                            broker_msg.timestamp,
+                        );
 
-                    if let Some(m) = msg {
-                        self.buffered_messages.append(m);
+                        self.message = Some(Message {
+                            inner_message: InnerMessage::BrokerMessage(new_msg.clone()),
+                        });
+
+                        self.buffered_messages.append(new_msg);
                     }
 
                     self.metrics_buffer
@@ -379,9 +386,9 @@ mod tests {
     use uuid::Uuid;
 
     struct TestStrategy {
-        message: Option<Message<String>>,
+        message: Option<Message<Arc<String>>>,
     }
-    impl ProcessingStrategy<String> for TestStrategy {
+    impl ProcessingStrategy<Arc<String>> for TestStrategy {
         #[allow(clippy::manual_map)]
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
             Ok(match self.message.as_ref() {
@@ -392,7 +399,10 @@ mod tests {
             })
         }
 
-        fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {
+        fn submit(
+            &mut self,
+            message: Message<Arc<String>>,
+        ) -> Result<(), SubmitError<Arc<String>>> {
             self.message = Some(message);
             Ok(())
         }
@@ -407,8 +417,8 @@ mod tests {
     }
 
     struct TestFactory {}
-    impl ProcessingStrategyFactory<String> for TestFactory {
-        fn create(&self) -> Box<dyn ProcessingStrategy<String>> {
+    impl ProcessingStrategyFactory<Arc<String>> for TestFactory {
+        fn create(&self) -> Box<dyn ProcessingStrategy<Arc<String>>> {
             Box::new(TestStrategy { message: None })
         }
     }

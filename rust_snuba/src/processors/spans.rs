@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -9,11 +10,11 @@ use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETEN
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
-    payload: KafkaPayload,
+    payload: Arc<KafkaPayload>,
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes)?;
+    let payload_bytes = payload.payload.as_ref().context("Expected payload")?;
+    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let mut span: Span = msg.try_into()?;
 

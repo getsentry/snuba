@@ -38,8 +38,8 @@ impl SchemaValidator {
     }
 }
 
-impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
+impl TaskRunner<Arc<KafkaPayload>, Arc<KafkaPayload>> for SchemaValidator {
+    fn get_task(&self, message: Message<Arc<KafkaPayload>>) -> RunTaskFunc<Arc<KafkaPayload>> {
         let Some(schema) = self.schema.clone() else {
             return Box::pin(async move { Ok(message) });
         };
@@ -77,13 +77,13 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
 }
 
 pub struct ValidateSchema {
-    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+    inner: Box<dyn ProcessingStrategy<Arc<KafkaPayload>>>,
 }
 
 impl ValidateSchema {
     pub fn new<N>(next_step: N, topic: &str, enforce_schema: bool, concurrency: usize) -> Self
     where
-        N: ProcessingStrategy<KafkaPayload> + 'static,
+        N: ProcessingStrategy<Arc<KafkaPayload>> + 'static,
     {
         let inner = Box::new(RunTaskInThreads::new(
             next_step,
@@ -96,12 +96,15 @@ impl ValidateSchema {
     }
 }
 
-impl ProcessingStrategy<KafkaPayload> for ValidateSchema {
+impl ProcessingStrategy<Arc<KafkaPayload>> for ValidateSchema {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+    fn submit(
+        &mut self,
+        message: Message<Arc<KafkaPayload>>,
+    ) -> Result<(), SubmitError<Arc<KafkaPayload>>> {
         self.inner.submit(message)
     }
 
@@ -134,14 +137,14 @@ mod tests {
         let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
-        impl ProcessingStrategy<KafkaPayload> for Noop {
+        impl ProcessingStrategy<Arc<KafkaPayload>> for Noop {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 Ok(None)
             }
             fn submit(
                 &mut self,
-                _message: Message<KafkaPayload>,
-            ) -> Result<(), SubmitError<KafkaPayload>> {
+                _message: Message<Arc<KafkaPayload>>,
+            ) -> Result<(), SubmitError<Arc<KafkaPayload>>> {
                 Ok(())
             }
             fn close(&mut self) {}
@@ -169,11 +172,11 @@ mod tests {
         let payload_str = example.to_string().as_bytes().to_vec();
         let message = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                payload: KafkaPayload {
+                payload: Arc::new(KafkaPayload {
                     key: None,
                     headers: None,
                     payload: Some(payload_str.clone()),
-                },
+                }),
                 partition,
                 offset: 0,
                 timestamp: Utc::now(),

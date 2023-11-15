@@ -5,7 +5,7 @@ use rust_arroyo::processing::strategies::{
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -124,13 +124,16 @@ impl PythonTransformStep {
     }
 }
 
-impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
+impl ProcessingStrategy<Arc<KafkaPayload>> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.check_for_results();
         self.next_step.poll()
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+    fn submit(
+        &mut self,
+        message: Message<Arc<KafkaPayload>>,
+    ) -> Result<(), SubmitError<Arc<KafkaPayload>>> {
         self.check_for_results();
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
@@ -159,7 +162,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (payload.payload, offset, partition.index, timestamp);
+                let args = (payload.payload.clone(), offset, partition.index, timestamp);
 
                 let process_message = |args| {
                     log::debug!("processing message in subprocess,  args={:?}", args);

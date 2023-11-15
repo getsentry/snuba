@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct TestFactory {}
-impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
-    fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+impl ProcessingStrategyFactory<Arc<KafkaPayload>> for TestFactory {
+    fn create(&self) -> Box<dyn ProcessingStrategy<Arc<KafkaPayload>>> {
         Box::new(CommitOffsets::new(Duration::from_secs(1)))
     }
 }

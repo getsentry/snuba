@@ -166,11 +166,11 @@ pub fn process_message(
     match processors::get_processing_function(name) {
         None => None,
         Some(func) => {
-            let payload = KafkaPayload {
+            let payload = Arc::new(KafkaPayload {
                 key: None,
                 headers: None,
                 payload: Some(value),
-            };
+            });
 
             let meta = KafkaMessageMetadata {
                 partition,

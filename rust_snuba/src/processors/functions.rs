@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -9,11 +10,11 @@ use crate::processors::spans::SpanStatus;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
-    payload: KafkaPayload,
+    payload: Arc<KafkaPayload>,
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes)?;
+    let payload_bytes = payload.payload.as_ref().context("Expected payload")?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,

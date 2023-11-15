@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -10,11 +11,11 @@ use uuid::Uuid;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
-    payload: KafkaPayload,
+    payload: Arc<KafkaPayload>,
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes)?;
+    let payload_bytes = payload.payload.as_ref().context("Expected payload")?;
+    let msg: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
     let querylog_msg: QuerylogMessage = msg.try_into()?;
 

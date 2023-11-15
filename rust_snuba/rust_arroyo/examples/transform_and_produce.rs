@@ -19,16 +19,17 @@ use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
-    let payload = value.payload.unwrap();
-    let str_payload = std::str::from_utf8(&payload).unwrap();
+fn reverse_string(value: Arc<KafkaPayload>) -> Result<KafkaPayload, InvalidMessage> {
+    let payload = value.payload.as_ref().unwrap();
+    let str_payload = std::str::from_utf8(payload).unwrap();
     let result_str = str_payload.chars().rev().collect::<String>();
 
     println!("transforming value: {:?} -> {:?}", str_payload, &result_str);
 
     let result = KafkaPayload {
         payload: Some(result_str.to_bytes().to_vec()),
-        ..value
+        key: value.key.clone(),
+        headers: value.headers.clone(),
     };
     Ok(result)
 }
@@ -56,8 +57,8 @@ async fn main() {
         config: KafkaConfig,
         topic: Topic,
     }
-    impl ProcessingStrategyFactory<KafkaPayload> for ReverseStringAndProduceStrategyFactory {
-        fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    impl ProcessingStrategyFactory<Arc<KafkaPayload>> for ReverseStringAndProduceStrategyFactory {
+        fn create(&self) -> Box<dyn ProcessingStrategy<Arc<KafkaPayload>>> {
             let producer = KafkaProducer::new(self.config.clone());
             let topic = TopicOrPartition::Topic(self.topic);
             let reverse_string_and_produce_strategy =
