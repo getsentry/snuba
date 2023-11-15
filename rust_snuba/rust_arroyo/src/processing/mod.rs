@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
-use crate::backends::{AssignmentCallbacks, Consumer};
+use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -29,15 +29,9 @@ pub enum RunError {
     #[error("invalid state")]
     InvalidState,
     #[error("poll error")]
-    PollError {
-        #[source]
-        source: Option<Box<dyn std::error::Error + 'static>>,
-    },
+    Poll(#[source] ConsumerError),
     #[error("pause error")]
-    PauseError {
-        #[source]
-        source: Option<Box<dyn std::error::Error + 'static>>,
-    },
+    Pause(#[source] ConsumerError),
 }
 
 struct Strategies<TPayload> {
@@ -196,9 +190,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 }
                 Err(error) => {
                     log::error!("poll error: {}", error);
-                    return Err(RunError::PollError {
-                        source: Some(Box::new(error)),
-                    });
+                    return Err(RunError::Poll(error));
                 }
             }
         }
@@ -256,9 +248,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         }
                         Err(error) => {
                             log::error!("pause error: {}", error);
-                            return Err(RunError::PauseError {
-                                source: Some(Box::new(error)),
-                            });
+                            return Err(RunError::Pause(error));
                         }
                     }
                 }
@@ -309,9 +299,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         }
                         Err(error) => {
                             log::error!("pause error: {}", error);
-                            return Err(RunError::PauseError {
-                                source: Some(Box::new(error)),
-                            });
+                            return Err(RunError::Pause(error));
                         }
                     }
                 }
