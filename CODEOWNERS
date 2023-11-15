@@ -2,7 +2,7 @@
 * @getsentry/owners-snuba
 
 # rust_snuba
-* @getsentry/owners-snuba @getsentry/owners-processing
+/rust_snuba @getsentry/owners-snuba @getsentry/owners-processing
 
 # Legal
 /LICENSE  @getsentry/owners-legal
