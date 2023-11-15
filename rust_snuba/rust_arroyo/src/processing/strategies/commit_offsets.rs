@@ -41,13 +41,7 @@ impl CommitOffsets {
     }
 
     fn commit(&mut self, force: bool) -> Option<CommitRequest> {
-        if SystemTime::now()
-            > self
-                .last_commit_time
-                .checked_add(self.commit_frequency)
-                .unwrap()
-            || force
-        {
+        if self.last_commit_time.elapsed().unwrap_or_default() > self.commit_frequency || force {
             if !self.partitions.is_empty() {
                 let ret = Some(CommitRequest {
                     positions: self.partitions.clone(),
