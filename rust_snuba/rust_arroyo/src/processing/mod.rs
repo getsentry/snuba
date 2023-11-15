@@ -151,7 +151,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
         let metrics = get_metrics();
-        metrics.increment("arroyo.consumer.run_once", Some(1), None);
+        metrics.increment("arroyo.consumer.run_once", 1, None);
 
         if self.is_paused {
             // If the consumer waas paused, it should not be returning any messages
