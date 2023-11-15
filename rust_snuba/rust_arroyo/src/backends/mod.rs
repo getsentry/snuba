@@ -41,9 +41,9 @@ pub enum ProducerError {
 
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
-pub trait AssignmentCallbacks: Send {
-    fn on_assign(&mut self, partitions: HashMap<Partition, u64>);
-    fn on_revoke(&mut self, partitions: Vec<Partition>);
+pub trait AssignmentCallbacks: Send + Sync {
+    fn on_assign(&self, partitions: HashMap<Partition, u64>);
+    fn on_revoke(&self, partitions: Vec<Partition>);
 }
 
 /// This abstract class provides an interface for consuming messages from a

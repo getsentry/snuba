@@ -10,24 +10,21 @@ pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            BadMessage
-        })?;
-        let querylog_msg: QuerylogMessage = msg.try_into()?;
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+    let querylog_msg: QuerylogMessage = msg.try_into()?;
 
-        let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
-            log::error!("Failed to serialize message: {}", err);
-            BadMessage
-        })?;
+    let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
+        log::error!("Failed to serialize message: {}", err);
+        BadMessage
+    })?;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-
-    Err(BadMessage)
+    Ok(BytesInsertBatch {
+        rows: vec![serialized],
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]

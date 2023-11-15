@@ -6,7 +6,7 @@ pub mod commit_offsets;
 pub mod produce;
 pub mod reduce;
 pub mod run_task_in_threads;
-pub mod transform;
+pub mod run_task;
 
 #[derive(Debug, Clone)]
 pub enum SubmitError<T> {
@@ -35,10 +35,8 @@ impl CommitRequest {
     pub fn merge(mut self, other: CommitRequest) -> Self {
         // Merge commit requests, keeping the highest offset for each partition
         for (partition, offset) in other.positions {
-            if self.positions.contains_key(&partition) {
-                if self.positions[&partition] < offset {
-                    self.positions.insert(partition, offset);
-                }
+            if let Some(pos_offset) = self.positions.get_mut(&partition) {
+                *pos_offset = (*pos_offset).max(offset);
             } else {
                 self.positions.insert(partition, offset);
             }

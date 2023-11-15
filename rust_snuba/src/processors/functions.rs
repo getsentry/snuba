@@ -9,64 +9,59 @@ pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+
+    let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| BadMessage)?;
+    let timestamp = match msg.timestamp {
+        Some(timestamp) => timestamp,
+        _ => SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_err| BadMessage)?
+            .as_secs(),
+    };
+    let device_classification = msg.device_class.unwrap_or_default();
+
+    let mut rows = Vec::with_capacity(msg.functions.len());
+    for from in msg.functions {
+        let function = Function {
+            // Profile metadata
+            browser_name: msg.browser_name.clone(),
+            device_classification,
+            dist: msg.dist.clone(),
+            environment: msg.environment.clone(),
+            http_method: msg.http_method.clone(),
+            platform: msg.platform.clone(),
+            profile_id: profile_id.to_string(),
+            project_id: msg.project_id,
+            release: msg.release.clone(),
+            retention_days: msg.retention_days,
+            timestamp,
+            transaction_name: msg.transaction_name.clone(),
+            transaction_op: msg.transaction_op.clone(),
+            transaction_status: msg.transaction_status as u8,
+
+            // Function metadata
+            fingerprint: from.fingerprint,
+            durations: from.self_times_ns,
+            function: from.function.clone(),
+            package: from.package.clone(),
+            name: from.function,
+            is_application: from.in_app as u8,
+
+            ..Default::default()
+        };
+        let serialized = serde_json::to_vec(&function).map_err(|err| {
+            log::error!("Failed to serialize message: {}", err);
             BadMessage
         })?;
-
-        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| BadMessage)?;
-        let timestamp = match msg.timestamp {
-            Some(timestamp) => timestamp,
-            _ => SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_err| BadMessage)?
-                .as_secs(),
-        };
-        let device_classification = match msg.device_class {
-            Some(device_classification) => device_classification,
-            _ => 0,
-        };
-        let mut rows = Vec::with_capacity(msg.functions.len());
-
-        for from in &msg.functions {
-            let function = Function {
-                // Profile metadata
-                browser_name: msg.browser_name.clone(),
-                device_classification,
-                dist: msg.dist.clone(),
-                environment: msg.environment.clone(),
-                http_method: msg.http_method.clone(),
-                platform: msg.platform.clone(),
-                profile_id: profile_id.to_string(),
-                project_id: msg.project_id,
-                release: msg.release.clone(),
-                retention_days: msg.retention_days,
-                timestamp,
-                transaction_name: msg.transaction_name.clone(),
-                transaction_op: msg.transaction_op.clone(),
-                transaction_status: msg.transaction_status as u8,
-
-                // Function metadata
-                fingerprint: from.fingerprint,
-                durations: from.self_times_ns.clone(),
-                function: from.function.clone(),
-                package: from.package.clone(),
-                name: from.function.clone(),
-                is_application: from.in_app as u8,
-
-                ..Default::default()
-            };
-            let serialized = serde_json::to_vec(&function).map_err(|err| {
-                log::error!("Failed to serialize message: {}", err);
-                BadMessage
-            })?;
-            rows.push(serialized);
-        }
-
-        return Ok(BytesInsertBatch { rows });
+        rows.push(serialized);
     }
-    Err(BadMessage)
+
+    Ok(BytesInsertBatch { rows })
 }
 
 #[derive(Debug, Deserialize)]

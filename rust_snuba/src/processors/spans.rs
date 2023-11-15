@@ -1,39 +1,32 @@
 use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
+use crate::processors::utils::{default_retention_days, DEFAULT_RETENTION_DAYS, hex_to_u64};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
 ) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            BadMessage
-        })?;
-        let mut span: Span = msg.try_into()?;
+    let payload_bytes = payload.payload.ok_or(BadMessage)?;
+    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
+        log::error!("Failed to deserialize message: {}", err);
+        BadMessage
+    })?;
+    let mut span: Span = msg.try_into()?;
 
-        span.offset = _metadata.offset;
-        span.partition = _metadata.partition;
+    span.offset = metadata.offset;
+    span.partition = metadata.partition;
 
-        let serialized = serde_json::to_vec(&span).map_err(|err| {
-            log::error!("Failed to serialize processed message: {}", err);
-            BadMessage
-        })?;
+    let serialized = serde_json::to_vec(&span).map_err(|err| {
+        log::error!("Failed to serialize processed message: {}", err);
+        BadMessage
+    })?;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-    Err(BadMessage)
-}
-
-const DEFAULT_RETENTION_DAYS: u16 = 90;
-
-fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
+    Ok(BytesInsertBatch {
+        rows: vec![serialized],
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -265,14 +258,6 @@ impl TryFrom<FromSpanMessage> for Span {
             ..Default::default()
         })
     }
-}
-
-fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
 }
 
 #[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]

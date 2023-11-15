@@ -10,8 +10,13 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
+pub enum RunTaskError {
+    RetryableError,
+    InvalidMessage(InvalidMessage),
+}
+
 pub type RunTaskFunc<TTransformed> =
-    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>>;
+    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
 
 pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
@@ -22,7 +27,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed> {
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
     runtime: tokio::runtime::Runtime,
-    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
+    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics_buffer: MetricsBuffer,
@@ -101,8 +106,11 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                             }
                             Ok(_) => {}
                         },
-                        Ok(Err(e)) => {
+                        Ok(Err(RunTaskError::InvalidMessage(e))) => {
                             return Err(e);
+                        }
+                        Ok(Err(RunTaskError::RetryableError)) => {
+                            log::error!("retryable error");
                         }
                         Err(e) => {
                             log::error!("the thread crashed {}", e);

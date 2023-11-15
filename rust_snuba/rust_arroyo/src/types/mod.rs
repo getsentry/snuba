@@ -61,7 +61,7 @@ impl fmt::Display for Partition {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TopicOrPartition {
     Topic(Topic),
     Partition(Partition),
