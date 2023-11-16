@@ -21,16 +21,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
-    let payload = value.payload.unwrap();
+    let payload = value.payload().unwrap();
     let str_payload = std::str::from_utf8(&payload).unwrap();
     let result_str = str_payload.chars().rev().collect::<String>();
 
     println!("transforming value: {:?} -> {:?}", str_payload, &result_str);
 
-    let result = KafkaPayload {
-        payload: Some(Arc::new(result_str.to_bytes().to_vec())),
-        ..value
-    };
+    let result = KafkaPayload::new(
+        value.key().map(|k| k.clone()),
+        value.headers().map(|h| h.clone()),
+        Some(result_str.to_bytes().to_vec()),
+    );
     Ok(result)
 }
 struct Noop {}

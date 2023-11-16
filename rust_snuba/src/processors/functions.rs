@@ -12,8 +12,8 @@ pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes)?;
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,
@@ -167,11 +167,7 @@ mod tests {
             "device_class": 2,
             "retention_days": 30
         }"#;
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

@@ -93,7 +93,6 @@ mod tests {
     use crate::processing::strategies::InvalidMessage;
     use crate::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use chrono::Utc;
-    use std::sync::Arc;
 
     #[test]
     fn test_produce() {
@@ -140,11 +139,7 @@ mod tests {
         let payload_str = "hello world".to_string().as_bytes().to_vec();
         let message = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                payload: KafkaPayload {
-                    key: None,
-                    headers: None,
-                    payload: Some(Arc::new(payload_str.clone())),
-                },
+                payload: KafkaPayload::new(None, None, Some(payload_str.clone())),
                 partition,
                 offset: 0,
                 timestamp: Utc::now(),

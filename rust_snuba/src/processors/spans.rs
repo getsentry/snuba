@@ -12,8 +12,8 @@ pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes)?;
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let mut span: Span = msg.try_into()?;
 
@@ -365,7 +365,6 @@ impl SpanStatus {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use std::sync::Arc;
     use std::time::SystemTime;
 
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -450,11 +449,7 @@ mod tests {
         let span = valid_span();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -469,11 +464,7 @@ mod tests {
         span.sentry_tags.status = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -488,11 +479,7 @@ mod tests {
         span.sentry_tags.status = Some("".into());
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -507,11 +494,7 @@ mod tests {
         span.retention_days = default_retention_days();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -526,11 +509,7 @@ mod tests {
         span.tags = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

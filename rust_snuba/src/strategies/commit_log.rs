@@ -42,7 +42,7 @@ impl TryFrom<KafkaPayload> for Commit {
     type Error = CommitLogError;
 
     fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
-        let key = payload.key.unwrap();
+        let key = payload.key().unwrap();
 
         let data: Vec<&str> = str::from_utf8(&key).unwrap().split(':').collect();
         if data.len() != 3 {
@@ -54,7 +54,7 @@ impl TryFrom<KafkaPayload> for Commit {
         let consumer_group = data[2].to_string();
 
         let d: Payload =
-            serde_json::from_slice(&payload.payload.ok_or(CommitLogError::InvalidPayload)?)?;
+            serde_json::from_slice(&payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
 
         Ok(Commit {
             topic,
@@ -70,24 +70,20 @@ impl TryFrom<Commit> for KafkaPayload {
     type Error = CommitLogError;
 
     fn try_from(commit: Commit) -> Result<Self, CommitLogError> {
-        let key = Some(Arc::new(
+        let key = Some(
             format!(
                 "{}:{}:{}",
                 commit.topic, commit.partition, commit.consumer_group
             )
             .into_bytes(),
-        ));
+        );
 
-        let payload = Some(Arc::new(serde_json::to_vec(&Payload {
+        let payload = Some(serde_json::to_vec(&Payload {
             offset: commit.offset,
             orig_message_ts: commit.orig_message_ts,
-        })?));
+        })?);
 
-        Ok(KafkaPayload {
-            key,
-            headers: None,
-            payload,
-        })
+        Ok(KafkaPayload::new(key, None, payload))
     }
 }
 
@@ -193,13 +189,11 @@ mod tests {
 
     #[test]
     fn commit() {
-        let payload = KafkaPayload {
-            key: Some(Arc::new(b"topic:0:group1".to_vec())),
-            headers: None,
-            payload: Some(Arc::new(
-                b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec(),
-            )),
-        };
+        let payload = KafkaPayload::new(
+            Some(b"topic:0:group1".to_vec()),
+            None,
+            Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec()),
+        );
 
         let payload_clone = payload.clone();
 
@@ -254,22 +248,22 @@ mod tests {
         }
 
         let payloads = vec![
-            KafkaPayload {
-                key: Some(Arc::new(b"topic:0:group1".to_vec())),
-                headers: None,
-                payload: Some(Arc::new(
+            KafkaPayload::new(
+                Some(b"topic:0:group1".to_vec()),
+                None,
+                Some(
                     b"{\"offset\":5,\"orig_message_ts\":100000.0,\"received_p99\":100000.0}"
                         .to_vec(),
-                )),
-            },
-            KafkaPayload {
-                key: Some(Arc::new(b"topic:0:group1".to_vec())),
-                headers: None,
-                payload: Some(Arc::new(
+                ),
+            ),
+            KafkaPayload::new(
+                Some(b"topic:0:group1".to_vec()),
+                None,
+                Some(
                     b"{\"offset\":6,\"orig_message_ts\":100001.0,\"received_p99\":100001.0}"
                         .to_vec(),
-                )),
-            },
+                ),
+            ),
         ];
 
         let expected_len = payloads.len();

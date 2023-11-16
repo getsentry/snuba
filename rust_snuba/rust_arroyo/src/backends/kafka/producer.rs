@@ -32,8 +32,8 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
             TopicOrPartition::Partition(partition) => partition.topic.as_str(),
         };
 
-        let msg_key = &*payload.key.unwrap_or_default();
-        let msg_payload = &*(payload.payload.unwrap_or_default());
+        let msg_key = payload.key().unwrap();
+        let msg_payload = payload.payload().unwrap();
 
         let mut base_record = BaseRecord::to(topic).payload(msg_payload).key(msg_key);
 
@@ -61,7 +61,6 @@ mod tests {
     use crate::backends::kafka::types::KafkaPayload;
     use crate::backends::Producer;
     use crate::types::{Topic, TopicOrPartition};
-    use std::sync::Arc;
     #[test]
     fn test_producer() {
         let topic = Topic::new("test");
@@ -71,11 +70,7 @@ mod tests {
 
         let producer = KafkaProducer::new(configuration);
 
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(Arc::new("asdf".as_bytes().to_vec())),
-        };
+        let payload = KafkaPayload::new(None, None, Some("asdf".as_bytes().to_vec()));
         producer
             .produce(&destination, payload)
             .expect("Message produced")
