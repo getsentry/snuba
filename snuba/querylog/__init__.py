@@ -101,26 +101,29 @@ def _record_cogs(
     result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     """
-    Record bytes scanned for Generic Metrics Queries per use case.
+    Record bytes scanned for shared resource Queries per use case.
     """
 
-    if (
-        not isinstance(result, QueryResult)
-        or query_metadata.dataset != "generic_metrics"
-    ):
+    if not isinstance(result, QueryResult):
         return
 
     profile = result.result.get("profile")
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
-    if (use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is None:
-        return
+    app_feature = query_metadata.dataset.replace("_", "")
 
-    if random() < (state.get_config("gen_metrics_query_cogs_probability") or 0):
+    if (
+        query_metadata.dataset == "generic_metrics"
+        and (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
+        is not None
+    ):
+        app_feature += f"_{use_case_id}"
+
+    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
         record_cogs(
             resource_id="snuba_api_bytes_scanned",
-            app_feature=f"genericmetrics_{use_case_id}",
+            app_feature=app_feature,
             amount=bytes_scanned,
             usage_type=UsageUnit.BYTES,
         )
