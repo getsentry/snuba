@@ -28,8 +28,8 @@ fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
     println!("transforming value: {:?} -> {:?}", str_payload, &result_str);
 
     let result = KafkaPayload::new(
-        value.key().map(|k| k.clone()),
-        value.headers().map(|h| h.clone()),
+        value.key().cloned(),
+        value.headers().cloned(),
         Some(result_str.to_bytes().to_vec()),
     );
     Ok(result)
