@@ -22,6 +22,7 @@ use crate::processors;
 use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
@@ -30,6 +31,7 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    python_max_queue_depth: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -39,6 +41,7 @@ pub fn consumer(
             skip_write,
             concurrency,
             use_rust_processor,
+            python_max_queue_depth,
         )
     });
 }
@@ -50,6 +53,7 @@ pub fn consumer_impl(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    python_max_queue_depth: Option<usize>,
 ) {
     setup_logging();
 
@@ -141,6 +145,7 @@ pub fn consumer_impl(
             max_batch_time,
             skip_write,
             concurrency,
+            python_max_queue_depth,
             use_rust_processor,
         )),
     );

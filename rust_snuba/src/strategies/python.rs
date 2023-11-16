@@ -33,12 +33,14 @@ pub struct PythonTransformStep {
     handles: VecDeque<TaskHandle>,
     message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
+    max_queue_depth: usize,
 }
 
 impl PythonTransformStep {
     pub fn new<N>(
         processor_config: MessageProcessorConfig,
         processes: usize,
+        max_queue_depth: Option<usize>,
         next_step: N,
     ) -> Result<Self, Error>
     where
@@ -73,6 +75,7 @@ impl PythonTransformStep {
             handles: VecDeque::new(),
             message_carried_over: None,
             processing_pool,
+            max_queue_depth: max_queue_depth.unwrap_or(processes),
         })
     }
 
@@ -131,17 +134,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        self.check_for_results();
-
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        //
-        // this threshold was chosen arbitrarily with no performance measuring, and we may also
-        // check for queued_count() > 0 instead, but the rough idea of comparing with
-        // active_count() is that we allow for one pending message per process, so that procspawn
-        // is able to keep CPU saturation high.
         if let Some(ref processing_pool) = self.processing_pool {
-            if processing_pool.queued_count() > processing_pool.active_count() {
+            if processing_pool.queued_count() > self.max_queue_depth {
                 tracing::debug!("python strategy provides backpressure");
                 return Err(SubmitError::MessageRejected(MessageRejected { message }));
             }
@@ -252,6 +248,7 @@ mod tests {
                 python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
             },
             processes,
+            None,
             sink.clone(),
         )
         .unwrap();
