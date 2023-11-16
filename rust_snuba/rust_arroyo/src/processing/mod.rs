@@ -67,6 +67,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&self, _: Vec<Partition>) {
+        tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();
 
@@ -77,6 +78,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
                 s.close();
                 if let Ok(Some(commit_request)) = s.join(None) {
                     let mut consumer = self.consumer.lock().unwrap();
+                    tracing::info!("Committing offsets");
                     consumer.stage_offsets(commit_request.positions).unwrap();
                     consumer.commit_offsets().unwrap();
                 }
@@ -89,6 +91,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             start.elapsed().as_millis() as u64,
             None,
         );
+
+        tracing::info!("End revoke partitions");
 
         // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
