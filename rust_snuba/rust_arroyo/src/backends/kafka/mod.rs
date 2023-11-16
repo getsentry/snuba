@@ -57,9 +57,9 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
 
     BrokerMessage::new(
         KafkaPayload {
-            key: msg.key().map(|k| k.to_vec()),
-            headers: msg.headers().map(BorrowedHeaders::detach),
-            payload: msg.payload().map(|p| p.to_vec()),
+            key: msg.key().map(|k| Arc::new(k.to_vec())),
+            headers: msg.headers().map(|h| Arc::new(BorrowedHeaders::detach(h))),
+            payload: msg.payload().map(|p| Arc::new(p.to_vec())),
         },
         partition,
         msg.offset() as u64,

@@ -28,7 +28,7 @@ fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
     println!("transforming value: {:?} -> {:?}", str_payload, &result_str);
 
     let result = KafkaPayload {
-        payload: Some(result_str.to_bytes().to_vec()),
+        payload: Some(Arc::new(result_str.to_bytes().to_vec())),
         ..value
     };
     Ok(result)

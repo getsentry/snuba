@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::dlq::BufferedMessages;
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -114,7 +115,7 @@ impl<TPayload> Callbacks<TPayload> {
 /// instance and a ``ProcessingStrategy``, ensuring that processing
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
-pub struct StreamProcessor<TPayload> {
+pub struct StreamProcessor<TPayload: Clone> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
     strategies: Arc<Mutex<Strategies<TPayload>>>,
     message: Option<Message<TPayload>>,
@@ -122,9 +123,10 @@ pub struct StreamProcessor<TPayload> {
     backpressure_timestamp: Option<Instant>,
     is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
+    buffered_messages: BufferedMessages<TPayload>,
 }
 
-impl<TPayload: 'static> StreamProcessor<TPayload> {
+impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
@@ -144,6 +146,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             backpressure_timestamp: None,
             is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+            buffered_messages: BufferedMessages::new(),
         }
     }
 
@@ -186,11 +189,16 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 .poll(Some(Duration::from_secs(1)))
             {
                 Ok(msg) => {
-                    self.message = msg.map(|inner| Message {
-                        inner_message: InnerMessage::BrokerMessage(inner),
-                    });
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
+
+                    if let Some(broker_msg) = msg {
+                        self.message = Some(Message {
+                            inner_message: InnerMessage::BrokerMessage(broker_msg.clone()),
+                        });
+
+                        self.buffered_messages.append(broker_msg);
+                    }
                 }
                 Err(error) => {
                     tracing::error!(%error, "poll error");

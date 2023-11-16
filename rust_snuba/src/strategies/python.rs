@@ -155,7 +155,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (payload.payload, offset, partition.index, timestamp);
+                let payload_bytes = (payload.payload.unwrap_or_default()).as_ref().clone();
+
+                let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args| {
                     tracing::debug!(?args, "processing message in subprocess");

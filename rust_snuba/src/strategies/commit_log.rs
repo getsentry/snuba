@@ -70,18 +70,18 @@ impl TryFrom<Commit> for KafkaPayload {
     type Error = CommitLogError;
 
     fn try_from(commit: Commit) -> Result<Self, CommitLogError> {
-        let key = Some(
+        let key = Some(Arc::new(
             format!(
                 "{}:{}:{}",
                 commit.topic, commit.partition, commit.consumer_group
             )
             .into_bytes(),
-        );
+        ));
 
-        let payload = Some(serde_json::to_vec(&Payload {
+        let payload = Some(Arc::new(serde_json::to_vec(&Payload {
             offset: commit.offset,
             orig_message_ts: commit.orig_message_ts,
-        })?);
+        })?));
 
         Ok(KafkaPayload {
             key,

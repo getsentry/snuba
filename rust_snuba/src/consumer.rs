@@ -179,7 +179,7 @@ pub fn process_message(
             let payload = KafkaPayload {
                 key: None,
                 headers: None,
-                payload: Some(value),
+                payload: Some(Arc::new(value)),
             };
 
             let meta = KafkaMessageMetadata {
