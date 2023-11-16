@@ -110,10 +110,10 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                             return Err(e);
                         }
                         Ok(Err(RunTaskError::RetryableError)) => {
-                            log::error!("retryable error");
+                            tracing::error!("retryable error");
                         }
-                        Err(e) => {
-                            log::error!("the thread crashed {}", e);
+                        Err(error) => {
+                            tracing::error!(%error, "the thread crashed");
                         }
                     }
                 } else {
@@ -154,16 +154,14 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
-            if let Some(t) = remaining {
-                remaining = Some(t - start.elapsed());
-                if remaining.unwrap() <= Duration::from_secs(0) {
-                    log::warn!(
-                        "[{}] Timeout reached while waiting for tasks to finish",
-                        self.metric_name
+            if let Some(t) = timeout {
+                if start.elapsed() > t {
+                    tracing::warn!(
+                        %self.metric_name,
+                        "Timeout reached while waiting for tasks to finish",
                     );
                     break;
                 }
@@ -180,6 +178,8 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
         }
         self.handles.clear();
         self.metrics_buffer.flush();
+
+        let remaining = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 

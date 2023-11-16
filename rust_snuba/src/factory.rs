@@ -3,7 +3,7 @@ use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::validate_schema::ValidateSchema;
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
@@ -53,12 +53,70 @@ impl ConsumerStrategyFactory {
     }
 }
 
+struct MessageProcessor {
+    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>,
+}
+
+impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch> {
+        let func = self.func;
+
+        Box::pin(async move {
+            let broker_message = match message.inner_message {
+                InnerMessage::BrokerMessage(msg) => msg,
+                _ => panic!("Unexpected message type"),
+            };
+
+            let metadata = KafkaMessageMetadata {
+                partition: broker_message.partition.index,
+                offset: broker_message.offset,
+                timestamp: broker_message.timestamp,
+            };
+
+            match func(broker_message.payload, metadata) {
+                Ok(transformed) => Ok(Message {
+                    inner_message: InnerMessage::BrokerMessage(BrokerMessage {
+                        payload: transformed,
+                        partition: broker_message.partition,
+                        offset: broker_message.offset,
+                        timestamp: broker_message.timestamp,
+                    }),
+                }),
+                Err(error) => {
+                    // TODO: after moving to `tracing`, we can properly attach `err` to the log.
+                    // however, as Sentry captures `error` logs as errors by default,
+                    // we would double-log this error here:
+                    tracing::error!(%error, "Failed processing message");
+                    sentry::with_scope(
+                        |_scope| {
+                            // FIXME(swatinem): we already moved `broker_message.payload`
+                            // let payload = broker_message
+                            //     .payload
+                            //     .payload
+                            //     .as_deref()
+                            //     .map(String::from_utf8_lossy)
+                            //     .into();
+                            // scope.set_extra("payload", payload)
+                        },
+                        || {
+                            sentry::integrations::anyhow::capture_anyhow(&error);
+                        },
+                    );
+
+                    Err(RunTaskError::InvalidMessage(InvalidMessage {
+                        partition: broker_message.partition,
+                        offset: broker_message.offset,
+                    }))
+                }
+            }
+        })
+    }
+}
+
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
-            for row in value.rows {
-                acc.rows.push(row);
-            }
+            acc.rows.extend(value.rows);
             acc
         });
 
@@ -83,50 +141,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             ),
         ) {
             (true, Some(func)) => {
-                struct MessageProcessor {
-                    func: fn(
-                        KafkaPayload,
-                        KafkaMessageMetadata,
-                    ) -> Result<BytesInsertBatch, BadMessage>,
-                }
-
-                impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
-                    fn get_task(
-                        &self,
-                        message: Message<KafkaPayload>,
-                    ) -> RunTaskFunc<BytesInsertBatch> {
-                        let func = self.func;
-
-                        Box::pin(async move {
-                            let broker_message = match message.inner_message {
-                                InnerMessage::BrokerMessage(msg) => msg,
-                                _ => panic!("Unexpected message type"),
-                            };
-
-                            let metadata = KafkaMessageMetadata {
-                                partition: broker_message.partition.index,
-                                offset: broker_message.offset,
-                                timestamp: broker_message.timestamp,
-                            };
-
-                            match func(broker_message.payload, metadata) {
-                                Ok(transformed) => Ok(Message {
-                                    inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                                        payload: transformed,
-                                        partition: broker_message.partition,
-                                        offset: broker_message.offset,
-                                        timestamp: broker_message.timestamp,
-                                    }),
-                                }),
-                                Err(_e) => Err(RunTaskError::InvalidMessage(InvalidMessage {
-                                    partition: broker_message.partition,
-                                    offset: broker_message.offset,
-                                })),
-                            }
-                        })
-                    }
-                }
-
                 let task_runner = MessageProcessor { func };
                 Box::new(ValidateSchema::new(
                     RunTaskInThreads::new(
@@ -135,7 +149,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         self.concurrency,
                         Some("process_message"),
                     ),
-                    self.logical_topic_name.clone(),
+                    &self.logical_topic_name,
                     false,
                     self.concurrency,
                 ))

@@ -119,8 +119,8 @@ impl PythonTransformStep {
                         self.message_carried_over = Some(transformed_message);
                     }
                 }
-                Err(e) => {
-                    log::error!("Invalid message {:?}", e);
+                Err(error) => {
+                    tracing::error!(error, "Invalid message");
                 }
             }
         }
@@ -138,12 +138,12 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         // not enqueue more.
         if let Some(ref processing_pool) = self.processing_pool {
             if processing_pool.queued_count() > self.max_queue_depth {
-                log::debug!("python strategy provides backpressure");
+                tracing::debug!("python strategy provides backpressure");
                 return Err(SubmitError::MessageRejected(MessageRejected { message }));
             }
         }
 
-        log::debug!("processing message,  message={}", message);
+        tracing::debug!(%message, "processing message");
 
         match message.inner_message {
             InnerMessage::AnyMessage(..) => {
@@ -158,7 +158,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload.payload, offset, partition.index, timestamp);
 
                 let process_message = |args| {
-                    log::debug!("processing message in subprocess,  args={:?}", args);
+                    tracing::debug!(?args, "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?

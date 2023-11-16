@@ -125,8 +125,8 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 
             match producer.produce(&topic, message.payload().clone()) {
                 Ok(_) => Ok(message),
-                Err(e) => {
-                    log::error!("Error producing message: {}", e);
+                Err(error) => {
+                    tracing::error!(%error, "Error producing message");
                     Err(RunTaskError::RetryableError)
                 }
             }
@@ -294,7 +294,7 @@ mod tests {
         }
 
         strategy.close();
-        strategy.join(None);
+        strategy.join(None).unwrap();
 
         assert_eq!(produced_payloads.lock().unwrap().len(), expected_len);
     }
