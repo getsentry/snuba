@@ -125,8 +125,8 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 
             match producer.produce(&topic, message.payload().clone()) {
                 Ok(_) => Ok(message),
-                Err(e) => {
-                    log::error!("Error producing message: {}", e);
+                Err(error) => {
+                    tracing::error!(%error, "Error producing message");
                     Err(RunTaskError::RetryableError)
                 }
             }

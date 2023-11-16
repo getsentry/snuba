@@ -27,19 +27,19 @@ chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = "3.2.5"
 futures = "0.3.21"
 glob = "0.3.1"
-log = "0.4"
-pretty_env_logger = "0.5.0"
 procspawn = { version = "0.10.2", features = ["json"] }
 pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = "0.11.11"
 rust_arroyo = { path = "./rust_arroyo" }
-sentry = { version = "0.31.0", features = ["anyhow", "log"] }
+sentry = { version = "0.31.0", features = ["anyhow", "tracing"] }
 sentry-kafka-schemas = "0.1.32"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serde_yaml = "0.9.19"
 thiserror = "1.0"
 tokio = { version = "1.19.2", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = "1.4.1"
 
 [dev-dependencies]

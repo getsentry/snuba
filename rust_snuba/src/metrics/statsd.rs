@@ -44,20 +44,20 @@ impl StatsDBackend {
 
 impl ArroyoMetrics for StatsDBackend {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+        if let Err(error) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 
     fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+        if let Err(error) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 
     fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+        if let Err(error) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 }

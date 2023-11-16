@@ -20,11 +20,11 @@ impl SchemaValidator {
     pub fn new(logical_topic: &str, enforce_schema: bool) -> Self {
         let schema = match sentry_kafka_schemas::get_schema(logical_topic, None) {
             Ok(s) => Some(Arc::new(s)),
-            Err(e) => {
+            Err(error) => {
                 if enforce_schema {
-                    panic!("Schema error: {}", e);
+                    panic!("Schema error: {error}");
                 } else {
-                    log::error!("Schema error: {}", e);
+                    tracing::error!(%error, "Schema error");
                 }
 
                 None
@@ -49,11 +49,11 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             // FIXME: this will panic when the payload is empty
             let payload = message.payload().payload.as_ref().unwrap();
 
-            let Err(err) = schema.validate_json(payload) else {
+            let Err(error) = schema.validate_json(payload) else {
                 return Ok(message);
             };
 
-            log::error!("Validation error {}", err);
+            tracing::error!(%error, "Validation error");
             if !enforce_schema {
                 return Ok(message);
             };

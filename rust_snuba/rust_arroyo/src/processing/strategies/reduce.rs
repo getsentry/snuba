@@ -91,7 +91,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
                 self.flush(true)?;
                 if let Some(t) = timeout {
                     if start.elapsed() > t {
-                        log::warn!("Timeout reached while waiting for tasks to finish");
+                        tracing::warn!("Timeout reached while waiting for tasks to finish");
                         break;
                     }
                 }
@@ -100,7 +100,8 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
             self.flush(true)?;
         }
 
-        let remaining: Option<Duration> = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
+        let remaining: Option<Duration> =
+            timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 

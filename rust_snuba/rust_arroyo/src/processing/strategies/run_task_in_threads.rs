@@ -110,10 +110,10 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                             return Err(e);
                         }
                         Ok(Err(RunTaskError::RetryableError)) => {
-                            log::error!("retryable error");
+                            tracing::error!("retryable error");
                         }
-                        Err(e) => {
-                            log::error!("the thread crashed {}", e);
+                        Err(error) => {
+                            tracing::error!(%error, "the thread crashed");
                         }
                     }
                 } else {
@@ -159,9 +159,9 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
             if let Some(t) = timeout {
                 if start.elapsed() > t {
-                    log::warn!(
-                        "[{}] Timeout reached while waiting for tasks to finish",
-                        self.metric_name
+                    tracing::warn!(
+                        %self.metric_name,
+                        "Timeout reached while waiting for tasks to finish",
                     );
                     break;
                 }

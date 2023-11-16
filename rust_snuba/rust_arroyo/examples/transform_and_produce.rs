@@ -52,6 +52,8 @@ impl ProcessingStrategy<KafkaPayload> for Noop {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     struct ReverseStringAndProduceStrategyFactory {
         config: KafkaConfig,
         topic: Topic,

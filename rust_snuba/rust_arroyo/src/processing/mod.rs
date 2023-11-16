@@ -67,7 +67,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&self, _: Vec<Partition>) {
-        log::info!("Start revoke partitions");
+        tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();
 
@@ -78,7 +78,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
                 s.close();
                 if let Ok(Some(commit_request)) = s.join(None) {
                     let mut consumer = self.consumer.lock().unwrap();
-                    log::info!("Committing offsets");
+                    tracing::info!("Committing offsets");
                     consumer.stage_offsets(commit_request.positions).unwrap();
                     consumer.commit_offsets().unwrap();
                 }
@@ -92,7 +92,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             None,
         );
 
-        log::info!("End revoke partitions");
+        tracing::info!("End revoke partitions");
 
         // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
@@ -193,7 +193,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
                 Err(error) => {
-                    log::error!("poll error: {}", error);
+                    tracing::error!(%error, "poll error");
                     return Err(RunError::Poll(error));
                 }
             }
@@ -251,7 +251,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                             self.is_paused = false;
                         }
                         Err(error) => {
-                            log::error!("pause error: {}", error);
+                            tracing::error!(%error, "pause error");
                             return Err(RunError::Pause(error));
                         }
                     }
@@ -284,7 +284,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         return Ok(());
                     }
 
-                    log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
+                    tracing::warn!(
+                        "Consumer is in backpressure state for more than 1 second, pausing",
+                    );
 
                     let partitions = self
                         .consumer
@@ -302,15 +304,15 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                             self.is_paused = true;
                         }
                         Err(error) => {
-                            log::error!("pause error: {}", error);
+                            tracing::error!(%error, "pause error");
                             return Err(RunError::Pause(error));
                         }
                     }
                 }
             }
-            Err(SubmitError::InvalidMessage(invalid_message)) => {
+            Err(SubmitError::InvalidMessage(message)) => {
                 // TODO: Put this into the DLQ once we have one
-                log::error!("Invalid message: {:?}", invalid_message);
+                tracing::error!(?message, "Invalid message");
             }
         }
         Ok(())
