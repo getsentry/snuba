@@ -200,8 +200,8 @@ mod tests {
         let commit: Commit = payload.try_into().unwrap();
         assert_eq!(commit.partition, 0);
         let transformed: KafkaPayload = commit.try_into().unwrap();
-        assert_eq!(transformed.key, payload_clone.key);
-        assert_eq!(transformed.payload, payload_clone.payload);
+        assert_eq!(transformed.key(), payload_clone.key());
+        assert_eq!(transformed.payload(), payload_clone.payload());
     }
 
     #[test]

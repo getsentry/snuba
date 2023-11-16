@@ -326,7 +326,6 @@ mod tests {
     use super::*;
     use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use std::sync::Arc;
     use std::time::SystemTime;
 
     #[test]

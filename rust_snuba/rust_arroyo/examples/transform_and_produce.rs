@@ -22,7 +22,7 @@ use std::time::Duration;
 
 fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
     let payload = value.payload().unwrap();
-    let str_payload = std::str::from_utf8(&payload).unwrap();
+    let str_payload = std::str::from_utf8(payload).unwrap();
     let result_str = str_payload.chars().rev().collect::<String>();
 
     println!("transforming value: {:?} -> {:?}", str_payload, &result_str);
