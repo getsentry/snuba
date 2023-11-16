@@ -833,8 +833,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         if self.__processes is None:
             inner_strategy = RunTask(transform_function, collect)
         else:
-            assert self.__input_block_size is not None
-            assert self.__output_block_size is not None
             inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,

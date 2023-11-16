@@ -85,10 +85,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__max_insert_batch_size = max_insert_batch_size or max_batch_size
         self.__max_insert_batch_time = max_insert_batch_time or max_batch_time
 
-        if processes is not None:
-            assert input_block_size is not None, "input block size required"
-            assert output_block_size is not None, "output block size required"
-        else:
+        if processes is None:
             assert (
                 input_block_size is None
             ), "input block size cannot be used without processes"
@@ -151,8 +148,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         if self.__processes is None:
             strategy = RunTask(transform_function, collect)
         else:
-            assert self.__input_block_size is not None
-            assert self.__output_block_size is not None
             strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
