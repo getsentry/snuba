@@ -1,4 +1,4 @@
-use serde::{Deserializer, Deserialize};
+use serde::{Deserialize, Deserializer};
 
 pub const DEFAULT_RETENTION_DAYS: u16 = 90;
 

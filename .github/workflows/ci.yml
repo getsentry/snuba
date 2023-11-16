@@ -89,7 +89,7 @@ jobs:
         name: Checkout code
       - name: Run linter
         run: |
-          make lint-rust
+          make lint-rust format-rust-ci
 
   typing:
     name: "mypy typing"
