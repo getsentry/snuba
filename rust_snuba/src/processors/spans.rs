@@ -365,6 +365,7 @@ impl SpanStatus {
 mod tests {
     use super::*;
     use chrono::DateTime;
+    use std::sync::Arc;
     use std::time::SystemTime;
 
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -471,7 +472,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
+            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,

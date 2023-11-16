@@ -178,7 +178,7 @@ mod tests {
                 payload: KafkaPayload {
                     key: None,
                     headers: None,
-                    payload: Some(payload_str.clone()),
+                    payload: Some(Arc::new(payload_str.clone())),
                 },
                 partition,
                 offset: 0,

@@ -130,6 +130,7 @@ mod tests {
     use super::*;
     use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use std::sync::Arc;
     use std::time::SystemTime;
 
     #[test]
@@ -169,7 +170,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.as_bytes().to_vec()),
+            payload: Some(Arc::new(data.as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,

@@ -189,14 +189,16 @@ mod tests {
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn commit() {
         let payload = KafkaPayload {
-            key: Some(b"topic:0:group1".to_vec()),
+            key: Some(Arc::new(b"topic:0:group1".to_vec())),
             headers: None,
-            payload: Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec()),
+            payload: Some(Arc::new(
+                b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec(),
+            )),
         };
 
         let payload_clone = payload.clone();
@@ -253,20 +255,20 @@ mod tests {
 
         let payloads = vec![
             KafkaPayload {
-                key: Some(b"topic:0:group1".to_vec()),
+                key: Some(Arc::new(b"topic:0:group1".to_vec())),
                 headers: None,
-                payload: Some(
+                payload: Some(Arc::new(
                     b"{\"offset\":5,\"orig_message_ts\":100000.0,\"received_p99\":100000.0}"
                         .to_vec(),
-                ),
+                )),
             },
             KafkaPayload {
-                key: Some(b"topic:0:group1".to_vec()),
+                key: Some(Arc::new(b"topic:0:group1".to_vec())),
                 headers: None,
-                payload: Some(
+                payload: Some(Arc::new(
                     b"{\"offset\":6,\"orig_message_ts\":100001.0,\"received_p99\":100001.0}"
                         .to_vec(),
-                ),
+                )),
             },
         ];
 
