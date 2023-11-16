@@ -453,7 +453,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
+            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,
@@ -491,7 +491,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
+            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,
@@ -510,7 +510,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
+            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,
@@ -529,7 +529,7 @@ mod tests {
         let payload = KafkaPayload {
             key: None,
             headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
+            payload: Some(Arc::new(data.unwrap().as_bytes().to_vec())),
         };
         let meta = KafkaMessageMetadata {
             partition: 0,
