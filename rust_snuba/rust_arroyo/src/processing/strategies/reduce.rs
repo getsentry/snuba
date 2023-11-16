@@ -2,7 +2,7 @@ use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
-use crate::types::{AnyMessage, InnerMessage, Message, Partition};
+use crate::types::{Message, Partition};
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
@@ -16,7 +16,7 @@ struct BatchState<T, TResult> {
     message_count: usize,
 }
 
-impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
+impl<T, TResult> BatchState<T, TResult> {
     fn new(
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
@@ -31,13 +31,13 @@ impl<T: Clone, TResult: Clone> BatchState<T, TResult> {
     }
 
     fn add(&mut self, message: Message<T>) {
-        let tmp = self.value.take();
-        self.value = Some((self.accumulator)(tmp.unwrap(), message.payload()));
-        self.message_count += 1;
-
         for (partition, offset) in message.committable() {
             self.offsets.insert(partition, offset);
         }
+
+        let tmp = self.value.take().unwrap();
+        self.value = Some((self.accumulator)(tmp, message.into_payload()));
+        self.message_count += 1;
     }
 }
 
@@ -51,9 +51,8 @@ pub struct Reduce<T, TResult> {
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
 }
-impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
-    for Reduce<T, TResult>
-{
+
+impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
@@ -84,24 +83,25 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
                 let next_commit = self.next_step.poll()?;
                 self.commit_request_carried_over =
                     merge_commit_request(self.commit_request_carried_over.take(), next_commit);
                 self.flush(true)?;
-                if let Some(t) = remaining {
-                    if t <= Duration::from_secs(0) {
+                if let Some(t) = timeout {
+                    if start.elapsed() > t {
                         log::warn!("Timeout reached while waiting for tasks to finish");
                         break;
                     }
-                    remaining = Some(t - start.elapsed());
                 }
             }
         } else {
             self.flush(true)?;
         }
+
+        let remaining: Option<Duration> = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
+
         let next_commit = self.next_step.join(remaining)?;
 
         Ok(merge_commit_request(
@@ -111,7 +111,7 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T>
     }
 }
 
-impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
+impl<T, TResult: Clone> Reduce<T, TResult> {
     pub fn new(
         next_step: Box<dyn ProcessingStrategy<TResult>>,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
@@ -166,12 +166,8 @@ impl<T: Clone + Send + Sync, TResult: Clone + Send + Sync> Reduce<T, TResult> {
                 BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
             );
 
-            let next_message = Message {
-                inner_message: InnerMessage::AnyMessage(AnyMessage::new(
-                    batch_state.value.unwrap(),
-                    batch_state.offsets,
-                )),
-            };
+            let next_message =
+                Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
 
             match self.next_step.submit(next_message) {
                 Err(SubmitError::MessageRejected(MessageRejected {
@@ -210,13 +206,13 @@ mod tests {
             pub submitted: Arc<Mutex<Vec<T>>>,
         }
 
-        impl<T: Clone + Send + Sync> ProcessingStrategy<T> for NextStep<T> {
+        impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 Ok(None)
             }
 
             fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-                self.submitted.lock().unwrap().push(message.payload());
+                self.submitted.lock().unwrap().push(message.into_payload());
                 Ok(())
             }
 

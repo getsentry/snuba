@@ -61,7 +61,7 @@ impl fmt::Display for Partition {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TopicOrPartition {
     Topic(Topic),
     Partition(Partition),
@@ -75,7 +75,7 @@ pub struct BrokerMessage<T> {
     pub timestamp: DateTime<Utc>,
 }
 
-impl<T: Clone> BrokerMessage<T> {
+impl<T> BrokerMessage<T> {
     pub fn new(payload: T, partition: Partition, offset: u64, timestamp: DateTime<Utc>) -> Self {
         Self {
             payload,
@@ -85,7 +85,7 @@ impl<T: Clone> BrokerMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> BrokerMessage<TReplaced> {
         BrokerMessage {
             payload: replacement,
             partition: self.partition,
@@ -93,9 +93,31 @@ impl<T: Clone> BrokerMessage<T> {
             timestamp: self.timestamp,
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<BrokerMessage<TReplaced>, E> {
+        let Self {
+            payload,
+            partition,
+            offset,
+            timestamp,
+        } = self;
+
+        let payload = f(payload)?;
+
+        Ok(BrokerMessage {
+            payload,
+            partition,
+            offset,
+            timestamp,
+        })
+    }
 }
 
-impl<T: Clone> fmt::Display for BrokerMessage<T> {
+impl<T> fmt::Display for BrokerMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -111,7 +133,7 @@ pub struct AnyMessage<T> {
     pub committable: BTreeMap<Partition, u64>,
 }
 
-impl<T: Clone> AnyMessage<T> {
+impl<T> AnyMessage<T> {
     pub fn new(payload: T, committable: BTreeMap<Partition, u64>) -> Self {
         Self {
             payload,
@@ -119,15 +141,33 @@ impl<T: Clone> AnyMessage<T> {
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> AnyMessage<TReplaced> {
         AnyMessage {
             payload: replacement,
             committable: self.committable,
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<AnyMessage<TReplaced>, E> {
+        let Self {
+            payload,
+            committable,
+        } = self;
+
+        let payload = f(payload)?;
+
+        Ok(AnyMessage {
+            payload,
+            committable,
+        })
+    }
 }
 
-impl<T: Clone> fmt::Display for AnyMessage<T> {
+impl<T> fmt::Display for AnyMessage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "AnyMessage(committable={:?})", self.committable)
     }
@@ -144,7 +184,7 @@ pub struct Message<T> {
     pub inner_message: InnerMessage<T>,
 }
 
-impl<T: Clone> Message<T> {
+impl<T> Message<T> {
     pub fn new_broker_message(
         payload: T,
         partition: Partition,
@@ -170,28 +210,37 @@ impl<T: Clone> Message<T> {
         }
     }
 
-    pub fn payload(&self) -> T {
+    pub fn payload(&self) -> &T {
         match &self.inner_message {
-            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload.clone(),
-            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload.clone(),
+            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload,
+            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload,
         }
     }
 
-    pub fn committable(&self) -> BTreeMap<Partition, u64> {
+    /// Consumes the message and returns its payload.
+    pub fn into_payload(self) -> T {
+        match self.inner_message {
+            InnerMessage::BrokerMessage(BrokerMessage { payload, .. }) => payload,
+            InnerMessage::AnyMessage(AnyMessage { payload, .. }) => payload,
+        }
+    }
+
+    /// Returns an iterator over this message's committable offsets.
+    pub fn committable(&self) -> Committable {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage {
                 partition, offset, ..
-            }) => {
-                let mut map = BTreeMap::new();
-                // TODO: Get rid of the clone
-                map.insert(*partition, offset + 1);
-                map
+            }) => Committable(CommittableInner::Broker(std::iter::once((
+                *partition,
+                offset + 1,
+            )))),
+            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
+                Committable(CommittableInner::Any(committable.iter()))
             }
-            InnerMessage::AnyMessage(AnyMessage { committable, .. }) => committable.clone(),
         }
     }
 
-    pub fn replace<TReplaced: Clone>(self, replacement: TReplaced) -> Message<TReplaced> {
+    pub fn replace<TReplaced>(self, replacement: TReplaced) -> Message<TReplaced> {
         match self.inner_message {
             InnerMessage::BrokerMessage(inner) => Message {
                 inner_message: InnerMessage::BrokerMessage(inner.replace(replacement)),
@@ -201,9 +250,26 @@ impl<T: Clone> Message<T> {
             },
         }
     }
+
+    /// Map a fallible function over this messages's payload.
+    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+        self,
+        f: F,
+    ) -> Result<Message<TReplaced>, E> {
+        match self.inner_message {
+            InnerMessage::BrokerMessage(inner) => {
+                let inner = inner.try_map(f)?;
+                Ok(inner.into())
+            }
+            InnerMessage::AnyMessage(inner) => {
+                let inner = inner.try_map(f)?;
+                Ok(inner.into())
+            }
+        }
+    }
 }
 
-impl<T: Clone> fmt::Display for Message<T> {
+impl<T> fmt::Display for Message<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner_message {
             InnerMessage::BrokerMessage(BrokerMessage {
@@ -229,6 +295,45 @@ impl<T: Clone> fmt::Display for Message<T> {
                         .join(",")
                 )
             }
+        }
+    }
+}
+
+impl<T> From<BrokerMessage<T>> for Message<T> {
+    fn from(value: BrokerMessage<T>) -> Self {
+        Self {
+            inner_message: InnerMessage::BrokerMessage(value),
+        }
+    }
+}
+
+impl<T> From<AnyMessage<T>> for Message<T> {
+    fn from(value: AnyMessage<T>) -> Self {
+        Self {
+            inner_message: InnerMessage::AnyMessage(value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum CommittableInner<'a> {
+    Any(std::collections::btree_map::Iter<'a, Partition, u64>),
+    Broker(std::iter::Once<(Partition, u64)>),
+}
+
+/// An iterator over a `Message`'s committable offsets.
+///
+/// This is produced by [`Message::committable`].
+#[derive(Debug, Clone)]
+pub struct Committable<'a>(CommittableInner<'a>);
+
+impl<'a> Iterator for Committable<'a> {
+    type Item = (Partition, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0 {
+            CommittableInner::Any(ref mut inner) => inner.next().map(|(k, v)| (*k, *v)),
+            CommittableInner::Broker(ref mut inner) => inner.next(),
         }
     }
 }

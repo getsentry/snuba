@@ -10,28 +10,31 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
-pub type RunTaskFunc<TTransformed> =
-    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>>;
+pub enum RunTaskError {
+    RetryableError,
+    InvalidMessage(InvalidMessage),
+}
 
-pub trait TaskRunner<TPayload: Clone, TTransformed: Clone + Send + Sync>: Send + Sync {
+pub type RunTaskFunc<TTransformed> =
+    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
+
+pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
-pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
+pub struct RunTaskInThreads<TPayload, TTransformed> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
     runtime: tokio::runtime::Runtime,
-    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
+    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics_buffer: MetricsBuffer,
     metric_name: String,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
-    RunTaskInThreads<TPayload, TTransformed>
-{
+impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
     pub fn new<N>(
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
@@ -62,8 +65,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
     }
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
-    ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
+impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
+    for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
@@ -103,8 +106,11 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                             }
                             Ok(_) => {}
                         },
-                        Ok(Err(e)) => {
+                        Ok(Err(RunTaskError::InvalidMessage(e))) => {
                             return Err(e);
+                        }
+                        Ok(Err(RunTaskError::RetryableError)) => {
+                            log::error!("retryable error");
                         }
                         Err(e) => {
                             log::error!("the thread crashed {}", e);
@@ -148,13 +154,11 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
-            if let Some(t) = remaining {
-                remaining = Some(t - start.elapsed());
-                if remaining.unwrap() <= Duration::from_secs(0) {
+            if let Some(t) = timeout {
+                if start.elapsed() > t {
                     log::warn!(
                         "[{}] Timeout reached while waiting for tasks to finish",
                         self.metric_name
@@ -174,6 +178,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
         self.handles.clear();
         self.metrics_buffer.flush();
+
+        let remaining = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 
@@ -211,7 +217,7 @@ mod tests {
 
         struct IdentityTaskRunner {}
 
-        impl<T: Clone + Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
+        impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
             fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
                 Box::pin(async move { Ok(message) })
             }

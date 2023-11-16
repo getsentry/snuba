@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub struct LocalBroker<TPayload: Clone> {
+pub struct LocalBroker<TPayload> {
     storage: Box<dyn MessageStorage<TPayload>>,
     clock: Box<dyn Clock>,
     offsets: HashMap<String, HashMap<Partition, u64>>,
@@ -32,7 +32,7 @@ impl From<TopicDoesNotExist> for BrokerError {
     }
 }
 
-impl<TPayload: Clone + Send> LocalBroker<TPayload> {
+impl<TPayload> LocalBroker<TPayload> {
     pub fn new(storage: Box<dyn MessageStorage<TPayload>>, clock: Box<dyn Clock>) -> Self {
         Self {
             storage,

@@ -6,7 +6,7 @@ pub mod commit_offsets;
 pub mod produce;
 pub mod reduce;
 pub mod run_task_in_threads;
-pub mod transform;
+pub mod run_task;
 
 #[derive(Debug, Clone)]
 pub enum SubmitError<T> {
@@ -35,10 +35,8 @@ impl CommitRequest {
     pub fn merge(mut self, other: CommitRequest) -> Self {
         // Merge commit requests, keeping the highest offset for each partition
         for (partition, offset) in other.positions {
-            if self.positions.contains_key(&partition) {
-                if self.positions[&partition] < offset {
-                    self.positions.insert(partition, offset);
-                }
+            if let Some(pos_offset) = self.positions.get_mut(&partition) {
+                *pos_offset = (*pos_offset).max(offset);
             } else {
                 self.positions.insert(partition, offset);
             }
@@ -67,7 +65,7 @@ pub fn merge_commit_request(
 ///
 /// This interface is intentionally not prescriptive, and affords a
 /// significant degree of flexibility for the various implementations.
-pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
+pub trait ProcessingStrategy<TPayload>: Send + Sync {
     /// Poll the processor to check on the status of asynchronous tasks or
     /// perform other scheduled work.
     ///
@@ -119,7 +117,7 @@ pub trait ProcessingStrategy<TPayload: Clone>: Send + Sync {
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
 }
 
-pub trait ProcessingStrategyFactory<TPayload: Clone>: Send + Sync {
+pub trait ProcessingStrategyFactory<TPayload>: Send + Sync {
     /// Instantiate and return a ``ProcessingStrategy`` instance.
     ///
     /// :param commit: A function that accepts a mapping of ``Partition``
