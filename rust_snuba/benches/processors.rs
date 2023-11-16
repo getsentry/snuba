@@ -7,10 +7,10 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::local::broker::LocalBroker;
 use rust_arroyo::backends::local::LocalConsumer;
 use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
-use rust_arroyo::backends::Consumer;
+use rust_arroyo::backends::{Consumer, ConsumerError};
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::StreamProcessor;
+use rust_arroyo::processing::{RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
@@ -72,8 +72,14 @@ fn run_bench(
             let mut processor = StreamProcessor::new(consumer, factory);
             processor.subscribe(topic);
 
-            for _ in 0..MSG_COUNT {
-                processor.run_once().unwrap();
+            loop {
+                let res = processor.run_once();
+                if matches!(res, Err(RunError::Poll(ConsumerError::EndOfPartition))) {
+                    // FIXME: this pretty much means that we *polled* the partition to the end,
+                    // it does not mean that we actually *committed* everything
+                    // (aka we finished actually processing everything).
+                    return;
+                }
             }
             // FIXME: this seems to deadlock?
             //processor.shutdown();
@@ -113,9 +119,10 @@ fn create_factory(
         storage,
         schema.into(),
         1_000,
-        Duration::from_millis(20),
+        Duration::from_millis(10),
         true,
         concurrency,
+        None,
         true,
     );
     Box::new(factory)
