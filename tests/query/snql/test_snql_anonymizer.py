@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -169,8 +171,7 @@ def test_format_expressions(query_body: str, expected_snql_anonymized: str) -> N
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    setattr(events_entity, "get_join_relationship", events_mock)
-
-    _, snql_anonymized = parse_snql_query(query_body, events)
+    with mock.patch.object(events_entity, "get_join_relationship", events_mock):
+        _, snql_anonymized = parse_snql_query(query_body, events)
 
     assert snql_anonymized == expected_snql_anonymized
