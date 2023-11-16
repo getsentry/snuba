@@ -75,7 +75,7 @@ impl PythonTransformStep {
             handles: VecDeque::new(),
             message_carried_over: None,
             processing_pool,
-            max_queue_depth: max_queue_depth.unwrap_or(processes)
+            max_queue_depth: max_queue_depth.unwrap_or(processes),
         })
     }
 

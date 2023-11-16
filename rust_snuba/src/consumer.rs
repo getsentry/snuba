@@ -31,7 +31,7 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
-    python_max_queue_depth: Option<usize>
+    python_max_queue_depth: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
