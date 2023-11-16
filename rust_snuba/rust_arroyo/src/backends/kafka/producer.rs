@@ -32,10 +32,15 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
             TopicOrPartition::Partition(partition) => partition.topic.as_str(),
         };
 
-        let msg_key = payload.key().unwrap();
-        let msg_payload = payload.payload().unwrap();
+        let mut base_record = BaseRecord::to(topic);
 
-        let mut base_record = BaseRecord::to(topic).payload(msg_payload).key(msg_key);
+        if let Some(msg_key) = payload.key() {
+            base_record = base_record.key(msg_key);
+        }
+
+        if let Some(msg_payload) = payload.payload() {
+            base_record = base_record.payload(msg_payload);
+        }
 
         let partition = match destination {
             TopicOrPartition::Topic(_) => None,

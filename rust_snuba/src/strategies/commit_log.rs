@@ -44,7 +44,7 @@ impl TryFrom<KafkaPayload> for Commit {
     fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
         let key = payload.key().unwrap();
 
-        let data: Vec<&str> = str::from_utf8(&key).unwrap().split(':').collect();
+        let data: Vec<&str> = str::from_utf8(key).unwrap().split(':').collect();
         if data.len() != 3 {
             return Err(CommitLogError::InvalidKey);
         }
@@ -54,7 +54,7 @@ impl TryFrom<KafkaPayload> for Commit {
         let consumer_group = data[2].to_string();
 
         let d: Payload =
-            serde_json::from_slice(&payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
+            serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
 
         Ok(Commit {
             topic,
