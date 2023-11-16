@@ -218,6 +218,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
+                for (partition, offset) in &request.positions {
+                    self.buffered_messages.pop(partition, offset - 1);
+                }
+
                 let mut consumer = self.consumer.lock().unwrap();
                 consumer.stage_offsets(request.positions).unwrap();
                 consumer.commit_offsets().unwrap();
