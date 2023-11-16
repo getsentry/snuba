@@ -8,7 +8,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -23,7 +23,7 @@ pub struct ConsumerStrategyFactory {
     max_batch_size: usize,
     max_batch_time: Duration,
     skip_write: bool,
-    concurrency: usize,
+    concurrency: ConcurrencyConfig,
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
 }
@@ -36,7 +36,7 @@ impl ConsumerStrategyFactory {
         max_batch_size: usize,
         max_batch_time: Duration,
         skip_write: bool,
-        concurrency: usize,
+        concurrency: ConcurrencyConfig,
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
     ) -> Self {
@@ -120,13 +120,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             acc
         });
 
+        let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
+            self.concurrency.concurrency,
+            self.concurrency.handle(),
+        );
         let next_step = Reduce::new(
             Box::new(ClickhouseWriterStep::new(
                 CommitOffsets::new(Duration::from_secs(1)),
                 self.storage_config.clickhouse_cluster.clone(),
                 self.storage_config.clickhouse_table_name.clone(),
                 self.skip_write,
-                2,
+                &clickhouse_concurrency,
             )),
             accumulator,
             BytesInsertBatch { rows: vec![] },
@@ -146,18 +150,18 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     RunTaskInThreads::new(
                         next_step,
                         Box::new(task_runner),
-                        self.concurrency,
+                        &self.concurrency,
                         Some("process_message"),
                     ),
                     &self.logical_topic_name,
                     false,
-                    self.concurrency,
+                    &self.concurrency,
                 ))
             }
             _ => Box::new(
                 PythonTransformStep::new(
                     self.storage_config.message_processor.clone(),
-                    self.concurrency,
+                    self.concurrency.concurrency,
                     self.python_max_queue_depth,
                     next_step,
                 )

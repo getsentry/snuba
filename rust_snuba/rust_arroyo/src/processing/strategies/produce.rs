@@ -1,7 +1,7 @@
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
 use crate::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -39,25 +39,25 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
 }
 
 pub struct Produce {
-    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
 }
 
 impl Produce {
     pub fn new<N>(
         next_step: N,
         producer: impl Producer<KafkaPayload> + 'static,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
         topic: TopicOrPartition,
     ) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ProduceMessage::new(producer, topic)),
             concurrency,
             Some("produce"),
-        ));
+        );
 
         Produce { inner }
     }
@@ -128,10 +128,11 @@ mod tests {
         }
 
         let producer: KafkaProducer = KafkaProducer::new(config);
+        let concurrency = ConcurrencyConfig::new(10);
         let mut strategy = Produce::new(
             Noop {},
             producer,
-            10,
+            &concurrency,
             TopicOrPartition::Topic(partition.topic),
         );
 

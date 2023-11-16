@@ -4,7 +4,7 @@ use std::time::Duration;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -59,7 +59,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 }
 
 pub struct ClickhouseWriterStep {
-    inner: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
 }
 
 impl ClickhouseWriterStep {
@@ -68,7 +68,7 @@ impl ClickhouseWriterStep {
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
     ) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -77,7 +77,7 @@ impl ClickhouseWriterStep {
         let http_port = cluster_config.http_port;
         let database = cluster_config.database;
 
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ClickhouseWriter::new(
                 ClickhouseClient::new(&hostname, http_port, &table, &database),
@@ -85,7 +85,7 @@ impl ClickhouseWriterStep {
             )),
             concurrency,
             Some("clickhouse"),
-        ));
+        );
 
         ClickhouseWriterStep { inner }
     }
