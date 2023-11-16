@@ -210,12 +210,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
-                self.consumer
-                    .lock()
-                    .unwrap()
-                    .stage_offsets(request.positions)
-                    .unwrap();
-                self.consumer.lock().unwrap().commit_offsets().unwrap();
+                let mut consumer = self.consumer.lock().unwrap();
+                consumer.stage_offsets(request.positions).unwrap();
+                consumer.commit_offsets().unwrap();
             }
             Err(e) => {
                 println!("TODOO: Handle invalid message {:?}", e);
@@ -235,18 +232,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             Ok(()) => {
                 // Resume if we are currently in a paused state
                 if self.is_paused {
-                    let partitions = self
-                        .consumer
-                        .lock()
-                        .unwrap()
-                        .tell()
-                        .unwrap()
-                        .keys()
-                        .cloned()
-                        .collect();
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
 
-                    let res = self.consumer.lock().unwrap().resume(partitions);
-                    match res {
+                    match consumer.resume(partitions) {
                         Ok(()) => {
                             self.is_paused = false;
                         }
@@ -288,18 +277,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         "Consumer is in backpressure state for more than 1 second, pausing",
                     );
 
-                    let partitions = self
-                        .consumer
-                        .lock()
-                        .unwrap()
-                        .tell()
-                        .unwrap()
-                        .keys()
-                        .cloned()
-                        .collect();
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
 
-                    let res = self.consumer.lock().unwrap().pause(partitions);
-                    match res {
+                    match consumer.pause(partitions) {
                         Ok(()) => {
                             self.is_paused = true;
                         }
