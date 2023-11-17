@@ -22,42 +22,46 @@ fn main() {
     divan::main();
 }
 
-const MSG_COUNT: usize = 10_000;
+const MSG_COUNT: usize = 5_000;
 
-#[divan::bench]
-fn functions(bencher: divan::Bencher) {
+#[divan::bench(consts = [1, 4, 16])]
+fn functions<const N: usize>(bencher: divan::Bencher) {
     run_bench(
         bencher,
+        N,
         functions_payload,
         "FunctionsMessageProcessor",
         "profiles-call-tree",
     );
 }
 
-#[divan::bench]
-fn profiles(bencher: divan::Bencher) {
+#[divan::bench(consts = [1, 4, 16])]
+fn profiles<const N: usize>(bencher: divan::Bencher) {
     run_bench(
         bencher,
+        N,
         profiles_payload,
         "ProfilesMessageProcessor",
         "processed-profiles",
     );
 }
 
-#[divan::bench]
-fn querylog(bencher: divan::Bencher) {
+#[divan::bench(consts = [1, 4, 16])]
+fn querylog<const N: usize>(bencher: divan::Bencher) {
     run_bench(
         bencher,
+        N,
         querylog_payload,
         "QuerylogProcessor",
         "snuba-queries",
     );
 }
 
-#[divan::bench]
-fn spans(bencher: divan::Bencher) {
+#[divan::bench(consts = [1, 4, 16])]
+fn spans<const N: usize>(bencher: divan::Bencher) {
     run_bench(
         bencher,
+        N,
         spans_payload,
         "SpansMessageProcessor",
         "snuba-spans",
@@ -66,6 +70,7 @@ fn spans(bencher: divan::Bencher) {
 
 fn run_bench(
     bencher: divan::Bencher,
+    concurrency: usize,
     make_payload: fn() -> KafkaPayload,
     processor: &str,
     schema: &str,
@@ -75,7 +80,7 @@ fn run_bench(
         .with_inputs(|| {
             (
                 create_consumer(make_payload, MSG_COUNT),
-                create_factory(processor, schema),
+                create_factory(concurrency, processor, schema),
             )
         })
         .bench_local_values(|((topic, consumer), factory)| {
@@ -104,6 +109,7 @@ static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
 });
 
 fn create_factory(
+    concurrency: usize,
     processor: &str,
     schema: &str,
 ) -> Box<dyn ProcessingStrategyFactory<KafkaPayload>> {
@@ -124,7 +130,7 @@ fn create_factory(
         },
     };
 
-    let concurrency = ConcurrencyConfig::with_runtime(16, RUNTIME.handle().to_owned());
+    let concurrency = ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
         schema.into(),
