@@ -32,6 +32,7 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
 ) {
     py.allow_threads(|| {
@@ -42,11 +43,13 @@ pub fn consumer(
             skip_write,
             concurrency,
             use_rust_processor,
+            max_poll_interval_ms,
             python_max_queue_depth,
         )
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
@@ -54,6 +57,7 @@ pub fn consumer_impl(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
 ) {
     setup_logging();
@@ -132,6 +136,7 @@ pub fn consumer_impl(
         consumer_group.to_owned(),
         auto_offset_reset.to_owned(),
         false,
+        max_poll_interval_ms,
         Some(broker_config),
     );
 

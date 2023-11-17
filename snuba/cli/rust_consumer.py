@@ -112,6 +112,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
+@click.option(
+    "--max-interval-poll-ms",
+    type=int,
+    default=30000,
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -132,6 +137,7 @@ def rust_consumer(
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     python_max_queue_depth: Optional[int],
+    max_interval_poll_ms: int,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -173,4 +179,5 @@ def rust_consumer(
         concurrency_override or concurrency or 1,
         use_rust_processor,
         python_max_queue_depth,
+        max_interval_poll_ms,
     )

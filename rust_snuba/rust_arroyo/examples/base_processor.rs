@@ -25,6 +25,7 @@ fn main() {
         "my_group".to_string(),
         "latest".to_string(),
         false,
+        30_000,
         None,
     );
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
