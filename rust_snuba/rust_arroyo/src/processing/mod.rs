@@ -71,14 +71,11 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let start = Instant::now();
 
         let mut stg = self.strategies.lock().unwrap();
-        match stg.strategy.as_mut() {
-            None => {}
-            Some(s) => {
-                s.close();
-                if let Ok(Some(commit_request)) = s.join(None) {
-                    tracing::info!("Committing offsets");
-                    commit_offsets.commit(commit_request.positions);
-                }
+        if let Some(s) = stg.strategy.as_mut() {
+            s.close();
+            if let Ok(Some(commit_request)) = s.join(None) {
+                tracing::info!("Committing offsets");
+                commit_offsets.commit(commit_request.positions);
             }
         }
         stg.strategy = None;

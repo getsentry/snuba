@@ -39,8 +39,16 @@ pub enum ProducerError {
     ProducerErrorred,
 }
 
+/// This abstracts the committing of partition offsets.
 pub trait CommitOffsets {
-    fn commit(self: Box<Self>, positions: HashMap<Partition, u64>) -> HashMap<Partition, u64>;
+    /// Commit the partition offsets stored in this object, plus the ones passed in `offsets`.
+    ///
+    /// Returns a map of all offsets that were committed. This combines [`Consumer::stage_offsets`] and
+    /// [`Consumer::commit_offsets`].
+    fn commit(
+        self: Box<Self>,
+        offsets: HashMap<Partition, u64>,
+    ) -> Result<HashMap<Partition, u64>, ConsumerError>;
 }
 
 /// This is basically an observer pattern to receive the callbacks from

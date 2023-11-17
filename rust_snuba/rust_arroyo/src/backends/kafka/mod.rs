@@ -1,5 +1,6 @@
 use super::kafka::config::KafkaConfig;
 use super::AssignmentCallbacks;
+use super::CommitOffsets;
 use super::Consumer as ArroyoConsumer;
 use super::ConsumerError;
 use crate::backends::kafka::types::KafkaPayload;
@@ -70,6 +71,36 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
+struct OffsetStage {
+    staged_offsets: HashMap<Partition, u64>,
+    consumer: Arc<Mutex<BaseConsumer<CustomContext>>>,
+}
+
+impl CommitOffsets for OffsetStage {
+    fn commit(
+        mut self: Box<Self>,
+        offsets: HashMap<Partition, u64>,
+    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
+        self.staged_offsets.extend(offsets);
+        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
+        for (partition, offset) in &self.staged_offsets {
+            partitions.add_partition_offset(
+                partition.topic.as_str(),
+                partition.index as i32,
+                Offset::from_raw(*offset as i64),
+            )?;
+        }
+
+        self.consumer
+            .lock()
+            .unwrap()
+            .commit(&partitions, CommitMode::Sync)
+            .unwrap();
+
+        Ok(self.staged_offsets)
+    }
+}
+
 pub struct CustomContext {
     callbacks: Box<dyn AssignmentCallbacks>,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
@@ -133,7 +164,7 @@ pub struct KafkaConsumer {
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    pub consumer: Option<BaseConsumer<CustomContext>>,
+    pub consumer: Option<Arc<Mutex<BaseConsumer<CustomContext>>>>,
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
@@ -170,7 +201,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
             .create_with_context(context)?;
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         consumer.subscribe(&topic_str)?;
-        self.consumer = Some(consumer);
+        self.consumer = Some(Arc::new(Mutex::new(consumer)));
         self.state = KafkaConsumerState::Consuming;
         Ok(())
     }
@@ -178,7 +209,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
         let consumer = self.consumer.as_mut().unwrap();
-        consumer.unsubscribe();
+        consumer.lock().unwrap().unsubscribe();
 
         Ok(())
     }
@@ -191,7 +222,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 
         let duration = timeout.unwrap_or(Duration::ZERO);
         let consumer = self.consumer.as_mut().unwrap();
-        let res = consumer.poll(duration);
+        let res = consumer.lock().unwrap().poll(duration);
         match res {
             None => Ok(None),
             Some(res) => {
@@ -220,7 +251,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         }
 
         let consumer = self.consumer.as_ref().unwrap();
-        consumer.pause(&topic_partition_list)?;
+        consumer.lock().unwrap().pause(&topic_partition_list)?;
 
         Ok(())
     }
@@ -237,7 +268,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         }
 
         let consumer = self.consumer.as_mut().unwrap();
-        consumer.resume(&topic_partition_list)?;
+        consumer.lock().unwrap().resume(&topic_partition_list)?;
 
         Ok(())
     }
@@ -277,7 +308,11 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         }
 
         let consumer = self.consumer.as_mut().unwrap();
-        consumer.commit(&partitions, CommitMode::Sync).unwrap();
+        consumer
+            .lock()
+            .unwrap()
+            .commit(&partitions, CommitMode::Sync)
+            .unwrap();
 
         // Clear staged offsets
         let prev_offsets = mem::take(&mut self.staged_offsets);

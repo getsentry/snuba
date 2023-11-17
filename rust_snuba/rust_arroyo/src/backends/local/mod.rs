@@ -27,18 +27,18 @@ struct SubscriptionState {
 
 struct OffsetStage<TPayload> {
     group: String,
-    staged_positions: HashMap<Partition, u64>,
+    staged_offsets: HashMap<Partition, u64>,
     broker: Arc<Mutex<LocalBroker<TPayload>>>,
 }
 
 impl<TPayload> CommitOffsets for OffsetStage<TPayload> {
-    fn commit(mut self: Box<Self>, positions: HashMap<Partition, u64>) -> HashMap<Partition, u64> {
-        self.staged_positions.extend(positions);
+    fn commit(mut self: Box<Self>, offsets: HashMap<Partition, u64>) -> HashMap<Partition, u64> {
+        self.staged_offsets.extend(offsets);
         self.broker
             .lock()
             .unwrap()
-            .commit(&self.group, self.staged_positions.clone());
-        std::mem::take(&mut self.staged_positions)
+            .commit(&self.group, self.staged_offsets.clone());
+        std::mem::take(&mut self.staged_offsets)
     }
 }
 
@@ -157,7 +157,7 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
                     if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
                         let offset_stage = OffsetStage {
                             group: self.group.clone(),
-                            staged_positions: std::mem::take(
+                            staged_offsets: std::mem::take(
                                 &mut self.subscription_state.staged_positions,
                             ),
                             broker: Arc::clone(&self.broker),
@@ -297,7 +297,7 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
         if let Some(c) = self.subscription_state.callbacks.as_mut() {
             let offset_stage = OffsetStage {
                 group: self.group.clone(),
-                staged_positions: std::mem::take(&mut self.subscription_state.staged_positions),
+                staged_offsets: std::mem::take(&mut self.subscription_state.staged_positions),
                 broker: Arc::clone(&self.broker),
             };
             c.on_revoke(Box::new(offset_stage), partitions);
