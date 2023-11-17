@@ -106,6 +106,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
+@click.option(
+    "--python-max-queue-depth",
+    type=int,
+    default=None,
+    help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -125,6 +131,7 @@ def rust_consumer(
     concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
+    python_max_queue_depth: Optional[int],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -165,4 +172,5 @@ def rust_consumer(
         skip_write,
         concurrency_override or concurrency or 1,
         use_rust_processor,
+        python_max_queue_depth,
     )

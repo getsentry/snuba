@@ -2,14 +2,17 @@ mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
-use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use thiserror::Error;
+
+use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::strategies::{MessageRejected, SubmitError};
+use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -21,11 +24,14 @@ pub struct PollError;
 #[derive(Debug, Clone)]
 pub struct PauseError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Error)]
 pub enum RunError {
+    #[error("invalid state")]
     InvalidState,
-    PollError,
-    PauseError,
+    #[error("poll error")]
+    Poll(#[source] ConsumerError),
+    #[error("pause error")]
+    Pause(#[source] ConsumerError),
 }
 
 struct Strategies<TPayload> {
@@ -61,6 +67,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         stg.strategy = Some(stg.processing_factory.create());
     }
     fn on_revoke(&self, _: Vec<Partition>) {
+        tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();
 
@@ -71,6 +78,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
                 s.close();
                 if let Ok(Some(commit_request)) = s.join(None) {
                     let mut consumer = self.consumer.lock().unwrap();
+                    tracing::info!("Committing offsets");
                     consumer.stage_offsets(commit_request.positions).unwrap();
                     consumer.commit_offsets().unwrap();
                 }
@@ -83,6 +91,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             start.elapsed().as_millis() as u64,
             None,
         );
+
+        tracing::info!("End revoke partitions");
 
         // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
@@ -185,9 +195,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
                 }
-                Err(e) => {
-                    log::error!("poll error: {}", e);
-                    return Err(RunError::PollError);
+                Err(error) => {
+                    tracing::error!(%error, "poll error");
+                    return Err(RunError::Poll(error));
                 }
             }
         }
@@ -203,12 +213,9 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
-                self.consumer
-                    .lock()
-                    .unwrap()
-                    .stage_offsets(request.positions)
-                    .unwrap();
-                self.consumer.lock().unwrap().commit_offsets().unwrap();
+                let mut consumer = self.consumer.lock().unwrap();
+                consumer.stage_offsets(request.positions).unwrap();
+                consumer.commit_offsets().unwrap();
             }
             Err(e) => {
                 println!("TODOO: Handle invalid message {:?}", e);
@@ -228,22 +235,17 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             Ok(()) => {
                 // Resume if we are currently in a paused state
                 if self.is_paused {
-                    let partitions = self
-                        .consumer
-                        .lock()
-                        .unwrap()
-                        .tell()
-                        .unwrap()
-                        .keys()
-                        .cloned()
-                        .collect();
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
 
-                    let res = self.consumer.lock().unwrap().resume(partitions);
-                    match res {
+                    match consumer.resume(partitions) {
                         Ok(()) => {
                             self.is_paused = false;
                         }
-                        Err(_) => return Err(RunError::PauseError),
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
+                        }
                     }
                 }
 
@@ -274,30 +276,27 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                         return Ok(());
                     }
 
-                    log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
+                    tracing::warn!(
+                        "Consumer is in backpressure state for more than 1 second, pausing",
+                    );
 
-                    let partitions = self
-                        .consumer
-                        .lock()
-                        .unwrap()
-                        .tell()
-                        .unwrap()
-                        .keys()
-                        .cloned()
-                        .collect();
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
 
-                    let res = self.consumer.lock().unwrap().pause(partitions);
-                    match res {
+                    match consumer.pause(partitions) {
                         Ok(()) => {
                             self.is_paused = true;
                         }
-                        Err(_) => return Err(RunError::PauseError),
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
+                        }
                     }
                 }
             }
-            Err(SubmitError::InvalidMessage(invalid_message)) => {
+            Err(SubmitError::InvalidMessage(message)) => {
                 // TODO: Put this into the DLQ once we have one
-                log::error!("Invalid message: {:?}", invalid_message);
+                tracing::error!(?message, "Invalid message");
             }
         }
         Ok(())

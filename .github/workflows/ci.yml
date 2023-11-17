@@ -89,7 +89,7 @@ jobs:
         name: Checkout code
       - name: Run linter
         run: |
-          make lint-rust
+          make lint-rust format-rust-ci
 
   typing:
     name: "mypy typing"
@@ -380,14 +380,27 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          make test-snuba
+          pytest -k 'not __In' tests \
+            -m snuba_ci \
+            -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
         # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          make test-snuba-full
+          pytest -k 'not __In' tests/snuba \
+              tests/sentry/eventstream/kafka \
+              tests/sentry/post_process_forwarder \
+              tests/sentry/snuba \
+              tests/sentry/search/events \
+              tests/sentry/event_manager \
+              -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
+
+      - name: Run CI module tests
+        if: needs.files-changed.outputs.api_changes == 'true'
+        working-directory: sentry
+        run: pytest -k 'not __In' tests -vv -m snuba_ci
 
   clickhouse-versions:
     needs: [linting, snuba-image]

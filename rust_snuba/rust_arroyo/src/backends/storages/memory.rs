@@ -49,6 +49,7 @@ impl<TPayload> TopicMessages<TPayload> {
     }
 }
 
+/// An implementation of [`MessageStorage`] that holds messages in memory.
 pub struct MemoryMessageStorage<TPayload> {
     topics: HashMap<Topic, TopicMessages<TPayload>>,
 }
@@ -71,41 +72,18 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
     }
 
     fn list_topics(&self) -> Vec<&Topic> {
-        let it = self.topics.keys();
-        let mut ret: Vec<&Topic> = Vec::new();
-        for x in it {
-            ret.push(x);
-        }
-        ret
+        self.topics.keys().collect()
     }
 
     fn delete_topic(&mut self, topic: &Topic) -> Result<(), TopicDoesNotExist> {
-        if !self.topics.contains_key(topic) {
-            return Err(TopicDoesNotExist);
-        }
-        self.topics.remove(topic);
+        self.topics.remove(topic).ok_or(TopicDoesNotExist)?;
         Ok(())
     }
 
-    fn get_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
+    fn partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
         match self.topics.get(topic) {
             Some(x) => Ok(x.partition_count()),
             None => Err(TopicDoesNotExist),
-        }
-    }
-
-    fn get_partition(&self, topic: &Topic, index: u16) -> Result<Partition, ConsumeError> {
-        let content = self
-            .topics
-            .get(topic)
-            .ok_or(ConsumeError::TopicDoesNotExist)?;
-        if content.partition_count() > index {
-            Ok(Partition {
-                topic: *topic,
-                index,
-            })
-        } else {
-            Err(ConsumeError::PartitionDoesNotExist)
         }
     }
 
@@ -114,10 +92,10 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
         partition: &Partition,
         offset: u64,
     ) -> Result<Option<BrokerMessage<TPayload>>, ConsumeError> {
-        let n_offset = usize::try_from(offset).unwrap();
+        let offset = usize::try_from(offset).unwrap();
         let messages = self.topics[&partition.topic].get_messages(partition.index)?;
-        match messages.len().cmp(&n_offset) {
-            Ordering::Greater => Ok(Some(messages[n_offset].clone())),
+        match messages.len().cmp(&offset) {
+            Ordering::Greater => Ok(Some(messages[offset].clone())),
             Ordering::Less => Err(ConsumeError::OffsetOutOfRange),
             Ordering::Equal => Ok(None),
         }
@@ -134,13 +112,9 @@ impl<TPayload: Clone + Send> MessageStorage<TPayload> for MemoryMessageStorage<T
             .get_mut(&partition.topic)
             .ok_or(ConsumeError::TopicDoesNotExist)?;
         let offset = messages.get_messages(partition.index)?.len();
-        let _ = messages.add_message(BrokerMessage::new(
-            payload,
-            *partition,
-            u64::try_from(offset).unwrap(),
-            timestamp,
-        ));
-        Ok(u64::try_from(offset).unwrap())
+        let offset = u64::try_from(offset).unwrap();
+        let _ = messages.add_message(BrokerMessage::new(payload, *partition, offset, timestamp));
+        Ok(offset)
     }
 }
 
@@ -208,7 +182,7 @@ mod tests {
         let mut m: MemoryMessageStorage<String> = Default::default();
         let _ = m.create_topic(Topic::new("test"), 16);
 
-        assert_eq!(m.get_partition_count(&Topic::new("test")).unwrap(), 16);
+        assert_eq!(m.partition_count(&Topic::new("test")).unwrap(), 16);
     }
 
     #[test]

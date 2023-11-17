@@ -34,6 +34,22 @@ TESTS = [
         SubscriptionData(
             project_id=1,
             query=(
+                "MATCH (events: events) -[attributes]-> (ga: group_attributes) "
+                "SELECT count() AS count "
+                "WHERE events.platform IN tuple('a') AND ga.group_status IN array(0)"
+            ),
+            time_window_sec=500 * 60,
+            resolution_sec=60,
+            entity=get_entity(EntityKey.EVENTS),
+            metadata={},
+        ),
+        None,
+        id="SnQL subscription",
+    ),
+    pytest.param(
+        SubscriptionData(
+            project_id=1,
+            query=(
                 "MATCH (events) "
                 "SELECT count() AS count, avg(timestamp) AS average_t "
                 "WHERE "

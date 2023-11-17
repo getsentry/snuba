@@ -5,8 +5,8 @@ use std::time::Duration;
 pub mod commit_offsets;
 pub mod produce;
 pub mod reduce;
-pub mod run_task_in_threads;
 pub mod run_task;
+pub mod run_task_in_threads;
 
 #[derive(Debug, Clone)]
 pub enum SubmitError<T> {
