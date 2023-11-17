@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
-use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -41,7 +41,6 @@ struct Strategies<TPayload> {
 
 struct Callbacks<TPayload> {
     strategies: Arc<Mutex<Strategies<TPayload>>>,
-    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +65,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&self, _: Vec<Partition>) {
+    fn on_revoke(&self, commit_offsets: Box<dyn CommitOffsets>, _: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();
@@ -77,10 +76,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             Some(s) => {
                 s.close();
                 if let Ok(Some(commit_request)) = s.join(None) {
-                    let mut consumer = self.consumer.lock().unwrap();
                     tracing::info!("Committing offsets");
-                    consumer.stage_offsets(commit_request.positions).unwrap();
-                    consumer.commit_offsets().unwrap();
+                    commit_offsets.commit(commit_request.positions);
                 }
             }
         }
@@ -99,14 +96,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
 }
 
 impl<TPayload> Callbacks<TPayload> {
-    pub fn new(
-        strategies: Arc<Mutex<Strategies<TPayload>>>,
-        consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-    ) -> Self {
-        Self {
-            strategies,
-            consumer,
-        }
+    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>) -> Self {
+        Self { strategies }
     }
 }
 
@@ -148,10 +139,8 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks: Box<dyn AssignmentCallbacks> = Box::new(Callbacks::new(
-            self.strategies.clone(),
-            self.consumer.clone(),
-        ));
+        let callbacks: Box<dyn AssignmentCallbacks> =
+            Box::new(Callbacks::new(self.strategies.clone()));
         self.consumer
             .lock()
             .unwrap()

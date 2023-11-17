@@ -96,7 +96,7 @@ impl ConsumerContext for CustomContext {
                 offsets.remove(partition);
             }
 
-            self.callbacks.on_revoke(partitions);
+            self.callbacks.on_revoke(todo!(), partitions);
         }
     }
 
@@ -280,8 +280,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         consumer.commit(&partitions, CommitMode::Sync).unwrap();
 
         // Clear staged offsets
-        let cleared_map = HashMap::new();
-        let prev_offsets = mem::replace(&mut self.staged_offsets, cleared_map);
+        let prev_offsets = mem::take(&mut self.staged_offsets);
 
         Ok(prev_offsets)
     }
@@ -300,7 +299,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 mod tests {
     use super::{AssignmentCallbacks, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
-    use crate::backends::Consumer;
+    use crate::backends::{CommitOffsets, Consumer};
     use crate::types::{Partition, Topic};
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;
@@ -312,7 +311,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: Vec<Partition>) {}
+        fn on_revoke(&self, _: Box<dyn CommitOffsets>, _: Vec<Partition>) {}
     }
 
     fn get_admin_client() -> AdminClient<DefaultClientContext> {

@@ -39,11 +39,15 @@ pub enum ProducerError {
     ProducerErrorred,
 }
 
+pub trait CommitOffsets {
+    fn commit(self: Box<Self>, positions: HashMap<Partition, u64>) -> HashMap<Partition, u64>;
+}
+
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
 pub trait AssignmentCallbacks: Send + Sync {
     fn on_assign(&self, partitions: HashMap<Partition, u64>);
-    fn on_revoke(&self, partitions: Vec<Partition>);
+    fn on_revoke(&self, commit_offsets: Box<dyn CommitOffsets>, partitions: Vec<Partition>);
 }
 
 /// This abstract class provides an interface for consuming messages from a
