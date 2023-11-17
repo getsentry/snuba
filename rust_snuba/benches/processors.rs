@@ -30,7 +30,7 @@ fn functions(bencher: divan::Bencher) {
         bencher,
         functions_payload,
         "FunctionsMessageProcessor",
-        "TODO",
+        "profiles-call-tree",
     );
 }
 
@@ -40,18 +40,28 @@ fn profiles(bencher: divan::Bencher) {
         bencher,
         profiles_payload,
         "ProfilesMessageProcessor",
-        "TODO",
+        "processed-profiles",
     );
 }
 
 #[divan::bench]
 fn querylog(bencher: divan::Bencher) {
-    run_bench(bencher, querylog_payload, "QuerylogProcessor", "TODO");
+    run_bench(
+        bencher,
+        querylog_payload,
+        "QuerylogProcessor",
+        "snuba-queries",
+    );
 }
 
 #[divan::bench]
 fn spans(bencher: divan::Bencher) {
-    run_bench(bencher, spans_payload, "SpansMessageProcessor", "TODO");
+    run_bench(
+        bencher,
+        spans_payload,
+        "SpansMessageProcessor",
+        "snuba-spans",
+    );
 }
 
 fn run_bench(
