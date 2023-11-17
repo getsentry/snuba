@@ -1,6 +1,9 @@
+import logging
+import pickle
 import zlib
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
+from random import random
 from typing import (
     Any,
     Iterable,
@@ -13,24 +16,30 @@ from typing import (
 )
 
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
+from usageaccountant import UsageUnit
 
+from snuba.cogs.accountant import record_cogs
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
+    aggregation_options_for_counter_message,
+    aggregation_options_for_distribution_message,
+    aggregation_options_for_gauge_message,
+    aggregation_options_for_set_message,
     is_counter_message,
     is_distribution_message,
+    is_gauge_message,
     is_set_message,
     value_for_counter_message,
+    value_for_gauge_message,
     values_for_distribution_message,
     values_for_set_message,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
+from snuba.state import get_config
 
-# These are the hardcoded values from the materialized view
-GRANULARITY_ONE_MINUTE = 1
-GRANULARITY_ONE_HOUR = 2
-GRANULARITY_ONE_DAY = 3
+logger = logging.getLogger(__name__)
 
 
 class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
@@ -40,6 +49,16 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
 
     @abstractmethod
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    @abstractproperty
+    def _resource_id(self) -> str:
         raise NotImplementedError
 
     #
@@ -57,7 +76,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
             buffer.extend(field.to_bytes(length=8, byteorder="little"))
-        for (key, value) in sorted_tag_items:
+        for key, value in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
             if isinstance(value, int):
                 buffer.extend(value.to_bytes(length=8, byteorder="little"))
@@ -132,14 +151,9 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
             **self._process_values(message),
-            "materialization_version": 1,
+            **self._aggregation_options(message, retention_days),
             "retention_days": retention_days,
             "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
-            "granularities": [
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
         }
         sentry_received_timestamp = None
         if message.get("sentry_received_timestamp"):
@@ -147,9 +161,19 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
                 message["sentry_received_timestamp"]
             )
 
+        self.__record_cogs(message)
         return InsertBatch(
             [processed], None, sentry_received_timestamp=sentry_received_timestamp
         )
+
+    def __record_cogs(self, message: GenericMetric) -> None:
+        if random() < (get_config("gen_metrics_processor_cogs_probability") or 0):
+            record_cogs(
+                resource_id=self._resource_id,
+                app_feature=f"genericmetrics_{message['use_case_id']}",
+                amount=len(pickle.dumps(message)),
+                usage_type=UsageUnit.BYTES,
+            )
 
 
 class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
@@ -159,6 +183,15 @@ class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_set_message(message)
 
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_set_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_sets"
+
 
 class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -167,6 +200,15 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_distribution_message(message)
 
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_distribution_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_distributions"
+
 
 class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -174,3 +216,29 @@ class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return value_for_counter_message(message)
+
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_counter_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_counters"
+
+
+class GenericGaugesMetricsProcessor(GenericMetricsBucketProcessor):
+    def _should_process(self, message: Mapping[str, Any]) -> bool:
+        return is_gauge_message(message)
+
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        return value_for_gauge_message(message)
+
+    def _aggregation_options(
+        self, message: Mapping[str, Any], retention_days: int
+    ) -> Mapping[str, Any]:
+        return aggregation_options_for_gauge_message(message, retention_days)
+
+    @property
+    def _resource_id(self) -> str:
+        return "generic_metrics_processor_gauges"

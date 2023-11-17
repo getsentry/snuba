@@ -49,7 +49,7 @@ function SnQLToSQL(props: { api: Client }) {
     }
     setIsExecuting(true);
     props.api
-      .convertSnQLQuery(snql_query as SnQLRequest)
+      .debugSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
           input_query: snql_query.query,

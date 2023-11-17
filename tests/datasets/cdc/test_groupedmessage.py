@@ -1,7 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
-import pytz
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -207,9 +206,9 @@ class TestGroupedMessage:
         "id": 74,
         "record_deleted": 0,
         "status": 0,
-        "last_seen": datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
-        "first_seen": datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        "active_at": datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
+        "last_seen": datetime(2019, 6, 19, 6, 46, 28, tzinfo=timezone.utc),
+        "first_seen": datetime(2019, 6, 19, 6, 45, 32, tzinfo=timezone.utc),
+        "active_at": datetime(2019, 6, 19, 6, 45, 32, tzinfo=timezone.utc),
         "first_release_id": None,
     }
 
@@ -226,7 +225,7 @@ class TestGroupedMessage:
     }
 
     def test_messages(self) -> None:
-        processor = GroupedMessageProcessor("sentry_groupedmessage")
+        processor = GroupedMessageProcessor()
 
         metadata = KafkaMessageMetadata(
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
@@ -234,7 +233,8 @@ class TestGroupedMessage:
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+            [self.PROCESSED],
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
         )
         write_processed_messages(self.storage, [ret])
         results = (
@@ -257,12 +257,14 @@ class TestGroupedMessage:
 
         ret = processor.process_message(self.UPDATE_MSG, metadata)
         assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+            [self.PROCESSED],
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch(
-            [self.DELETED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+            [self.DELETED],
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
         )
 
     def test_bulk_load(self) -> None:

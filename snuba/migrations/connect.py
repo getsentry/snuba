@@ -1,6 +1,6 @@
 import re
 import time
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import structlog
 from packaging import version
@@ -9,6 +9,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     CLUSTERS,
     ClickhouseClientSettings,
+    ClickhouseCluster,
     ClickhouseNode,
     UndefinedClickhouseCluster,
 )
@@ -21,17 +22,20 @@ from snuba.migrations.clickhouse import (
 )
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
 from snuba.settings import ENABLE_DEV_FEATURES
+from snuba.utils.types import ColumnStatesMapType
 
 logger = structlog.get_logger().bind(module=__name__)
 
 
-def check_clickhouse_connections() -> None:
+def check_clickhouse_connections(
+    clusters: Sequence[ClickhouseCluster] = CLUSTERS,
+) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
     attempts = 0
 
-    for cluster in CLUSTERS:
+    for cluster in clusters:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         while True:
@@ -78,12 +82,11 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
         )
 
 
-def check_for_inactive_replicas() -> None:
+def _get_all_storage_keys() -> Sequence[StorageKey]:
     """
-    Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
+    Returns all storage keys that are not part of a dev storage set.
     """
-
-    storage_keys = [
+    return [
         storage_key
         for storage_key in sorted(
             get_all_storage_keys(), key=lambda storage_key: storage_key.value
@@ -92,22 +95,44 @@ def check_for_inactive_replicas() -> None:
         or ENABLE_DEV_FEATURES
     ]
 
+
+def _get_all_nodes_for_storage(
+    storage_key: StorageKey,
+) -> Tuple[Sequence[ClickhouseNode], Sequence[ClickhouseNode], ClickhouseNode]:
+    """
+    Returns all nodes for a given storage key.
+    """
+    storage = get_storage(storage_key)
+    cluster = storage.get_cluster()
+    query_node = cluster.get_query_node()
+    if storage_key == StorageKey.DISCOVER:
+        local_nodes: Sequence[ClickhouseNode] = []
+        distributed_nodes: Sequence[ClickhouseNode] = []
+    else:
+        local_nodes = cluster.get_local_nodes()
+        distributed_nodes = cluster.get_distributed_nodes()
+
+    return (local_nodes, distributed_nodes, query_node)
+
+
+def check_for_inactive_replicas() -> None:
+    """
+    Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
+    """
+
+    storage_keys = _get_all_storage_keys()
+
     checked_nodes = set()
     inactive_replica_info = []
     for storage_key in storage_keys:
-        storage = get_storage(storage_key)
         try:
+            local_nodes, distributed_nodes, query_node = _get_all_nodes_for_storage(
+                storage_key
+            )
+            storage = get_storage(storage_key)
             cluster = storage.get_cluster()
         except UndefinedClickhouseCluster:
             continue
-
-        query_node = cluster.get_query_node()
-        if storage_key == StorageKey.DISCOVER:
-            local_nodes: Sequence[ClickhouseNode] = []
-            distributed_nodes: Sequence[ClickhouseNode] = []
-        else:
-            local_nodes = cluster.get_local_nodes()
-            distributed_nodes = cluster.get_distributed_nodes()
 
         for node in (*local_nodes, *distributed_nodes, query_node):
             if (node.host_name, node.port) in checked_nodes:
@@ -128,3 +153,39 @@ def check_for_inactive_replicas() -> None:
 
     if inactive_replica_info:
         raise InactiveClickhouseReplica("\n".join(sorted(set(inactive_replica_info))))
+
+
+def get_column_states() -> ColumnStatesMapType:
+    """
+    For every node in the cluster, get the current type of the columns.
+    Passing on this information to the migrations will allow them to
+    check for dangerous migrations
+    """
+    storage_keys = _get_all_storage_keys()
+    column_states: ColumnStatesMapType = {}
+    checked_nodes = set()
+    for storage_key in storage_keys:
+        try:
+            local_nodes, distributed_nodes, query_node = _get_all_nodes_for_storage(
+                storage_key
+            )
+            storage = get_storage(storage_key)
+            cluster = storage.get_cluster()
+        except UndefinedClickhouseCluster:
+            continue
+        for node in (*local_nodes, *distributed_nodes, query_node):
+            if (node.host_name, node.port) in checked_nodes:
+                continue
+            checked_nodes.add((node.host_name, node.port))
+
+            conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            column_types = conn.execute(
+                "SELECT table, name, type FROM system.columns "
+                f"WHERE database='{conn.database}'",
+            ).results
+
+            for row in column_types:
+                table, col_name, type = row
+                column_states[(node.host_name, node.port, table, col_name)] = type
+
+    return column_states

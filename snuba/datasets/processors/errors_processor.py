@@ -46,8 +46,15 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorsProcessor(DatasetMessageProcessor):
-    def __init__(self, promoted_tag_columns: Mapping[str, str]):
-        self._promoted_tag_columns = promoted_tag_columns
+    def __init__(self) -> None:
+        self._promoted_tag_columns = {
+            "environment": "environment",
+            "sentry:release": "release",
+            "sentry:dist": "dist",
+            "sentry:user": "user",
+            "transaction": "transaction_name",
+            "level": "level",
+        }
 
     def process_message(
         self,
@@ -73,7 +80,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], None)
+            return InsertBatch([row], row["received"])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])

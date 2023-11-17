@@ -76,6 +76,14 @@ schema:
   dist_table_name: spans_dist
   partition_format: [retention_days, date]
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -92,7 +100,7 @@ query_processors:
       columns: [transaction_id, trace_id]
   - processor: HexIntColumnProcessor
     args:
-      columns: [span_id, parent_span_id, segment_id, group]
+      columns: [span_id, parent_span_id, segment_id, group, group_raw]
   - processor: MappingOptimizer
     args:
       column_name: tags
@@ -124,6 +132,5 @@ mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor:
-    name: SpansMessageProcessor
-  default_topic: transactions
+  processor: SpansMessageProcessor
+  default_topic: snuba-spans

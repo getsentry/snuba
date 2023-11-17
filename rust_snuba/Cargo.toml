@@ -5,6 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = ["rust_arroyo"]
+
+[features]
+ffi = ["pyo3/extension-module"]
+
 [lib]
 # The name of the native library. This is the name which will be used in Python to import the
 # library (i.e. `import string_sum`). If you change this, you must also change the name of the
@@ -15,15 +21,28 @@ name = "rust_snuba"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = "1.0.69"
-rust_arroyo = { path = "./rust_arroyo" }
-serde_yaml = "0.9.19"
-tokio = { version = "1.19.2", features = ["full"] }
-log = "0.4"
-env_logger = "0.10.0"
-serde = { version = "1.0", features = ["derive"]}
-serde_json = { version = "1.0" }
-glob = "0.3.1"
-pyo3 = { version = "0.18.1", features = ["chrono", "extension-module"] }
+anyhow = { version = "1.0.69", features = ["backtrace"] }
+cadence = "0.29.1"
+chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = "3.2.5"
-sentry = "0.31.0"
+futures = "0.3.21"
+glob = "0.3.1"
+procspawn = { version = "0.10.2", features = ["json"] }
+pyo3 = { version = "0.18.1", features = ["chrono"] }
+reqwest = "0.11.11"
+rust_arroyo = { path = "./rust_arroyo" }
+sentry = { version = "0.31.0", features = ["anyhow", "tracing"] }
+sentry-kafka-schemas = "0.1.32"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+serde_yaml = "0.9.19"
+thiserror = "1.0"
+tokio = { version = "1.19.2", features = ["full"] }
+statsdproxy = { version = "0.1.0", features = ["cadence"], git = "https://github.com/getsentry/statsdproxy", default-features = false }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+uuid = "1.5.0"
+
+[dev-dependencies]
+procspawn = { version = "0.10.2", features = ["test-support", "json"] }
+pyo3 = { version = "*", features = ["auto-initialize"] }

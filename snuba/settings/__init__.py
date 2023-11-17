@@ -55,6 +55,13 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
 )
 
+ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ROLES_REDIS_TTL = 600
+
+# All available regions where region is:
+# https://snuba-admin.<region>.getsentry.net/
+ADMIN_REGIONS: Sequence[str] = []
+
 ######################
 # End Admin Settings #
 ######################
@@ -97,6 +104,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "group_attributes",
+            "generic_metrics_gauges",
         },
         "single_node": True,
     },
@@ -154,6 +163,7 @@ class RedisClusters(TypedDict):
     config: RedisClusterConfig | None
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
+    admin_auth: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -164,6 +174,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "config": None,
     "dlq": None,
     "optimize": None,
+    "admin_auth": None,
 }
 
 # Query Recording Options
@@ -180,6 +191,7 @@ SENTRY_TRACE_SAMPLE_RATE = 0
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
 SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
+STARFISH_SLACK_CHANNEL_ID = os.environ.get("STARFISH_SLACK_CHANNEL_ID")
 
 # Snuba Options
 
@@ -187,6 +199,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
+
 
 # Processor/Writer Options
 
@@ -245,11 +258,26 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# Capacity Management
+# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
+# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
+# available for single tenant since we can enable/disable policies at runtime there.
+ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
+
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation
 # policy code, the request will still be able to go through (but it will create a dangerous
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
+# By default, the readthrough cache won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache
+# the request will still be able to go through as if the cache did not exist
+RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
+
+# List of referrers not to look in or cache results for. Queries with these referrers generally
+# require live and up to date data, so caching should be avoided entirely.
+BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
 # (logical topic name, # of partitions)
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
@@ -311,6 +339,11 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
 
 # Enable spans ingestion
 ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
+
+# Enable group attributes consumer
+ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
+    "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
+)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.

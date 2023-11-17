@@ -10,13 +10,11 @@ import CapacityManagement from "./capacity_management";
 import DeadLetterQueue from "./dead_letter_queue";
 import CardinalityAnalyzer from "./cardinality_analyzer";
 import ProductionQueries from "./production_queries";
-
-function Placeholder(props: any) {
-  return null;
-}
+import SnubaExplain from "./snuba_explain";
+import Welcome from "./welcome";
 
 const NAV_ITEMS = [
-  { id: "overview", display: "🤿 Snuba Admin", component: Placeholder },
+  { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "capacity-management",
@@ -27,6 +25,11 @@ const NAV_ITEMS = [
     id: "snql-to-sql",
     display: "🌐 SnQL to SQL",
     component: SnQLToSQL,
+  },
+  {
+    id: "snuba-explain",
+    display: "🩺 Snubsplain",
+    component: SnubaExplain,
   },
   {
     id: "clickhouse",
@@ -65,7 +68,7 @@ const NAV_ITEMS = [
   },
   {
     id: "cardinality-analyzer",
-    display: "🔢Cardinality Analyzer!!!",
+    display: "🔢 Cardinality Analyzer!!!",
     component: CardinalityAnalyzer,
   },
   {

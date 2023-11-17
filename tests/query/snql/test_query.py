@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 
 import pytest
 
@@ -1140,11 +1141,11 @@ test_cases = [
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee),
             (e: events) -[bookmark]-> (gm: groupedmessage),
-            (e: events) -[activity]-> (se: sessions)
+            (e: events) -[activity]-> (se: metrics_sets)
         SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
         WHERE {build_cond('e')} AND {build_cond('t')}
         AND se.org_id = 1 AND se.project_id = 1
-        AND se.started >= toDateTime('2021-01-01') AND se.started < toDateTime('2021-01-02')""",
+        AND se.timestamp >= toDateTime('2021-01-01') AND se.timestamp < toDateTime('2021-01-02')""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -1160,8 +1161,8 @@ test_cases = [
                             right_node=IndividualNode(
                                 "se",
                                 QueryEntity(
-                                    EntityKey.SESSIONS,
-                                    get_entity(EntityKey.SESSIONS).get_data_model(),
+                                    EntityKey.METRICS_SETS,
+                                    get_entity(EntityKey.METRICS_SETS).get_data_model(),
                                 ),
                             ),
                             keys=[
@@ -1297,9 +1298,9 @@ test_cases = [
                                                 binary_condition(
                                                     "greaterOrEquals",
                                                     Column(
-                                                        "_snuba_se.started",
+                                                        "_snuba_se.timestamp",
                                                         "se",
-                                                        "started",
+                                                        "timestamp",
                                                     ),
                                                     Literal(
                                                         None,
@@ -1311,9 +1312,9 @@ test_cases = [
                                                 binary_condition(
                                                     "less",
                                                     Column(
-                                                        "_snuba_se.started",
+                                                        "_snuba_se.timestamp",
                                                         "se",
-                                                        "started",
+                                                        "timestamp",
                                                     ),
                                                     Literal(
                                                         None,
@@ -1962,7 +1963,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
         "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
-        "activity": (EntityKey.SESSIONS, "org_id"),
+        "activity": (EntityKey.METRICS_SETS, "org_id"),
     }
 
     def events_mock(relationship: str) -> JoinRelationship:
@@ -1975,9 +1976,9 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    setattr(events_entity, "get_join_relationship", events_mock)
 
-    query, _ = parse_snql_query(query_body, events)
+    with mock.patch.object(events_entity, "get_join_relationship", events_mock):
+        query, _ = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

@@ -3,10 +3,11 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Type, cast
+from typing import Any, List, Mapping, Optional, Sequence, Type
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.registered_class import RegisteredClass
 from snuba.writer import WriterTableRow
 
@@ -71,22 +72,10 @@ class CdcMessageRow(ABC):
         raise NotImplementedError
 
 
-class CdcProcessor(MessageProcessor, metaclass=RegisteredClass):
+class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
     def __init__(self, pg_table: str, message_row_class: Type[CdcMessageRow]):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
-
-    @classmethod
-    def get_from_name(cls, name: str) -> Type["CdcProcessor"]:
-        return cast(Type["CdcProcessor"], cls.class_from_name(name))
-
-    @classmethod
-    def from_kwargs(cls, **kwargs: str) -> CdcProcessor:
-        return cls(**kwargs)  # type: ignore
-
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
 
     def _process_begin(self, offset: int) -> Sequence[WriterTableRow]:
         return []

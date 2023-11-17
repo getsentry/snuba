@@ -5,8 +5,6 @@ import QueryDisplay from "./query_display";
 import { QueryResult, PredefinedQuery } from "./types";
 
 function ClickhouseQueries(props: { api: Client }) {
-  const [predefinedQuery, setPredefinedQuery] =
-    useState<PredefinedQuery | null>(null);
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
   >([]);
@@ -31,19 +29,6 @@ function ClickhouseQueries(props: { api: Client }) {
     );
   }
 
-  function updatePredefinedQuery(queryName: string) {
-    const selectedQuery = predefinedQueryOptions.find(
-      (query) => query.name === queryName
-    );
-    if (selectedQuery) {
-      setPredefinedQuery(() => {
-        return {
-          ...selectedQuery,
-        };
-      });
-    }
-  }
-
   function formatSQL(sql: string) {
     const formatted = sql
       .split("\n")
@@ -54,28 +39,10 @@ function ClickhouseQueries(props: { api: Client }) {
 
   return (
     <div>
-      <div>
-        <form>
-          <select
-            value={predefinedQuery?.name || ""}
-            onChange={(evt) => updatePredefinedQuery(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a predefined query
-            </option>
-            {predefinedQueryOptions.map((option: PredefinedQuery) => (
-              <option key={option.name} value={option.name}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </form>
-      </div>
       {QueryDisplay({
         api: props.api,
         resultDataPopulator: tablePopulator,
-        predefinedQuery: predefinedQuery,
+        predefinedQueryOptions: predefinedQueryOptions,
       })}
     </div>
   );

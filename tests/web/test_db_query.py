@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
@@ -26,14 +26,9 @@ from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import (
-    _apply_thread_quota_to_clickhouse_query_settings,
-    _get_query_settings_from_config,
-    db_query,
-)
+from snuba.web.db_query import _get_query_settings_from_config, db_query
 
 test_data = [
     pytest.param(
@@ -47,6 +42,8 @@ test_data = [
             "max_threads": 10,
             "merge_tree_max_rows_to_use_cache": 50000,
         },
+        None,
+        False,
         None,
         id="no override when query settings prefix empty",
     ),
@@ -62,6 +59,8 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 50000,
         },
         "other-query-prefix",
+        False,
+        None,
         id="no override for different query prefix",
     ),
     pytest.param(
@@ -76,53 +75,131 @@ test_data = [
             "merge_tree_max_rows_to_use_cache": 100000,
         },
         "some-query-prefix",
+        False,
+        None,
         id="override for same query prefix",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        None,
+        True,
+        None,
+        id="no override when no async settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 20,
+            "merge_tree_max_rows_to_use_cache": 50000,
+        },
+        "other-query-prefix",
+        True,
+        None,
+        id="override for async settings with no prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        None,
+        id="no override for async settings with prefix override",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "referrer/some-referrer/query_settings/max_read_replicas": 4,
+        },
+        {
+            "max_threads": 10,
+            "merge_tree_max_rows_to_use_cache": 50000,
+            "max_read_replicas": 4,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override does its job",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 30,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-referrer",
+        id="referrer override takes precedence over all other settings",
+    ),
+    pytest.param(
+        {
+            "query_settings/max_threads": 10,
+            "query_settings/merge_tree_max_rows_to_use_cache": 50000,
+            "some-query-prefix/query_settings/max_threads": 5,
+            "some-query-prefix/query_settings/merge_tree_max_rows_to_use_cache": 100000,
+            "async_query_settings/max_threads": 20,
+            "referrer/some-referrer/query_settings/max_threads": 30,
+        },
+        {
+            "max_threads": 5,
+            "merge_tree_max_rows_to_use_cache": 100000,
+        },
+        "some-query-prefix",
+        True,
+        "some-other-referrer",
+        id="referrer override does not apply to other referrers",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_config,expected,query_prefix", test_data)
+@pytest.mark.parametrize(
+    "query_config,expected,query_prefix,async_override,referrer", test_data
+)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
     query_prefix: Optional[str],
+    async_override: bool,
+    referrer: str,
 ) -> None:
     for k, v in query_config.items():
         state.set_config(k, v)
-    assert _get_query_settings_from_config(query_prefix) == expected
-
-
-test_thread_quota_data = [
-    pytest.param(
-        [],
-        ResourceQuota(max_threads=5),
-        RateLimitStats(rate=1, concurrent=1),
-        {"max_threads": 5},
-        id="only thread quota",
+    assert (
+        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
+        == expected
     )
-]
-
-
-@pytest.mark.parametrize(
-    "rate_limit_params,resource_quota,rate_limit_stats,expected_query_settings",
-    test_thread_quota_data,
-)
-def test_apply_thread_quota(
-    rate_limit_params: Sequence[RateLimitParameters],
-    resource_quota: ResourceQuota,
-    rate_limit_stats: RateLimitStats,
-    expected_query_settings: Mapping[str, Any],
-) -> None:
-    settings = HTTPQuerySettings()
-    for rlimit in rate_limit_params:
-        settings.add_rate_limit(rlimit)
-    settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings: dict[str, Any] = {}
-    _apply_thread_quota_to_clickhouse_query_settings(
-        settings, clickhouse_query_settings, rate_limit_stats
-    )
-    assert clickhouse_query_settings == expected_query_settings
 
 
 def _build_test_query(
@@ -183,7 +260,12 @@ def test_db_query_success() -> None:
             "can_run": True,
             "explanation": {},
             "max_threads": 10,
-        }
+        },
+        "ConcurrentRateLimitAllocationPolicy": {
+            "can_run": True,
+            "explanation": {},
+            "max_threads": 10,
+        },
     }
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
@@ -191,6 +273,7 @@ def test_db_query_success() -> None:
     assert set(result.result["profile"].keys()) == {  # type: ignore
         "elapsed",
         "bytes",
+        "progress_bytes",
         "blocks",
         "rows",
     }
@@ -198,19 +281,32 @@ def test_db_query_success() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_db_query_bypass_cache() -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("bypass_readthrough_cache_probability.errors_local", 0.3)
+def test_bypass_cache_referrer() -> None:
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
 
-    # cache should not be used for the errors table
-    # so if the bypass does not work, the test will try to
-    # use a bad cache
-    with mock.patch("snuba.web.db_query._get_cache_partition"):
-        # random() is less than `bypass_readthrough_cache_probability` therefore we bypass the cache
-        with mock.patch("snuba.web.db_query.random", return_value=0.2):
+    state.set_config("enable_bypass_cache_referrers", 1)
+
+    attribution_info = AttributionInfo(
+        app_id=AppID(key="key"),
+        tenant_ids={
+            "referrer": "some_bypass_cache_referrer",
+            "organization_id": 1234,
+        },
+        referrer="some_bypass_cache_referrer",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
+
+    # cache should not be used for "some_bypass_cache_referrer" so if the
+    # bypass does not work, the test will try to use a bad cache
+    with mock.patch(
+        "snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]
+    ):
+        with mock.patch("snuba.web.db_query._get_cache_partition"):
             result = db_query(
                 clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
@@ -229,7 +325,12 @@ def test_db_query_bypass_cache() -> None:
                     "can_run": True,
                     "explanation": {},
                     "max_threads": 10,
-                }
+                },
+                "ConcurrentRateLimitAllocationPolicy": {
+                    "can_run": True,
+                    "explanation": {},
+                    "max_threads": 10,
+                },
             }
             assert len(query_metadata_list) == 1
             assert result.extra["stats"] == stats
@@ -237,6 +338,7 @@ def test_db_query_bypass_cache() -> None:
             assert set(result.result["profile"].keys()) == {  # type: ignore
                 "elapsed",
                 "bytes",
+                "progress_bytes",
                 "blocks",
                 "rows",
             }
@@ -273,12 +375,15 @@ def test_db_query_fail() -> None:
 def test_db_query_with_rejecting_allocation_policy() -> None:
     # this test does not need the db or a query because the allocation policy
     # should reject the query before it gets to execution
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
+    update_called = False
+
     class RejectAllocationPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=False,
@@ -289,8 +394,11 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
+            nonlocal update_called
+            update_called = True
             return
 
     with mock.patch(
@@ -303,12 +411,12 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
             db_query(
-                clickhouse_query=mock.Mock(),
+                clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
                 attribution_info=mock.Mock(),
                 dataset_name="events",
                 query_metadata_list=query_metadata_list,
-                formatted_query=mock.Mock(),
+                formatted_query=format_query(query),
                 reader=mock.Mock(),
                 timer=Timer("foo"),
                 stats=stats,
@@ -329,9 +437,13 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             ]["reason"]
             == "policy rejects all queries"
         )
+        assert query_metadata_list[0].request_status.status.value == "rate-limited"
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
+        assert (
+            update_called
+        ), "update_quota_balance should have been called even though the query was rejected but was not"
 
 
 @pytest.mark.clickhouse_db
@@ -344,7 +456,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=True,
@@ -355,13 +467,14 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             return
 
     class ThreadLimitPolicyDuplicate(ThreadLimitPolicy):
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(
                 can_run=True,
@@ -412,7 +525,7 @@ def test_allocation_policy_updates_quota() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
             if queries_run + 1 > MAX_QUERIES_TO_RUN:
@@ -426,6 +539,7 @@ def test_allocation_policy_updates_quota() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run
@@ -438,7 +552,7 @@ def test_allocation_policy_updates_quota() -> None:
             return []
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
             if queries_run_duplicate + 1 > MAX_QUERIES_TO_RUN:
@@ -454,6 +568,7 @@ def test_allocation_policy_updates_quota() -> None:
         def _update_quota_balance(
             self,
             tenant_ids: dict[str, str | int],
+            query_id: str,
             result_or_error: QueryResultOrError,
         ) -> None:
             nonlocal queries_run_duplicate
@@ -551,3 +666,29 @@ def test_clickhouse_settings_applied_to_query() -> None:
         "group_by_overflow_mode" in clickhouse_settings_used
         and clickhouse_settings_used["group_by_overflow_mode"] == "any"
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_db_query_ignore_consistent() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(consistent=True),
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+    assert result.extra["stats"]["consistent"] is False
+    assert result.extra["stats"]["max_threads"] == 10

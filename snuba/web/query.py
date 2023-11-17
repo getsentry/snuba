@@ -34,6 +34,7 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.subscriptions.data import SUBSCRIPTION_REFERRER
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
@@ -196,7 +197,8 @@ def _run_query_pipeline(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
 
-    record_missing_tenant_ids(request)
+    record_missing_use_case_id(request, dataset)
+    record_subscription_created_missing_tenant_ids(request)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -205,20 +207,45 @@ def _run_query_pipeline(
     )
 
 
-def record_missing_tenant_ids(request: Request) -> None:
+def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
     """
-    Used to track how often the new `tenant_ids` field is not included in
-    a Snuba Request. Ideally, all requests contain this information and this
-    metric will be removed once all API calls from Sentry do include this info.
+    Used to track how often the new `use_case_id` Tenant ID is not included in
+    a Generic Metrics request.
     """
-    if (
-        not (tenant_ids := request.attribution_info.tenant_ids)
-        or tenant_ids.get("referrer") is None
-        or tenant_ids.get("organization_id") is None
-    ):
-        metrics.increment(
-            "request_without_tenant_ids", tags={"referrer": request.referrer}
-        )
+    if get_dataset_name(dataset) == "generic_metrics":
+        if (
+            not (tenant_ids := request.attribution_info.tenant_ids)
+            or (use_case_id := tenant_ids.get("use_case_id")) is None
+        ):
+            metrics.increment(
+                "gen_metrics_request_without_use_case_id",
+                tags={"referrer": request.referrer},
+            )
+        else:
+            metrics.increment(
+                "gen_metrics_request_with_use_case_id",
+                tags={
+                    "referrer": request.referrer,
+                    "use_case_id": str(use_case_id),
+                },
+            )
+
+
+def record_subscription_created_missing_tenant_ids(request: Request) -> None:
+    """
+    Used to track how often new subscriptions are created without Tenant IDs.
+    """
+    if request.referrer == SUBSCRIPTION_REFERRER:
+        if not (tenant_ids := request.attribution_info.tenant_ids):
+            metrics.increment("subscription_created_without_tenant_ids")
+        else:
+            metrics.increment(
+                "subscription_created_with_tenant_ids",
+                tags={
+                    "use_case_id": str(tenant_ids.get("use_case_id")),
+                    "has_org_id": str(tenant_ids.get("organization_id") is not None),
+                },
+            )
 
 
 def _dry_run_query_runner(
@@ -230,7 +257,9 @@ def _dry_run_query_runner(
     # you will only see the sql reported that the first of the split queries ran. Since this returns
     # no results, you won't see any others
 
-    with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
+    with sentry_sdk.start_span(
+        description="dryrun_create_query", op="function"
+    ) as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
@@ -313,7 +342,7 @@ def _format_storage_query_and_run(
     visitor = TablesCollector()
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
-    with sentry_sdk.start_span(description="create_query", op="db") as span:
+    with sentry_sdk.start_span(description="create_query", op="function") as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
@@ -323,9 +352,17 @@ def _format_storage_query_and_run(
         span.set_data(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)
         )  # To avoid the query being truncated
+        span.set_data("table", table_names)
         span.set_data("query_size_bytes", query_size_bytes)
         sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
-        metrics.increment("execute")
+        metrics.increment(
+            "execute",
+            tags={
+                "table": table_names,
+                "referrer": attribution_info.referrer,
+                "dataset": query_metadata.dataset,
+            },
+        )
 
     timer.mark("prepare_query")
 
@@ -352,7 +389,7 @@ def _format_storage_query_and_run(
                 experiments=clickhouse_query.get_experiments(),
             ),
         ) from cause
-    with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
+    with sentry_sdk.start_span(description=formatted_sql, op="function") as span:
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:

@@ -84,6 +84,15 @@ The `snuba migrations` CLI tool should be used to manage migrations.
 - Force must be used if the migration is already marked completed
 - The `--dry-run` option can be used to simply print migration's SQL to stdout (note: not for Python migrations)
 
+
+### Fake a migration(s)
+
+`snuba migrations migrate --fake`
+
+* will update the status for all migrations in the `migrations_local` table to be completed
+* if faking a blocking migration, use `--force` as well
+* if faking a specific migration, use the `snuba migrations run` command with `--fake`, and it will only update the status for that migration
+
 ### Adding a new node
 
 `snuba migrations add-node --type <type> --storage-set <storage_sets>`

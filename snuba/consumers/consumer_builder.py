@@ -68,11 +68,17 @@ class ConsumerBuilder:
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
+        max_insert_batch_size: Optional[int],
+        max_insert_batch_time_ms: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int],
-        join_timeout: Optional[int],
+        join_timeout: Optional[float],
+        enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
+        health_check_file: Optional[str] = None,
+        group_instance_id: Optional[str] = None,
+        skip_write: bool = False,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -83,6 +89,8 @@ class ConsumerBuilder:
         self.__consumer_config = consumer_config
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
+        self.__enforce_schema = enforce_schema
+        self.__skip_write = skip_write
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -130,6 +138,8 @@ class ConsumerBuilder:
         self.metrics = metrics
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
+        self.max_insert_batch_size = max_insert_batch_size
+        self.max_insert_batch_time_ms = max_insert_batch_time_ms
         self.group_id = kafka_params.group_id
         self.auto_offset_reset = kafka_params.auto_offset_reset
         self.strict_offset_reset = kafka_params.strict_offset_reset
@@ -140,12 +150,15 @@ class ConsumerBuilder:
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
+        self.health_check_file = health_check_file
+        self.group_instance_id = group_instance_id
 
         self.dlq_producer: Optional[KafkaProducer] = None
 
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        input_topic: Topic,
         dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
 
@@ -160,6 +173,13 @@ class ConsumerBuilder:
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+            # HACK: If the max poll interval is less than 45 seconds, set the session timeout
+            # to the same. (it's default is 45 seconds and it must be <= to max.poll.interval.ms)
+            if self.max_poll_interval_ms < 45000:
+                configuration["session.timeout.ms"] = self.max_poll_interval_ms
+
+        if self.group_instance_id is not None:
+            configuration["group.instance.id"] = self.group_instance_id
 
         def log_general_error(e: KafkaError) -> None:
             with configure_scope() as scope:
@@ -179,8 +199,9 @@ class ConsumerBuilder:
 
         return StreamProcessor(
             consumer,
-            self.raw_topic,
+            input_topic,
             strategy_factory,
+            # We already debounce commits by batch sizes, ONCE_PER_SECOND just adds more lag.
             IMMEDIATE,
             dlq_policy=dlq_policy,
             join_timeout=self.join_timeout,
@@ -212,6 +233,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -223,10 +245,15 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
+            health_check_file=self.health_check_file,
+            skip_write=self.__skip_write,
         )
 
         if self.__profile_path is not None:
@@ -264,6 +291,7 @@ class ConsumerBuilder:
                 processor,
                 self.consumer_group,
                 logical_topic,
+                self.__enforce_schema,
             ),
             collector=build_batch_writer(
                 table_writer,
@@ -275,6 +303,9 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            max_insert_batch_size=self.max_insert_batch_size,
+            max_insert_batch_time=self.max_insert_batch_time_ms
+            and self.max_insert_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
@@ -299,7 +330,9 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(
-            self.build_streaming_strategy_factory(), self.__build_default_dlq_policy()
+            self.build_streaming_strategy_factory(),
+            self.raw_topic,
+            self.__build_default_dlq_policy(),
         )
 
     def build_dlq_consumer(
@@ -325,8 +358,13 @@ class ConsumerBuilder:
         else:
             raise ValueError("Invalid DLQ policy")
 
+        dlq_topic = self.__consumer_config.dlq_topic
+        assert dlq_topic is not None
+
         return self.__build_consumer(
-            self.build_dlq_strategy_factory(instruction), dlq_policy
+            self.build_dlq_strategy_factory(instruction),
+            Topic(dlq_topic.physical_topic_name),
+            dlq_policy,
         )
 
     def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
@@ -346,7 +384,10 @@ class ConsumerBuilder:
                     self.dlq_producer,
                     Topic(self.__consumer_config.dlq_topic.physical_topic_name),
                 ),
-                DlqLimit(),
+                DlqLimit(
+                    max_invalid_ratio=0.01,
+                    max_consecutive_count=1000,
+                ),
                 None,
             )
         else:

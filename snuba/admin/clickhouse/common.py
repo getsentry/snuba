@@ -73,7 +73,11 @@ def get_ro_node_connection(
         ClickhouseClientSettings.QUERY,
         ClickhouseClientSettings.QUERYLOG,
         ClickhouseClientSettings.TRACING,
-    }, "admin can only use QUERY, QUERYLOG, or TRACING ClickhouseClientSettings"
+        ClickhouseClientSettings.CARDINALITY_ANALYZER,
+    }, (
+        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
+        "ClickhouseClientSettings"
+    )
 
     if (
         client_settings == ClickhouseClientSettings.QUERY

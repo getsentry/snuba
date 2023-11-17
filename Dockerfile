@@ -1,6 +1,6 @@
-ARG PYTHON_VERSION=3.8.16
+ARG PYTHON_VERSION=3.8.18
 
-FROM python:${PYTHON_VERSION}-slim-bullseye as build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -49,11 +49,7 @@ RUN set -ex; \
     mkdir -p /var/lib/uwsgi; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
     # TODO: https://github.com/lincolnloop/pyuwsgi-wheels/pull/17
-    python -c 'import os, sys; sys.setdlopenflags(sys.getdlopenflags() | os.RTLD_GLOBAL); import pyuwsgi; pyuwsgi.run()' --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
-    \
-    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
-    rm /tmp/build-deps.txt; \
-    rm -rf /var/lib/apt/lists/*;
+    python -c 'import os, sys; sys.setdlopenflags(sys.getdlopenflags() | os.RTLD_GLOBAL); import pyuwsgi; pyuwsgi.run()' --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null
 
 # We assume that compared to snuba codebase, the Rust consumer is the least likely to get
 # changed. We do need requirements.txt installed though, so we cannot use the
@@ -66,7 +62,7 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba
-ARG RUST_TOOLCHAIN=1.68
+ARG RUST_TOOLCHAIN=1.72
 ARG SHOULD_BUILD_RUST=true
 
 COPY ./rust_snuba/ ./rust_snuba/
@@ -103,7 +99,7 @@ RUN set -ex; \
 
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
-FROM base AS application
+FROM base AS application_base
 COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
@@ -119,6 +115,19 @@ RUN set -ex; \
     pip install -e .; \
     snuba --help
 
+USER snuba
+EXPOSE 1218 1219
+ENTRYPOINT [ "./docker_entrypoint.sh" ]
+CMD [ "api" ]
+
+FROM application_base as application
+USER 0
+RUN set -ex; \
+    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
+    rm /tmp/build-deps.txt; \
+    rm -rf /var/lib/apt/lists/*;
+USER snuba
+
 ARG SOURCE_COMMIT
 ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
@@ -129,13 +138,14 @@ ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
-USER snuba
-EXPOSE 1218 1219
-ENTRYPOINT [ "./docker_entrypoint.sh" ]
-CMD [ "api" ]
 
-FROM application AS testing
+FROM application_base AS testing
 
 USER 0
 RUN pip install -r requirements-test.txt
+
+ARG RUST_TOOLCHAIN=1.72
+COPY ./rust_snuba/ ./rust_snuba/
+RUN bash -c "set -o pipefail && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y"
+ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba

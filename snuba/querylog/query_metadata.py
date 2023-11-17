@@ -3,14 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, MutableSequence, Optional, Set
+from typing import Any, Dict, MutableSequence, Optional, Set, cast
 
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import StorageNotAvailable
+from snuba.query.exceptions import InvalidQueryException
 from snuba.request import Request
+from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
@@ -123,7 +125,9 @@ def get_request_status(cause: Exception | None = None) -> Status:
         slo_status = RequestStatus.CACHE_SET_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
-    elif isinstance(cause, StorageNotAvailable):
+    elif isinstance(
+        cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
+    ):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
@@ -201,7 +205,7 @@ class ClickhouseQueryMetadata:
             "sql_anonymized": self.sql_anonymized,
             "start_timestamp": start,
             "end_timestamp": end,
-            "stats": self.stats,
+            "stats": cast(snuba_queries_v1._QueryMetadataStats, self.stats),
             "status": self.status.value,
             "request_status": self.request_status.status.value,
             "slo": self.request_status.slo.value,
@@ -252,9 +256,9 @@ class SnubaQueryMetadata:
             "snql_anonymized": self.snql_anonymized,
         }
         # TODO: Remove check once Org IDs are required
-        if org_id := self.request.attribution_info.tenant_ids.get("organization_id"):
-            if isinstance(org_id, int):
-                request_dict["organization"] = org_id
+        org_id = self.request.attribution_info.tenant_ids.get("organization_id")
+        if org_id is not None and isinstance(org_id, int):
+            request_dict["organization"] = org_id
         return request_dict
 
     @property

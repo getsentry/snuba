@@ -97,11 +97,22 @@ class QuotaAllowance:
     # because I don't know what exactly should go in it yet
     explanation: dict[str, Any]
 
-    def __lt__(self, other: QuotaAllowance) -> bool:
-        return self.max_threads < other.max_threads
-
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def __lt__(self, other: QuotaAllowance) -> bool:
+        if self.can_run and not other.can_run:
+            return False
+        return self.max_threads < other.max_threads
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, QuotaAllowance):
+            return False
+        return (
+            self.can_run == other.can_run
+            and self.max_threads == other.max_threads
+            and self.explanation == other.explanation
+        )
 
 
 class AllocationPolicyViolation(SerializableException):
@@ -177,7 +188,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>     # Use your configs in the following methods
 
         >>>     def _get_quota_allowance(
-        >>>         self, tenant_ids: dict[str, str | int]
+        >>>         self, tenant_ids: dict[str, str | int], query_id: str
         >>>     ) -> QuotaAllowance:
         >>>         # before a query is run on clickhouse, make a decision whether it can be run and with
         >>>         # how many threads
@@ -186,6 +197,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>>     def _update_quota_balance(
         >>>         self,
         >>>         tenant_ids: dict[str, str | int],
+        >>>         query_id: str
         >>>         result_or_error: QueryResultOrError,
         >>>     ) -> None:
         >>>         # after the query has been run, update whatever this allocation policy
@@ -197,10 +209,11 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         >>> policy = MyAllocationPolicy(
         >>>     StorageKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
         >>> )
-        >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"})
+        >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"}, query_id="deadbeef")
         >>> result = run_db_query(allowance)
         >>> policy.update_quota_balance(
         >>>     tenant_ids={"organization_id": 1234, "referrer": "myreferrer"},
+        >>>     query_id="deadbeef",
         >>>     QueryResultOrError(result=result)
         >>> )
 
@@ -395,7 +408,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_enforced(self) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED))
+        return (
+            bool(self.get_config_value(IS_ENFORCED))
+            and settings.ENFORCE_BYTES_SCANNED_WINDOW_POLICY
+        )
 
     @property
     def max_threads(self) -> int:
@@ -420,6 +436,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             and self._storage_key == other._storage_key
             and self._required_tenant_types == other._required_tenant_types
         )
+
+    def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
+        return bool(tenant_ids.get("cross_org_query", False))
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
@@ -675,37 +694,60 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         try:
             if not self.is_active:
                 allowance = QuotaAllowance(True, self.max_threads, {})
             else:
-                allowance = self._get_quota_allowance(tenant_ids)
+                allowance = self._get_quota_allowance(tenant_ids, query_id)
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
             if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                 raise
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids)
+            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
         if not allowance.can_run:
-            raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
+            self.metrics.increment(
+                "db_request_rejected",
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+            if self.is_enforced:
+                raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
+        elif allowance.max_threads < self.max_threads:
+            # NOTE: The elif is very intentional here. Don't count the throttling
+            # if the request was rejected.
+            self.metrics.increment(
+                "db_request_throttled",
+                tags={
+                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                    "max_threads": str(allowance.max_threads),
+                },
+            )
+        if not self.is_enforced:
+            return QuotaAllowance(True, self.max_threads, {})
         return allowance
 
     @abstractmethod
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         pass
 
     def update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
             if not self.is_active:
                 return
-            return self._update_quota_balance(tenant_ids, result_or_error)
+            return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except Exception:
+            # FIXME: Remove this
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
@@ -716,6 +758,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
@@ -725,7 +768,9 @@ class PassthroughPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=True, max_threads=self.max_threads, explanation={}
         )
@@ -733,6 +778,7 @@ class PassthroughPolicy(AllocationPolicy):
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         pass

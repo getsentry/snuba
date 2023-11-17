@@ -204,6 +204,7 @@ schema:
       type: UInt,
       args: { schema_modifiers: [nullable], size: 64 },
     },
+    { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
   ]
 required_time_column: timestamp
 storages:

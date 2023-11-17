@@ -1,7 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
-import pytz
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -137,7 +136,7 @@ class TestGroupassignee:
         "record_deleted": 0,
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=timezone.utc),
     }
 
     PROCESSED_UPDATE = {
@@ -147,7 +146,7 @@ class TestGroupassignee:
         "record_deleted": 0,
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=timezone.utc),
     }
 
     DELETED = {
@@ -161,7 +160,7 @@ class TestGroupassignee:
     }
 
     def test_messages(self) -> None:
-        processor = GroupAssigneeProcessor("sentry_groupasignee")
+        processor = GroupAssigneeProcessor()
 
         metadata = KafkaMessageMetadata(
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
@@ -169,7 +168,8 @@ class TestGroupassignee:
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=pytz.UTC)
+            [self.PROCESSED],
+            datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=timezone.utc),
         )
         write_processed_messages(self.storage, [ret])
         results = (
@@ -190,7 +190,8 @@ class TestGroupassignee:
 
         ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
         assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC)
+            [self.PROCESSED],
+            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=timezone.utc),
         )
 
         # Tests an update with key change which becomes a two inserts:
@@ -198,12 +199,13 @@ class TestGroupassignee:
         ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
         assert ret == InsertBatch(
             [self.DELETED, self.PROCESSED_UPDATE],
-            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC),
+            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=timezone.utc),
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch(
-            [self.DELETED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+            [self.DELETED],
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
         )
 
     def test_bulk_load(self) -> None:

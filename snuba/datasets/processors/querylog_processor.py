@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
-from sentry_kafka_schemas.schema_types.snuba_queries_v1 import (
-    ClickhouseQueryProfile,
-    Querylog,
-    QueryMetadata,
-)
+from sentry_kafka_schemas.schema_types.snuba_queries_v1 import Querylog, QueryMetadata
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
@@ -23,7 +19,7 @@ metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 class QuerylogProcessor(DatasetMessageProcessor):
     def __to_json_string(self, map: Mapping[str, Any]) -> str:
-        return json.dumps({k: v for k, v in sorted(map.items())})
+        return json.dumps({k: v for k, v in sorted(map.items())}, separators=(",", ":"))
 
     def __get_sample(self, sample: Union[int, float]) -> float:
         """
@@ -66,32 +62,23 @@ class QuerylogProcessor(DatasetMessageProcessor):
             trace_id.append(str(uuid.UUID(query["trace_id"])))
             stats.append(self.__to_json_string(query["stats"]))
             final.append(int(query["stats"].get("final") or 0))
-            cache_hit.append(int(query["stats"].get("cache_hit") or 0))
-            sample.append(query["stats"].get("sample") or 0)
+            cache_hit.append(int(query["stats"].get("cache_hit", 0) or 0))
+            sample.append(float(query["stats"].get("sample", 0.0) or 0.0))
             max_threads.append(query["stats"].get("max_threads") or 0)
             clickhouse_table.append(query["stats"].get("clickhouse_table") or "")
             query_id.append(query["stats"].get("query_id") or "")
             # XXX: ``is_duplicate`` is currently not set when using the
             # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
-            consistent.append(int(query["stats"].get("consistent") or 0))
-            fallback_profile: ClickhouseQueryProfile = {
-                "time_range": 0,
-                "all_columns": [],
-                "multi_level_condition": False,
-                "where_profile": {"columns": [], "mapping_cols": []},
-                "groupby_cols": [],
-                "array_join_cols": [],
-            }
-            profile = query.get("profile") or fallback_profile
-
+            consistent.append(int(query["stats"].get("consistent", 0) or 0))
+            profile = query["profile"]
             result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
             num_days.append(
                 time_range if time_range is not None and time_range >= 0 else 0
             )
-            all_columns.append(profile.get("all_columns") or [])
-            or_conditions.append(profile["multi_level_condition"])
+            all_columns.append(profile["all_columns"])
+            or_conditions.append(int(profile["multi_level_condition"]))
             where_columns.append(profile["where_profile"]["columns"])
             where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
             groupby_columns.append(profile["groupby_cols"])
@@ -146,6 +133,10 @@ class QuerylogProcessor(DatasetMessageProcessor):
                 continue
             valid_project_ids.append(pid)
         processed["projects"] = valid_project_ids
+        org_id = processed["organization"]
+        if org_id is not None and org_id <= 0:
+            logger.warning(f"Invalid Org ID in Querylog message: {org_id}", processed)
+            processed["organization"] = 0
 
     def process_message(
         self, message: Querylog, metadata: KafkaMessageMetadata
@@ -157,32 +148,11 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "dataset": message["dataset"],
             "projects": message.get("projects") or [],
             "organization": message.get("organization"),
+            "status": message["status"],
+            "timestamp": message["timing"]["timestamp"],
+            "duration_ms": message["timing"]["duration_ms"],
             **self.__extract_query_list(message["query_list"]),
         }
         self._remove_invalid_data(processed)
 
-        # These fields are sometimes missing from the payload. If they are missing, don't
-        # add them to processed so Clickhouse sets a default value for them.
-        missing_fields: MutableMapping[str, Any] = {}
-        timing = message.get("timing") or {}
-        if timing.get("timestamp") is not None:
-            missing_fields["timestamp"] = timing["timestamp"]
-        if timing.get("duration_ms") is not None:
-            missing_fields["duration_ms"] = timing["duration_ms"]
-        if message.get("status") is not None:
-            missing_fields["status"] = message["status"]
-
-        missing_keys = set(["timestamp", "duration_ms", "status"])
-        for key, val in missing_fields.items():
-            if key in processed:
-                missing_keys.remove(key)
-            elif val is not None:
-                processed[key] = val
-                missing_keys.remove(key)
-
-        if missing_keys:
-            metrics.increment(
-                "process.missing_fields",
-                tags={"fields": ",".join(sorted(missing_keys))},
-            )
         return InsertBatch([processed], None)

@@ -171,6 +171,12 @@ class ReplaysLoader(DirectoryLoader):
             "0008_add_sample_rate",
             "0009_add_dom_index_columns",
             "0010_add_nullable_columns",
+            "0011_add_is_dead_rage",
+            "0012_materialize_counts",
+            "0013_add_low_cardinality_codecs",
+            "0014_add_id_event_columns",
+            "0015_index_frequently_accessed_columns",
+            "0016_materialize_new_event_counts",
         ]
 
 
@@ -294,6 +300,19 @@ class GenericMetricsLoader(DirectoryLoader):
             "0011_counters_raw_table",
             "0012_counters_mv",
             "0013_distributions_dist_tags_hash",
+            "0014_distribution_add_options",
+            "0015_sets_add_options",
+            "0016_counters_add_options",
+            "0017_distributions_mv2",
+            "0018_sets_update_opt_default",
+            "0019_counters_update_opt_default",
+            "0020_sets_mv2",
+            "0021_counters_mv2",
+            "0022_gauges_aggregate_table",
+            "0023_gauges_raw_table",
+            "0024_gauges_mv",
+            "0025_counters_add_raw_tags_hash_column",
+            "0026_gauges_add_raw_tags_hash_column",
         ]
 
 
@@ -325,4 +344,16 @@ class SpansLoader(DirectoryLoader):
             "0002_spans_add_tags_hashmap",
             "0003_spans_add_ms_columns",
             "0004_spans_group_raw_col",
+            "0005_spans_add_sentry_tags",
+            "0006_spans_add_profile_id",
+        ]
+
+
+class GroupAttributesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.group_attributes")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_group_attributes",
         ]

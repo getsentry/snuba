@@ -16,12 +16,14 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
+from py._path.local import LocalPath
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
+from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
@@ -29,7 +31,6 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend
 
@@ -37,7 +38,7 @@ commit_codec = CommitCodec()
 
 
 @pytest.mark.redis_db
-def test_scheduler_consumer() -> None:
+def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
@@ -90,8 +91,8 @@ def test_scheduler_consumer() -> None:
         False,
         60 * 5,
         None,
-        None,
         metrics_backend,
+        health_check_file=(tmpdir / "health.txt").strpath,
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -99,7 +100,7 @@ def test_scheduler_consumer() -> None:
     scheduler._run_once()
     scheduler._run_once()
 
-    epoch = datetime(1970, 1, 1)
+    epoch = 1000
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
@@ -107,11 +108,11 @@ def test_scheduler_consumer() -> None:
         )
     )
 
-    for (partition, offset, orig_message_ts) in [
+    for (partition, offset, ts) in [
         (0, 0, epoch),
-        (1, 0, epoch + timedelta(minutes=1)),
-        (0, 1, epoch + timedelta(minutes=2)),
-        (1, 1, epoch + timedelta(minutes=3)),
+        (1, 0, epoch + 60),
+        (0, 1, epoch + 120),
+        (1, 1, epoch + 180),
     ]:
         fut = producer.produce(
             commit_log_topic,
@@ -120,7 +121,8 @@ def test_scheduler_consumer() -> None:
                     "events",
                     Partition(commit_log_topic, partition),
                     offset,
-                    orig_message_ts,
+                    ts,
+                    ts,
                 )
             ),
         )
@@ -133,6 +135,7 @@ def test_scheduler_consumer() -> None:
 
     scheduler._shutdown()
 
+    assert (tmpdir / "health.txt").check()
     assert mock_scheduler_producer.produce.call_count == 2
 
     settings.TOPIC_PARTITION_COUNTS = {}
@@ -141,11 +144,11 @@ def test_scheduler_consumer() -> None:
 def test_tick_time_shift() -> None:
     partition = 0
     offsets = Interval(0, 1)
-    tick = Tick(
-        partition, offsets, Interval(datetime(1970, 1, 1), datetime(1970, 1, 2))
-    )
-    assert tick.time_shift(timedelta(hours=24)) == Tick(
-        partition, offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
+    tick = Tick(partition, offsets, Interval(0, 60 * 60 * 24))
+    assert tick.time_shift(timedelta(hours=24).total_seconds()) == Tick(
+        partition,
+        offsets,
+        Interval(datetime(1970, 1, 2).timestamp(), datetime(1970, 1, 3).timestamp()),
     )
 
 
@@ -173,7 +176,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
         for offset in offsets:
             payload = commit_codec.encode(
                 Commit(
-                    followed_consumer_group, Partition(topic, partition), offset, epoch
+                    followed_consumer_group,
+                    Partition(topic, partition),
+                    offset,
+                    epoch.timestamp(),
+                    epoch.timestamp(),
                 )
             )
             producer.produce(Partition(topic, 0), payload).result()
@@ -181,7 +188,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     inner_consumer = broker.get_consumer("group")
 
     consumer = CommitLogTickConsumer(
-        inner_consumer, followed_consumer_group, time_shift=time_shift
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        "orig_message_ts",
+        time_shift=time_shift,
     )
 
     if time_shift is None:
@@ -206,9 +217,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 1
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(0, 1),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         1,
         epoch,
@@ -220,9 +233,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 2
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         2,
         epoch,
@@ -261,9 +276,11 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
     # consume 0, 2
     assert consumer.poll() == BrokerValue(
-        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch.timestamp(), epoch.timestamp()),
+        ).time_shift(time_shift.total_seconds()),
         Partition(topic, 0),
         2,
         epoch,
@@ -293,7 +310,12 @@ def test_tick_consumer_non_monotonic() -> None:
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+    consumer = CommitLogTickConsumer(
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        "orig_message_ts",
+    )
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
@@ -305,7 +327,15 @@ def test_tick_consumer_non_monotonic() -> None:
 
     producer.produce(
         partition,
-        commit_codec.encode(Commit(followed_consumer_group, partition, 0, epoch)),
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                0,
+                epoch.timestamp(),
+                epoch.timestamp(),
+            )
+        ),
     ).result()
 
     clock.sleep(1)
@@ -313,7 +343,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 1, epoch + timedelta(seconds=1))
+            Commit(
+                followed_consumer_group,
+                partition,
+                1,
+                epoch.timestamp() + 1,
+                epoch.timestamp() + 1,
+            )
         ),
     ).result()
 
@@ -327,7 +363,7 @@ def test_tick_consumer_non_monotonic() -> None:
             Tick(
                 0,
                 offsets=Interval(0, 1),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 1),
             ),
             partition,
             1,
@@ -338,7 +374,15 @@ def test_tick_consumer_non_monotonic() -> None:
 
     producer.produce(
         partition,
-        commit_codec.encode(Commit(followed_consumer_group, partition, 2, epoch)),
+        commit_codec.encode(
+            Commit(
+                followed_consumer_group,
+                partition,
+                2,
+                epoch.timestamp(),
+                epoch.timestamp(),
+            )
+        ),
     ).result()
 
     with assert_changes(consumer.tell, {partition: 2}, {partition: 3}):
@@ -349,7 +393,13 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit(followed_consumer_group, partition, 3, epoch + timedelta(seconds=2))
+            Commit(
+                followed_consumer_group,
+                partition,
+                3,
+                epoch.timestamp() + 2,
+                epoch.timestamp() + 2,
+            )
         ),
     ).result()
 
@@ -358,9 +408,7 @@ def test_tick_consumer_non_monotonic() -> None:
             Tick(
                 0,
                 offsets=Interval(1, 3),
-                timestamps=Interval(
-                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
-                ),
+                timestamps=Interval(epoch.timestamp() + 1, epoch.timestamp() + 2),
             ),
             partition,
             3,
@@ -382,7 +430,12 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+    consumer = CommitLogTickConsumer(
+        inner_consumer,
+        followed_consumer_group,
+        TestingMetricsBackend(),
+        "orig_message_ts",
+    )
 
     now = datetime.now()
 
@@ -415,7 +468,8 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
                 followed_consumer_group,
                 partition,
                 5,
-                now,
+                now.timestamp(),
+                now.timestamp(),
             )
         ),
     ).result()
@@ -427,7 +481,8 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
                 followed_consumer_group,
                 partition,
                 4,
-                now - timedelta(seconds=2),
+                now.timestamp() - 2,
+                now.timestamp() - 2,
             )
         ),
     ).result()

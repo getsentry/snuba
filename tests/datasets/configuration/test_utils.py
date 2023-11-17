@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from fastjsonschema.exceptions import JsonSchemaValueException
 
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.storage_builder import build_stream_loader
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
-from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericSetsMetricsProcessor,
 )
-from snuba.processor import ProcessedMessage
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -21,9 +16,7 @@ from snuba.utils.streams.topics import Topic
 def test_build_stream_loader() -> None:
     loader = build_stream_loader(
         {
-            "processor": {
-                "name": "GenericSetsMetricsProcessor",
-            },
+            "processor": "GenericSetsMetricsProcessor",
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
                 "type": "KafkaHeaderSelectFilter",
@@ -31,6 +24,8 @@ def test_build_stream_loader() -> None:
             },
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
+            "subscription_synchronization_timestamp": "orig_message_ts",
+            "subscription_delay_seconds": 60,
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_topic": "snuba-dead-letter-generic-metrics",
@@ -61,41 +56,6 @@ def test_build_stream_loader() -> None:
         dlq_topic_spec is not None
         and dlq_topic_spec.topic == Topic.DEAD_LETTER_GENERIC_METRICS
     )
-
-
-def test_stream_loader_processor_init_arg() -> None:
-    class TestProcessor(DatasetMessageProcessor):
-        def __init__(self, value: int) -> None:
-            self.value = value
-
-        def process_message(
-            self, message: Any, metadata: KafkaMessageMetadata
-        ) -> ProcessedMessage | None:
-            raise NotImplementedError
-
-    loader = build_stream_loader(
-        {
-            "processor": {
-                "name": "TestProcessor",
-                "args": {"value": 6},
-            },
-            "default_topic": "snuba-generic-metrics",
-            "pre_filter": {
-                "type": "KafkaHeaderSelectFilter",
-                "args": {"header_key": "metric_type", "header_value": "s"},
-            },
-            "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
-            "subscription_scheduler_mode": "global",
-            "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
-            "subscription_result_topic": "generic-metrics-subscription-results",
-            "dlq_policy": {
-                "topic": "snuba-dead-letter-generic-metrics",
-            },
-        }
-    )
-
-    assert isinstance(loader.get_processor(), TestProcessor)
-    assert getattr(loader.get_processor(), "value") == 6
 
 
 def test_invalid_storage() -> None:

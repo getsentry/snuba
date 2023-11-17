@@ -1,5 +1,280 @@
 # Changelog
 
+## 23.11.0
+
+### Various fixes & improvements
+
+- Move `SchemaValidator` into async task  (#5037) by @Swatinem
+- Micro-optimize `ClickhouseWriter` (#5035) by @Swatinem
+- ref(rust): Add source information to `RunError` (#5034) by @loewenheim
+- fix(cli): Remove misleading defaults (#4837) by @untitaker
+- Remove `BadMessage` in favor of `anyhow::Error` (#5032) by @Swatinem
+- Remove some unused Send/Sync bounds (#5029) by @loewenheim
+- Use more early-returns (#5023) by @Swatinem
+- ref(rust): Fix inconsistency in metrics trait (#5027) by @lynnagara
+- feat(rust): Add strategy that produces the commit log topic (#4976) by @lynnagara
+- chore(rust): Move common functionality out (#5026) by @nikhars
+- ref(rust): Rename Transform to RunTask (#5021) by @lynnagara
+- Avoid Mutex on `AssignmentCallbacks` (#5025) by @Swatinem
+- ref: Remove most Clone bounds (#5020) by @loewenheim
+- feat(rust): Port the buffered messages class to Rust (#4993) by @lynnagara
+- fix(migration): move metrics migration into the right place (#5007) by @volokluev
+- feat(settings): Allow runtime configurable referrer overrides (#5005) by @nikhars
+- Optimize subset checks (#5018) by @Swatinem
+- ref: Rename and simplify TopicContent struct (#5017) by @loewenheim
+- Intern `Topic` and make it `Copy` (#5016) by @Swatinem
+- Avoid intermediate `HashMap` in TopicPartitionList (#5015) by @Swatinem
+- Give `Topic` and `Partition` a `new` fn (#5014) by @Swatinem
+- Apply clippy suggestions (#5008) by @Swatinem
+- ref: rust-rdkafka 0.36 (#5004) by @lynnagara
+- fix(metrics): add _raw_tags_hash column to distributed table (counters) (#4998) by @volokluev
+
+_Plus 75 more_
+
+## 23.10.1
+
+### Various fixes & improvements
+
+- feat(cardinality): Cardinalily analysis reporting (#4893) by @nikhars
+- ref(rust): Skip procspawn::init() if pure rust (#4899) by @lynnagara
+- fix(rust): Fix the consumer pause condition when backpressure happens (#4898) by @lynnagara
+- fix(clickhouse-v23.3): Fix function tuple can't have lambda expression as arguments bug (#4853) by @enochtangg
+- feat(subscriptions): Record received_p99 - take 2 (#4894) by @lynnagara
+- fix: fix 0001_functions and 0001_querylog for clickhouse 23 (#4842) by @untitaker
+- feat: Squash errors migrations (#4854) by @lynnagara
+- Revert "feat: Write received_p99 to commit log (#4872)" (2d3fc182) by @getsentry-bot
+- feat: Write received_p99 to commit log (#4872) by @lynnagara
+- feat(rust): Update all dependencies in lockfile (#4892) by @lynnagara
+- feat(generic-metrics): Add gauges storage set locally (#4888) by @ayirr7
+- deps: bump node to 20.8.1 (#4884) by @mdtro
+- feat(CoGS): Record bytes scanned for Generic Metrics queries by use case (#4748) by @rahul-kumar-saini
+- ref: bump sentry-arroyo to 2.14.13 (#4887) by @getsentry-bot
+- lint(generic-metrics): Remove feature flag for gen-metrics counters mat view version (#4891) by @john-z-yang
+- feat(subscriptions): Add mechanism for storage to define timestamp used for scheduling (#4873) by @lynnagara
+- configure dependabot and dependency review (#4885) by @mdtro
+- fix: Log step name in run_task_in_threads (#4875) by @untitaker
+- bump to debian 12 and configure dependabot for docker + gh actions (#4874) by @mdtro
+- ref(23.3) Fix test so it runs on 23.3 (#4863) by @evanh
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4869) by @john-z-yang
+- feat: Make subscription scheduler invalid interval a metric not warning (#4855) by @lynnagara
+- feat(generic-metrics): Add new mat view for generic counter metrics (#4867) by @john-z-yang
+- lint(generic-metrics): Remove feature flag for gen-metrics sets mat view version (#4866) by @john-z-yang
+
+_Plus 1 more_
+
+## 23.10.0
+
+### Various fixes & improvements
+
+- feat(slack): Allow sending files in slack client (#4865) by @nikhars
+- ref: Simplify collector / processed message batch writer (#4848) by @lynnagara
+- deploy static experimental consumers with statefulsets (#4856) by @dbanda
+- feat: Mark first migration blocking (#4849) by @lynnagara
+- deploy to experimental static membership consumers (#4851) by @dbanda
+- feat: Reduce more logging (#4852) by @lynnagara
+- test: Run full Sentry test suite if any migrations changed (#4850) by @lynnagara
+- feat(generic-metrics): Bump `materialization_version` for generic sets metrics to 2 (#4820) by @john-z-yang
+- feat(generic-metrics): Add new mat view for generic set metrics (#4803) by @john-z-yang
+- feat(generic-metrics): Write `retention_days` to `min_retention_days` columns for sets and counters (#4819) by @john-z-yang
+- docs(migrations): document --fake (#4844) by @MeredithAnya
+- remove `--force` from ST migrations (#4840) by @dbanda
+- Add 10s granularity to generic metrics granularity processors (#4834) by @ayirr7
+- fix: Fix rust logging setup and sentry integration (#4843) by @untitaker
+- Upgrade Python to 3.8.18 (#4841) by @oioki
+- feat: Reduce logging in Rust consumers (#4845) by @lynnagara
+- fix(slack): Allow slack to talk to different channels. (#4810) by @nikhars
+- fix(dlq): Add sane defaults to the dlq policy (#4817) by @nikhars
+- fix(cardinality-analyzer): Add more storage keys to cardinality analyzer (#4839) by @john-z-yang
+- fix: Fix committing in the no-skip-write python consumer (#4838) by @lynnagara
+- ref(spans): Refactor spans Rust processor (#4833) by @phacops
+- fix(spans): Handle null and no tags values (#4830) by @phacops
+- ref: bump sentry-arroyo to 2.14.12 (#4829) by @getsentry-bot
+- fix: deploy new dummy rust consumers (#4828) by @untitaker
+
+_Plus 65 more_
+
+## 23.9.1
+
+### Various fixes & improvements
+
+- feat(spans): Port the processor to Rust (#4712) by @john-z-yang
+- meta: Bump new development version (2432b27d)
+
+## 23.9.0
+
+### Various fixes & improvements
+
+- feat(rust): Add processor metrics for Rust consumer (#4737) by @lynnagara
+- feat: metrics.increment() no longer supports option (#4738) by @lynnagara
+- ref: bump sentry-kafka-schemas to 0.1.27 (#4739) by @getsentry-bot
+- Update snuba-sdk version to latest 2.0.1 (#4735) by @enochtangg
+- make sure possible API changes are tested against sentry (#4736) by @volokluev
+- test: Run different Sentry tests depending on files changed (#4727) by @lynnagara
+- fix(ci): no more sentry shards (#4725) by @joshuarli
+- fix(CI): Unblock deploys as they hard check for sentry matrix'd tests (#4724) by @rahul-kumar-saini
+- fix(on-call): Negative org ID in Tenant IDs crashes Querylog consumer (#4722) by @rahul-kumar-saini
+- ref: bump sentry-kafka-schemas to 0.1.26 (#4721) by @getsentry-bot
+- test: No need to run Sentry CI in a matrix (#4720) by @lynnagara
+- Use snuba-admin spec for ST and SaaS (#4716) by @dbanda
+- feat(rust-arroyo): Processor calls consumer.poll() with timeout of 1 second (#4719) by @lynnagara
+- experiment(on-call): Profile bytes scanned potentially incorrect (#4714) by @rahul-kumar-saini
+- feat(reduce): Avoid clone and ensure all messages are processed in join (#4718) by @lynnagara
+- improvement(visibility): make the replacer log project_ids for slow replacements (#4717) by @onewland
+- feat(profiling): Add a functions processor in Rust (#4705) by @phacops
+- fix(spans): Handle bad group and group_raw values (#4715) by @phacops
+- feat(profiling): Add a profiles processor in Rust (#4698) by @phacops
+- Remove canary deploys in non-US regions (#4696) by @mattgauntseo-sentry
+- feat(spans): write tags to sentry_tags col (#4706) by @dbanda
+- sort lists before compare (#4711) by @dbanda
+- fix(rust-arroyo): Fix timeout in RunTaskInThreads::join() (#4704) by @lynnagara
+- ref(rust): Rewrite check_for_results to use better way of joining process pool (#4703) by @untitaker
+
+_Plus 78 more_
+
+## 23.8.0
+
+### Various fixes & improvements
+
+- fix(Cache): Cache fail open on ValueError (#4615) by @rahul-kumar-saini
+- feat(replays): Add low cardinality encoding to select columns (#4601) by @cmanallen
+- feat: Group the validation warnings for each topic separately (#4570) by @lynnagara
+- fix(oncall): Query execution dataset metric tag (#4608) by @rahul-kumar-saini
+- feat(replays): Add materialized counts for array columns (#4603) by @cmanallen
+- search_issues -> group_attributes join relationship (#4588) by @barkbarkimashark
+- feat(async-queries): Add ability to override query settings for async queries (#4584) by @davidtsuk
+- ref: bump sentry-kafka-schemas to 0.1.25 (#4610) by @getsentry-bot
+- fix(ci): improve caching (#4521) by @dbanda
+- feat(replay): pass start_time as received header (#4548) by @bmckerry
+- fix(capman): rate limit overrides should not collide (#4604) by @volokluev
+- feat(db_query): Randomized Query IDs (#4605) by @rahul-kumar-saini
+- Remove the test regions from rollbacks (#4599) by @mattgauntseo-sentry
+- feat(capman): implement rate limit overrides (#4563) by @volokluev
+- pass through subscriptions for new concurrent rate limiter (#4587) by @volokluev
+- ci: only render gocd pipelines if relevant files are changed (#4591) by @joshuarli
+- bump readiness (#4590) by @barkbarkimashark
+- meta: Bump new development version (e7d99451)
+
+## 23.7.2
+
+### Various fixes & improvements
+
+- feat(group_attributes): add ability to join events -> group_attributes  (#4586) by @barkbarkimashark
+- cleanup(capman): remove project throttler (#4576) by @volokluev
+- feat(consumer): add health check step to consumers (#4508) by @dbanda
+- fix(capman): Bake in `is_enforced` behavior into every allocation policy (#4585) by @volokluev
+- Update gocd-jsonnet to v1.4.1 (#4579) by @mattgauntseo-sentry
+- Revert "feat(db_query): Readthrough Cache entire `db_query()` pipeline (#4506)" (946c90a5) by @getsentry-bot
+- ref: bump sentry-arroyo to 2.14.2 (#4569) by @getsentry-bot
+- turn on rate limit policy for transactions (#4572) by @volokluev
+- feat(db_query): Readthrough Cache entire `db_query()` pipeline (#4506) by @rahul-kumar-saini
+- ref(admin): Upload sourcemaps to Sentry for the admin tool (#4441) by @evanh
+- feat(oncall): break down query execution metrics by table and referrer (#4573) by @volokluev
+- feat(prod-queries): Add button to view all allowed projects (#4574) by @davidtsuk
+- feat(consumer): Add transactions consumer SLO (#4442) by @ayirr7
+- feat(schema): add replay_id to table entities and storages (#4565) by @JoshFerge
+- ref: bump sentry-kafka-schemas to 0.1.23 (#4571) by @getsentry-bot
+- feat(rust-consumer): Port querylog processor to Rust (#4562) by @lynnagara
+- feat(group-attributes): Change the readiness state for migration to partial (#4567) by @lynnagara
+- Revert back to snuba group for role access (#4550) by @mattgauntseo-sentry
+- feat(capman): ratelimit allocation policy (no overrides) (#4536) by @volokluev
+- Switch is ST check to library version (#4568) by @mattgauntseo-sentry
+- feat(clickhouse): Enable 23.3 (#4566) by @lynnagara
+- Add customer 1 and 2 to pipedream (#4564) by @mattgauntseo-sentry
+- meta: Bump new development version (24a00034)
+
+## 23.7.1
+
+### Various fixes & improvements
+
+- ref: bump sentry-kafka-schemas to 0.1.22 (#4559) by @getsentry-bot
+- ref: Remove manual collection of librdkafka stats (#4542) by @lynnagara
+- feat: Banish fetching untyped runtime config (#4540) by @lynnagara
+- Fix validation pipeline (#4547) by @mattgauntseo-sentry
+- feat(rust-consumer): Add RunTaskInThreads strategy (#4537) by @lynnagara
+- ref: Remove unnecessary config (#4541) by @lynnagara
+- fix(prod-queries): Remove project validation in debug env (#4549) by @davidtsuk
+- Update gocd jsonnet libs and fix rollbacks (#4544) by @mattgauntseo-sentry
+- fix(cardinality-analyzer): Fix CSV escaping (#4546) by @gggritso
+- build(deps): bump flask from 2.2.2 to 2.2.5 (#4543) by @dependabot
+- build(deps): bump werkzeug from 2.2.2 to 2.2.3 (#3771) by @dependabot
+- chore: bump sentry-kafka-schemas to 0.1.21 (#4529) by @ayirr7
+- ref(snubsplain): Add steps for snql parsing and query mappers (#4486) by @evanh
+- feat(group-attributes): expose storage and entity, process messages (#4507) by @barkbarkimashark
+- ref: Simplify querylog processor more (#4520) by @lynnagara
+- ci: add GoCD pipeline validation (#4528) by @joshuarli
+- ref(capman): split the rate limit function into a start and finish phase (#4532) by @volokluev
+- ref: Simplify querylog processor (#4511) by @lynnagara
+- Add elastic agent to rollback pipeline (#4534) by @mattgauntseo-sentry
+- set min_retention_days to retention_days (#4533) by @john-z-yang
+- feat(admin): Add new trace logs view (#4510) by @enochtangg
+- Revert "Revert "feat(replays): Add click_is_dead and click_is_rage columns (#4470)"" (#4517) by @cmanallen
+- Enable Sentry `Hub` propagation (#4530) by @gggritso
+- Fix canaries and migrations in s4s snuba (#4531) by @mattgauntseo-sentry
+
+_Plus 1 more_
+
+## 23.7.0
+
+### Various fixes & improvements
+
+- Switch to pipedream pipelines (#4526) by @mattgauntseo-sentry
+- feat(rust-consumer): Support parallel insert to ClickHouse (#4519) by @lynnagara
+- run search_issues migration in self-hosted (#4518) by @hubertdeng123
+- bump materialization_version to 2 (#4505) by @john-z-yang
+- perf: Allow parallel clickhouse insert (#4516) by @lynnagara
+- add facilities to insert aggregation_options in processor (#4509) by @john-z-yang
+- feat(subscriptions): add clickhouse connection check (#4512) by @dbanda
+- Revert "feat(replays): Add click_is_dead and click_is_rage columns (#4470)" (0788e2ad) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.19 (#4515) by @getsentry-bot
+- migration(group_attributes): create new GroupAttributes table that mirrors a subset of columns from sentry (#4496) by @barkbarkimashark
+- Allow snuba/clusters/storage_sets.py  in migrations check (#4514) by @dbanda
+- feat(replays): Add click_is_dead and click_is_rage columns (#4470) by @cmanallen
+- add migrations for new distributions matview (#4504) by @john-z-yang
+- fix: Actually resubmit carried over message in clickhouse strategy (#4502) by @lynnagara
+- feat(replays): Add migration for click_is_dead and click_is_rage columns (#4469) by @cmanallen
+- ref: bump sentry-kafka-schemas to 0.1.18 (#4501) by @getsentry-bot
+- fix(rust-consumer): Actually commit messages even if we are skipping the clickhouse write (#4500) by @lynnagara
+- feat(generic-metrics): Add aggregation options for generic metrics raw tables (#4467) by @john-z-yang
+- ref(rust-consumer): Move clickhouse_client out of rust_arroyo (#4499) by @lynnagara
+- feat(rust-consumer): Write to ClickHouse (#4490) by @lynnagara
+- Fix MultistorageCollector as #4297 (#4475) by @qbx2
+- test: Rust CI improvements (#4258) by @lynnagara
+- check connections on consumer startup (#4497) by @dbanda
+- Update jsonnet lib and add rollback pipeline (#4495) by @mattgauntseo-sentry
+
+_Plus 17 more_
+
+## 23.6.2
+
+### Various fixes & improvements
+
+- add role to migrations stage (#4424) by @dbanda
+- experiment(capman,starfish): add ability to turn off concurrent throttling (#4464) by @volokluev
+- feat(dlq): If DLQ replay is kicked off, add it to audit log (#4439) by @lynnagara
+- Add script for customer deployments (#4438) by @mattgauntseo-sentry
+- feat(oncall): Make readthrough cache fail open on redis errors (#4449) by @volokluev
+- ref(admin) Allow colons in system queries so that datetimes are valid (#4462) by @evanh
+- perm(cardinality-analyzer): Add ingest team (#4458) by @jjbayer
+- use mantine text area instead of rich text editor (#4461) by @enochtangg
+- perm(prod-queries): Add production queries tool to product tools (#4460) by @davidtsuk
+- fix(spans): Add `group_raw` to HexIntColumnProcessor (#4459) by @shruthilayaj
+- feat(admin): Add syntax highlighting to snuba admin (#4430) by @enochtangg
+- feat(admin): Stop blocking text/images on Snuba Admin replays (#4443) by @rahul-kumar-saini
+- ref: Clean up print statements (#4447) by @lynnagara
+- fix: Revert debounced commits (#4446) by @untitaker
+- test(dlq): Add end to end DLQ consumer test (#4367) by @lynnagara
+- ref: bump sentry-redis-tools to 0.1.7 (#4445) by @getsentry-bot
+- ref: bump sentry-kafka-schemas to 0.1.17 (#4444) by @getsentry-bot
+- feat(prod-queries): Implement backend for prod queries (#4398) by @davidtsuk
+- ref: Decouple processing batches and clickhouse batches (#4251) by @untitaker
+- ref: bump sentry-kafka-schemas to 0.1.16 (#4436) by @getsentry-bot
+- build(deps): bump sentry-relay from 0.8.21 to 0.8.27 (#4427) by @dependabot
+- perm(cardinality-analyzer) Update cardinality analyzer member list (#4435) by @davidtsuk
+- feat(snubsplain): Use request context to capture query processors (#4381) by @evanh
+- ref(admin): Set the user email in Sentry (#4431) by @evanh
+
+_Plus 65 more_
+
 ## 23.6.1
 
 ### Various fixes & improvements

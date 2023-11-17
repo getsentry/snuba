@@ -17,6 +17,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "FUNCTIONS": "functions",
     "SEARCH_ISSUES": "search_issues",
     "SPANS": "spans",
+    "GROUP_ATTRIBUTES": "group_attributes",
 }
 
 
@@ -84,6 +85,14 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
         frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset(
+            {
+                StorageSetKey.EVENTS,
+                StorageSetKey.EVENTS_RO,
+                StorageSetKey.GROUP_ATTRIBUTES,
+            }
+        ),
+        frozenset({StorageSetKey.SEARCH_ISSUES, StorageSetKey.GROUP_ATTRIBUTES}),
     }
 )
 

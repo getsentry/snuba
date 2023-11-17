@@ -166,6 +166,7 @@ def test_config_descriptions(admin_api: FlaskClient) -> None:
     }
 
 
+@pytest.mark.redis_db
 def get_node_for_table(
     admin_api: FlaskClient, storage_name: str
 ) -> tuple[str, str, int]:
@@ -204,6 +205,7 @@ def test_system_query(admin_api: FlaskClient) -> None:
     assert data["rows"] == []
 
 
+@pytest.mark.redis_db
 def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/clickhouse_queries",
@@ -230,6 +232,8 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
+    key = next(iter(data["formatted_trace_output"]))
+    assert "read_performance" in data["formatted_trace_output"][key]
 
 
 @pytest.mark.redis_db
@@ -249,6 +253,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
+@pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
@@ -279,6 +284,7 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
     assert "column_names" in data and data["column_names"] == ["count()"]
 
 
+@pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
@@ -301,6 +307,7 @@ def test_querylog_describe(admin_api: FlaskClient) -> None:
     assert "column_names" in data and "rows" in data
 
 
+@pytest.mark.redis_db
 def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/querylog_queries",
@@ -313,6 +320,7 @@ def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
     assert data[0]["name"] == "QueryByID"
 
 
+@pytest.mark.redis_db
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     response = admin_api.get("/snuba_datasets")
     assert response.status_code == 200
@@ -320,9 +328,10 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     assert set(data) == set(get_enabled_dataset_names())
 
 
-def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
+@pytest.mark.redis_db
+def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -330,9 +339,9 @@ def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
+def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
+        "/snuba_debug", data=json.dumps({"dataset": "transactions", "query": ""})
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -344,21 +353,65 @@ def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
+def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
-    MATCH (sessions)
-    SELECT sessions_crashed
-    WHERE org_id = 100
-    AND project_id IN tuple(100)
-    AND started >= toDateTime('2022-01-01 00:00:00')
-    AND started < toDateTime('2022-02-01 00:00:00')
+    MATCH (functions)
+    SELECT worst
+    WHERE project_id IN tuple(100)
+    AND timestamp >= toDateTime('2022-01-01 00:00:00')
+    AND timestamp < toDateTime('2022-02-01 00:00:00')
     """
     response = admin_api.post(
-        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": snql_query})
+        "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
     )
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["sql"] != ""
+    assert "timing" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (functions)
+    SELECT worst
+    WHERE project_id IN tuple(100)
+    AND timestamp >= toDateTime('2022-01-01 00:00:00')
+    AND timestamp < toDateTime('2022-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/snuba_debug", data=json.dumps({"dataset": "functions", "query": snql_query})
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["sql"] != ""
+    assert len(data["explain"]["steps"]) > 0
+    assert data["explain"]["original_ast"].startswith("SELECT")
+
+    expected_steps = [
+        {
+            "category": "storage_planning",
+            "name": "mappers",
+            "type": "query_transform",
+        },
+        {
+            "category": "snql_parsing",
+            "name": "_parse_datetime_literals",
+            "type": "query_transform",
+        },
+    ]
+
+    for e in expected_steps:
+        assert any(
+            step["category"] == e["category"]
+            and step["name"] == e["name"]
+            and step["type"] == e["type"]
+            and step["data"]["original"] != ""
+            and step["data"]["transformed"] != ""
+            and len(step["data"]["diff"]) > 0
+            for step in data["explain"]["steps"]
+        )
 
 
 @pytest.mark.redis_db
@@ -372,12 +425,15 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             ]
 
         def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int]
+            self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             return QuotaAllowance(True, 1, {})
 
         def _update_quota_balance(
-            self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
         ) -> None:
             pass
 
@@ -445,10 +501,18 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # one policy
-        assert response.json is not None and len(response.json) == 1
-        [policy_configs] = response.json
-        assert policy_configs["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        # two policies
+        assert response.json is not None and len(response.json) == 2
+        policy_configs = response.json
+        bytes_scanned_policy = [
+            policy
+            for policy in policy_configs
+            if policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        ][0]
+
+        assert (
+            bytes_scanned_policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        )
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -457,7 +521,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } in policy_configs["configs"]
+        } in bytes_scanned_policy["configs"]
 
         # no need to record auditlog when nothing was updated
         assert not auditlog_records
@@ -478,7 +542,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 1
+        assert response.json is not None and len(response.json) == 2
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -490,3 +554,65 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         } not in response.json[0]["configs"]
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' does not exist"
+
+
+@pytest.mark.redis_db
+def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_snql_query", data=json.dumps({"dataset": "functions", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
+    )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 1
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (events)
+    SELECT title
+    WHERE project_id = 2
+    AND timestamp >= toDateTime('2023-01-01 00:00:00')
+    AND timestamp < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "events", "query": snql_query}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"

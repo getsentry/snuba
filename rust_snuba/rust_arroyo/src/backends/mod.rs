@@ -32,11 +32,18 @@ pub enum ConsumerError {
     BrokerError(#[from] Box<dyn std::error::Error>),
 }
 
+#[non_exhaustive]
+#[derive(Error, Debug)]
+pub enum ProducerError {
+    #[error("The producer errored")]
+    ProducerErrorred,
+}
+
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
 pub trait AssignmentCallbacks: Send + Sync {
-    fn on_assign(&mut self, partitions: HashMap<Partition, u64>);
-    fn on_revoke(&mut self, partitions: Vec<Partition>);
+    fn on_assign(&self, partitions: HashMap<Partition, u64>);
+    fn on_revoke(&self, partitions: Vec<Partition>);
 }
 
 /// This abstract class provides an interface for consuming messages from a
@@ -73,7 +80,7 @@ pub trait AssignmentCallbacks: Send + Sync {
 /// occurs even if the consumer retains ownership of the partition across
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
-pub trait Consumer<'a, TPayload: Clone> {
+pub trait Consumer<TPayload>: Send {
     fn subscribe(
         &mut self,
         topic: &[Topic],
@@ -152,9 +159,11 @@ pub trait Consumer<'a, TPayload: Clone> {
     fn closed(&self) -> bool;
 }
 
-pub trait Producer<TPayload> {
+pub trait Producer<TPayload>: Send + Sync {
     /// Produce to a topic or partition.
-    fn produce(&self, destination: &TopicOrPartition, payload: &TPayload);
-
-    fn close(&mut self);
+    fn produce(
+        &self,
+        destination: &TopicOrPartition,
+        payload: TPayload,
+    ) -> Result<(), ProducerError>;
 }

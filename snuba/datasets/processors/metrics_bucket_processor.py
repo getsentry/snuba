@@ -103,6 +103,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "metric_id": message["metric_id"],
+            "use_case_id": message.get("use_case_id", "sessions"),
             "timestamp": timestamp,
             "tags.key": keys,
             "tags.value": values,

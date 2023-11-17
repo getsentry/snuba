@@ -97,6 +97,7 @@ query_processors:
   - processor: MappedGranularityProcessor
     args:
       accepted_granularities:
+        10: 0
         60: 1
         3600: 2
         86400: 3

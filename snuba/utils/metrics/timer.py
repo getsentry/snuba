@@ -1,16 +1,11 @@
 from itertools import groupby
-from typing import Dict, Mapping, MutableSequence, Optional, Tuple, TypedDict
+from typing import Dict, Mapping, MutableSequence, Optional, Tuple
+
+from sentry_kafka_schemas.schema_types.snuba_queries_v1 import TimerData
 
 from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
-
-
-class TimerData(TypedDict, total=False):
-    timestamp: int
-    duration_ms: int
-    marks_ms: Dict[str, int]
-    tags: Dict[str, str]
 
 
 class Timer:

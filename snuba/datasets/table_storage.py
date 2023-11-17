@@ -87,23 +87,34 @@ class KafkaStreamLoader:
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
+        subscription_synchronization_timestamp: Optional[str] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
+        subscription_delay_seconds: Optional[int] = None,
         dlq_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
-        assert (
-            (subscription_scheduler_mode is None)
-            == (subscription_scheduled_topic_spec is None)
-            == (subscription_result_topic_spec is None)
-        )
+        subscription_values = [
+            bool(subscription_scheduled_topic_spec),
+            bool(subscription_scheduler_mode),
+            bool(subscription_result_topic_spec),
+            bool(subscription_synchronization_timestamp),
+            bool(subscription_delay_seconds),
+        ]
+        assert all(subscription_values) or not any(
+            subscription_values
+        ), "provide all subscription config or none"
 
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
         self.__subscription_scheduler_mode = subscription_scheduler_mode
+        self.__subscription_synchronization_timestamp = (
+            subscription_synchronization_timestamp
+        )
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
+        self.__subscription_delay_seconds = subscription_delay_seconds
         self.__pre_filter = pre_filter
         self.__dlq_topic_spec = dlq_topic_spec
 
@@ -129,11 +140,17 @@ class KafkaStreamLoader:
     def get_subscription_scheduler_mode(self) -> Optional[SchedulingWatermarkMode]:
         return self.__subscription_scheduler_mode
 
+    def get_subscription_sychronization_timestamp(self) -> Optional[str]:
+        return self.__subscription_synchronization_timestamp
+
     def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_scheduled_topic_spec
 
     def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_result_topic_spec
+
+    def get_subscription_delay_seconds(self) -> Optional[int]:
+        return self.__subscription_delay_seconds
 
     def get_dlq_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__dlq_topic_spec
@@ -148,6 +165,8 @@ def build_kafka_stream_loader_from_settings(
     subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
+    subscription_synchronization_timestamp: Optional[str] = None,
+    subscription_delay_seconds: Optional[int] = None,
     dlq_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
@@ -189,8 +208,10 @@ def build_kafka_stream_loader_from_settings(
         replacement_topic_spec,
         commit_log_topic_spec,
         subscription_scheduler_mode=subscription_scheduler_mode,
+        subscription_synchronization_timestamp=subscription_synchronization_timestamp,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
+        subscription_delay_seconds=subscription_delay_seconds,
         dlq_topic_spec=dlq_topic_spec,
     )
 

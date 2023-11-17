@@ -8,7 +8,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from functools import partial
 from io import StringIO
 from typing import (
     Any,
@@ -24,6 +23,7 @@ from typing import (
 )
 from uuid import UUID
 
+import sentry_sdk
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
@@ -45,6 +45,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 class ClickhouseProfile(TypedDict):
     bytes: int
+    progress_bytes: int
     blocks: int
     rows: int
     elapsed: float
@@ -172,16 +173,23 @@ class ClickhousePool(object):
                             else {"send_logs_level": "trace"}
                         )
 
-                    query_execute = partial(
-                        conn.execute,
-                        query,
-                        params=params,
-                        with_column_types=with_column_types,
-                        query_id=query_id,
-                        settings=settings,
-                        types_check=types_check,
-                        columnar=columnar,
-                    )
+                    def query_execute() -> Any:
+                        with sentry_sdk.start_span(
+                            description=query, op="db.clickhouse"
+                        ) as span:
+                            span.set_data(
+                                sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
+                            )
+                            return conn.execute(  # type: ignore
+                                query,
+                                params=params,
+                                with_column_types=with_column_types,
+                                query_id=query_id,
+                                settings=settings,
+                                types_check=types_check,
+                                columnar=columnar,
+                            )
+
                     result_data: Sequence[Any]
                     trace_output = ""
                     if capture_trace:
@@ -193,6 +201,7 @@ class ClickhousePool(object):
 
                     profile_data = ClickhouseProfile(
                         bytes=conn.last_query.profile_info.bytes or 0,
+                        progress_bytes=conn.last_query.progress.bytes or 0,
                         blocks=conn.last_query.profile_info.blocks or 0,
                         rows=conn.last_query.profile_info.rows or 0,
                         elapsed=conn.last_query.elapsed or 0.0,
@@ -218,7 +227,13 @@ class ClickhousePool(object):
                     metrics.increment(
                         "connection_error"
                         if not fallback_mode
-                        else "fallback_connection_error"
+                        else "fallback_connection_error",
+                        tags={
+                            "host": self.host,
+                            "port": str(self.port),
+                            "user": self.user,
+                            "database": self.database,
+                        },
                     )
 
                     # Force a reconnection next time

@@ -1,0 +1,64 @@
+version: v1
+kind: writable_storage
+name: group_attributes
+
+storage:
+  key: group_attributes
+  set_key: group_attributes
+
+readiness_state: partial
+
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: group_id, type: UInt, args: { size: 64 } },
+
+      { name: group_status, type: UInt, args: { size: 8 } },
+      { name: group_substatus, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+      { name: group_first_seen, type: DateTime },
+      { name: group_num_comments, type: UInt, args: { size: 64 } },
+
+      { name: assignee_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+      { name: assignee_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+
+      { name: owner_suspect_commit_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+      { name: owner_ownership_rule_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+      { name: owner_ownership_rule_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+      { name: owner_codeowners_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+      { name: owner_codeowners_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+
+      { name: deleted, type: UInt, args: { size: 8 } },
+      { name: message_timestamp, type: DateTime },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: group_attributes_local
+  dist_table_name: group_attributes_dist
+  not_deleted_mandatory_condition: deleted
+
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: PassthroughPolicy
+    args:
+      required_tenant_types:
+        - blank
+
+query_processors:
+  - processor: TableRateLimit
+  - processor: ConsistencyEnforcerProcessor
+
+mandatory_condition_checkers:
+  - condition: ProjectIdEnforcer
+
+stream_loader:
+  processor: GroupAttributesMessageProcessor
+  default_topic: group-attributes
+  dlq_topic: snuba-dead-letter-group-attributes

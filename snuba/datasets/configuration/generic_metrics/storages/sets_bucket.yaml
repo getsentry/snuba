@@ -48,8 +48,7 @@ schema:
   local_table_name: generic_metric_sets_raw_local
   dist_table_name: generic_metric_sets_raw_dist
 stream_loader:
-  processor:
-    name: GenericSetsMetricsProcessor
+  processor: GenericSetsMetricsProcessor
   default_topic: snuba-generic-metrics
   pre_filter:
     type: KafkaHeaderSelectFilter
@@ -58,8 +57,11 @@ stream_loader:
       header_value: s
   commit_log_topic: snuba-generic-metrics-sets-commit-log
   subscription_scheduler_mode: global
+  subscription_synchronization_timestamp: orig_message_ts
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-sets
   subscription_result_topic: generic-metrics-subscription-results
+  subscription_delay_seconds: 60
+
   # We noticed that the Snuba generic metrics consumers are unable to
   # shut down successfully with a DLQ policy, when we remove the policy
   # the issue is fixed. We also reproduced it on the errors consumer

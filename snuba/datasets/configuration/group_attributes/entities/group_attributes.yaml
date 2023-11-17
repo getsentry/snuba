@@ -1,0 +1,56 @@
+version: v1
+kind: entity
+name: group_attributes
+
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: group_id, type: UInt, args: { size: 64 } },
+
+    { name: group_status, type: UInt, args: { size: 8 } },
+    { name: group_substatus, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+    { name: group_first_seen, type: DateTime },
+    { name: group_num_comments, type: UInt, args: { size: 64 } },
+
+    { name: assignee_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: assignee_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+
+    { name: owner_suspect_commit_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: owner_ownership_rule_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: owner_ownership_rule_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: owner_codeowners_user_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    { name: owner_codeowners_team_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+
+    { name: deleted, type: UInt, args: { size: 8 } },
+    { name: message_timestamp, type: DateTime },
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+  ]
+
+storages:
+  - storage: group_attributes
+    is_writable: true
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: ReferrerRateLimiterProcessor
+#  - processor: ProjectReferrerRateLimiter
+#    args:
+#      project_column: project_id
+#  - processor: ProjectRateLimiterProcessor
+#    args:
+#      project_column: project_id
+#  - processor: ResourceQuotaProcessor
+#    args:
+#      project_field: project_id
+  - processor: BasicFunctionsProcessor
+
+validate_data_model: error
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["project_id"]
+
+required_time_column: null

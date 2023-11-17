@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
+import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -22,6 +23,9 @@ from snuba.admin.clickhouse.capacity_management import (
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
+    CardinalityQuery,
+)
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -33,6 +37,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -64,6 +69,7 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
+from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
@@ -96,7 +102,9 @@ def authorize() -> None:
     if request.endpoint != "health":
         user = authorize_request()
         logger.info("authorize.finished", user=user)
-        g.user = user
+        with sentry_sdk.push_scope() as scope:
+            scope.user = {"email": user.email}
+            g.user = user
 
 
 @application.route("/")
@@ -123,6 +131,7 @@ def settings_endpoint() -> Response:
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
+                "userEmail": g.user.email,
             }
         ),
         200,
@@ -302,6 +311,13 @@ def clickhouse_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.QUERYLOG])
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/cardinality_queries")
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_queries() -> Response:
+    res = [q.to_json() for q in CardinalityQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -721,15 +737,23 @@ def snuba_datasets() -> Response:
     )
 
 
-@application.route("/snql_to_sql", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL])
-def snql_to_sql() -> Response:
+@application.route("/snuba_debug", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SNQL_TO_SQL, AdminTools.SNUBA_EXPLAIN])
+def snuba_debug() -> Response:
     body = json.loads(request.data)
     body["debug"] = True
     body["dry_run"] = True
     try:
         dataset = get_dataset(body.pop("dataset"))
-        return dataset_query(dataset, body, Timer("admin"))
+        response = dataset_query(dataset, body, Timer("admin"))
+        data = response.get_json()
+        assert isinstance(data, dict)
+
+        meta = get_explain_meta()
+        if meta:
+            data["explain"] = asdict(meta)
+        response.data = json.dumps(data)
+        return response
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
@@ -742,6 +766,8 @@ def snql_to_sql() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
+    finally:
+        explain_cleanup()
 
 
 @application.route("/storages_with_allocation_policies")
@@ -935,6 +961,15 @@ def dlq_replay() -> Response:
             slice_id,
             max_messages_to_process,
         )
+
+        user = request.headers.get(USER_HEADER_KEY)
+
+        audit_log.record(
+            user or "",
+            AuditLogAction.DLQ_REPLAY,
+            {"instruction": str(instruction)},
+            notify=True,
+        )
         store_instruction(instruction)
 
     if request.method == "DELETE":
@@ -946,3 +981,36 @@ def dlq_replay() -> Response:
         return make_response(jsonify(None), 200)
 
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
+
+
+@application.route("/production_snql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_snql_query() -> Response:
+    body = json.loads(request.data)
+    body["tenant_ids"] = {"referrer": request.referrer}
+    try:
+        ret = run_snql_query(body, g.user.email)
+        return ret
+    except InvalidQueryException as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/allowed_projects", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def get_allowed_projects() -> Response:
+    return make_response(jsonify(settings.ADMIN_ALLOWED_PROD_PROJECTS), 200)
+
+
+@application.route("/admin_regions", methods=["GET"])
+def get_admin_regions() -> Response:
+    return make_response(jsonify(settings.ADMIN_REGIONS), 200)

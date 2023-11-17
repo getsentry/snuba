@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Mapping
 
 import pytest
-import pytz
 
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -45,7 +44,7 @@ from snuba.utils.schemas import DateTime, Nested, UInt
 @pytest.fixture
 def start_time() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=pytz.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
     )
 
 

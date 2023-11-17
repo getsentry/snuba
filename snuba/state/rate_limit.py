@@ -166,71 +166,78 @@ def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
     return "{}{}{}".format(prefix, bucket, shard_suffix)
 
 
-@contextmanager
-def rate_limit(
+def rate_limit_start_request(
     rate_limit_params: RateLimitParameters,
-) -> Iterator[Optional[RateLimitStats]]:
+    query_id: str,
+    rate_history_sec: int,
+    rate_limit_shard_factor: int,
+    rate_limit_prefix: str,
+    max_query_duration_s: int | None = None,
+) -> RateLimitStats:
     """
-    A context manager for rate limiting that allows for limiting based on:
-        * a rolling-window per-second rate
-        * the number of queries concurrently running.
+    The first half of the rate limiting algorithm. This function is called before the thing
+    you want to rate limit is run. Depends on rate_limit_finish_request to be called afterwards
+    in order for rate limiting to work
 
-    It uses one redis sorted set to keep track of both of these limits
-    The following mapping is kept in redis:
+    params:
+        rate_limit_params: RateLimitParameters(rate_limit_name, bucket, per_second_limit, concurrent_limit)
+        query_id: str
+        rate_history_sec: int - How many seconds to retain completed queries for the per-second rolling window limit
+        rate_limit_shard_factor: int - How many shards to use for the rate limit buckets
+        max_query_duration_s: how long we consider a query to be running before it is killed and cleaned up, defaults to state.max_query_duration_s
 
-        bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
+    Usage:
+
+        >>> stats = rate_limit_start_request(rate_limit_params, query_id, rate_history_sec, rate_limit_shard_factor)
+        >>> if (
+        >>>    stats.rate > rate_limit_params.per_second_limit or
+        >>>    stats.concurrent > rate_limit_params.concurrent_limit):
+        >>>     # do what you gotta do
+
+        >>> # after you're done with the thing you want to rate limit
+        >>> rate_limit_finish_request(
+        >>>    rate_limit_params, query_id, rate_history_sec, rate_limit_shard_factor, was_rate_limited=False)
+
+    Implementation details:
+        It uses one redis sorted set to keep track of both of these limits
+        The following mapping is kept in redis:
+
+            bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
 
 
-    Queries are thrown ahead in time when they start so we can count them
-    as concurrent, and thrown back to their start time once they finish so
-    we can count them towards the historical rate. See the comments for
-    an example.
+        Queries are thrown ahead in time when they start so we can count them
+        as concurrent, and thrown back to their start time once they finish so
+        we can count them towards the historical rate. See the comments for
+        an example.
 
-               time >>----->
-    +-----------------------------+--------------------------------+
-    | historical query window     | currently executing queries    |
-    +-----------------------------+--------------------------------+
-                                  ^
-                                 now
+                   time >>----->
+        +-----------------------------+--------------------------------+
+        | historical query window     | currently executing queries    |
+        +-----------------------------+--------------------------------+
+                                      ^
+                                     now
+
     """
-    (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
-        [
-            # bool (0/1) flag to disable rate limits altogether
-            ("bypass_rate_limit", 0),
-            # number of seconds the timestamps are kept
-            ("rate_history_sec", 3600),
-            # number of shards that each redis set is supposed to have.
-            # increasing this value multiplies the number of redis keys by that
-            # factor, and (on average) reduces the size of each redis set
-            ("rate_limit_shard_factor", 1),
-        ]
-    )
-    assert isinstance(rate_history_s, (int, float))
-    assert isinstance(rate_limit_shard_factor, int)
-    assert rate_limit_shard_factor > 0
-
-    if bypass_rate_limit == 1:
-        yield None
-        return
-
     now = time.time()
-
-    query_id_uuid = uuid.uuid4()
-    query_id = str(query_id_uuid)
+    max_query_duration_s = max_query_duration_s or state.max_query_duration_s
 
     # Compute the set shard to which we should add and remove the query_id
-    bucket_shard = int(query_id_uuid) % rate_limit_shard_factor
+    bucket_shard = hash(query_id) % rate_limit_shard_factor
     query_bucket = _get_bucket_key(
-        state.ratelimit_prefix, rate_limit_params.bucket, bucket_shard
+        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
+    )
+    use_transaction_pipe = bool(
+        state.get_config("rate_limit_use_transaction_pipe", False)
     )
 
-    pipe = rds.pipeline(transaction=False)
+    pipe = rds.pipeline(transaction=use_transaction_pipe)
+
     # cleanup old query timestamps past our retention window
     #
     # it is fine to only perform this cleanup for the shard of the current
     # query, because on average there will be many other queries that hit other
-    # shards and perform cleanup there.
-    pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_s))
+    # shards and perform cleanup there
+    pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_sec))
 
     # Now for the tricky bit:
     # ======================
@@ -260,7 +267,7 @@ def rate_limit(
     #                                   running concurrently; in this case 3)
     #              ^
     #              | current time
-    pipe.zadd(query_bucket, {query_id: now + state.max_query_duration_s})
+    pipe.zadd(query_bucket, {query_id: now + max_query_duration_s})
 
     # bump the expiration date of the entire set so that it roughly aligns with
     # the expiration date of the latest item.
@@ -279,13 +286,13 @@ def rate_limit(
     # * the next query's zremrangebyscore would remove this item on `now +
     #   max_query_duration_s + rate_history_s` at the earliest.
     # * add +1 to account for rounding errors when casting to int
-    pipe.expire(query_bucket, int(state.max_query_duration_s + rate_history_s + 1))
+    pipe.expire(query_bucket, int(max_query_duration_s + rate_history_sec + 1))
 
     if rate_limit_params.per_second_limit is not None:
         # count queries that have finished for the per-second rate
         for shard_i in range(rate_limit_shard_factor):
             bucket = _get_bucket_key(
-                state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                rate_limit_prefix, rate_limit_params.bucket, shard_i
             )
             pipe.zcount(bucket, now - state.rate_lookback_s, now)
 
@@ -294,12 +301,13 @@ def rate_limit(
         # of concurrent queries
         for shard_i in range(rate_limit_shard_factor):
             bucket = _get_bucket_key(
-                state.ratelimit_prefix, rate_limit_params.bucket, shard_i
+                rate_limit_prefix, rate_limit_params.bucket, shard_i
             )
             pipe.zcount(bucket, "({:f}".format(now), "+inf")
 
     try:
-        pipe_results = iter(pipe.execute())
+        results = pipe.execute()
+        pipe_results = iter(results)
 
         # skip zremrangebyscore, zadd and expire
         next(pipe_results)
@@ -316,13 +324,89 @@ def rate_limit(
         else:
             concurrent = 0
     except Exception as ex:
+        # if something goes wrong, we don't want to block the request,
+        # set the values such that they pass under any limit
         logger.exception(ex)
-        yield None  # fail open if redis is having issues
-        return
+        return RateLimitStats(rate=-1, concurrent=-1)
 
     per_second = historical / float(state.rate_lookback_s)
 
     stats = RateLimitStats(rate=per_second, concurrent=concurrent)
+    return stats
+
+
+def rate_limit_finish_request(
+    rate_limit_params: RateLimitParameters,
+    query_id: str,
+    rate_limit_shard_factor: int,
+    was_rate_limited: bool,
+    rate_limit_prefix: str,
+    max_query_duration_s: int | None = None,
+) -> None:
+    """Second half of rate limiting, called after the request is finished. See rate_limit_start_request for details"""
+    bucket_shard = hash(query_id) % rate_limit_shard_factor
+    query_bucket = _get_bucket_key(
+        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
+    )
+    max_query_duration_s = max_query_duration_s or state.max_query_duration_s
+    if was_rate_limited:
+        try:
+            rds.zrem(query_bucket, query_id)  # not allowed / not counted
+        except Exception as ex:
+            logger.exception(ex)
+    else:
+        try:
+            # return the query to its start time, if the query_id was actually added.
+            rds.zincrby(query_bucket, -float(max_query_duration_s), query_id)
+        except Exception as ex:
+            logger.exception(ex)
+
+
+@contextmanager
+def rate_limit(
+    rate_limit_params: RateLimitParameters,
+) -> Iterator[Optional[RateLimitStats]]:
+    """
+    A context manager for rate limiting that allows for limiting based on:
+        * a rolling-window per-second rate
+        * the number of queries concurrently running.
+
+    usage:
+        with rate_limit(rate_limit_params) as stats:
+            do_something()
+            # will raise RateLimitExceeded if the rate limit is exceeded
+
+    """
+    (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
+        [
+            # bool (0/1) flag to disable rate limits altogether
+            ("bypass_rate_limit", 0),
+            # number of seconds the timestamps are kept
+            ("rate_history_sec", 3600),
+            # number of shards that each redis set is supposed to have.
+            # increasing this value multiplies the number of redis keys by that
+            # factor, and (on average) reduces the size of each redis set
+            ("rate_limit_shard_factor", 1),
+        ]
+    )
+    assert isinstance(rate_history_s, int)
+    assert isinstance(rate_limit_shard_factor, int)
+    assert rate_limit_shard_factor > 0
+
+    if bypass_rate_limit == 1:
+        yield None
+        return
+
+    query_id_uuid = uuid.uuid4()
+    query_id = str(query_id_uuid)
+
+    rate_limit_stats = rate_limit_start_request(
+        rate_limit_params,
+        query_id,
+        rate_history_s,
+        rate_limit_shard_factor,
+        state.ratelimit_prefix,
+    )
 
     rate_limit_name = rate_limit_params.rate_limit_name
 
@@ -331,25 +415,25 @@ def rate_limit(
         Reason(
             rate_limit_name,
             "concurrent",
-            concurrent,
+            rate_limit_stats.concurrent,
             rate_limit_params.concurrent_limit,
         ),
         Reason(
             rate_limit_name,
             "per-second",
-            per_second,
+            rate_limit_stats.rate,
             rate_limit_params.per_second_limit,
         ),
     ]
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
     if reason:
-        try:
-            # Remove the query from the sorted set
-            # because we rate limited it. It shouldn't count towards
-            # rate limiting future queries in this bucket.
-            rds.zrem(query_bucket, query_id)
-        except Exception as ex:
-            logger.exception(ex)
+        rate_limit_finish_request(
+            rate_limit_params,
+            query_id,
+            rate_limit_shard_factor,
+            True,
+            state.ratelimit_prefix,
+        )
 
         raise RateLimitExceeded(
             "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
@@ -359,27 +443,29 @@ def rate_limit(
             name=reason.name,
         )
 
-    rate_limited = False
     try:
-        yield stats
+        yield rate_limit_stats
         _, err, _ = sys.exc_info()
         if isinstance(err, RateLimitExceeded):
             # If another rate limiter throws an exception, it won't be propagated
             # through this context. So check for the exception explicitly.
             # If another rate limit was hit, we don't want to count this query
             # against this limit.
-            try:
-                rds.zrem(query_bucket, query_id)  # not allowed / not counted
-                rate_limited = True
-            except Exception as ex:
-                logger.exception(ex)
+            rate_limit_finish_request(
+                rate_limit_params,
+                query_id,
+                rate_limit_shard_factor,
+                True,
+                state.ratelimit_prefix,
+            )
     finally:
-        try:
-            # return the query to its start time, if the query_id was actually added.
-            if not rate_limited:
-                rds.zincrby(query_bucket, -float(state.max_query_duration_s), query_id)
-        except Exception as ex:
-            logger.exception(ex)
+        rate_limit_finish_request(
+            rate_limit_params,
+            query_id,
+            rate_limit_shard_factor,
+            False,
+            state.ratelimit_prefix,
+        )
 
 
 def _record_metrics(

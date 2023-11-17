@@ -4,7 +4,6 @@ from typing import Any
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
@@ -25,14 +24,12 @@ from snuba.datasets.table_storage import (
     KafkaStreamLoader,
     build_kafka_stream_loader_from_settings,
 )
-from snuba.processor import MessageProcessor
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.util import PartSegment
-from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.utils.streams.topics import Topic
 
 KIND = "kind"
@@ -161,16 +158,8 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-    processor_config = loader_config["processor"]
-    processor: MessageProcessor | None = None
-    try:
-        processor = DatasetMessageProcessor.get_from_name(
-            processor_config["name"]
-        ).from_kwargs(**processor_config.get("args", {}))
-    except InvalidConfigKeyError:
-        processor = CdcProcessor.get_from_name(processor_config["name"]).from_kwargs(
-            **processor_config.get("args", {})
-        )
+    processor_name = loader_config["processor"]
+    processor = DatasetMessageProcessor.from_name(processor_name)
     assert processor is not None
     default_topic = Topic(loader_config["default_topic"])
     # optionals
@@ -192,6 +181,12 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     )
     subscription_result_topic = __get_topic(loader_config, "subscription_result_topic")
 
+    subscription_synchronization_timestamp = loader_config.get(
+        "subscription_synchronization_timestamp"
+    )
+
+    subscription_delay_seconds = loader_config.get("subscription_delay_seconds")
+
     dlq_topic = __get_topic(loader_config, "dlq_topic")
 
     return build_kafka_stream_loader_from_settings(
@@ -203,6 +198,8 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_scheduler_mode,
         subscription_scheduled_topic,
         subscription_result_topic,
+        subscription_synchronization_timestamp,
+        subscription_delay_seconds,
         dlq_topic,
     )
 

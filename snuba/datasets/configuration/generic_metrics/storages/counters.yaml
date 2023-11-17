@@ -60,6 +60,14 @@ schema:
   dist_table_name: generic_metric_counters_aggregated_dist
 
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -69,6 +77,26 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+  - name: CrossOrgQueryAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+      cross_org_referrer_limits:
+        dynamic_sampling.counters.get_org_transaction_volumes:
+          max_threads: 4
+          concurrent_limit: 10
+        dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes:
+            max_threads: 4
+            concurrent_limit: 10
+        dynamic_sampling.counters.fetch_projects_with_transaction_totals:
+            max_threads: 4
+            concurrent_limit: 10
+        dynamic_sampling.counters.get_active_orgs:
+            max_threads: 4
+            concurrent_limit: 10
 
 query_processors:
   - processor: TableRateLimit

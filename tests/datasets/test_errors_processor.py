@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
+from unittest.mock import ANY
 from uuid import UUID
 
 import pytest
-import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
@@ -344,7 +344,7 @@ class ErrorEvent:
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
             ],
-            "received": self.received_timestamp.astimezone(pytz.utc).replace(
+            "received": self.received_timestamp.astimezone(timezone.utc).replace(
                 tzinfo=None, microsecond=0
             ),
             "message": "",
@@ -398,16 +398,7 @@ class ErrorEvent:
 @pytest.mark.redis_db
 class TestErrorsProcessor:
 
-    processor = ErrorsProcessor(
-        {
-            "environment": "environment",
-            "sentry:release": "release",
-            "sentry:dist": "dist",
-            "sentry:user": "user",
-            "transaction": "transaction_name",
-            "level": "level",
-        }
-    )
+    processor = ErrorsProcessor()
 
     def __get_timestamps(self) -> tuple[datetime, datetime]:
         timestamp = datetime.now() - timedelta(seconds=5)
@@ -449,18 +440,9 @@ class TestErrorsProcessor:
         message = self.__get_error_event(timestamp, recieved)
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
-        processor = ErrorsProcessor(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+        processor = ErrorsProcessor()
         assert processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], None
+            [message.build_result(meta)], ANY
         )
 
     def test_errors_replayid_context(self) -> None:
@@ -498,7 +480,7 @@ class TestErrorsProcessor:
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], None
+            [message.build_result(meta)], ANY
         )
 
     def test_errors_replayid_tag(self) -> None:
@@ -542,7 +524,7 @@ class TestErrorsProcessor:
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, replay_id.hex)
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
     def test_errors_replayid_tag_and_context(self) -> None:
@@ -585,7 +567,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["replay_id"] = str(replay_id)
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
     def test_errors_replayid_invalid_tag(self) -> None:
@@ -629,7 +611,7 @@ class TestErrorsProcessor:
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, invalid_replay_id)
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
     def test_exception_main_thread_true(self) -> None:
@@ -683,7 +665,7 @@ class TestErrorsProcessor:
         result["exception_main_thread"] = True
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
     def test_exception_main_thread_false(self) -> None:
@@ -737,7 +719,7 @@ class TestErrorsProcessor:
         result["exception_main_thread"] = False
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
     def test_trace_sampled(self) -> None:
@@ -777,7 +759,7 @@ class TestErrorsProcessor:
         result["trace_sampled"] = True
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
         # verify processing trace.sampled=None works as it did before
@@ -788,7 +770,7 @@ class TestErrorsProcessor:
         result2 = message.build_result(meta)
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result2], None
+            [result2], ANY
         )
 
     def test_errors_processed(self) -> None:
@@ -828,7 +810,7 @@ class TestErrorsProcessor:
         result["num_processing_errors"] = 3
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )
 
         # ensure old behavior where data.errors=None won't set 'num_processing_errors'
@@ -839,5 +821,5 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], None
+            [result], ANY
         )

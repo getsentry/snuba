@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Dict
 
 import pytest
 
+from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -35,6 +38,7 @@ TESTS = [
                 "GRANULARITY 60"
             ),
             "parent_api": "<unknown>",
+            "tenant_ids": {"organization_id": 1, "referrer": "test"},
         },
         binary_condition(
             BooleanFunctions.AND,
@@ -97,3 +101,92 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
     assert status == True, f"Query mismatch: {differences}"
+
+
+TENANT_ID_TESTS = [
+    pytest.param(
+        {
+            "query": (
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "project_id IN tuple(1) AND "
+                "timestamp >= toDateTime('2011-07-01T19:54:15') AND"
+                "timestamp < toDateTime('2018-07-06T19:54:15') "
+                "LIMIT 1000 "
+                "GRANULARITY 60"
+            ),
+            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+        },
+        {"organization_id": 1, "referrer": "test", "project_id": 1},
+        "my_request",
+        0,
+        id="one project id in query",
+    ),
+    pytest.param(
+        {
+            "query": (
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "project_id IN tuple(1, 2, 3, 4) AND"
+                "timestamp >= toDateTime('2011-07-01t19:54:15') AND"
+                "timestamp < toDateTime('2018-07-06t19:54:15') "
+                "LIMIT 1000 "
+                "GRANULARITY 60"
+            ),
+            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+        },
+        {"organization_id": 1, "referrer": "test"},
+        "my_request",
+        0,
+        id="multiple projects, no project tenant",
+    ),
+    pytest.param(
+        {
+            "query": (
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "project_id IN tuple(1, 2, 3, 4) AND"
+                "timestamp >= toDateTime('2011-07-01t19:54:15') AND"
+                "timestamp < toDateTime('2018-07-06t19:54:15') "
+                "LIMIT 1000 "
+                "GRANULARITY 60"
+            ),
+            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+        },
+        {"organization_id": 1, "referrer": "test"},
+        "test",
+        1,
+        id="only use tenant_id referrer in request",
+    ),
+]
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "request_payload, expected_tenant_ids, expected_referrer, only_use_tenant_id_referrer",
+    TENANT_ID_TESTS,
+)
+def test_tenant_ids(
+    request_payload: dict[str, Any],
+    expected_tenant_ids: dict[str, Any],
+    expected_referrer: str,
+    only_use_tenant_id_referrer: bool,
+) -> None:
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(HTTPQuerySettings)
+
+    state.set_config("only_use_tenant_id_referrer", only_use_tenant_id_referrer)
+    request = build_request(
+        request_payload,
+        parse_snql_query,
+        HTTPQuerySettings,
+        schema,
+        dataset,
+        Timer("test"),
+        "my_request",
+    )
+    assert request.referrer == expected_referrer
+    assert request.attribution_info.tenant_ids == expected_tenant_ids

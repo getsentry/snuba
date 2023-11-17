@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import QueryEditor from "../query_editor";
 
 describe("Query editor", () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
   describe("when generating queries", () => {
     it("should replace all instances of parameter name when it has a non-empty parameter value", () => {

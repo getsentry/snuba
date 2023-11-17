@@ -36,6 +36,7 @@ LIST_ELEMENT_LIMIT = 1000
 MAX_CLICK_EVENTS = 20
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
+LOG_LEVELS = ["fatal", "error", "warning", "info", "debug"]
 
 
 class ReplaysProcessor(DatasetMessageProcessor):
@@ -65,18 +66,21 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["urls"] = self.__extract_urls(replay_event)
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
         processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
-        processed["release"] = maybe(to_string, replay_event.get("release"))
-        processed["environment"] = maybe(to_string, replay_event.get("environment"))
-        processed["dist"] = maybe(to_string, replay_event.get("dist"))
-        processed["platform"] = maybe(to_string, replay_event["platform"])
-        processed["replay_type"] = maybe(
-            to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
+        processed["release"] = default(
+            str, maybe(to_string, replay_event.get("release"))
         )
-
-        # Archived can only be 1 or null.
-        processed["is_archived"] = (
-            1 if replay_event.get("is_archived") is True else None
+        processed["environment"] = default(
+            str, maybe(to_string, replay_event.get("environment"))
         )
+        processed["dist"] = default(str, maybe(to_string, replay_event.get("dist")))
+        processed["platform"] = default(str, maybe(to_string, replay_event["platform"]))
+        processed["replay_type"] = default(
+            str,
+            maybe(
+                to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
+            ),
+        )
+        processed["is_archived"] = default(int, replay_event.get("is_archived"))
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -85,7 +89,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
         # we have to set title to empty string as it is non-nullable,
         # and on clickhouse 20 this throws an error.
-        processed["title"] = tags.transaction or ""
+        processed["title"] = tags.transaction
         processed["tags.key"] = tags.keys
         processed["tags.value"] = tags.values
 
@@ -110,9 +114,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         # "extract_user" calls "_unicodify" so we can be reasonably sure it has coerced the
         # strings correctly.
         extract_user(user_data, user_dict)
-        processed["user_name"] = user_data["username"]
-        processed["user_id"] = user_data["user_id"]
-        processed["user_email"] = user_data["email"]
+        processed["user_name"] = default(str, user_data["username"])
+        processed["user_id"] = default(str, user_data["user_id"])
+        processed["user_email"] = default(str, user_data["email"])
 
         ip_address = _ensure_valid_ip(user_data["ip_address"])
         if ip_address:
@@ -130,32 +134,48 @@ class ReplaysProcessor(DatasetMessageProcessor):
         if not contexts:
             return None
 
-        os_context = contexts.get("os", {})
-        processed["os_name"] = maybe(to_string, os_context.get("name"))
-        processed["os_version"] = maybe(to_string, os_context.get("version"))
-
         browser_context = contexts.get("browser", {})
-        processed["browser_name"] = maybe(to_string, browser_context.get("name"))
-        processed["browser_version"] = maybe(to_string, browser_context.get("version"))
-
         device_context = contexts.get("device", {})
-        processed["device_name"] = maybe(to_string, device_context.get("name"))
-        processed["device_brand"] = maybe(to_string, device_context.get("brand"))
-        processed["device_family"] = maybe(to_string, device_context.get("family"))
-        processed["device_model"] = maybe(to_string, device_context.get("model"))
-
+        os_context = contexts.get("os", {})
         replay = contexts.get("replay", {})
-        processed["error_sample_rate"] = maybe(float, replay.get("error_sample_rate"))
-        processed["session_sample_rate"] = maybe(
-            float, replay.get("session_sample_rate")
+
+        processed["os_name"] = default(str, maybe(to_string, os_context.get("name")))
+        processed["os_version"] = default(
+            str, maybe(to_string, os_context.get("version"))
+        )
+        processed["browser_name"] = default(
+            str, maybe(to_string, browser_context.get("name"))
+        )
+        processed["browser_version"] = default(
+            str, maybe(to_string, browser_context.get("version"))
+        )
+        processed["device_name"] = default(
+            str, maybe(to_string, device_context.get("name"))
+        )
+        processed["device_brand"] = default(
+            str, maybe(to_string, device_context.get("brand"))
+        )
+        processed["device_family"] = default(
+            str, maybe(to_string, device_context.get("family"))
+        )
+        processed["device_model"] = default(
+            str, maybe(to_string, device_context.get("model"))
+        )
+
+        # Sample rates default to -1.0 which is an impossible state for the field.
+        processed["error_sample_rate"] = default(
+            lambda: -1.0, maybe(float, replay.get("error_sample_rate"))
+        )
+        processed["session_sample_rate"] = default(
+            lambda: -1.0, maybe(float, replay.get("session_sample_rate"))
         )
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         sdk = replay_event.get("sdk", None) or {}
-        processed["sdk_name"] = maybe(to_string, sdk.get("name"))
-        processed["sdk_version"] = maybe(to_string, sdk.get("version"))
+        processed["sdk_name"] = default(str, maybe(to_string, sdk.get("name")))
+        processed["sdk_version"] = default(str, maybe(to_string, sdk.get("version")))
 
     def _process_kafka_metadata(
         self, metadata: KafkaMessageMetadata, processed: MutableMapping[str, Any]
@@ -176,10 +196,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         replay_event = rapidjson.loads(bytes(message["payload"]))
+        received = datetime.utcfromtimestamp(message["start_time"])
         try:
             retention_days = enforce_retention(
                 message["retention_days"],
-                datetime.utcfromtimestamp(message["start_time"]),
+                received,
             )
         except EventTooOld:
             return None
@@ -191,7 +212,10 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
         if replay_event["type"] == "replay_actions":
             actions = process_replay_actions(replay_event, processed, metadata)
-            return InsertBatch(actions, None)
+            return InsertBatch(actions, received)
+        if replay_event["type"] == "event_link":
+            link = process_replay_event_link(replay_event, processed, metadata)
+            return InsertBatch([link], received)
         else:
             # The following helper functions should be able to be applied in any order.
             # At time of writing, there are no reads of the values in the `processed`
@@ -207,7 +231,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
-            return InsertBatch([processed], None)
+            return InsertBatch([processed], received)
 
 
 def process_replay_actions(
@@ -251,9 +275,42 @@ def process_replay_actions(
             "click_testid": to_string(click["testid"])[:64],
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
+            "click_is_dead": to_uint1(click["is_dead"]),
+            "click_is_rage": to_uint1(click["is_rage"]),
         }
         for click in payload["clicks"][:MAX_CLICK_EVENTS]
     ]
+
+
+def process_replay_event_link(
+    payload: Mapping[Any, Any],
+    processed: Mapping[Any, Any],
+    metadata: KafkaMessageMetadata,
+) -> dict[str, Any]:
+    event_id = None
+    event_severity = None
+    for level in LOG_LEVELS:
+        if payload.get(level + "_id") is not None:
+            event_id = to_uuid(payload[level + "_id"])
+            event_severity = level
+            break
+
+    if event_id is None or event_severity is None:
+        raise ValueError("Missing event id")
+
+    return {
+        "project_id": processed["project_id"],
+        "replay_id": to_uuid(payload["replay_id"]),
+        "segment_id": None,
+        "event_hash": payload["event_hash"],
+        "timestamp": raise_on_null(
+            "timestamp", maybe(to_datetime, payload["timestamp"])
+        ),
+        "retention_days": processed["retention_days"],
+        "partition": metadata.partition,
+        "offset": metadata.offset,
+        event_severity + "_id": event_id,
+    }
 
 
 T = TypeVar("T")
@@ -292,6 +349,14 @@ def to_datetime(value: Any) -> datetime:
     Datetimes for the replays schema standardize on 32 bit dates.
     """
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
+
+
+def to_uint1(value: Any) -> int:
+    int_value = int(value)
+    if int_value == 0 or int_value == 1:
+        return int_value
+    else:
+        raise ValueError("Value must be 0 or 1")
 
 
 def to_uint16(value: Any) -> int:

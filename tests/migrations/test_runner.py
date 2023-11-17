@@ -56,7 +56,9 @@ def test_get_status() -> None:
     assert runner.get_status(
         MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
     ) == (Status.NOT_STARTED, None)
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
     assert runner.get_status(
         MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
     ) == (Status.NOT_STARTED, None)
@@ -99,7 +101,7 @@ def test_show_all_for_groups() -> None:
     assert group == MigrationGroup("system")
     assert all([migration.status == Status.NOT_STARTED for migration in migrations])
 
-    runner.run_migration(migration_key)
+    runner.run_migration(migration_key, force=True)
     results = runner.show_all(["system"])
 
     assert len(results) == 1
@@ -111,7 +113,9 @@ def test_show_all_for_groups() -> None:
 @pytest.mark.clickhouse_db
 def test_run_migration() -> None:
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -168,7 +172,9 @@ def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
     assert len(runner._get_pending_migrations()) == total_migrations
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
@@ -179,7 +185,9 @@ def test_get_pending_migrations_for_group() -> None:
     migration_group_count = len(get_group_loader(group).get_migrations())
     assert len(runner._get_pending_migrations_for_group(group)) == migration_group_count
 
-    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup("system"), "0001_migrations"), force=True
+    )
     assert len(runner._get_pending_migrations_for_group(MigrationGroup.SYSTEM)) == 0
 
 
@@ -385,7 +393,9 @@ def test_get_active_migration_groups(temp_settings: Any) -> None:
 @pytest.mark.clickhouse_db
 def test_reverse_in_progress() -> None:
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
     migration_key = MigrationKey(
         MigrationGroup.TEST_MIGRATION, "0001_create_test_table"
     )
@@ -410,7 +420,9 @@ def test_reverse_in_progress() -> None:
 @pytest.mark.clickhouse_db
 def test_version() -> None:
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    )
     migration_key = MigrationKey(MigrationGroup.EVENTS, "test")
     assert runner._get_next_version(migration_key) == 1
     runner._update_migration_status(migration_key, Status.IN_PROGRESS)

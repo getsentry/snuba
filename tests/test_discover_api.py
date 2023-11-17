@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -34,14 +33,15 @@ class TestDiscoverApi(BaseApiTest):
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method: Any) -> None:
-        super().setup_method(test_method)
+    @pytest.fixture(scope="function", autouse=True)
+    def _setup_method(self, request: Any, clickhouse_db: None) -> None:
+        super().setup_method(request.function)
         self.trace_id = "7400045b25c443b885914600aa83ad04"
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
+            second=0, microsecond=0, tzinfo=timezone.utc
         ) - timedelta(minutes=90)
 
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
@@ -202,14 +202,20 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
 
         assert response.status_code == 200
-        assert data["data"] == [
-            {
-                "type": "transaction",
-                "count": 0,
-                "uniq_group_id": 0,
-                "uniq_ex_stacks": None,
-            }
-        ]
+
+        # this generates a bad snql expression that returns a count of 0
+        # rows in clickhouse 20, but on clickhouse 21 it returns no rows
+        assert (
+            data["data"]
+            == [
+                {
+                    "type": "transaction",
+                    "count": 0,
+                    "uniq_group_id": 0,
+                    "uniq_ex_stacks": None,
+                }
+            ]
+        ) or (data["data"] == [])
 
         response = self.post(
             json.dumps(

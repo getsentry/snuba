@@ -257,6 +257,11 @@ schema:
     },
     { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
     {
+      name: replay_id,
+      type: UUID,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
       name: trace_sampled,
       type: UInt,
       args: { schema_modifiers: [nullable], size: 8 },

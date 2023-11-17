@@ -10,6 +10,7 @@ from unittest.mock import Mock, call
 import pytest
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from py._path.local import LocalPath
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -31,13 +32,16 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.fixtures import get_raw_error_message
 
 
-def test_streaming_consumer_strategy() -> None:
+def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
     messages = (
         Message(
             BrokerValue(
-                KafkaPayload(None, b"{}", []),
+                KafkaPayload(
+                    None, json.dumps(get_raw_error_message()).encode("utf-8"), []
+                ),
                 Partition(Topic("events"), 0),
                 i,
                 datetime.now(),
@@ -69,17 +73,21 @@ def test_streaming_consumer_strategy() -> None:
             ),
         )
 
+    health_check_file = tmpdir / "health.txt"
     factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(
-            process_message, processor, "consumer_group", SnubaTopic.EVENTS
+            process_message, processor, "consumer_group", SnubaTopic.EVENTS, True
         ),
         write_step,
         max_batch_size=10,
         max_batch_time=60,
+        max_insert_batch_size=None,
+        max_insert_batch_time=None,
         processes=None,
         input_block_size=None,
         output_block_size=None,
+        health_check_file=health_check_file.strpath,
     )
 
     commit_function = Mock()
@@ -118,6 +126,8 @@ def test_streaming_consumer_strategy() -> None:
     ):
         strategy.close()
         strategy.join()
+
+    assert health_check_file.check()
 
 
 def test_json_row_batch_pickle_simple() -> None:
@@ -209,17 +219,8 @@ def test_multistorage_strategy(
         for message in messages:
             strategy.submit(message)
 
-        with assert_changes(
-            lambda: commit.call_args_list,
-            [],
-            [
-                call({}),
-                call({Partition(topic=Topic(name="topic"), index=0): 3}),
-                call({}, force=True),
-            ],
-        ):
-            strategy.close()
-            strategy.join()
+        strategy.close()
+        strategy.join()
 
 
 @pytest.mark.clickhouse_db

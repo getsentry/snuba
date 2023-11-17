@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
@@ -43,7 +43,9 @@ _ORG_LESS_REFERRERS = set(
         "replays.query.download_replay_segments",
         "release_monitor.fetch_projects_with_recent_sessions",
         "https://snuba-admin.getsentry.net/",
+        "http://localhost:1219/",
         "reprocessing2.start_group_reprocessing",
+        "metric_validation",
     ]
 )
 
@@ -83,7 +85,6 @@ DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):
-
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
@@ -113,6 +114,8 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[bool, str]:
+        if self.is_cross_org_query(tenant_ids):
+            return True, "cross org query"
         if tenant_ids.get("referrer") is None:
             return False, "no referrer"
         if (
@@ -124,19 +127,21 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
         return True, ""
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
-            self.metrics.increment(
-                "db_request_rejected",
-                tags={
-                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                },
-            )
             if self.is_enforced:
                 return QuotaAllowance(
                     can_run=False, max_threads=0, explanation={"reason": why}
                 )
+        if self.is_cross_org_query(tenant_ids):
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={"reason": "cross_org_query"},
+            )
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
@@ -174,12 +179,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             if granted_quota.granted <= 0:
-                self.metrics.increment(
-                    "db_request_throttled",
-                    tags={
-                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                    },
-                )
                 explanation[
                     "reason"
                 ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
@@ -193,25 +192,48 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return QuotaAllowance(True, num_threads, explanation)
         return QuotaAllowance(True, self.max_threads, {})
 
+    def _get_bytes_scanned_in_query(
+        self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
+    ) -> int:
+        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
+        if isinstance(progress_bytes_scanned, (int, float)):
+            self.metrics.increment(
+                "progress_bytes_scanned",
+                progress_bytes_scanned,
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+
+        return progress_bytes_scanned
+
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
-        if result_or_error.error:
-            return
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
         if not ids_are_valid:
             # we already logged the reason before the query
             return
+        if self.is_cross_org_query(tenant_ids):
+            return
+        if result_or_error.error:
+            return
+        bytes_scanned = self._get_bytes_scanned_in_query(tenant_ids, result_or_error)
         query_result = result_or_error.query_result
         assert query_result is not None
-        bytes_scanned = query_result.result.get("profile", {}).get("bytes", None)  # type: ignore
         if bytes_scanned is None:
             logging.error("No bytes scanned in query_result %s", query_result)
             return
         if bytes_scanned == 0:
             return
+        # we emitted both kinds of bytes scanned in _get_bytes_scanned_in_query however
+        # this metric shows what is actually being used to enforce the policy
+        self.metrics.increment(
+            "bytes_scanned",
+            bytes_scanned,
+            tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+        )
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
                 tenant_ids.get("organization_id")

@@ -48,7 +48,9 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-    return _parse_snql_query(request_parts.query["query"], dataset, custom_processing)
+    return _parse_snql_query(
+        request_parts.query["query"], dataset, custom_processing, settings
+    )
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
@@ -64,6 +66,24 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
     return original_setting
 
 
+def update_attribution_info(
+    request_parts: RequestParts, referrer: str, query_project_id: Optional[int]
+) -> dict[str, Any]:
+    attribution_info = dict(request_parts.attribution_info)
+
+    attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
+    attribution_info["referrer"] = referrer
+    attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
+
+    if (
+        "project_id" not in attribution_info["tenant_ids"]
+        and query_project_id is not None
+    ):
+        attribution_info["tenant_ids"]["project_id"] = query_project_id
+
+    return attribution_info
+
+
 def build_request(
     body: Dict[str, Any],
     parser: Parser,
@@ -77,6 +97,14 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
+            if state.get_config("only_use_tenant_id_referrer", False):
+                if "referrer" not in request_parts.attribution_info["tenant_ids"]:
+                    referrer = "<unknown>"
+                else:
+                    referrer = str(
+                        request_parts.attribution_info["tenant_ids"]["referrer"]
+                    )
+
             if settings_class == HTTPQuerySettings:
                 query_settings: MutableMapping[str, bool | str] = {
                     **request_parts.query_settings,
@@ -98,22 +126,18 @@ def build_request(
             )
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
+            query_project_id = None
             if project_ids is not None and len(project_ids) == 1:
-                sentry_sdk.set_tag("snuba_project_id", project_ids.pop())
+                query_project_id = project_ids.pop()
+                sentry_sdk.set_tag("snuba_project_id", query_project_id)
 
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
                 sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
-            attribution_info = dict(request_parts.attribution_info)
-            # TODO: clean this up
-            attribution_info["app_id"] = get_app_id(
-                request_parts.attribution_info["app_id"]
-            )
-            attribution_info["referrer"] = referrer
-            attribution_info["tenant_ids"] = request_parts.attribution_info[
-                "tenant_ids"
-            ]
 
+            attribution_info = update_attribution_info(
+                request_parts, referrer, query_project_id
+            )
             request_id = uuid.uuid4().hex
             request = Request(
                 id=request_id,
@@ -128,11 +152,15 @@ def build_request(
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
-            record_invalid_request(timer, request_status, referrer)
+            record_invalid_request(
+                timer, request_status, referrer, str(type(exception).__name__)
+            )
             raise exception
         except Exception as exception:
             request_status = get_request_status(exception)
-            record_error_building_request(timer, request_status, referrer)
+            record_error_building_request(
+                timer, request_status, referrer, str(type(exception).__name__)
+            )
             raise exception
 
         span.set_data(

@@ -27,7 +27,9 @@ class AdminTools(Enum):
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
     CAPACITY_MANAGEMENT = "capacity-management"
+    PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
+    SNUBA_EXPLAIN = "snuba-explain"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

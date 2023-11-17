@@ -1,8 +1,7 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
-import rapidjson
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
@@ -10,6 +9,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit, Partition, Topic
 
 from snuba import settings
@@ -17,7 +17,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
@@ -26,10 +25,10 @@ from snuba.subscriptions.scheduler_processing_strategy import (
     TickBuffer,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.types import Interval, InvalidRangeError
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
-from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,10 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 class MessageDetails(NamedTuple):
     offset: int
-    orig_message_ts: datetime
+    orig_message_ts: float
+    # The timestamp the message was first received by Sentry (Relay)
+    # It is optional since it is not currently present on all topics
+    received_p99: Optional[float]
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -95,12 +97,17 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self,
         consumer: Consumer[KafkaPayload],
         followed_consumer_group: str,
+        metrics: MetricsBackend,
+        synchronization_timestamp: str,
         time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__consumer = consumer
         self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
-        self.__time_shift = time_shift if time_shift is not None else timedelta()
+        self.__metrics = metrics
+        assert synchronization_timestamp in ("orig_message_ts", "received_p99")
+        self.__synchronization_timestamp = synchronization_timestamp
+        self.__time_shift = time_shift.total_seconds() if time_shift is not None else 0
 
     def subscribe(
         self,
@@ -128,7 +135,6 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         try:
             commit = commit_codec.decode(value.payload)
-            assert commit.orig_message_ts is not None
         except Exception:
             logger.error(
                 f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
@@ -146,16 +152,12 @@ class CommitLogTickConsumer(Consumer[Tick]):
         if previous_message is not None:
             try:
                 time_interval = Interval(
-                    previous_message.orig_message_ts, commit.orig_message_ts
+                    getattr(previous_message, self.__synchronization_timestamp),
+                    getattr(commit, self.__synchronization_timestamp),
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
-                logger.warning(
-                    "Could not construct valid interval between %r and %r!",
-                    previous_message,
-                    MessageDetails(commit.offset, commit.orig_message_ts),
-                    exc_info=True,
-                )
+                self.__metrics.increment("invalid_interval")
                 return None
             else:
                 result = BrokerValue(
@@ -173,7 +175,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             result = None
 
         self.__previous_messages[commit.partition] = MessageDetails(
-            commit.offset, commit.orig_message_ts
+            commit.offset, commit.orig_message_ts, commit.received_p99
         )
 
         return result
@@ -220,10 +222,10 @@ class SchedulerBuilder:
         auto_offset_reset: str,
         strict_offset_reset: Optional[bool],
         schedule_ttl: int,
-        delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -245,8 +247,13 @@ class SchedulerBuilder:
 
         mode = stream_loader.get_subscription_scheduler_mode()
         assert mode is not None
-
         self.__mode = mode
+
+        synchronization_timestamp = (
+            stream_loader.get_subscription_sychronization_timestamp()
+        )
+        assert synchronization_timestamp is not None
+        self.__synchronization_timestamp = synchronization_timestamp
 
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
@@ -257,10 +264,14 @@ class SchedulerBuilder:
         self.__auto_offset_reset = auto_offset_reset
         self.__strict_offset_reset = strict_offset_reset
         self.__schedule_ttl = schedule_ttl
+
+        delay_seconds = stream_loader.get_subscription_delay_seconds()
+        assert delay_seconds is not None
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__slice_id = slice_id
+        self.__health_check_file = health_check_file
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -283,6 +294,7 @@ class SchedulerBuilder:
             self.__scheduled_topic_spec,
             self.__metrics,
             self.__slice_id,
+            self.__health_check_file,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -295,31 +307,11 @@ class SchedulerBuilder:
             strict_offset_reset=self.__strict_offset_reset,
         )
 
-        # Collect metrics from librdkafka if we have stats_collection_freq_ms set
-        # for the consumer group, or use the default.
-        stats_collection_frequency_ms = get_config(
-            f"stats_collection_freq_ms_{self.__consumer_group}",
-            get_config("stats_collection_freq_ms", 0),
-        )
-
-        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
-
-            def stats_callback(stats_json: str) -> None:
-                stats = rapidjson.loads(stats_json)
-                self.__metrics.gauge(
-                    "librdkafka.total_queue_size", stats.get("replyq", 0)
-                )
-
-            consumer_configuration.update(
-                {
-                    "statistics.interval.ms": stats_collection_frequency_ms,
-                    "stats_cb": stats_callback,
-                }
-            )
-
         return CommitLogTickConsumer(
             KafkaConsumer(consumer_configuration),
             followed_consumer_group=self.__followed_consumer_group,
+            metrics=self.__metrics,
+            synchronization_timestamp=self.__synchronization_timestamp,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
                 if self.__delay_seconds is not None
@@ -340,6 +332,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
         slice_id: Optional[int] = None,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -348,6 +341,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
         self.__slice_id = slice_id
+        self.__health_check_file = health_check_file
 
         self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
             entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
@@ -382,10 +376,15 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__slice_id,
         )
 
-        return TickBuffer(
+        strategy: ProcessingStrategy[Tick] = TickBuffer(
             self.__mode,
             self.__partitions,
             self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
             self.__metrics,
         )
+
+        if self.__health_check_file:
+            strategy = Healthcheck(self.__health_check_file, strategy)
+
+        return strategy

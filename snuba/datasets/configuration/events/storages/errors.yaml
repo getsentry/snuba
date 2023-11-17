@@ -229,8 +229,9 @@ schema:
       {
         name: num_processing_errors,
         type: UInt,
-        args: { schema_modifiers: [ nullable ], size: 64 },
+        args: { schema_modifiers: [nullable], size: 64 },
       },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist
@@ -239,6 +240,14 @@ schema:
     - date
   not_deleted_mandatory_condition: deleted
 allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -354,19 +363,12 @@ replacer_processor:
     state_name: errors
     storage_key_str: errors
 stream_loader:
-  processor:
-    name: ErrorsProcessor
-    args:
-      promoted_tag_columns:
-        environment: environment
-        sentry:release: release
-        sentry:dist: dist
-        sentry:user: user
-        transaction: transaction_name
-        level: level
+  processor: ErrorsProcessor
   default_topic: events
   replacement_topic: event-replacements
   commit_log_topic: snuba-commit-log
   subscription_scheduler_mode: partition
+  subscription_synchronization_timestamp: received_p99
+  subscription_delay_seconds: 30
   subscription_scheduled_topic: scheduled-subscriptions-events
   subscription_result_topic: events-subscription-results

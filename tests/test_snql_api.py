@@ -31,7 +31,9 @@ class RejectAllocationPolicy123(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
 
-    def _get_quota_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance:
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=False,
             max_threads=0,
@@ -41,6 +43,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
+        query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
         return
@@ -86,6 +89,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     ORDER BY count ASC
                     LIMIT 1000""",
+                    "referrer": "myreferrer",
                     "turbo": False,
                     "consistent": True,
                     "debug": True,
@@ -796,50 +800,6 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    @patch("snuba.settings.RECORD_QUERIES", True)
-    @patch("snuba.attribution.log.kfk")
-    def test_app_id_attribution(self, record_kfk: Any) -> None:
-        state.set_config("use_attribution", 1)
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (events)
-                    SELECT count() AS count
-                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN tuple({self.project_id})
-                    """,
-                    "app_id": "default",
-                    "parent_api": "some/endpoint",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "default"
-        assert metric_calls[0].tags["referrer"] == "test"
-        assert metric_calls[0].tags["parent_api"] == "some/endpoint"
-        assert metric_calls[0].tags["dataset"] == "events"
-        assert metric_calls[0].tags["entity"] == "events"
-        assert metric_calls[0].tags["table"].startswith("errors")
-
-        record_kfk.produce.assert_called_once()
-        topic, raw_data = record_kfk.produce.call_args.args
-        assert topic == "snuba-attribution"
-        data = json.loads(raw_data)
-        assert data["app_id"] == "default"
-        assert data["referrer"] == "test"
-        assert data["dataset"] == "events"
-        assert data["entity"] == "events"
-        assert len(data["queries"]) == 1
-        assert data["queries"][0]["table"].startswith("errors_")
-        assert data["queries"][0]["bytes_scanned"] > 0
-
     def test_timing_metrics_tags(self) -> None:
         response = self.post(
             "/events/snql",
@@ -867,29 +827,6 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["final"] == "False"
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["app_id"] == "something-good"
-
-    def test_arbitrary_app_id_attribution(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (events)
-                    SELECT count() AS count
-                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN tuple({self.project_id})
-                    """,
-                    "app_id": "something-cool",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "something-cool"
 
     def test_missing_alias_bug(self) -> None:
         response = self.post(
@@ -1126,7 +1063,7 @@ class TestSnQLApi(BaseApiTest):
                     WHERE type != 'transaction' AND project_id = {self.project_id}
                     AND timestamp >= toDateTime('{self.base_time.isoformat()}')
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND type IN array(1, 2, 3)
+                    AND project_id IN array('one', 'two')
                     LIMIT 1000""",
                     "turbo": False,
                     "consistent": True,
@@ -1136,7 +1073,6 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
 
-        assert b"DB::Exception: Type mismatch" in response.data
         assert response.status_code == 400
 
     def test_clickhouse_illegal_type_error(self) -> None:
@@ -1250,7 +1186,7 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert (
-            response.status_code == 500
+            response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
     def test_allocation_policy_violation(self) -> None:

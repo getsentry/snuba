@@ -17,10 +17,6 @@ USE_REDIS_CLUSTER = False
 DOGSTATSD_HOST = env("DOGSTATSD_HOST")
 DOGSTATSD_PORT = env("DOGSTATSD_PORT")
 
-# Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {
-    "search_issues",
-}
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "complete"}
 READINESS_STATE_FAIL_QUERIES: bool = False

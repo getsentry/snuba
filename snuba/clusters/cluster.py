@@ -79,6 +79,18 @@ class ClickhouseClientSettings(Enum):
         },
         None,
     )
+    CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
+        {
+            # Allow reading data and changing settings.
+            "readonly": 2,
+            # Allow more threads for faster processing since cardinality queries
+            # need more resources.
+            "max_threads": 10,
+            # Don't use up production cache for cardinality analyzer queries.
+            "use_uncompressed_cache": 0,
+        },
+        None,
+    )
 
 
 @dataclass(frozen=True)
@@ -363,6 +375,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 
     def get_port(self) -> int:
         return self.__port
+
+    def get_http_port(self) -> int:
+        return self.__http_port
 
 
 CLUSTERS = [

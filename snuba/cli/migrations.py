@@ -65,6 +65,7 @@ def list() -> None:
 @click.argument("through", default="all")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
+@click.option("--check-dangerous", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
@@ -74,6 +75,7 @@ def migrate(
     through: str,
     force: bool,
     fake: bool,
+    check_dangerous: bool,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -104,6 +106,7 @@ def migrate(
                 if readiness_state
                 else None
             ),
+            check_dangerous=check_dangerous,
         )
     except MigrationError as e:
         raise click.ClickException(str(e))
@@ -118,6 +121,7 @@ def migrate(
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
+@click.option("--check-dangerous", is_flag=True)
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
@@ -128,6 +132,7 @@ def run(
     fake: bool,
     dry_run: bool,
     yes: bool,
+    check_dangerous: bool,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -147,7 +152,9 @@ def run(
     migration_key = MigrationKey(migration_group, migration_id)
 
     if dry_run:
-        runner.run_migration(migration_key, dry_run=True)
+        runner.run_migration(
+            migration_key, dry_run=True, check_dangerous=check_dangerous
+        )
         return
 
     try:
@@ -156,7 +163,9 @@ def run(
                 "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
                 abort=True,
             )
-        runner.run_migration(migration_key, force=force, fake=fake)
+        runner.run_migration(
+            migration_key, force=force, fake=fake, check_dangerous=check_dangerous
+        )
     except MigrationError as e:
         raise click.ClickException(str(e))
 

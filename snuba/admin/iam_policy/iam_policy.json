@@ -32,7 +32,8 @@
     },
     {
       "members": [
-          "group:team-starfish@sentry.io"
+          "group:team-starfish@sentry.io",
+          "group:team-ingestion-pipeline@sentry.io"
       ],
       "role": "roles/CardinalityAnalyzer"
     }

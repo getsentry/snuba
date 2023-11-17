@@ -1,10 +1,9 @@
 import itertools
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 
 import pytest
-import pytz
 from pytest import approx
 from snuba_sdk import AliasedExpression, Function, Request
 from snuba_sdk.column import Column
@@ -27,7 +26,7 @@ SNQL_ROUTE = "/generic_metrics/snql"
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=pytz.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
     )
 
 
@@ -719,3 +718,160 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         data = json.loads(response.data)
         first_row = data["data"][0]
         assert first_row["tag_string"] == expected_value
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestOrgGenericMetricsApiGauges(BaseApiTest):
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "generic_metrics_gauges"
+
+    @pytest.fixture(autouse=True)
+    def setup_teardown(
+        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+    ) -> None:
+        self.post = _build_snql_post_methods
+
+        self.count = 3600
+        self.base_time = utc_yesterday_12_15()
+        self.sentry_received_timestamp = utc_yesterday_12_15()
+
+        self.start_time = self.base_time
+        self.end_time = (
+            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
+        )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
+        self.mapping_meta = SHARED_MAPPING_META
+        self.default_tags = SHARED_TAGS
+
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_GAUGES_RAW)
+
+        self.use_case_id = "performance"
+
+        self.metric_id = 1001
+        self.org_id = 101
+        self.project_ids = [1, 2]  # 2 projects
+        self.generate_gauges()
+
+    def generate_gauges(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
+        events = []
+        for n in range(self.count):
+            for p in self.project_ids:
+                processed = (
+                    self.write_storage.get_table_writer()
+                    .get_stream_loader()
+                    .get_processor()
+                    .process_message(
+                        (
+                            {
+                                "org_id": self.org_id,
+                                "project_id": p,
+                                "unit": "ms",
+                                "type": InputType.GAUGE.value,
+                                "value": {
+                                    "min": 2.0,
+                                    "max": 21.0,
+                                    "sum": 25.0,
+                                    "count": 3,
+                                    "last": 4.0,
+                                },
+                                "timestamp": self.base_time.timestamp() + n,
+                                "tags": self.default_tags,
+                                "metric_id": self.metric_id,
+                                "retention_days": RETENTION_DAYS,
+                                "mapping_meta": self.mapping_meta,
+                                "use_case_id": self.use_case_id,
+                                "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
+                                + n,
+                            }
+                        ),
+                        KafkaMessageMetadata(0, 0, self.base_time),
+                    )
+                )
+                if processed:
+                    events.append(processed)
+        write_processed_messages(self.write_storage, events)
+
+    def test_simple_gauge(self) -> None:
+        query = Query(
+            match=Entity("generic_metrics_gauges"),
+            select=[
+                Function("last", [Column("value")], "value"),
+                Column("org_id"),
+                Column("project_id"),
+            ],
+            groupby=[Column("org_id"), Column("project_id")],
+            where=[
+                Condition(Column("metric_id"), Op.EQ, self.metric_id),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
+                Condition(Column("org_id"), Op.EQ, self.org_id),
+                Condition(Column("project_id"), Op.IN, self.project_ids),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+        )
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 2
+        assert data["data"][0] == {
+            "org_id": self.org_id,
+            "project_id": 1,
+            "value": 4.0,
+        }
+        assert data["data"][1] == {
+            "org_id": self.org_id,
+            "project_id": 2,
+            "value": 4.0,
+        }
+
+    def test_bucketed_time_gauge(self) -> None:
+        query = Query(
+            match=Entity("generic_metrics_gauges"),
+            select=[
+                Column("bucketed_time"),
+                Function("last", [Column("value")], "value"),
+                Column("org_id"),
+                Column("project_id"),
+            ],
+            groupby=[Column("org_id"), Column("project_id"), Column("bucketed_time")],
+            where=[
+                Condition(Column("metric_id"), Op.EQ, self.metric_id),
+                Condition(Column("timestamp"), Op.GTE, self.hour_before_start_time),
+                Condition(Column("timestamp"), Op.LT, self.hour_after_start_time),
+                Condition(Column("org_id"), Op.EQ, self.org_id),
+                Condition(Column("project_id"), Op.IN, self.project_ids),
+            ],
+            granularity=Granularity(3600),
+        )
+
+        request = Request(
+            dataset="generic_metrics",
+            app_id="default",
+            query=query,
+            tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+        )
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(request.to_dict()),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4

@@ -17,6 +17,9 @@ from snuba.web import QueryResult
 ORG_SCAN_LIMIT = 1000
 THROTTLED_THREAD_NUMBER = 1
 MAX_THREAD_NUMBER = 400
+# This policy does not use the query_id for any of its operation,
+# but we need to pass it for the interface
+QUERY_ID = "deadbeef"
 
 
 @pytest.fixture(scope="function")
@@ -45,20 +48,21 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    allowance = policy.get_quota_allowance(tenant_ids)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.max_threads == MAX_THREAD_NUMBER
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"bytes": ORG_SCAN_LIMIT}},
+                result={"profile": {"progress_bytes": ORG_SCAN_LIMIT}},
                 extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
         ),
     )
-    allowance = policy.get_quota_allowance(tenant_ids)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.max_threads == THROTTLED_THREAD_NUMBER
     assert allowance.explanation == {
@@ -79,6 +83,7 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
     }
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -91,7 +96,7 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
         "organization_id": 1235,
         "referrer": "some_referrer",
     }
-    allowance = policy.get_quota_allowance(different_tenant_ids)
+    allowance = policy.get_quota_allowance(different_tenant_ids, QUERY_ID)
     assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
@@ -105,6 +110,7 @@ def test_killswitch(policy: AllocationPolicy) -> None:
     }
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -113,7 +119,7 @@ def test_killswitch(policy: AllocationPolicy) -> None:
             error=None,
         ),
     )
-    allowance = policy.get_quota_allowance(tenant_ids)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     # policy is not active so no change
     assert allowance.max_threads == MAX_THREAD_NUMBER
 
@@ -127,6 +133,7 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
     }
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
@@ -136,7 +143,7 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
         ),
     )
     policy.set_config_value("is_enforced", 0)
-    allowance = policy.get_quota_allowance(tenant_ids)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     # policy not enforced
     assert allowance.max_threads == MAX_THREAD_NUMBER
 
@@ -145,15 +152,18 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
 def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(tenant_ids={"organization_id": 1234})
+        policy.get_quota_allowance(
+            tenant_ids={"organization_id": 1234}, query_id=QUERY_ID
+        )
     with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(tenant_ids={"referrer": "bloop"})
+        policy.get_quota_allowance(tenant_ids={"referrer": "bloop"}, query_id=QUERY_ID)
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
         tenant_ids: dict[str, str | int] = {"referrer": referrer}
-        policy.get_quota_allowance(tenant_ids)
+        policy.get_quota_allowance(tenant_ids, QUERY_ID)
         policy.update_quota_balance(
             tenant_ids,
+            QUERY_ID,
             QueryResultOrError(
                 query_result=QueryResult(
                     result={"profile": {"bytes": ORG_SCAN_LIMIT}},
@@ -191,11 +201,12 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
         "organization_id": 1,
     }
     assert (
-        policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
         == MAX_THREAD_NUMBER
     )
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},
@@ -205,7 +216,7 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
         ),
     )
     assert (
-        policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
         == MAX_THREAD_NUMBER
     )
 
@@ -214,9 +225,13 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
 def test_single_thread_referrers(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, str | int] = {"referrer": "delete-events-from-file"}
-    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == 1
+    )
     policy.update_quota_balance(
         tenant_ids,
+        QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
                 result={"profile": {"bytes": ORG_SCAN_LIMIT * 1000}},
@@ -225,4 +240,45 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
             error=None,
         ),
     )
-    assert policy.get_quota_allowance(tenant_ids=tenant_ids).max_threads == 1
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == 1
+    )
+
+
+@pytest.mark.redis_db
+def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "organization_id": 1,
+    }
+    no_bytes_scanned_info_result = QueryResultOrError(
+        query_result=QueryResult(
+            result={
+                "profile": {
+                    # bytes scanned info is missing
+                }
+            },
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+        error=None,
+    )
+    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+
+
+@pytest.mark.redis_db
+def test_cross_org(policy: AllocationPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "referrer": "do_something",
+        "cross_org_query": 1,
+    }
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).can_run
+    assert (
+        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
+        == policy.max_threads
+    )
+    # make sure that this can be called with cross org queries
+    # and nothing raises
+    policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore

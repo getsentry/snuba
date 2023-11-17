@@ -9,6 +9,14 @@ function CardinalityQueries(props: { api: Client }) {
     PredefinedQuery[]
   >([]);
 
+  useEffect(() => {
+    props.api.getPredefinedCardinalityQueryOptions().then((res) => {
+      res.forEach(
+          (queryOption) => (queryOption.sql = formatSQL(queryOption.sql))
+      );
+      setPredefinedQueryOptions(res);
+    });
+  }, []);
 
   function tablePopulator(queryResult: CardinalityQueryResult) {
     return (
@@ -20,7 +28,6 @@ function CardinalityQueries(props: { api: Client }) {
       </div>
     );
   }
-
   function formatSQL(sql: string) {
     const formatted = sql
       .split("\n")
@@ -34,7 +41,7 @@ function CardinalityQueries(props: { api: Client }) {
       {QueryDisplay({
         api: props.api,
         resultDataPopulator: tablePopulator,
-        predefinedQueryOptions: [],
+        predefinedQueryOptions: predefinedQueryOptions,
       })}
     </div>
   );

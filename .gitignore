@@ -13,3 +13,5 @@ node_modules
 .vscode/*.log
 snuba/admin/dist/bundle.js*
 tmp/
+gocd/templates/vendor/
+gocd/generated-pipelines/

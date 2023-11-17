@@ -3,15 +3,16 @@ from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
 import click
+import structlog
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
 from snuba import environment, state
-from snuba.attribution.log import flush_attribution_producer
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -76,6 +77,12 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
 )
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
 def subscriptions_executor(
     *,
     dataset_name: str,
@@ -89,6 +96,7 @@ def subscriptions_executor(
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
+    health_check_file: Optional[str],
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -97,6 +105,8 @@ def subscriptions_executor(
     """
     setup_logging(log_level)
     setup_sentry()
+
+    logger = structlog.get_logger().bind(module=__name__)
 
     metrics_tags = {
         "dataset": dataset_name,
@@ -129,6 +139,10 @@ def subscriptions_executor(
         )
     )
 
+    logger.info("Checking Clickhouse connections")
+    cluster = storage.get_cluster()
+    check_clickhouse_connections([cluster])
+
     processor = build_executor_consumer(
         dataset_name,
         entity_names,
@@ -141,6 +155,7 @@ def subscriptions_executor(
         not no_strict_offset_reset,
         metrics,
         stale_threshold_seconds,
+        health_check_file,
     )
 
     def handler(signum: int, frame: Any) -> None:
@@ -149,7 +164,7 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with closing(producer), flush_querylog(), flush_attribution_producer():
+    with closing(producer), flush_querylog():
         processor.run()
 
 

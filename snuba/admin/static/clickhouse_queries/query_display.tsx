@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
+import QueryEditor from "../query_editor";
+
+import { Prism } from "@mantine/prism";
+import { RichTextEditor } from "@mantine/tiptap";
+import { useEditor } from "@tiptap/react";
+import HardBreak from "@tiptap/extension-hard-break";
+import Placeholder from "@tiptap/extension-placeholder";
+import StarterKit from "@tiptap/starter-kit";
 
 import {
   ClickhouseNodeData,
@@ -14,7 +22,7 @@ type QueryState = Partial<QueryRequest>;
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
-  predefinedQuery: PredefinedQuery | null;
+  predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [query, setQuery] = useState<QueryState>({});
@@ -28,17 +36,11 @@ function QueryDisplay(props: {
     });
   }, []);
 
-  useEffect(() => {
-    if (props.predefinedQuery) {
-      setQuery({ sql: props.predefinedQuery.sql });
-    }
-  }, [props.predefinedQuery]);
-
   function selectStorage(storage: string) {
     setQuery((prevQuery) => {
       // clear old host port
-      delete prevQuery.host
-      delete prevQuery.port
+      delete prevQuery.host;
+      delete prevQuery.port;
 
       return {
         ...prevQuery,
@@ -85,55 +87,55 @@ function QueryDisplay(props: {
     window.navigator.clipboard.writeText(text);
   }
 
-  function getHosts(nodeData: ClickhouseNodeData[]) : JSX.Element[]{
+  function getHosts(nodeData: ClickhouseNodeData[]): JSX.Element[] {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
-    if (node_info){
+    if (node_info) {
       let local_hosts = node_info.local_nodes.map((node) => (
-              <option
-                key={`${node.host}:${node.port}`}
-                value={`${node.host}:${node.port}`}
-              >
-                {node.host}:{node.port}
-              </option>
-            ))
+        <option
+          key={`${node.host}:${node.port}`}
+          value={`${node.host}:${node.port}`}
+        >
+          {node.host}:{node.port}
+        </option>
+      ));
       let dist_hosts = node_info.dist_nodes
-          .filter((node)=>!node_info.local_nodes.includes(node))
-          .map((node) => (
-              <option
-                key={`${node.host}:${node.port} dist`}
-                value={`${node.host}:${node.port}`}
-              >
-                {node.host}:{node.port} (distributed)
-              </option>
-            ))
-      let hosts = local_hosts.concat(dist_hosts)
-      let query_node = node_info.query_node
-      if (query_node){
+        .filter((node) => !node_info.local_nodes.includes(node))
+        .map((node) => (
+          <option
+            key={`${node.host}:${node.port} dist`}
+            value={`${node.host}:${node.port}`}
+          >
+            {node.host}:{node.port} (distributed)
+          </option>
+        ));
+      let hosts = local_hosts.concat(dist_hosts);
+      let query_node = node_info.query_node;
+      if (query_node) {
         hosts.push(
-          (<option
+          <option
             key={`${query_node.host}:${query_node.port} query`}
             value={`${query_node.host}:${query_node.port}`}
           >
             {query_node.host}:{query_node.port} (query node)
           </option>
-          )
-        )
+        );
       }
-      return hosts
+      return hosts;
     }
-    return []
-
+    return [];
   }
 
   return (
     <div>
       <form>
         <h2>Construct a ClickHouse System Query</h2>
-        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
-        <div>
-          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
-        </div>
+        <QueryEditor
+          onQueryUpdate={(sql) => {
+            updateQuerySql(sql);
+          }}
+          predefinedQueryOptions={props.predefinedQueryOptions}
+        />
         <div style={executeActionsStyle}>
           <div>
             <select
@@ -239,14 +241,34 @@ function TextArea(props: {
   onChange: (nextValue: string) => void;
 }) {
   const { value, onChange } = props;
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder: "Write your query here.",
+      }),
+      HardBreak.extend({
+        addKeyboardShortcuts() {
+          return {
+            Enter: () => this.editor.commands.setHardBreak(),
+          };
+        },
+      }),
+    ],
+    content: `${value}`,
+    onUpdate({ editor }) {
+      onChange(editor.getText());
+    },
+  });
   return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 140 }}
-      placeholder={"Write your query here"}
-    />
+    <div>
+      <RichTextEditor editor={editor}>
+        <RichTextEditor.Content />
+      </RichTextEditor>
+      <Prism withLineNumbers language="sql">
+        {value || ""}
+      </Prism>
+    </div>
   );
 }
 

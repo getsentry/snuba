@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 import pytest
 
@@ -27,11 +27,13 @@ from snuba.datasets.processors.replays_processor import (
 )
 from snuba.processor import InsertBatch
 
+LOG_LEVELS = ["fatal", "error", "warning", "info", "debug"]
+
 
 @dataclass
 class ReplayEvent:
     replay_id: str
-    replay_type: str
+    replay_type: str | None
     event_hash: str | None
     error_sample_rate: float | None
     session_sample_rate: float | None
@@ -67,18 +69,18 @@ class ReplayEvent:
     def empty_set(cls) -> ReplayEvent:
         return cls(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            replay_type="session",
+            timestamp=int(datetime.now(timezone.utc).timestamp()),
+            segment_id=None,
+            replay_type=None,
             event_hash=None,
-            error_sample_rate=0,
-            session_sample_rate=0,
+            error_sample_rate=None,
+            session_sample_rate=None,
             title=None,
             error_ids=[],
             trace_ids=[],
-            segment_id=None,
-            timestamp=int(datetime.now(timezone.utc).timestamp()),
             replay_start_timestamp=None,
             platform=None,
-            dist="",
+            dist=None,
             urls=[],
             is_archived=None,
             os_name=None,
@@ -94,13 +96,15 @@ class ReplayEvent:
             user_email=None,
             ipv4=None,
             ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
+            environment=None,
+            release=None,
+            sdk_name=None,
+            sdk_version=None,
         )
 
-    def serialize(self) -> Mapping[Any, Any]:
+    def serialize(
+        self, header_overrides: Optional[dict[Any, Any]] = None
+    ) -> Mapping[Any, Any]:
         replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
@@ -160,13 +164,17 @@ class ReplayEvent:
             "extra": {},
         }
 
-        return {
-            "type": "replay_event",
+        headers = {
             "start_time": datetime.now().timestamp(),
+            "type": "replay_event",
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
-            "payload": list(bytes(json.dumps(replay_event).encode())),
+        }
+        headers.update(header_overrides or {})
+        return {
+            **headers,
+            **{"payload": list(bytes(json.dumps(replay_event).encode()))},
         }
 
     def _user_field(self) -> Any | None:
@@ -220,7 +228,7 @@ class ReplayEvent:
             "device_model": self.device_model,
             "tags.key": ["customtag"],
             "tags.value": ["is_set"],
-            "title": self.title or "",
+            "title": self.title,
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
@@ -245,6 +253,9 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
+        header_overrides = {
+            "start_time": int(datetime.now(tz=timezone.utc).timestamp())
+        }
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             replay_type="session",
@@ -283,8 +294,11 @@ class TestReplaysProcessor:
             sdk_version="0.9.0",
         )
         assert ReplaysProcessor().process_message(
-            message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+            message.serialize(header_overrides), meta
+        ) == InsertBatch(
+            [message.build_result(meta)],
+            datetime.utcfromtimestamp(header_overrides["start_time"]),
+        )
 
     def test_process_message_mismatched_types(self) -> None:
         meta = KafkaMessageMetadata(
@@ -336,9 +350,9 @@ class TestReplaysProcessor:
         )
         assert isinstance(processed_message, InsertBatch)
         assert processed_message.rows[0]["urls"] == ["http://127.0.0.1:8001", "0"]
-        assert processed_message.rows[0]["replay_type"] is None
-        assert processed_message.rows[0]["error_sample_rate"] is None
-        assert processed_message.rows[0]["session_sample_rate"] is None
+        assert processed_message.rows[0]["replay_type"] == ""
+        assert processed_message.rows[0]["error_sample_rate"] == -1.0
+        assert processed_message.rows[0]["session_sample_rate"] == -1.0
         assert processed_message.rows[0]["platform"] == "0"
         assert processed_message.rows[0]["dist"] == "0"
         assert processed_message.rows[0]["user_name"] == "0"
@@ -437,10 +451,31 @@ class TestReplaysProcessor:
 
         expected = message.build_result(meta)
         assert isinstance(expected, dict)  # required for type checker
-        expected_event_hash = expected.pop("event_hash")
+        assert received_event_hash != expected.pop("event_hash")  # hash is random
 
-        assert received == expected  # all fields are identical except event_hash
-        assert received_event_hash != expected_event_hash  # hash is random
+        # Sample rates default to -1.0 which is an impossible state for the field.
+        assert received["error_sample_rate"] == -1.0
+        assert received["session_sample_rate"] == -1.0
+
+        assert received["replay_type"] == ""
+        assert received["platform"] == ""
+        assert received["dist"] == ""
+        assert received["user_name"] == ""
+        assert received["user_id"] == ""
+        assert received["user_email"] == ""
+        assert received["os_name"] == ""
+        assert received["os_version"] == ""
+        assert received["browser_name"] == ""
+        assert received["browser_version"] == ""
+        assert received["device_name"] == ""
+        assert received["device_brand"] == ""
+        assert received["device_family"] == ""
+        assert received["device_model"] == ""
+        assert received["environment"] == ""
+        assert received["release"] == ""
+        assert received["sdk_name"] == ""
+        assert received["sdk_version"] == ""
+        assert received["replay_start_timestamp"] is None
 
     def test_process_message_invalid_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
@@ -707,6 +742,8 @@ class TestReplaysActionProcessor:
                                     "text": "text",
                                     "timestamp": int(now.timestamp()),
                                     "event_hash": "df3c3aa2daae465e89f1169e49139827",
+                                    "is_dead": 0,
+                                    "is_rage": 1,
                                 }
                             ],
                         }
@@ -746,3 +783,83 @@ class TestReplaysActionProcessor:
         assert row["click_alt"] == ""
         assert row["click_testid"] == ""
         assert row["click_title"] == ""
+        assert row["click_is_dead"] == 0
+        assert row["click_is_rage"] == 1
+
+
+from hashlib import md5
+
+
+def make_payload_for_event_link(severity: str) -> tuple[dict[str, Any], str, str]:
+    now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+    replay_id = "bb570198b8f04f8bbe87077668530da7"
+    event_id = uuid.uuid4().hex
+    message = {
+        "type": "replay_event",
+        "start_time": datetime.now().timestamp(),
+        "replay_id": replay_id,
+        "project_id": 1,
+        "retention_days": 30,
+        "payload": list(
+            bytes(
+                json.dumps(
+                    {
+                        "type": "event_link",
+                        "replay_id": replay_id,
+                        severity + "_id": event_id,
+                        "timestamp": str(int(now.timestamp())),
+                        "event_hash": md5(
+                            (replay_id + event_id).encode("utf-8")
+                        ).hexdigest(),
+                    }
+                ).encode()
+            )
+        ),
+    }
+    return (message, event_id, severity)
+
+
+@pytest.mark.parametrize(
+    "event_link_message",
+    [pytest.param(make_payload_for_event_link(log_level)) for log_level in LOG_LEVELS],
+)
+def test_replay_event_links(
+    event_link_message: tuple[dict[str, Any], str, str]
+) -> None:
+    message, event_id, severity = event_link_message
+
+    meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
+
+    result = ReplaysProcessor().process_message(message, meta)
+    assert isinstance(result, InsertBatch)
+    rows = result.rows
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["project_id"] == 1
+    assert "timestamp" in row
+    assert row[severity + "_id"] == str(uuid.UUID(event_id))
+    assert row["replay_id"] == str(uuid.UUID(message["replay_id"]))
+    assert (
+        row["event_hash"]
+        == md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest()
+    )
+    assert row["segment_id"] is None
+    assert row["retention_days"] == 30
+    assert row["partition"] == 0
+    assert row["offset"] == 0
+
+
+@pytest.mark.parametrize(
+    "event_link_message",
+    [pytest.param(make_payload_for_event_link("not_valid"))],
+)
+def test_replay_event_links_invalid_severity(
+    event_link_message: tuple[dict[str, Any], str, str]
+) -> None:
+    message, _, _ = event_link_message
+
+    meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
+
+    with pytest.raises(ValueError):
+        ReplaysProcessor().process_message(message, meta)

@@ -8,6 +8,7 @@ from snuba.migrations.group_loader import (
     EventsLoader,
     FunctionsLoader,
     GenericMetricsLoader,
+    GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
     OutcomesLoader,
@@ -39,6 +40,7 @@ class MigrationGroup(Enum):
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
     SPANS = "spans"
+    GROUP_ATTRIBUTES = "group_attributes"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -54,6 +56,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.SPANS,
+    MigrationGroup.GROUP_ATTRIBUTES,
 }
 
 
@@ -135,6 +138,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
             StorageSetKey.GENERIC_METRICS_SETS,
             StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
             StorageSetKey.GENERIC_METRICS_COUNTERS,
+            StorageSetKey.GENERIC_METRICS_GAUGES,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
@@ -151,6 +155,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
+        readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
+        loader=GroupAttributesLoader(),
+        storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
         readiness_state=ReadinessState.PARTIAL,
     ),
 }

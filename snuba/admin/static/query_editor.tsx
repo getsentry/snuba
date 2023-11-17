@@ -1,5 +1,8 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
+import { Prism } from "@mantine/prism";
+import { Textarea } from "@mantine/core";
+
 type PredefinedQuery = {
   name: string;
   sql: string;
@@ -53,7 +56,6 @@ function QueryEditor(props: {
   >(undefined);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
-  const textAreaStyle = { width: "100%", height: 140 };
 
   useEffect(() => {
     const newQueryParams = new Set(
@@ -135,30 +137,27 @@ function QueryEditor(props: {
 
   return (
     <form>
-      {renderPredefinedQueriesSelectors()}
+      {props.predefinedQueryOptions != null &&
+        renderPredefinedQueriesSelectors()}
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
-      <textarea
+      <Textarea
         value={queryTemplate || ""}
-        placeholder={
-          "Edit your queries here, add '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
-        }
-        style={textAreaStyle}
         onChange={(evt) => {
           setSelectedPredefinedQuery(undefined);
           setQueryTemplate(evt.target.value);
         }}
+        placeholder="Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
+        autosize
+        minRows={2}
+        maxRows={8}
         data-testid="text-area-input"
       />
       {renderParameterSetters()}
-      <textarea
-        disabled={true}
-        placeholder={"The final query you send to snuba will be here"}
-        style={textAreaStyle}
-        value={query}
-        data-testid="text-area-output"
-      ></textarea>
+      <Prism withLineNumbers language="sql">
+        {query || ""}
+      </Prism>
     </form>
   );
 }

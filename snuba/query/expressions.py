@@ -253,7 +253,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
         self.__level += 1
         transformation_str = exp.transformation.accept(self)
         self.__level -= 1
-        return f"{self._get_line_prefix()}({params_str} ->\n{transformation_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}({params_str}) ->\n{transformation_str}\n{self._get_line_prefix()}{self._get_alias_str(exp)}"
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
