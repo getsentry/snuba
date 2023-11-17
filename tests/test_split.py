@@ -73,6 +73,7 @@ def test_no_split(
         clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         assert query == query
         return QueryResult({}, {})
@@ -197,6 +198,7 @@ def test_col_split(
         clickhouse_query: ClickhouseQuery,
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         selected_col_names = [
             c.expression.column_name

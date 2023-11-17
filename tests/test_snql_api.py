@@ -373,6 +373,9 @@ class TestSnQLApi(BaseApiTest):
 
             assert len(result["data"]) == 1
             assert record_cogs_mock.call_count == 1
+            metadata = record_cogs_mock.call_args[0][1]
+            # Don't test the actual value for this because it will change between different test envs (e.g. distributed)
+            assert "cluster_name" in metadata.query_list[0].stats
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
