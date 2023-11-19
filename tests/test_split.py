@@ -254,7 +254,7 @@ column_split_tests = [
                 "event_id",
                 "level",
                 "release",
-                "servplatformer_name",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",

@@ -99,7 +99,7 @@ test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
                 ["timestamp", ">=", "2020-01-01T12:00:00"],
                 ["timestamp", "<", "2020-01-02T12:00:00"],
                 ["event_id", "=", "something"],
-                [["ifNull", ["column2", 0]], "=", 1],
+                [["ifNull", ["partition", 0]], "=", 1],
                 ["project_id", "IN", [100, 200, 300]],
                 [["count", ["offset"]], "=", 10],
                 ["project_id", "=", 100],

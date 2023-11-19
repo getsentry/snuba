@@ -174,12 +174,12 @@ TEST_CASES = [
     ),
     pytest.param(
         "metrics_distributions",
-        "avg(partition)",
+        "avg(bucketed_time)",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            "_snuba_avg(partition)",
+            "_snuba_avg(bucketed_time)",
             "avg",
-            (Column("_snuba_partition", None, "partition"),),
+            (Column("_snuba_bucketed_time", None, "bucketed_time"),),
         ),
         id="Test that a column other than value is not transformed",
     ),
