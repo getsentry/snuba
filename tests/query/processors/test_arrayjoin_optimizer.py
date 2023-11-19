@@ -247,7 +247,8 @@ test_data = [
             None,
             selected_columns=[
                 SelectedExpression(
-                    name="col1", expression=Column("_snuba_col1", None, "col1")
+                    name="platform",
+                    expression=Column("_snuba_platform", None, "platform"),
                 )
             ],
             condition=with_required(

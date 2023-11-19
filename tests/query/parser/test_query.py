@@ -267,7 +267,7 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT partition BY column1
+        SELECT partition BY platform
         WHERE {conditions}
         ORDER BY partition DESC
         """.format(
@@ -286,7 +286,7 @@ test_cases = [
                 ),
             ],
             condition=with_required(),
-            groupby=[Column("_snuba_partition", None, "partition")],
+            groupby=[Column("_snuba_platform", None, "platform")],
             having=None,
             order_by=[
                 OrderBy(
@@ -427,7 +427,7 @@ test_cases = [
                             FunctionCall(
                                 "_snuba_issue_id",
                                 "goo",
-                                (Column("_snuba_something", None, "something"),),
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
