@@ -956,7 +956,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query columns (fake_col, fsdfsd) do not exist",
+            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
             id="Invalid multiple Select columns",
         ),
         pytest.param(
