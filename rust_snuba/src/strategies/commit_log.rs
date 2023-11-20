@@ -42,9 +42,9 @@ impl TryFrom<KafkaPayload> for Commit {
     type Error = CommitLogError;
 
     fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
-        let key = payload.key.unwrap();
+        let key = payload.key().unwrap();
 
-        let data: Vec<&str> = str::from_utf8(&key).unwrap().split(':').collect();
+        let data: Vec<&str> = str::from_utf8(key).unwrap().split(':').collect();
         if data.len() != 3 {
             return Err(CommitLogError::InvalidKey);
         }
@@ -54,7 +54,7 @@ impl TryFrom<KafkaPayload> for Commit {
         let consumer_group = data[2].to_string();
 
         let d: Payload =
-            serde_json::from_slice(&payload.payload.ok_or(CommitLogError::InvalidPayload)?)?;
+            serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
 
         Ok(Commit {
             topic,
@@ -83,11 +83,7 @@ impl TryFrom<Commit> for KafkaPayload {
             orig_message_ts: commit.orig_message_ts,
         })?);
 
-        Ok(KafkaPayload {
-            key,
-            headers: None,
-            payload,
-        })
+        Ok(KafkaPayload::new(key, None, payload))
     }
 }
 
@@ -189,23 +185,23 @@ mod tests {
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn commit() {
-        let payload = KafkaPayload {
-            key: Some(b"topic:0:group1".to_vec()),
-            headers: None,
-            payload: Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec()),
-        };
+        let payload = KafkaPayload::new(
+            Some(b"topic:0:group1".to_vec()),
+            None,
+            Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec()),
+        );
 
         let payload_clone = payload.clone();
 
         let commit: Commit = payload.try_into().unwrap();
         assert_eq!(commit.partition, 0);
         let transformed: KafkaPayload = commit.try_into().unwrap();
-        assert_eq!(transformed.key, payload_clone.key);
-        assert_eq!(transformed.payload, payload_clone.payload);
+        assert_eq!(transformed.key(), payload_clone.key());
+        assert_eq!(transformed.payload(), payload_clone.payload());
     }
 
     #[test]
@@ -252,22 +248,22 @@ mod tests {
         }
 
         let payloads = vec![
-            KafkaPayload {
-                key: Some(b"topic:0:group1".to_vec()),
-                headers: None,
-                payload: Some(
+            KafkaPayload::new(
+                Some(b"topic:0:group1".to_vec()),
+                None,
+                Some(
                     b"{\"offset\":5,\"orig_message_ts\":100000.0,\"received_p99\":100000.0}"
                         .to_vec(),
                 ),
-            },
-            KafkaPayload {
-                key: Some(b"topic:0:group1".to_vec()),
-                headers: None,
-                payload: Some(
+            ),
+            KafkaPayload::new(
+                Some(b"topic:0:group1".to_vec()),
+                None,
+                Some(
                     b"{\"offset\":6,\"orig_message_ts\":100001.0,\"received_p99\":100001.0}"
                         .to_vec(),
                 ),
-            },
+            ),
         ];
 
         let expected_len = payloads.len();

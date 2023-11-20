@@ -56,11 +56,11 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     let time_millis = msg.timestamp().to_millis().unwrap_or(0);
 
     BrokerMessage::new(
-        KafkaPayload {
-            key: msg.key().map(|k| k.to_vec()),
-            headers: msg.headers().map(BorrowedHeaders::detach),
-            payload: msg.payload().map(|p| p.to_vec()),
-        },
+        KafkaPayload::new(
+            msg.key().map(|k| k.to_vec()),
+            msg.headers().map(BorrowedHeaders::detach),
+            msg.payload().map(|p| p.to_vec()),
+        ),
         partition,
         msg.offset() as u64,
         DateTime::from_naive_utc_and_offset(
