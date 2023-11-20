@@ -20,11 +20,12 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.validation.validators import ColumnValidationMode
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
-from tests.helpers import write_unprocessed_events
+from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
@@ -891,6 +892,7 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
     def test_invalid_column(self) -> None:
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.ERROR)
         response = self.post(
             "/outcomes/snql",
             data=json.dumps(
@@ -909,6 +911,7 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.WARN)
         assert response.status_code == 400
         assert (
             json.loads(response.data)["error"]["message"]
@@ -956,7 +959,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query columns (fake_col, fsdfsd) do not exist",
+            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
             id="Invalid multiple Select columns",
         ),
         pytest.param(
@@ -1012,13 +1015,22 @@ class TestSnQLApi(BaseApiTest):
         ),
     ]
 
+    @pytest.fixture()
     @pytest.mark.parametrize(
         "query, response_code, error_message", invalid_columns_composite_query_tests
     )
     def test_invalid_columns_composite_query(
         self, query: str, response_code: int, error_message: str
     ) -> None:
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
+        )
         response = self.post("/events/snql", data=json.dumps({"query": query}))
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
+        )
 
         assert response.status_code == response_code
         assert json.loads(response.data)["error"]["message"] == error_message
