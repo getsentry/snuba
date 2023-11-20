@@ -155,7 +155,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (payload.payload, offset, partition.index, timestamp);
+                // TODO: Handle None payload
+                let payload_bytes = (payload.payload().unwrap()).clone();
+
+                let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args| {
                     tracing::debug!(?args, "processing message in subprocess");
@@ -255,11 +258,11 @@ mod tests {
 
         let _ = step.poll();
         step.submit(Message::new_broker_message(
-            KafkaPayload {
-                key: None,
-                headers: None,
-                payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            },
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
             Partition::new(Topic::new("test"), 1),
             1,
             Utc::now(),
