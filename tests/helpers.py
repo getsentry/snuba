@@ -63,7 +63,7 @@ def write_raw_unprocessed_events(
 
 def override_entity_column_validator(
     entity_key: EntityKey, validator_mode: ColumnValidationMode
-):
+) -> None:
     entity = get_entity(entity_key)
     assert isinstance(entity, PluggableEntity)
     entity.validate_data_model = validator_mode
