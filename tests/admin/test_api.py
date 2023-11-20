@@ -218,13 +218,9 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     assert data[0]["name"] == "CurrentMerges"
 
 
-@pytest.mark.xfail
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
-    """
-    TODO-23.3: Looks like the tracing output has changed:
-    """
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
