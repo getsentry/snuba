@@ -52,7 +52,7 @@ test_data = [
         # Add pre-where condition in the expected order
         {
             "conditions": [
-                ["project_id", "=", "1"],
+                ["event_id", "=", "1"],
                 ["partition", "=", "3"],
                 [
                     [
@@ -77,7 +77,7 @@ test_data = [
                     None,
                     OPERATOR_TO_FUNCTION["="],
                     (
-                        Column("_snuba_project_id", None, "project_id"),
+                        Column("_snuba_event_id", None, "event_id"),
                         Literal(None, "1"),
                     ),
                 ),
@@ -117,7 +117,7 @@ test_data = [
                 ["offset", "=", "3"],
             ]
         },
-        ["a", "b", "c"],
+        ["project_id", "partition", "offset"],
         [],
         FunctionCall(
             None,
@@ -150,19 +150,19 @@ test_data = [
         # most of the dataset.
         {
             "conditions": [
-                ["project_id", "NOT IN", [1, 2, 3]],
+                ["event_id", "NOT IN", [1, 2, 3]],
                 ["partition", "=", "2"],
                 ["offset", "=", "3"],
             ]
         },
-        ["a", "b"],
+        ["event_id", "partition"],
         [],
         FunctionCall(
             None,
             BooleanFunctions.AND,
             (
                 not_in_condition(
-                    Column("_snuba_project_id", None, "project_id"),
+                    Column("_snuba_event_id", None, "event_id"),
                     [Literal(None, 1), Literal(None, 2), Literal(None, 3)],
                 ),
                 FunctionCall(

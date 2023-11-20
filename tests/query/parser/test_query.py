@@ -279,7 +279,7 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
+                    "platform", Column("_snuba_platform", None, "platform")
                 ),
                 SelectedExpression(
                     "partition", Column("_snuba_partition", None, "partition")

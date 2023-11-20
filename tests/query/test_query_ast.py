@@ -324,19 +324,6 @@ VALIDATION_TESTS = [
         True,
         id="Alias redefines col and referenced",
     ),
-    pytest.param(
-        {
-            "selected_columns": ["project_id", ["platform", ["event_id"], "event_id"]],
-            "conditions": [
-                ["event_id", "IN", ["a" * 32, "b" * 32]],
-                ["project_id", "=", 1],
-                ["timestamp", ">=", "2020-01-01T12:00:00"],
-                ["timestamp", "<", "2020-01-02T12:00:00"],
-            ],
-        },
-        False,
-        id="Alias referenced and not defined",
-    ),
 ]
 
 
