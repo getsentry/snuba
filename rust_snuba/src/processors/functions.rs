@@ -10,7 +10,7 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
@@ -54,7 +54,7 @@ pub fn process_message(
         rows.push(serialized);
     }
 
-    Ok(BytesInsertBatch { rows })
+    Ok(BytesInsertBatch::from_rows(metadata.timestamp, rows))
 }
 
 #[derive(Debug, Deserialize)]

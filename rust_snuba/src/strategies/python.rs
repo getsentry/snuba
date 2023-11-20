@@ -10,11 +10,10 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::Error;
-
 use pyo3::prelude::*;
+use chrono::{DateTime, Utc};
 
 use crate::types::BytesInsertBatch;
-
 use crate::config::MessageProcessorConfig;
 
 enum TaskHandle {
@@ -160,7 +159,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
-                let process_message = |args| {
+                let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
@@ -168,11 +167,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                                 .getattr("process_rust_message")?
                                 .into();
 
+                        let timestamp = args.3.clone();
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch {
-                            rows: result_decoded,
-                        })
+                        Ok(BytesInsertBatch::from_rows(timestamp, result_decoded))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };

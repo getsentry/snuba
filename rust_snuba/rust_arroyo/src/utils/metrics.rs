@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub static METRICS: OnceLock<Arc<Mutex<Box<dyn Metrics>>>> = OnceLock::new();
+pub type BoxMetrics = Arc<Mutex<Box<dyn Metrics>>>;
 
 pub trait Metrics: Debug + Send + Sync {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>);
@@ -12,7 +13,7 @@ pub trait Metrics: Debug + Send + Sync {
     fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>);
 }
 
-impl Metrics for Arc<Mutex<Box<dyn Metrics>>> {
+impl Metrics for BoxMetrics {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
         self.as_ref().lock().unwrap().increment(key, value, tags)
     }
@@ -42,7 +43,7 @@ pub fn configure_metrics(metrics: Box<dyn Metrics>) {
         .expect("Metrics already configured");
 }
 
-pub fn get_metrics() -> Arc<Mutex<Box<dyn Metrics>>> {
+pub fn get_metrics() -> BoxMetrics {
     match METRICS.get() {
         Some(metrics) => metrics.clone(),
         None => Arc::new(Mutex::new(Box::new(Noop {}))),

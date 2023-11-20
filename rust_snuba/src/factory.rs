@@ -115,10 +115,7 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
-            acc.rows.extend(value.rows);
-            acc
-        });
+        let accumulator = Arc::new(BytesInsertBatch::merge);
 
         let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
             self.concurrency.concurrency,
@@ -133,7 +130,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &clickhouse_concurrency,
             )),
             accumulator,
-            BytesInsertBatch { rows: vec![] },
+            BytesInsertBatch::default(),
             self.max_batch_size,
             self.max_batch_time,
         );

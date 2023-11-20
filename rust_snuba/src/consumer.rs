@@ -189,9 +189,7 @@ pub fn process_message(
             };
 
             let res = func(payload, meta);
-            println!("res {:?}", res);
-            let row = res.unwrap().rows[0].clone();
-            Some(row)
+            Some(res.unwrap().get_encoded_rows().to_vec())
         }
     }
 }

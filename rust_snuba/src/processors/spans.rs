@@ -22,9 +22,7 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&span)?;
 
-    Ok(BytesInsertBatch {
-        rows: vec![serialized],
-    })
+    Ok(BytesInsertBatch::from_rows(metadata.timestamp, vec![serialized]))
 }
 
 #[derive(Debug, Default, Deserialize)]
