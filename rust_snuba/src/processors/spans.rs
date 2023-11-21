@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{RowData, KafkaMessageMetadata};
+use crate::types::{KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
