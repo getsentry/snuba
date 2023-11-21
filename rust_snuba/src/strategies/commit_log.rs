@@ -1,3 +1,5 @@
+use crate::types::BytesInsertBatch;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::Producer;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
@@ -6,7 +8,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
-use rust_arroyo::types::{Message, TopicOrPartition};
+use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
 use std::sync::Arc;
@@ -18,7 +20,7 @@ struct Commit {
     topic: String,
     partition: u16,
     consumer_group: String,
-    orig_message_ts: f64,
+    orig_message_ts: DateTime<Utc>,
     offset: u64,
 }
 
@@ -36,6 +38,8 @@ enum CommitLogError {
     InvalidKey,
     #[error("invalid message payload")]
     InvalidPayload,
+    #[error("invalid timestamp")]
+    InvalidTimestamp,
 }
 
 impl TryFrom<KafkaPayload> for Commit {
@@ -56,11 +60,18 @@ impl TryFrom<KafkaPayload> for Commit {
         let d: Payload =
             serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
 
+        let time_millis = (d.orig_message_ts * 1000.0) as i64;
+
+        let orig_message_ts = DateTime::from_naive_utc_and_offset(
+            NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
+            Utc,
+        );
+
         Ok(Commit {
             topic,
             partition,
             consumer_group,
-            orig_message_ts: d.orig_message_ts,
+            orig_message_ts,
             offset: d.offset,
         })
     }
@@ -78,9 +89,11 @@ impl TryFrom<Commit> for KafkaPayload {
             .into_bytes(),
         );
 
+        let orig_message_ts = commit.orig_message_ts.timestamp_millis() as f64 / 1000.0;
+
         let payload = Some(serde_json::to_vec(&Payload {
             offset: commit.offset,
-            orig_message_ts: commit.orig_message_ts,
+            orig_message_ts,
         })?);
 
         Ok(KafkaPayload::new(key, None, payload))
@@ -89,7 +102,9 @@ impl TryFrom<Commit> for KafkaPayload {
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
-    topic: Arc<TopicOrPartition>,
+    topic: Topic,
+    destination: Arc<TopicOrPartition>,
+    consumer_group: String,
     skip_produce: bool,
 }
 
@@ -97,41 +112,57 @@ impl ProduceMessage {
     #[allow(dead_code)]
     pub fn new(
         producer: impl Producer<KafkaPayload> + 'static,
-        topic: TopicOrPartition,
+        topic: Topic,
+        consumer_group: String,
         skip_produce: bool,
     ) -> Self {
         ProduceMessage {
             producer: Arc::new(producer),
-            topic: Arc::new(topic),
+            topic,
+            destination: Arc::new(TopicOrPartition::Topic(topic)),
+            consumer_group,
             skip_produce,
         }
     }
 }
 
-impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
+    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let producer = self.producer.clone();
-        let topic = self.topic.clone();
+        let destination = self.destination.clone();
+        let topic = self.topic.as_str();
         let skip_produce = self.skip_produce;
+        let consumer_group = &self.consumer_group;
 
         Box::pin(async move {
             if skip_produce {
                 return Ok(message);
             }
 
-            match producer.produce(&topic, message.payload().clone()) {
-                Ok(_) => Ok(message),
-                Err(error) => {
-                    tracing::error!(%error, "Error producing message");
-                    Err(RunTaskError::RetryableError)
+            for (partition, (offset, orig_message_ts)) in message.payload().commit_log_offsets {
+                let commit = Commit {
+                    topic: topic.to_string(),
+                    partition: partition,
+                    consumer_group: consumer_group.to_string(),
+                    orig_message_ts,
+                    offset,
+                };
+
+                let payload = commit.try_into().unwrap();
+
+                if let Err(err) = producer.produce(&destination, payload) {
+                    tracing::error!(%err, "Error producing message");
+                    return Err(RunTaskError::RetryableError);
                 }
             }
+
+            Ok(message)
         })
     }
 }
 
 pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
 }
 
 impl ProduceCommitLog {
@@ -140,15 +171,21 @@ impl ProduceCommitLog {
         next_step: N,
         producer: impl Producer<KafkaPayload> + 'static,
         concurrency: &ConcurrencyConfig,
-        topic: TopicOrPartition,
+        topic: Topic,
+        consumer_group: String,
         skip_produce: bool,
     ) -> Self
     where
-        N: ProcessingStrategy<KafkaPayload> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ProduceMessage::new(producer, topic, skip_produce)),
+            Box::new(ProduceMessage::new(
+                producer,
+                topic,
+                consumer_group,
+                skip_produce,
+            )),
             concurrency,
             Some("produce_commit_log"),
         );
@@ -157,12 +194,15 @@ impl ProduceCommitLog {
     }
 }
 
-impl ProcessingStrategy<KafkaPayload> for ProduceCommitLog {
+impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+    fn submit(
+        &mut self,
+        message: Message<BytesInsertBatch>,
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
         self.inner.submit(message)
     }
 
@@ -279,7 +319,8 @@ mod tests {
             next_step,
             producer,
             &concurrency,
-            TopicOrPartition::Topic(Topic::new("test")),
+            Topic::new("test"),
+            "group1".to_string(),
             false,
         );
 

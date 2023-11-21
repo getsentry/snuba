@@ -13,25 +13,25 @@ use anyhow::Error;
 
 use pyo3::prelude::*;
 
-use crate::types::BytesInsertBatch;
+use crate::types::RowData;
 
 use crate::config::MessageProcessorConfig;
 
 enum TaskHandle {
     Procspawn {
         original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
     },
     Immediate {
         original_message_meta: Message<()>,
-        result: Result<BytesInsertBatch, String>,
+        result: Result<RowData, String>,
     },
 }
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<RowData>>,
     handles: VecDeque<TaskHandle>,
-    message_carried_over: Option<Message<BytesInsertBatch>>,
+    message_carried_over: Option<Message<RowData>>,
     processing_pool: Option<procspawn::Pool>,
     max_queue_depth: usize,
 }
@@ -44,7 +44,7 @@ impl PythonTransformStep {
         next_step: N,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<RowData> + 'static,
     {
         let next_step = Box::new(next_step);
         let python_module = &processor_config.python_module;
@@ -162,7 +162,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args| {
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -170,7 +170,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch {
+                        Ok(RowData {
                             rows: result_decoded,
                         })
                     })

@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::spans::SpanStatus;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
+) -> anyhow::Result<RowData> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -54,7 +54,7 @@ pub fn process_message(
         rows.push(serialized);
     }
 
-    Ok(BytesInsertBatch { rows })
+    Ok(RowData { rows })
 }
 
 #[derive(Debug, Deserialize)]
