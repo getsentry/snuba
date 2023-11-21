@@ -79,8 +79,10 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
                     inner_message: InnerMessage::BrokerMessage(BrokerMessage {
                         payload: BytesInsertBatch {
                             rows: transformed.rows,
-                            // TODO: Actually implement this?
-                            commit_log_offsets: BTreeMap::from([]),
+                            commit_log_offsets: BTreeMap::from([(
+                                broker_message.partition.index,
+                                (broker_message.offset, broker_message.timestamp),
+                            )]),
                         },
                         partition: broker_message.partition,
                         offset: broker_message.offset,
@@ -122,6 +124,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
             acc.rows.extend(value.rows);
+            acc.commit_log_offsets.extend(value.commit_log_offsets);
             acc
         });
 
