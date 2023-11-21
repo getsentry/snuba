@@ -167,7 +167,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                                 .getattr("process_rust_message")?
                                 .into();
 
-                        let timestamp = args.3.clone();
+                        let timestamp = args.3;
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
                         let bytes_batch = BytesInsertBatch::from_rows(result_decoded);
