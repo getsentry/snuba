@@ -94,12 +94,7 @@ pub fn consumer_impl(
         tags.insert("storage", storage_name.as_str());
         tags.insert("consumer_group", consumer_group);
 
-        configure_metrics(Box::new(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            tags,
-        )));
+        configure_metrics(StatsDBackend::new(&host, port, "snuba.consumer", tags));
     }
 
     if !use_rust_processor {
@@ -114,25 +109,12 @@ pub fn consumer_impl(
         first_storage.name,
     );
 
-    let broker_config: HashMap<_, _> = consumer_config
-        .raw_topic
-        .broker_config
-        .iter()
-        .filter_map(|(k, v)| {
-            let v = v.as_ref()?;
-            if v.is_empty() {
-                return None;
-            }
-            Some((k.to_owned(), v.to_owned()))
-        })
-        .collect();
-
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
         auto_offset_reset.to_owned(),
         false,
-        Some(broker_config),
+        Some(consumer_config.raw_topic.broker_config),
     );
 
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));

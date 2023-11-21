@@ -10,7 +10,7 @@ use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
 use rdkafka::error::KafkaResult;
-use rdkafka::message::{BorrowedHeaders, BorrowedMessage, Message};
+use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -58,7 +58,7 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     BrokerMessage::new(
         KafkaPayload::new(
             msg.key().map(|k| k.to_vec()),
-            msg.headers().map(BorrowedHeaders::detach),
+            msg.headers().map(|h| h.into()),
             msg.payload().map(|p| p.to_vec()),
         ),
         partition,
