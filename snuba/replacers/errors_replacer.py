@@ -262,11 +262,11 @@ def _build_event_set_filter(
         if not msg_value:
             return ""
 
-        if "+" in msg_value:  # e.g. "2023-08-28T03:05:38+00:00"
-            msg_value, _ = msg_value.rsplit("+", 1)
-            msg_value += ".000Z"
+        try:
+            timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
+        except ValueError:  # e.g. "2023-08-28T03:05:38+00:00"
+            timestamp = datetime.fromisoformat(msg_value)
 
-        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
         return (
             f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
         )
