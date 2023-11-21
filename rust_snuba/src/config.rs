@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -15,14 +15,37 @@ pub struct ConsumerConfig {
     pub env: EnvConfig,
 }
 
+pub fn deserialize_broker_config<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let data = RawBrokerConfig::deserialize(deserializer)?
+        .iter()
+        .filter_map(|(k, v)| {
+            let v = v.as_ref()?;
+            if v.is_empty() {
+                return None;
+            }
+            Some((k.to_owned(), v.to_owned()))
+        })
+        .collect();
+
+    Ok(data)
+}
+
 #[derive(Deserialize, Debug)]
 pub struct TopicConfig {
     pub physical_topic_name: String,
     pub logical_topic_name: String,
+    #[serde(deserialize_with = "deserialize_broker_config")]
     pub broker_config: BrokerConfig,
 }
 
-pub type BrokerConfig = HashMap<String, Option<String>>;
+type RawBrokerConfig = HashMap<String, Option<String>>;
+
+pub type BrokerConfig = HashMap<String, String>;
 
 impl ConsumerConfig {
     pub fn load_from_str(payload: &str) -> Result<Self, anyhow::Error> {
