@@ -4,6 +4,7 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread::sleep;
@@ -112,9 +113,17 @@ impl PythonTransformStep {
             };
             match message_result {
                 Ok(data) => {
+                    let replacement = BytesInsertBatch {
+                        rows: data.rows,
+                        // TODO: Actually implement this
+                        commit_log_offsets: BTreeMap::from([]),
+                    };
+
                     if let Err(SubmitError::MessageRejected(MessageRejected {
                         message: transformed_message,
-                    })) = self.next_step.submit(original_message_meta.replace(data))
+                    })) = self
+                        .next_step
+                        .submit(original_message_meta.replace(replacement))
                     {
                         self.message_carried_over = Some(transformed_message);
                     }

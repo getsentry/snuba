@@ -38,8 +38,6 @@ enum CommitLogError {
     InvalidKey,
     #[error("invalid message payload")]
     InvalidPayload,
-    #[error("invalid timestamp")]
-    InvalidTimestamp,
 }
 
 impl TryFrom<KafkaPayload> for Commit {
@@ -130,20 +128,22 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let producer = self.producer.clone();
         let destination = self.destination.clone();
-        let topic = self.topic.as_str();
+        let topic = self.topic.as_str().to_string();
         let skip_produce = self.skip_produce;
-        let consumer_group = &self.consumer_group;
+        let consumer_group = self.consumer_group.clone();
+
+        let commit_log_offsets = message.payload().commit_log_offsets.clone();
 
         Box::pin(async move {
             if skip_produce {
                 return Ok(message);
             }
 
-            for (partition, (offset, orig_message_ts)) in message.payload().commit_log_offsets {
+            for (partition, (offset, orig_message_ts)) in commit_log_offsets {
                 let commit = Commit {
-                    topic: topic.to_string(),
-                    partition: partition,
-                    consumer_group: consumer_group.to_string(),
+                    topic: topic.clone(),
+                    partition,
+                    consumer_group: consumer_group.clone(),
                     orig_message_ts,
                     offset,
                 };
