@@ -247,15 +247,15 @@ mod tests {
     #[test]
     fn produce_commit_log() {
         struct Noop {
-            pub payloads: Vec<KafkaPayload>,
+            pub payloads: Vec<BytesInsertBatch>,
         }
-        impl ProcessingStrategy<KafkaPayload> for Noop {
+        impl ProcessingStrategy<BytesInsertBatch> for Noop {
             fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
                 Ok(None)
             }
             fn submit(
                 &mut self,
-                message: Message<KafkaPayload>,
+                message: Message<BytesInsertBatch>,
             ) -> Result<(), SubmitError<KafkaPayload>> {
                 self.payloads.push(message.payload().clone());
                 Ok(())
@@ -288,25 +288,18 @@ mod tests {
         }
 
         let payloads = vec![
-            KafkaPayload::new(
-                Some(b"topic:0:group1".to_vec()),
-                None,
-                Some(
-                    b"{\"offset\":5,\"orig_message_ts\":100000.0,\"received_p99\":100000.0}"
-                        .to_vec(),
-                ),
-            ),
-            KafkaPayload::new(
-                Some(b"topic:0:group1".to_vec()),
-                None,
-                Some(
-                    b"{\"offset\":6,\"orig_message_ts\":100001.0,\"received_p99\":100001.0}"
-                        .to_vec(),
-                ),
-            ),
+            BytesInsertBatch {
+                rows: Vec::new(),
+                commit_log_offsets: BTreeMap::from([(0, (500, Utc::now()))]),
+            },
+            BytesInsertBatch {
+                rows: Vec::new(),
+                commit_log_offsets: BTreeMap::from([
+                    (0, (600, Utc::now())),
+                    (1, (100, Utc::now())),
+                ]),
+            },
         ];
-
-        let expected_len = payloads.len();
 
         let producer = MockProducer {
             payloads: produced_payloads.clone(),
@@ -334,6 +327,6 @@ mod tests {
         strategy.close();
         strategy.join(None).unwrap();
 
-        assert_eq!(produced_payloads.lock().unwrap().len(), expected_len);
+        assert_eq!(produced_payloads.lock().unwrap().len(), 3);
     }
 }
