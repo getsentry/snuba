@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration};
+use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
@@ -10,10 +10,10 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::Message;
-use rust_arroyo::utils::metrics::{BoxMetrics, get_metrics};
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 
 use crate::config::ClickhouseConfig;
-use crate::types::BytesInsertBatch;
+use crate::types::InsertBatch;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
@@ -31,8 +31,8 @@ impl ClickhouseWriter {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<InsertBatch, InsertBatch> for ClickhouseWriter {
+    fn get_task(&self, message: Message<InsertBatch>) -> RunTaskFunc<InsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
         let metrics = self.metrics.clone();
@@ -46,7 +46,10 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             }
 
             tracing::debug!("performing write");
-            let response = client.send(insert_batch.get_encoded_rows().to_vec()).await.unwrap();
+            let response = client
+                .send(insert_batch.get_encoded_rows().to_vec())
+                .await
+                .unwrap();
 
             tracing::debug!(?response);
             tracing::info!("Inserted {} rows", insert_batch.len());
@@ -59,7 +62,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 }
 
 pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
+    inner: RunTaskInThreads<InsertBatch, InsertBatch>,
 }
 
 impl ClickhouseWriterStep {
@@ -71,7 +74,7 @@ impl ClickhouseWriterStep {
         concurrency: &ConcurrencyConfig,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<InsertBatch> + 'static,
     {
         let hostname = cluster_config.host;
         let http_port = cluster_config.http_port;
@@ -91,15 +94,12 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
+impl ProcessingStrategy<InsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(
-        &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+    fn submit(&mut self, message: Message<InsertBatch>) -> Result<(), SubmitError<InsertBatch>> {
         self.inner.submit(message)
     }
 

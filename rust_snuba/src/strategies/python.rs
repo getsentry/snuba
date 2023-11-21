@@ -10,27 +10,27 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::Error;
-use pyo3::prelude::*;
 use chrono::{DateTime, Utc};
+use pyo3::prelude::*;
 
-use crate::types::BytesInsertBatch;
 use crate::config::MessageProcessorConfig;
+use crate::types::{BytesInsertBatch, InsertBatch};
 
 enum TaskHandle {
     Procspawn {
         original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
     },
     Immediate {
         original_message_meta: Message<()>,
-        result: Result<BytesInsertBatch, String>,
+        result: Result<InsertBatch, String>,
     },
 }
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<InsertBatch>>,
     handles: VecDeque<TaskHandle>,
-    message_carried_over: Option<Message<BytesInsertBatch>>,
+    message_carried_over: Option<Message<InsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
     max_queue_depth: usize,
 }
@@ -43,7 +43,7 @@ impl PythonTransformStep {
         next_step: N,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<InsertBatch> + 'static,
     {
         let next_step = Box::new(next_step);
         let python_module = &processor_config.python_module;
@@ -161,7 +161,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<InsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -170,7 +170,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         let timestamp = args.3.clone();
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch::from_rows(timestamp, result_decoded))
+                        let bytes_batch = BytesInsertBatch::from_rows(result_decoded);
+                        Ok(InsertBatch::new(timestamp, bytes_batch))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };

@@ -11,7 +11,7 @@ use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<BytesInsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
@@ -20,7 +20,7 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&querylog_msg)?;
 
-    Ok(BytesInsertBatch::from_rows(metadata.timestamp, vec![serialized]))
+    Ok(BytesInsertBatch::from_rows(vec![serialized]))
 }
 
 #[derive(Debug, Deserialize, Serialize)]

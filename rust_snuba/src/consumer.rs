@@ -20,7 +20,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::KafkaMessageMetadata;
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -178,18 +178,21 @@ pub fn process_message(
         Some(func) => {
             let payload = KafkaPayload::new(None, None, Some(value));
 
+            let timestamp = DateTime::from_naive_utc_and_offset(
+                NaiveDateTime::from_timestamp_millis(millis_since_epoch)
+                    .unwrap_or(NaiveDateTime::MIN),
+                Utc,
+            );
+
             let meta = KafkaMessageMetadata {
                 partition,
                 offset,
-                timestamp: DateTime::from_naive_utc_and_offset(
-                    NaiveDateTime::from_timestamp_millis(millis_since_epoch)
-                        .unwrap_or(NaiveDateTime::MIN),
-                    Utc,
-                ),
+                timestamp,
             };
 
             let res = func(payload, meta);
-            Some(res.unwrap().get_encoded_rows().to_vec())
+            let batch = InsertBatch::new(timestamp, res.unwrap());
+            Some(batch.get_encoded_rows().to_vec())
         }
     }
 }
