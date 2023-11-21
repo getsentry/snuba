@@ -256,7 +256,7 @@ mod tests {
             fn submit(
                 &mut self,
                 message: Message<BytesInsertBatch>,
-            ) -> Result<(), SubmitError<KafkaPayload>> {
+            ) -> Result<(), SubmitError<BytesInsertBatch>> {
                 self.payloads.push(message.payload().clone());
                 Ok(())
             }
