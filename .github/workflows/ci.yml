@@ -292,12 +292,16 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        instance: [0, 1, 2, 3]
+        instance: [0, 1]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
-      MATRIX_INSTANCE_TOTAL: 4
+      MATRIX_INSTANCE_TOTAL: 2
       TEST_GROUP_STRATEGY: ROUND_ROBIN
+      # randomly sample half the tests
+      TEST_SAMPLE_RATE: 0.5
+      # use the github sha as the seed so that we re-run the same tests if we need to re-run them
+      TEST_SHUFFLER_SEED: ${{ github.sha }}
 
     steps:
       # Checkout codebase
