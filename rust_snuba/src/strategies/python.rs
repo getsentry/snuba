@@ -13,7 +13,7 @@ use anyhow::Error;
 
 use pyo3::prelude::*;
 
-use crate::types::RowData;
+use crate::types::{BytesInsertBatch, RowData};
 
 use crate::config::MessageProcessorConfig;
 
@@ -29,9 +29,9 @@ enum TaskHandle {
 }
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<RowData>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     handles: VecDeque<TaskHandle>,
-    message_carried_over: Option<Message<RowData>>,
+    message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
     max_queue_depth: usize,
 }
@@ -44,7 +44,7 @@ impl PythonTransformStep {
         next_step: N,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<RowData> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let next_step = Box::new(next_step);
         let python_module = &processor_config.python_module;
