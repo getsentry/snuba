@@ -94,12 +94,7 @@ pub fn consumer_impl(
         tags.insert("storage", storage_name.as_str());
         tags.insert("consumer_group", consumer_group);
 
-        configure_metrics(Box::new(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            tags,
-        )));
+        configure_metrics(StatsDBackend::new(&host, port, "snuba.consumer", tags));
     }
 
     if !use_rust_processor {
