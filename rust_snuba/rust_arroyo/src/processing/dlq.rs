@@ -1,7 +1,125 @@
 #![allow(dead_code)]
-use crate::types::{BrokerMessage, Partition};
+use crate::backends::kafka::producer::KafkaProducer;
+use crate::backends::kafka::types::KafkaPayload;
+use crate::backends::Producer;
+use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
+trait DlqProducer<TPayload> {
+    // Send a message to the DLQ.
+    fn produce(
+        &self,
+        message: BrokerMessage<TPayload>,
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>>>>;
+
+    fn build_initial_state(&self) -> DlqLimitState;
+}
+
+// Drops all invalid messages. Produce returns an immediately resolved future.
+struct NoopDlqProducer {}
+
+impl<TPayload: 'static> DlqProducer<TPayload> for NoopDlqProducer {
+    fn produce(
+        &self,
+        message: BrokerMessage<TPayload>,
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>>>> {
+        Box::pin(async move { message })
+    }
+
+    fn build_initial_state(&self) -> DlqLimitState {
+        DlqLimitState {}
+    }
+}
+
+// KafkaDlqProducer forwards invalid messages to a Kafka topic
+
+// Two additional fields are added to the headers of the Kafka message
+// "original_partition": The partition of the original message
+// "original_offset": The offset of the original message
+struct KafkaDlqProducer {
+    producer: Arc<KafkaProducer>,
+    topic: TopicOrPartition,
+}
+
+impl KafkaDlqProducer {
+    fn new(producer: KafkaProducer, topic: Topic) -> Self {
+        Self {
+            producer: Arc::new(producer),
+            topic: TopicOrPartition::Topic(topic),
+        }
+    }
+}
+
+impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
+    fn produce(
+        &self,
+        message: BrokerMessage<KafkaPayload>,
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<KafkaPayload>>>> {
+        let producer = self.producer.clone();
+        let topic = self.topic;
+
+        let mut headers = message.payload.headers().cloned().unwrap_or_default();
+
+        headers = headers.insert(
+            "original_partition",
+            Some(message.offset.to_string().into_bytes()),
+        );
+        headers = headers.insert(
+            "original_offset",
+            Some(message.offset.to_string().into_bytes()),
+        );
+
+        let payload = KafkaPayload::new(
+            message.payload.key().cloned(),
+            Some(headers),
+            message.payload.payload().cloned(),
+        );
+
+        Box::pin(async move {
+            producer
+                .produce(&topic, payload)
+                .expect("Message was produced");
+
+            message
+        })
+    }
+
+    fn build_initial_state(&self) -> DlqLimitState {
+        DlqLimitState {}
+    }
+}
+
+// Defines any limits that should be placed on the number of messages that are
+// forwarded to the DLQ. This exists to prevent 100% of messages from going into
+// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
+// it may be preferable to stop processing messages altogether and deploy a fix
+// rather than rerouting every message to the DLQ.
+
+// The ratio and max_consecutive_count are counted on a per-partition basis.
+struct DlqLimit {
+    max_invalid_ratio: Option<f64>,
+    max_consecutive_count: Option<u64>,
+}
+
+struct DlqLimitState {}
+
+// DLQ policy defines the DLQ configuration, and is passed to the stream processor
+// upon creation of the consumer. It consists of the DLQ producer implementation and
+// any limits that should be applied.
+struct DlqPolicy<TPayload> {
+    producer: Box<dyn DlqProducer<TPayload>>,
+    limit: DlqLimit,
+}
+
+impl<TPayload> DlqPolicy<TPayload> {
+    pub fn new(producer: Box<dyn DlqProducer<TPayload>>, limit: DlqLimit) -> Self {
+        DlqPolicy { producer, limit }
+    }
+}
 
 /// Stores messages that are pending commit. This is used to retreive raw messages
 // in case they need to be placed in the DLQ.
