@@ -298,10 +298,6 @@ jobs:
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 2
       TEST_GROUP_STRATEGY: ROUND_ROBIN
-      # randomly sample half the tests
-      TEST_SAMPLE_RATE: 0.5
-      # use the github sha as the seed so that we re-run the same tests if we need to re-run them
-      TEST_SHUFFLER_SEED: ${{ github.sha }}
 
     steps:
       # Checkout codebase
@@ -388,12 +384,12 @@ jobs:
             -m snuba_ci \
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
-      - name: Run full tests
+      - name: Run full tests (sampled)
         # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests/snuba \
+          TEST_SAMPLE_RATE=0.5 TEST_SHUFFLER_SEED=${{ github_sha }} pytest -k 'not __In' tests/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
               tests/sentry/snuba \
