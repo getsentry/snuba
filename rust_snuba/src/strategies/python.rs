@@ -14,23 +14,23 @@ use chrono::{DateTime, Utc};
 use pyo3::prelude::*;
 
 use crate::config::MessageProcessorConfig;
-use crate::types::{BytesInsertBatch, InsertBatch};
+use crate::types::{BytesInsertBatch, BytesRows};
 
 enum TaskHandle {
     Procspawn {
         original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
     },
     Immediate {
         original_message_meta: Message<()>,
-        result: Result<InsertBatch, String>,
+        result: Result<BytesInsertBatch, String>,
     },
 }
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<InsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
     handles: VecDeque<TaskHandle>,
-    message_carried_over: Option<Message<InsertBatch>>,
+    message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
     max_queue_depth: usize,
 }
@@ -43,7 +43,7 @@ impl PythonTransformStep {
         next_step: N,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<InsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let next_step = Box::new(next_step);
         let python_module = &processor_config.python_module;
@@ -161,7 +161,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<InsertBatch> {
+                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -170,8 +170,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         let timestamp = args.3;
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        let bytes_batch = BytesInsertBatch::from_rows(result_decoded);
-                        Ok(InsertBatch::new(timestamp, bytes_batch))
+                        let bytes_batch = BytesRows::from_rows(result_decoded);
+                        Ok(BytesInsertBatch::new(timestamp, bytes_batch))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };

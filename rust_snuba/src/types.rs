@@ -5,25 +5,25 @@ use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct InsertBatch {
-    batch: BytesInsertBatch,
+pub struct BytesInsertBatch {
+    rows: BytesRows,
     sum_message_timestamp_secs: f64,
     max_message_timestamp_secs: i64,
 }
 
-impl InsertBatch {
-    pub fn new(timestamp: DateTime<Utc>, batch: BytesInsertBatch) -> Self {
+impl BytesInsertBatch {
+    pub fn new(timestamp: DateTime<Utc>, rows: BytesRows) -> Self {
         let unix_timestamp = timestamp.timestamp();
-        InsertBatch {
-            batch,
+        BytesInsertBatch {
+            rows,
             sum_message_timestamp_secs: unix_timestamp as f64,
             max_message_timestamp_secs: unix_timestamp,
         }
     }
 
     pub fn merge(mut self, other: Self) -> Self {
-        self.batch.encoded_rows.extend(other.batch.encoded_rows);
-        self.batch.num_rows += other.batch.num_rows;
+        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.num_rows += other.rows.num_rows;
         self.sum_message_timestamp_secs += other.sum_message_timestamp_secs;
         self.max_message_timestamp_secs = max(
             self.max_message_timestamp_secs,
@@ -46,7 +46,7 @@ impl InsertBatch {
         }
 
         if let Some(latency) = DateTime::from_timestamp(
-            (self.sum_message_timestamp_secs / self.batch.num_rows as f64) as i64,
+            (self.sum_message_timestamp_secs / self.rows.num_rows as f64) as i64,
             0,
         )
         .and_then(into_latency)
@@ -58,21 +58,21 @@ impl InsertBatch {
     }
 
     pub fn len(&self) -> usize {
-        self.batch.num_rows
+        self.rows.num_rows
     }
 
     pub fn get_encoded_rows(&self) -> &[u8] {
-        &self.batch.encoded_rows
+        &self.rows.encoded_rows
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct BytesInsertBatch {
+pub struct BytesRows {
     encoded_rows: Vec<u8>,
     num_rows: usize,
 }
 
-impl BytesInsertBatch {
+impl BytesRows {
     pub fn from_rows(rows: impl IntoIterator<Item = Vec<u8>>) -> Self {
         let mut encoded_rows = Vec::new();
         let mut num_rows = 0;
@@ -82,7 +82,7 @@ impl BytesInsertBatch {
             num_rows += 1;
         }
 
-        BytesInsertBatch {
+        BytesRows {
             num_rows,
             encoded_rows,
         }

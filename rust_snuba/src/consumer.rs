@@ -20,7 +20,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -173,7 +173,7 @@ pub fn process_message(
             };
 
             let res = func(payload, meta);
-            let batch = InsertBatch::new(timestamp, res.unwrap());
+            let batch = BytesInsertBatch::new(timestamp, res.unwrap());
             Some(batch.get_encoded_rows().to_vec())
         }
     }

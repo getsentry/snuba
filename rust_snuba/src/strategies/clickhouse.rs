@@ -13,7 +13,7 @@ use rust_arroyo::types::Message;
 use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 
 use crate::config::ClickhouseConfig;
-use crate::types::InsertBatch;
+use crate::types::BytesInsertBatch;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
@@ -31,8 +31,8 @@ impl ClickhouseWriter {
     }
 }
 
-impl TaskRunner<InsertBatch, InsertBatch> for ClickhouseWriter {
-    fn get_task(&self, message: Message<InsertBatch>) -> RunTaskFunc<InsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
+    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
         let metrics = self.metrics.clone();
@@ -62,7 +62,7 @@ impl TaskRunner<InsertBatch, InsertBatch> for ClickhouseWriter {
 }
 
 pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<InsertBatch, InsertBatch>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
 }
 
 impl ClickhouseWriterStep {
@@ -74,7 +74,7 @@ impl ClickhouseWriterStep {
         concurrency: &ConcurrencyConfig,
     ) -> Self
     where
-        N: ProcessingStrategy<InsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
         let hostname = cluster_config.host;
         let http_port = cluster_config.http_port;
@@ -94,12 +94,15 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<InsertBatch> for ClickhouseWriterStep {
+impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
-    fn submit(&mut self, message: Message<InsertBatch>) -> Result<(), SubmitError<InsertBatch>> {
+    fn submit(
+        &mut self,
+        message: Message<BytesInsertBatch>,
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
         self.inner.submit(message)
     }
 

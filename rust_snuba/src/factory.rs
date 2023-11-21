@@ -3,7 +3,7 @@ use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::validate_schema::ValidateSchema;
-use crate::types::{BytesInsertBatch, InsertBatch, KafkaMessageMetadata};
+use crate::types::{BytesInsertBatch, BytesRows, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
@@ -54,11 +54,11 @@ impl ConsumerStrategyFactory {
 }
 
 struct MessageProcessor {
-    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>,
+    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesRows>,
 }
 
-impl TaskRunner<KafkaPayload, InsertBatch> for MessageProcessor {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<InsertBatch> {
+impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch> {
         let func = self.func;
 
         Box::pin(async move {
@@ -76,7 +76,7 @@ impl TaskRunner<KafkaPayload, InsertBatch> for MessageProcessor {
             match func(broker_message.payload, metadata) {
                 Ok(transformed) => Ok(Message {
                     inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                        payload: InsertBatch::new(broker_message.timestamp, transformed),
+                        payload: BytesInsertBatch::new(broker_message.timestamp, transformed),
                         partition: broker_message.partition,
                         offset: broker_message.offset,
                         timestamp: broker_message.timestamp,
@@ -115,7 +115,7 @@ impl TaskRunner<KafkaPayload, InsertBatch> for MessageProcessor {
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        let accumulator = Arc::new(InsertBatch::merge);
+        let accumulator = Arc::new(BytesInsertBatch::merge);
 
         let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
             self.concurrency.concurrency,
@@ -130,7 +130,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &clickhouse_concurrency,
             )),
             accumulator,
-            InsertBatch::default(),
+            BytesInsertBatch::default(),
             self.max_batch_size,
             self.max_batch_time,
         );
