@@ -5,7 +5,6 @@ from typing import Any, Dict
 
 import pytest
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -38,7 +37,7 @@ TESTS = [
                 "GRANULARITY 60"
             ),
             "parent_api": "<unknown>",
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
         binary_condition(
             BooleanFunctions.AND,
@@ -116,11 +115,10 @@ TENANT_ID_TESTS = [
                 "LIMIT 1000 "
                 "GRANULARITY 60"
             ),
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
-        {"organization_id": 1, "referrer": "test", "project_id": 1},
+        {"organization_id": 1, "referrer": "my_request", "project_id": 1},
         "my_request",
-        0,
         id="one project id in query",
     ),
     pytest.param(
@@ -138,8 +136,7 @@ TENANT_ID_TESTS = [
             "tenant_ids": {"organization_id": 1, "referrer": "test"},
         },
         {"organization_id": 1, "referrer": "test"},
-        "my_request",
-        0,
+        "test",
         id="multiple projects, no project tenant",
     ),
     pytest.param(
@@ -158,7 +155,6 @@ TENANT_ID_TESTS = [
         },
         {"organization_id": 1, "referrer": "test"},
         "test",
-        1,
         id="only use tenant_id referrer in request",
     ),
 ]
@@ -166,19 +162,17 @@ TENANT_ID_TESTS = [
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "request_payload, expected_tenant_ids, expected_referrer, only_use_tenant_id_referrer",
+    "request_payload, expected_tenant_ids, expected_referrer",
     TENANT_ID_TESTS,
 )
 def test_tenant_ids(
     request_payload: dict[str, Any],
     expected_tenant_ids: dict[str, Any],
     expected_referrer: str,
-    only_use_tenant_id_referrer: bool,
 ) -> None:
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
 
-    state.set_config("only_use_tenant_id_referrer", only_use_tenant_id_referrer)
     request = build_request(
         request_payload,
         parse_snql_query,

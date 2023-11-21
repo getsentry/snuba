@@ -7,7 +7,7 @@ from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, U
 
 import sentry_sdk
 
-from snuba import state
+from snuba import environment, state
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -29,6 +29,9 @@ from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
 
 class Parser(Protocol):
@@ -97,13 +100,22 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            if state.get_config("only_use_tenant_id_referrer", False):
-                if "referrer" not in request_parts.attribution_info["tenant_ids"]:
-                    referrer = "<unknown>"
-                else:
-                    referrer = str(
-                        request_parts.attribution_info["tenant_ids"]["referrer"]
-                    )
+            if "referrer" not in request_parts.attribution_info["tenant_ids"]:
+                found_referrer = "<unknown>"
+            else:
+                found_referrer = str(
+                    request_parts.attribution_info["tenant_ids"]["referrer"]
+                )
+
+            if found_referrer != referrer:
+                metrics.increment(
+                    "referrer_mismatch",
+                    tags={
+                        "tenant_referrer": found_referrer,
+                        "request_referrer": referrer,
+                    },
+                )
+            referrer = found_referrer
 
             if settings_class == HTTPQuerySettings:
                 query_settings: MutableMapping[str, bool | str] = {
