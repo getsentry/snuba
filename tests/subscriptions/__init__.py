@@ -12,7 +12,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertEvent
-from tests.helpers import write_unprocessed_events
+from tests.helpers import write_raw_unprocessed_events, write_unprocessed_events
 
 
 class BaseSubscriptionTest:
@@ -54,6 +54,34 @@ class BaseSubscriptionTest:
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                     }
                 )
+                for tick in range(self.minutes)
+            ],
+        )
+        ga_storage = get_writable_storage(StorageKey.GROUP_ATTRIBUTES)
+        write_raw_unprocessed_events(
+            ga_storage,
+            [
+                {
+                    "group_deleted": False,
+                    "project_id": self.project_id,
+                    "group_id": tick,
+                    "status": 0,
+                    "substatus": 7,
+                    "first_seen": (self.base_time + timedelta(minutes=tick)).strftime(
+                        settings.PAYLOAD_DATETIME_FORMAT
+                    ),
+                    "num_comments": 0,
+                    "assignee_user_id": None,
+                    "assignee_team_id": None,
+                    "owner_suspect_commit_user_id": None,
+                    "owner_ownership_rule_user_id": None,
+                    "owner_ownership_rule_team_id": None,
+                    "owner_codeowners_user_id": None,
+                    "owner_codeowners_team_id": None,
+                    "timestamp": (self.base_time + timedelta(minutes=tick)).strftime(
+                        settings.PAYLOAD_DATETIME_FORMAT
+                    ),
+                }
                 for tick in range(self.minutes)
             ],
         )

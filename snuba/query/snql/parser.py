@@ -1269,7 +1269,6 @@ def validate_identifiers_in_lambda(
 def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
-
     condition = query.get_condition()
     top_level = (
         get_first_level_and_conditions(condition) if condition is not None else []
@@ -1462,7 +1461,6 @@ def _post_process(
         # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(func, "__name__", "custom")
         with sentry_sdk.start_span(op="processor", description=description):
-
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("snql_parsing", description, query):
                     func(query)
@@ -1506,7 +1504,6 @@ def parse_snql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
-
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 

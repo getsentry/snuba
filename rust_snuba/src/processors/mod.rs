@@ -4,11 +4,10 @@ mod querylog;
 mod spans;
 mod utils;
 
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{KafkaMessageMetadata, RowData};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
-type ProcessingFunction =
-    fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesInsertBatch>;
+type ProcessingFunction = fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<RowData>;
 
 pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
     match name {

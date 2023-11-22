@@ -118,14 +118,15 @@ schema:
     { name: title, type: String, args: { schema_modifiers: [readonly] } },
     { name: transaction_source, type: String },
     { name: timestamp, type: DateTime, args: { schema_modifiers: [readonly] } },
+    { name: time, type: DateTime, args: { schema_modifiers: [readonly] } },
     {
       name: group_ids,
       type: Array,
       args: { inner_type: { type: UInt, args: { size: 64 } } },
     },
     { name: app_start_type, type: String },
-    { name: profile_id, type: UUID, args: {schema_modifiers: [nullable]}},
-    { name: replay_id, type: UUID, args: {schema_modifiers: [nullable]}}
+    { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } }
   ]
 required_time_column: finish_ts
 storages:
@@ -354,7 +355,7 @@ subscription_validators:
         {
           max_allowed_aggregations: 1,
           disallowed_aggregations: [groupby, having, orderby],
-          required_time_column: finish_ts
+          required_time_column: finish_ts,
         },
     },
   ]

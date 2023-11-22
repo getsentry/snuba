@@ -5,14 +5,27 @@ name: spans
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: transaction_id, type: UUID, args: { schema_modifiers: [ nullable ] } },
-    { name: transaction_op, type: String, args: { schema_modifiers: [ nullable ] } },
+    {
+      name: transaction_id,
+      type: UUID,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: transaction_op,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
     { name: trace_id, type: UUID },
     { name: span_id, type: UInt, args: { size: 64 } },
-    { name: parent_span_id, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
+    {
+      name: parent_span_id,
+      type: UInt,
+      args: { size: 64, schema_modifiers: [nullable] },
+    },
     { name: segment_id, type: UInt, args: { size: 64 } },
     { name: is_segment, type: UInt, args: { size: 8 } },
     { name: segment_name, type: String },
+    { name: time, type: DateTime },
     { name: start_timestamp, type: DateTime },
     { name: start_ms, type: UInt, args: { size: 16 } },
     { name: end_timestamp, type: DateTime },
@@ -21,22 +34,27 @@ schema:
     { name: exclusive_time, type: Float, args: { size: 64 } },
     { name: op, type: String },
     { name: group, type: UInt, args: { size: 64 } },
+    { name: group_raw, type: UInt, args: { size: 64 } },
     { name: span_status, type: UInt, args: { size: 8 } },
     { name: span_kind, type: String },
     { name: description, type: String },
-    { name: status, type: UInt, args: { size: 32, schema_modifiers: [ nullable ] } },
+    {
+      name: status,
+      type: UInt,
+      args: { size: 32, schema_modifiers: [nullable] },
+    },
     { name: module, type: String },
-    { name: action, type: String, args: { schema_modifiers: [ nullable ] } },
-    { name: domain, type: String, args: { schema_modifiers: [ nullable ] } },
-    { name: platform, type: String, args: { schema_modifiers: [ nullable ] } },
-    { name: user, type: String, args: { schema_modifiers: [ nullable] } },
+    { name: action, type: String, args: { schema_modifiers: [nullable] } },
+    { name: domain, type: String, args: { schema_modifiers: [nullable] } },
+    { name: platform, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user, type: String, args: { schema_modifiers: [nullable] } },
     {
       name: tags,
       type: Nested,
       args:
         {
           subcolumns:
-            [ { name: key, type: String }, { name: value, type: String } ],
+            [{ name: key, type: String }, { name: value, type: String }],
         },
     },
     {
@@ -57,7 +75,7 @@ schema:
       args:
         {
           inner_type: { type: UInt, args: { size: 64 } },
-          schema_modifiers: [ readonly ],
+          schema_modifiers: [readonly],
         },
     },
     { name: partition, type: UInt, args: { size: 16 } },
