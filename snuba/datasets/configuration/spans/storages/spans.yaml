@@ -16,6 +16,7 @@ schema:
       { name: transaction_op, type: String, args: { schema_modifiers: [nullable] } },
       { name: trace_id, type: UUID},
       { name: span_id, type: UInt, args: { size: 64 } },
+      { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
       { name: parent_span_id, type: UInt, args: { size: 64, schema_modifiers: [nullable] } },
       { name: segment_id, type: UInt, args: { size: 64 } },
       { name: is_segment, type: UInt, args: { size: 8 } },
