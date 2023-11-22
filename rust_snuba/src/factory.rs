@@ -124,6 +124,7 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let accumulator = Arc::new(BytesInsertBatch::merge);
+
         let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
             self.concurrency.concurrency,
             self.concurrency.handle(),
