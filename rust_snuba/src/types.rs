@@ -3,21 +3,31 @@ use std::cmp::max;
 use chrono::{DateTime, Utc};
 use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct BytesInsertBatch {
-    rows: BytesRows,
+    rows: RowData,
     sum_message_timestamp_secs: f64,
     max_message_timestamp_secs: i64,
+    // For each partition we store the offset and timestamp to be produced to the commit log
+    commit_log_offsets: CommitLogOffsets,
 }
 
 impl BytesInsertBatch {
-    pub fn new(timestamp: DateTime<Utc>, rows: BytesRows) -> Self {
+    pub fn new(
+        timestamp: DateTime<Utc>,
+        rows: RowData,
+        commit_log_offsets: CommitLogOffsets,
+    ) -> Self {
         let unix_timestamp = timestamp.timestamp();
         BytesInsertBatch {
             rows,
             sum_message_timestamp_secs: unix_timestamp as f64,
             max_message_timestamp_secs: unix_timestamp,
+            commit_log_offsets,
         }
     }
 
@@ -61,18 +71,22 @@ impl BytesInsertBatch {
         self.rows.num_rows
     }
 
-    pub fn get_encoded_rows(&self) -> &[u8] {
+    pub fn encoded_rows(&self) -> &[u8] {
         &self.rows.encoded_rows
+    }
+
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct BytesRows {
+pub struct RowData {
     encoded_rows: Vec<u8>,
     num_rows: usize,
 }
 
-impl BytesRows {
+impl RowData {
     pub fn from_rows(rows: impl IntoIterator<Item = Vec<u8>>) -> Self {
         let mut encoded_rows = Vec::new();
         let mut num_rows = 0;
@@ -82,7 +96,7 @@ impl BytesRows {
             num_rows += 1;
         }
 
-        BytesRows {
+        RowData {
             num_rows,
             encoded_rows,
         }

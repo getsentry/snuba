@@ -22,6 +22,7 @@ schema:
       args: { schema_modifiers: [nullable], size: 16 },
     },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
     {
       name: replay_start_timestamp,
       type: DateTime,

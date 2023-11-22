@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -173,8 +173,13 @@ pub fn process_message(
             };
 
             let res = func(payload, meta);
-            let batch = BytesInsertBatch::new(timestamp, res.unwrap());
-            Some(batch.get_encoded_rows().to_vec())
+            let batch = BytesInsertBatch::new(
+                timestamp,
+                res.unwrap(),
+                // TODO: Actually implement this?
+                BTreeMap::new(),
+            );
+            Some(batch.encoded_rows().to_vec())
         }
     }
 }

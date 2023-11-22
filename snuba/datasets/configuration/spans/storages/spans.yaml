@@ -28,6 +28,7 @@ schema:
       { name: exclusive_time, type: Float, args: { size: 64 } },
       { name: op, type: String },
       { name: group, type: UInt, args: { size: 64 } },
+      { name: group_raw, type: UInt, args: { size: 64 } },
       { name: span_status, type: UInt, args: { size: 8 } },
       { name: span_kind, type: String },
       { name: description, type: String },

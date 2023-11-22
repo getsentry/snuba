@@ -186,11 +186,13 @@ def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelations
     return relationships
 
 
-def _build_validation_mode(mode: str | None) -> ColumnValidationMode:
+def _build_validation_mode(mode: str | None) -> ColumnValidationMode | None:
     if not mode:
-        return ColumnValidationMode.DO_NOTHING
+        return None
 
-    if mode == "warn":
+    if mode == "do_nothing":
+        return ColumnValidationMode.DO_NOTHING
+    elif mode == "warn":
         return ColumnValidationMode.WARN
     elif mode == "error":
         return ColumnValidationMode.ERROR

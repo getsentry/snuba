@@ -3,7 +3,7 @@ use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::validate_schema::ValidateSchema;
-use crate::types::{BytesInsertBatch, BytesRows, KafkaMessageMetadata};
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata, RowData};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
@@ -13,6 +13,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use std::time::Duration;
@@ -54,7 +55,7 @@ impl ConsumerStrategyFactory {
 }
 
 struct MessageProcessor {
-    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<BytesRows>,
+    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<RowData>,
 }
 
 impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
@@ -76,7 +77,12 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
             match func(broker_message.payload, metadata) {
                 Ok(transformed) => Ok(Message {
                     inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                        payload: BytesInsertBatch::new(broker_message.timestamp, transformed),
+                        payload: BytesInsertBatch::new(
+                            broker_message.timestamp,
+                            transformed,
+                            // TODO: Actually implement this?
+                            BTreeMap::new(),
+                        ),
                         partition: broker_message.partition,
                         offset: broker_message.offset,
                         timestamp: broker_message.timestamp,

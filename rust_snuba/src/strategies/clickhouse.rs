@@ -47,7 +47,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
             tracing::debug!("performing write");
             let response = client
-                .send(insert_batch.get_encoded_rows().to_vec())
+                .send(insert_batch.encoded_rows().to_vec())
                 .await
                 .unwrap();
 
