@@ -115,6 +115,16 @@ RUN set -ex; \
     pip install -e .; \
     snuba --help
 
+ARG SOURCE_COMMIT
+ENV SNUBA_RELEASE=$SOURCE_COMMIT \
+    FLASK_DEBUG=0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UWSGI_ENABLE_METRICS=true \
+    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
+    UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
+    UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
+
 USER snuba
 EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
@@ -127,17 +137,6 @@ RUN set -ex; \
     rm /tmp/build-deps.txt; \
     rm -rf /var/lib/apt/lists/*;
 USER snuba
-
-ARG SOURCE_COMMIT
-ENV SNUBA_RELEASE=$SOURCE_COMMIT \
-    FLASK_DEBUG=0 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    UWSGI_ENABLE_METRICS=true \
-    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
-    UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
-    UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
-
 
 FROM application_base AS testing
 

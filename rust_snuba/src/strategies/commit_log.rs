@@ -132,7 +132,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
         let skip_produce = self.skip_produce;
         let consumer_group = self.consumer_group.clone();
 
-        let commit_log_offsets = message.payload().commit_log_offsets.clone();
+        let commit_log_offsets = message.payload().commit_log_offsets().clone();
 
         Box::pin(async move {
             if skip_produce {
@@ -221,6 +221,8 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
 
 #[cfg(test)]
 mod tests {
+    use crate::types::RowData;
+
     use super::*;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
@@ -288,17 +290,16 @@ mod tests {
         }
 
         let payloads = vec![
-            BytesInsertBatch {
-                rows: Vec::new(),
-                commit_log_offsets: BTreeMap::from([(0, (500, Utc::now()))]),
-            },
-            BytesInsertBatch {
-                rows: Vec::new(),
-                commit_log_offsets: BTreeMap::from([
-                    (0, (600, Utc::now())),
-                    (1, (100, Utc::now())),
-                ]),
-            },
+            BytesInsertBatch::new(
+                Utc::now(),
+                RowData::from_rows(vec![]),
+                BTreeMap::from([(0, (500, Utc::now()))]),
+            ),
+            BytesInsertBatch::new(
+                Utc::now(),
+                RowData::from_rows(vec![]),
+                BTreeMap::from([(0, (600, Utc::now())), (1, (100, Utc::now()))]),
+            ),
         ];
 
         let producer = MockProducer {

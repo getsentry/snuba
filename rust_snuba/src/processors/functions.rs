@@ -54,7 +54,7 @@ pub fn process_message(
         rows.push(serialized);
     }
 
-    Ok(RowData { rows })
+    Ok(RowData::from_rows(rows))
 }
 
 #[derive(Debug, Deserialize)]
