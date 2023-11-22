@@ -127,6 +127,12 @@ pub struct BufferedMessages<TPayload> {
     buffered_messages: BTreeMap<Partition, VecDeque<BrokerMessage<TPayload>>>,
 }
 
+impl<TPayload> Default for BufferedMessages<TPayload> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<TPayload> BufferedMessages<TPayload> {
     pub fn new() -> Self {
         BufferedMessages {
