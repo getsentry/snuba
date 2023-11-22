@@ -361,7 +361,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         self.consumer.lock().unwrap().close();
     }
 
-    pub fn tell(self) -> HashMap<Partition, u64> {
+    pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.lock().unwrap().tell().unwrap()
     }
 }
