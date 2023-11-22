@@ -221,7 +221,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
-                let process_message = |args: (Vec<u8>, u64, u16, DateTime<Utc>)| {
+                let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
