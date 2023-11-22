@@ -125,6 +125,7 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
+    "--concurrency",
     type=int,
 )
 @click.option(
@@ -191,13 +192,13 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    join_timeout: int = 5,
-    enforce_schema: bool = False,
-    log_level: Optional[str] = None,
-    profile_path: Optional[str] = None,
-    max_poll_interval_ms: int = 30000,
-    health_check_file: Optional[str] = None,
-    group_instance_id: Optional[str] = None,
+    join_timeout: int,
+    enforce_schema: bool,
+    log_level: Optional[str],
+    profile_path: Optional[str],
+    max_poll_interval_ms: int,
+    health_check_file: Optional[str],
+    group_instance_id: Optional[str],
     skip_write: bool,
 ) -> None:
 

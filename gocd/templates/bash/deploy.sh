@@ -45,7 +45,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
   --container-name="rust-querylog-consumer" \
-  --container-name="rust-querylog-pure-consumer" \
   --container-name="rust-querylog-reference-consumer" \
   --container-name="spans-consumer" \
   --container-name="rust-spans-consumer" \

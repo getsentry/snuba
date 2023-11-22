@@ -174,7 +174,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
         )
-
         response = self.app.post(
             self.snql_route,
             data=json.dumps(

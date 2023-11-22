@@ -1,14 +1,19 @@
+mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
-use crate::backends::{AssignmentCallbacks, Consumer};
-use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, Metrics};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use thiserror::Error;
+
+use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::dlq::BufferedMessages;
+use crate::processing::strategies::{MessageRejected, SubmitError};
+use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -20,20 +25,39 @@ pub struct PollError;
 #[derive(Debug, Clone)]
 pub struct PauseError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Error)]
 pub enum RunError {
+    #[error("invalid state")]
     InvalidState,
-    PollError,
-    PauseError,
+    #[error("poll error")]
+    Poll(#[source] ConsumerError),
+    #[error("pause error")]
+    Pause(#[source] ConsumerError),
 }
 
-struct Strategies<TPayload: Clone> {
+struct ConsumerState<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
+    backpressure_timestamp: Option<Instant>,
+    is_paused: bool,
+    metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
-struct Callbacks<TPayload: Clone> {
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
+impl<TPayload> ConsumerState<TPayload> {
+    fn clear_backpressure(&mut self) {
+        if self.backpressure_timestamp.is_some() {
+            self.metrics_buffer.incr_timing(
+                "arroyo.consumer.backpressure.time",
+                self.backpressure_timestamp.unwrap().elapsed(),
+            );
+            self.backpressure_timestamp = None;
+        }
+    }
+}
+
+struct Callbacks<TPayload> {
+    strategies: Arc<Mutex<ConsumerState<TPayload>>>,
+    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,19 +71,20 @@ impl ProcessorHandle {
     }
 }
 
-impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
+impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // TODO: Having the initialization of the strategy here
     // means that ProcessingStrategy and ProcessingStrategyFactory
     // have to be Send and Sync, which is really limiting and unnecessary.
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
-    fn on_assign(&mut self, _: HashMap<Partition, u64>) {
+    fn on_assign(&self, _: HashMap<Partition, u64>) {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&mut self, _: Vec<Partition>) {
-        let mut metrics = get_metrics();
+    fn on_revoke(&self, _: Vec<Partition>) {
+        tracing::info!("Start revoke partitions");
+        let metrics = get_metrics();
         let start = Instant::now();
 
         let mut stg = self.strategies.lock().unwrap();
@@ -67,12 +92,17 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None => {}
             Some(s) => {
                 s.close();
-                // TODO: We need to actually call consumer.commit() with the commit request.
-                // Right now we are never committing during consumer shutdown.
-                let _ = s.join(None);
+                if let Ok(Some(commit_request)) = s.join(None) {
+                    let mut consumer = self.consumer.lock().unwrap();
+                    tracing::info!("Committing offsets");
+                    consumer.stage_offsets(commit_request.positions).unwrap();
+                    consumer.commit_offsets().unwrap();
+                }
             }
         }
         stg.strategy = None;
+        stg.is_paused = false;
+        stg.clear_backpressure();
 
         metrics.timing(
             "arroyo.consumer.join.time",
@@ -80,13 +110,21 @@ impl<TPayload: 'static + Clone> AssignmentCallbacks for Callbacks<TPayload> {
             None,
         );
 
+        tracing::info!("End revoke partitions");
+
         // TODO: Figure out how to flush the metrics buffer from the recovation callback.
     }
 }
 
-impl<TPayload: Clone> Callbacks<TPayload> {
-    pub fn new(strategies: Arc<Mutex<Strategies<TPayload>>>) -> Self {
-        Self { strategies }
+impl<TPayload> Callbacks<TPayload> {
+    pub fn new(
+        strategies: Arc<Mutex<ConsumerState<TPayload>>>,
+        consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+    ) -> Self {
+        Self {
+            strategies,
+            consumer,
+        }
     }
 }
 
@@ -96,40 +134,43 @@ impl<TPayload: Clone> Callbacks<TPayload> {
 /// partition revocation.
 pub struct StreamProcessor<TPayload: Clone> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
+    consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
-    backpressure_timestamp: Option<Instant>,
-    is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
+    buffered_messages: BufferedMessages<TPayload>,
 }
 
-impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
+impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     ) -> Self {
-        let strategies = Arc::new(Mutex::new(Strategies {
+        let consumer_state = Arc::new(Mutex::new(ConsumerState {
             processing_factory,
             strategy: None,
+            backpressure_timestamp: None,
+            is_paused: false,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }));
 
         Self {
             consumer,
-            strategies,
+            consumer_state,
             message: None,
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
-            backpressure_timestamp: None,
-            is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+            buffered_messages: BufferedMessages::new(),
         }
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks: Box<dyn AssignmentCallbacks> =
-            Box::new(Callbacks::new(self.strategies.clone()));
+        let callbacks: Box<dyn AssignmentCallbacks> = Box::new(Callbacks::new(
+            self.consumer_state.clone(),
+            self.consumer.clone(),
+        ));
         self.consumer
             .lock()
             .unwrap()
@@ -138,7 +179,10 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
-        if self.is_paused {
+        let metrics = get_metrics();
+        metrics.increment("arroyo.consumer.run.count", 1, None);
+
+        if self.consumer_state.lock().unwrap().is_paused {
             // If the consumer waas paused, it should not be returning any messages
             // on ``poll``.
             let res = self
@@ -164,128 +208,123 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
                 .poll(Some(Duration::from_secs(1)))
             {
                 Ok(msg) => {
-                    self.message = msg.map(|inner| Message {
-                        inner_message: InnerMessage::BrokerMessage(inner),
-                    });
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
+
+                    if let Some(broker_msg) = msg {
+                        self.message = Some(Message {
+                            inner_message: InnerMessage::BrokerMessage(broker_msg.clone()),
+                        });
+
+                        self.buffered_messages.append(broker_msg);
+                    }
                 }
-                Err(e) => {
-                    log::error!("poll error: {}", e);
-                    return Err(RunError::PollError);
+                Err(error) => {
+                    tracing::error!(%error, "poll error");
+                    return Err(RunError::Poll(error));
                 }
             }
         }
 
-        let mut trait_callbacks = self.strategies.lock().unwrap();
-        match trait_callbacks.strategy.as_mut() {
-            None => match self.message.as_ref() {
-                None => {}
+        // since we do not drive the kafka consumer at this point, it is safe to acquire the state
+        // lock, as we can be sure that for the rest of this function, no assignment callback will
+        // run.
+        let mut consumer_state = self.consumer_state.lock().unwrap();
+
+        let Some(strategy) = consumer_state.strategy.as_mut() else {
+            match self.message.as_ref() {
+                None => return Ok(()),
                 Some(_) => return Err(RunError::InvalidState),
-            },
-            Some(strategy) => {
-                let commit_request = strategy.poll();
-                match commit_request {
-                    Ok(None) => {}
-                    Ok(Some(request)) => {
-                        self.consumer
-                            .lock()
-                            .unwrap()
-                            .stage_offsets(request.positions)
-                            .unwrap();
-                        self.consumer.lock().unwrap().commit_offsets().unwrap();
-                    }
-                    Err(e) => {
-                        println!("TODOO: Handle invalid message {:?}", e);
-                    }
-                };
+            }
+        };
+        let commit_request = strategy.poll();
+        match commit_request {
+            Ok(None) => {}
+            Ok(Some(request)) => {
+                for (partition, offset) in &request.positions {
+                    self.buffered_messages.pop(partition, offset - 1);
+                }
 
-                let msg = self.message.take();
-                if let Some(msg_s) = msg {
-                    let processing_start = Instant::now();
-                    let ret = strategy.submit(msg_s);
-                    self.metrics_buffer.incr_timing(
-                        "arroyo.consumer.processing.time",
-                        processing_start.elapsed(),
-                    );
-                    match ret {
+                let mut consumer = self.consumer.lock().unwrap();
+                consumer.stage_offsets(request.positions).unwrap();
+                consumer.commit_offsets().unwrap();
+            }
+            Err(e) => {
+                println!("TODOO: Handle invalid message {:?}", e);
+            }
+        };
+
+        let Some(msg_s) = self.message.take() else {
+            return Ok(());
+        };
+        let processing_start = Instant::now();
+        let ret = strategy.submit(msg_s);
+        self.metrics_buffer.incr_timing(
+            "arroyo.consumer.processing.time",
+            processing_start.elapsed(),
+        );
+
+        match ret {
+            Ok(()) => {
+                // Resume if we are currently in a paused state
+                if consumer_state.is_paused {
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
+
+                    match consumer.resume(partitions) {
                         Ok(()) => {
-                            // Resume if we are currently in a paused state
-                            if self.is_paused {
-                                let partitions: std::collections::HashSet<Partition> = self
-                                    .consumer
-                                    .lock()
-                                    .unwrap()
-                                    .tell()
-                                    .unwrap()
-                                    .keys()
-                                    .cloned()
-                                    .collect();
-
-                                let res = self.consumer.lock().unwrap().resume(partitions);
-                                match res {
-                                    Ok(()) => {
-                                        self.is_paused = false;
-                                    }
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            }
-
-                            // Clear backpressure timestamp if it is set
-                            if self.backpressure_timestamp.is_some() {
-                                self.metrics_buffer.incr_timing(
-                                    "arroyo.consumer.backpressure.time",
-                                    self.backpressure_timestamp.unwrap().elapsed(),
-                                );
-                                self.backpressure_timestamp = None;
-                            }
+                            consumer_state.is_paused = false;
                         }
-                        Err(SubmitError::MessageRejected(MessageRejected { message })) => {
-                            // Put back the carried over message
-                            self.message = Some(message);
-
-                            if self.backpressure_timestamp.is_none() {
-                                self.backpressure_timestamp = Some(Instant::now());
-                            }
-
-                            // If we are in the backpressure state for more than 1 second,
-                            // we pause the consumer and hold the message until it is
-                            // accepted, at which point we can resume consuming.
-                            if !self.is_paused && self.backpressure_timestamp.is_some() {
-                                let backpressure_duration =
-                                    self.backpressure_timestamp.unwrap().elapsed();
-
-                                if backpressure_duration < Duration::from_secs(1) {
-                                    return Ok(());
-                                }
-
-                                log::warn!("Consumer is in backpressure state for more than 1 second, pausing",);
-
-                                let partitions = self
-                                    .consumer
-                                    .lock()
-                                    .unwrap()
-                                    .tell()
-                                    .unwrap()
-                                    .keys()
-                                    .cloned()
-                                    .collect();
-
-                                let res = self.consumer.lock().unwrap().pause(partitions);
-                                match res {
-                                    Ok(()) => {
-                                        self.is_paused = true;
-                                    }
-                                    Err(_) => return Err(RunError::PauseError),
-                                }
-                            }
-                        }
-                        Err(SubmitError::InvalidMessage(invalid_message)) => {
-                            // TODO: Put this into the DLQ once we have one
-                            log::error!("Invalid message: {:?}", invalid_message);
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
                         }
                     }
                 }
+
+                // Clear backpressure timestamp if it is set
+                consumer_state.clear_backpressure();
+            }
+            Err(SubmitError::MessageRejected(MessageRejected { message })) => {
+                // Put back the carried over message
+                self.message = Some(message);
+
+                if consumer_state.backpressure_timestamp.is_none() {
+                    consumer_state.backpressure_timestamp = Some(Instant::now());
+                }
+
+                // If we are in the backpressure state for more than 1 second,
+                // we pause the consumer and hold the message until it is
+                // accepted, at which point we can resume consuming.
+                if !consumer_state.is_paused && consumer_state.backpressure_timestamp.is_some() {
+                    let backpressure_duration =
+                        consumer_state.backpressure_timestamp.unwrap().elapsed();
+
+                    if backpressure_duration < Duration::from_secs(1) {
+                        return Ok(());
+                    }
+
+                    tracing::warn!(
+                        "Consumer is in backpressure state for more than 1 second, pausing",
+                    );
+
+                    let mut consumer = self.consumer.lock().unwrap();
+                    let partitions = consumer.tell().unwrap().into_keys().collect();
+
+                    match consumer.pause(partitions) {
+                        Ok(()) => {
+                            consumer_state.is_paused = true;
+                        }
+                        Err(error) => {
+                            tracing::error!(%error, "pause error");
+                            return Err(RunError::Pause(error));
+                        }
+                    }
+                }
+            }
+            Err(SubmitError::InvalidMessage(message)) => {
+                // TODO: Put this into the DLQ once we have one
+                tracing::error!(?message, "Invalid message");
             }
         }
         Ok(())
@@ -298,22 +337,16 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
             .shutdown_requested
             .load(Ordering::Relaxed)
         {
-            let ret = self.run_once();
-            match ret {
-                Ok(()) => {}
-                Err(e) => {
-                    let mut trait_callbacks = self.strategies.lock().unwrap();
+            if let Err(e) = self.run_once() {
+                let mut trait_callbacks = self.consumer_state.lock().unwrap();
 
-                    match trait_callbacks.strategy.as_mut() {
-                        None => {}
-                        Some(strategy) => {
-                            strategy.terminate();
-                        }
-                    }
-                    drop(trait_callbacks); // unlock mutex so we can close consumer
-                    self.consumer.lock().unwrap().close();
-                    return Err(e);
+                if let Some(strategy) = trait_callbacks.strategy.as_mut() {
+                    strategy.terminate();
                 }
+
+                drop(trait_callbacks); // unlock mutex so we can close consumer
+                self.consumer.lock().unwrap().close();
+                return Err(e);
             }
         }
         self.shutdown();
@@ -328,7 +361,7 @@ impl<TPayload: 'static + Clone> StreamProcessor<TPayload> {
         self.consumer.lock().unwrap().close();
     }
 
-    pub fn tell(self) -> HashMap<Partition, u64> {
+    pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.lock().unwrap().tell().unwrap()
     }
 }
@@ -358,7 +391,7 @@ mod tests {
             Ok(match self.message.as_ref() {
                 None => None,
                 Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable().into_iter()),
+                    positions: HashMap::from_iter(message.committable()),
                 }),
             })
         }
@@ -389,9 +422,7 @@ mod tests {
         let clock = SystemClock {};
         let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
 
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
+        let topic1 = Topic::new("test1");
 
         let _ = broker.create_topic(topic1, 1);
         broker
@@ -408,9 +439,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -418,13 +447,8 @@ mod tests {
     #[test]
     fn test_consume() {
         let mut broker = build_broker();
-        let topic1 = Topic {
-            name: "test1".to_string(),
-        };
-        let partition = Partition {
-            topic: topic1,
-            index: 0,
-        };
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
@@ -436,9 +460,7 @@ mod tests {
         )));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
-        processor.subscribe(Topic {
-            name: "test1".to_string(),
-        });
+        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();

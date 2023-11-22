@@ -80,8 +80,8 @@ test_cases = [
     pytest.param(
         """
            MATCH (events)
-           SELECT test_func(column4) AS test_func_alias,
-              column1 BY column2, column3
+           SELECT test_func(release) AS test_func_alias,
+              event_id BY project_id, platform
            WHERE {conditions}
         """.format(
             conditions=snql_conditions_with_default()
@@ -92,26 +92,26 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "column2", Column("_snuba_column2", None, "column2")
+                    "project_id", Column("_snuba_project_id", None, "project_id")
                 ),
                 SelectedExpression(
-                    "column3", Column("_snuba_column3", None, "column3")
+                    "platform", Column("_snuba_platform", None, "platform")
                 ),
                 SelectedExpression(
                     "test_func_alias",
                     FunctionCall(
                         "_snuba_test_func_alias",
                         "test_func",
-                        (Column("_snuba_column4", None, "column4"),),
+                        (Column("_snuba_release", None, "release"),),
                     ),
                 ),
                 SelectedExpression(
-                    "column1", Column("_snuba_column1", None, "column1")
+                    "event_id", Column("_snuba_event_id", None, "event_id")
                 ),
             ],
             groupby=[
-                Column("_snuba_column2", None, "column2"),
-                Column("_snuba_column3", None, "column3"),
+                Column("_snuba_project_id", None, "project_id"),
+                Column("_snuba_platform", None, "platform"),
             ],
             condition=with_required(),
             limit=1000,
@@ -123,11 +123,11 @@ test_cases = [
         MATCH (events)
         SELECT count(platform) AS platforms,
                uniq(platform) AS uniq_platforms,
-               testF(platform, field2) AS top_platforms,
-               f1(column1, column2) AS f1_alias, f2() AS f2_alias
+               testF(platform, release) AS top_platforms,
+               f1(partition, offset) AS f1_alias, f2() AS f2_alias
         BY format_eventid(event_id)
         WHERE {conditions}
-        HAVING times_seen > 1
+        HAVING retention_days > 1
         """.format(
             conditions=snql_conditions_with_default(
                 "tags[sentry:dist] IN tuple('dist1', 'dist2')"
@@ -169,7 +169,7 @@ test_cases = [
                         "testF",
                         (
                             Column("_snuba_platform", None, "platform"),
-                            Column("_snuba_field2", None, "field2"),
+                            Column("_snuba_release", None, "release"),
                         ),
                     ),
                 ),
@@ -179,8 +179,8 @@ test_cases = [
                         "_snuba_f1_alias",
                         "f1",
                         (
-                            Column("_snuba_column1", None, "column1"),
-                            Column("_snuba_column2", None, "column2"),
+                            Column("_snuba_partition", None, "partition"),
+                            Column("_snuba_offset", None, "offset"),
                         ),
                     ),
                 ),
@@ -208,7 +208,7 @@ test_cases = [
             ),
             having=binary_condition(
                 "greater",
-                Column("_snuba_times_seen", None, "times_seen"),
+                Column("_snuba_retention_days", None, "retention_days"),
                 Literal(None, 1),
             ),
             groupby=[
@@ -225,11 +225,11 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT column1, column2
+        SELECT partition, offset
         WHERE {conditions}
-        ORDER BY column1 ASC,
-                 column2 DESC,
-                 func(column3) DESC
+        ORDER BY partition ASC,
+                 offset DESC,
+                 func(retention_days) DESC
         """.format(
             conditions=snql_conditions_with_default()
         ),
@@ -239,26 +239,24 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "column1", Column("_snuba_column1", None, "column1")
+                    "partition", Column("_snuba_partition", None, "partition")
                 ),
-                SelectedExpression(
-                    "column2", Column("_snuba_column2", None, "column2")
-                ),
+                SelectedExpression("offset", Column("_snuba_offset", None, "offset")),
             ],
             condition=with_required(),
             groupby=None,
             having=None,
             order_by=[
                 OrderBy(
-                    OrderByDirection.ASC, Column("_snuba_column1", None, "column1")
+                    OrderByDirection.ASC, Column("_snuba_partition", None, "partition")
                 ),
-                OrderBy(
-                    OrderByDirection.DESC, Column("_snuba_column2", None, "column2")
-                ),
+                OrderBy(OrderByDirection.DESC, Column("_snuba_offset", None, "offset")),
                 OrderBy(
                     OrderByDirection.DESC,
                     FunctionCall(
-                        None, "func", (Column("_snuba_column3", None, "column3"),)
+                        None,
+                        "func",
+                        (Column("_snuba_retention_days", None, "retention_days"),),
                     ),
                 ),
             ],
@@ -269,9 +267,9 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT column1 BY column1
+        SELECT partition BY platform
         WHERE {conditions}
-        ORDER BY column1 DESC
+        ORDER BY partition DESC
         """.format(
             conditions=snql_conditions_with_default()
         ),
@@ -281,18 +279,18 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "column1", Column("_snuba_column1", None, "column1")
+                    "platform", Column("_snuba_platform", None, "platform")
                 ),
                 SelectedExpression(
-                    "column1", Column("_snuba_column1", None, "column1")
+                    "partition", Column("_snuba_partition", None, "partition")
                 ),
             ],
             condition=with_required(),
-            groupby=[Column("_snuba_column1", None, "column1")],
+            groupby=[Column("_snuba_platform", None, "platform")],
             having=None,
             order_by=[
                 OrderBy(
-                    OrderByDirection.DESC, Column("_snuba_column1", None, "column1")
+                    OrderByDirection.DESC, Column("_snuba_partition", None, "partition")
                 )
             ],
             limit=1000,
@@ -302,7 +300,7 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT column1, tags[test] BY foo(tags[test2])
+        SELECT platform, tags[test] BY foo(tags[test2])
         WHERE {conditions}
         """.format(
             conditions=snql_conditions_with_default()
@@ -327,7 +325,7 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "column1", Column("_snuba_column1", None, "column1")
+                    "platform", Column("_snuba_platform", None, "platform")
                 ),
                 SelectedExpression(
                     "tags[test]",
@@ -359,8 +357,8 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT group_id, goo(something) AS issue_id,
-               foo(zoo(a)) AS a
+        SELECT group_id, goo(partition) AS issue_id,
+               foo(zoo(offset)) AS offset
         WHERE {conditions}
         ORDER BY group_id ASC
         """.format(
@@ -380,7 +378,7 @@ test_cases = [
                             FunctionCall(
                                 "_snuba_issue_id",
                                 "goo",
-                                (Column("_snuba_something", None, "something"),),
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
@@ -390,15 +388,15 @@ test_cases = [
                     FunctionCall(
                         "_snuba_issue_id",
                         "goo",
-                        (Column("_snuba_something", None, "something"),),
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
                 SelectedExpression(
-                    "a",
+                    "offset",
                     FunctionCall(
-                        "_snuba_a",
+                        "_snuba_offset",
                         "foo",
-                        (FunctionCall(None, "zoo", (Column(None, None, "a"),)),),
+                        (FunctionCall(None, "zoo", (Column(None, None, "offset"),)),),
                     ),
                 ),
             ],
@@ -412,7 +410,7 @@ test_cases = [
                             FunctionCall(
                                 "_snuba_issue_id",
                                 "goo",
-                                (Column("_snuba_something", None, "something"),),
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
@@ -429,7 +427,7 @@ test_cases = [
                             FunctionCall(
                                 "_snuba_issue_id",
                                 "goo",
-                                (Column("_snuba_something", None, "something"),),
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
@@ -442,8 +440,8 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT foo(column3) AS exp,
-               foo(column3) AS exp
+        SELECT foo(partition) AS exp,
+               foo(partition) AS exp
         WHERE {conditions}
         """.format(
             conditions=snql_conditions_with_default()
@@ -458,7 +456,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_exp",
                         "foo",
-                        (Column("_snuba_column3", None, "column3"),),
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
                 SelectedExpression(
@@ -466,7 +464,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_exp",
                         "foo",
-                        (Column("_snuba_column3", None, "column3"),),
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
             ],
@@ -478,7 +476,7 @@ test_cases = [
     pytest.param(
         """
         MATCH (events)
-        SELECT foo(column) AS exp, exp
+        SELECT foo(partition) AS exp, exp
         WHERE {conditions}
         """.format(
             conditions=snql_conditions_with_default()
@@ -491,13 +489,17 @@ test_cases = [
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "foo", (Column("_snuba_column", None, "column"),)
+                        "_snuba_exp",
+                        "foo",
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "foo", (Column("_snuba_column", None, "column"),)
+                        "_snuba_exp",
+                        "foo",
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
             ],

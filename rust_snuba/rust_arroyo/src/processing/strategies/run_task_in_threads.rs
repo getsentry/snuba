@@ -1,41 +1,97 @@
+use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
+use std::time::{Duration, Instant};
+
+use tokio::runtime::{Handle, Runtime};
+use tokio::task::JoinHandle;
+
 use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
 use crate::types::Message;
-use std::collections::VecDeque;
-use std::future::Future;
-use std::pin::Pin;
-use std::time::{Duration, Instant};
-use tokio::task::JoinHandle;
+
+pub enum RunTaskError {
+    RetryableError,
+    InvalidMessage(InvalidMessage),
+}
 
 pub type RunTaskFunc<TTransformed> =
-    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, InvalidMessage>> + Send>>;
+    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
 
-pub trait TaskRunner<TPayload: Clone, TTransformed: Clone + Send + Sync>: Send + Sync {
+pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
     fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
 }
 
-pub struct RunTaskInThreads<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync> {
+/// This is configuration for the [`RunTaskInThreads`] strategy.
+///
+/// It defines the runtime on which tasks are being spawned, and the number of
+/// concurrently running tasks.
+pub struct ConcurrencyConfig {
+    /// The configured number of concurrently running tasks.
+    pub concurrency: usize,
+    runtime: RuntimeOrHandle,
+}
+
+impl ConcurrencyConfig {
+    /// Creates a new [`ConcurrencyConfig`], spawning a new [`Runtime`].
+    ///
+    /// The runtime will use the number of worker threads given by the `concurrency`,
+    /// and also limit the number of concurrently running tasks as well.
+    pub fn new(concurrency: usize) -> Self {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(concurrency)
+            .enable_all()
+            .build()
+            .unwrap();
+        Self {
+            concurrency,
+            runtime: RuntimeOrHandle::Runtime(runtime),
+        }
+    }
+
+    /// Creates a new [`ConcurrencyConfig`], reusing an existing [`Runtime`] via
+    /// its [`Handle`].
+    pub fn with_runtime(concurrency: usize, runtime: Handle) -> Self {
+        Self {
+            concurrency,
+            runtime: RuntimeOrHandle::Handle(runtime),
+        }
+    }
+
+    /// Returns a [`Handle`] to the underlying runtime.
+    pub fn handle(&self) -> Handle {
+        match &self.runtime {
+            RuntimeOrHandle::Handle(handle) => handle.clone(),
+            RuntimeOrHandle::Runtime(runtime) => runtime.handle().to_owned(),
+        }
+    }
+}
+
+enum RuntimeOrHandle {
+    Handle(Handle),
+    Runtime(Runtime),
+}
+
+pub struct RunTaskInThreads<TPayload, TTransformed> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
     concurrency: usize,
-    runtime: tokio::runtime::Runtime,
-    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, InvalidMessage>>>,
+    runtime: Handle,
+    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics_buffer: MetricsBuffer,
     metric_name: String,
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
-    RunTaskInThreads<TPayload, TTransformed>
-{
+impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
     pub fn new<N>(
         next_step: N,
         task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
         // If provided, this name is used for metrics
         custom_strategy_name: Option<&'static str>,
     ) -> Self
@@ -47,12 +103,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
         RunTaskInThreads {
             next_step: Box::new(next_step),
             task_runner,
-            concurrency,
-            runtime: tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(concurrency)
-                .enable_all()
-                .build()
-                .unwrap(),
+            concurrency: concurrency.concurrency,
+            runtime: concurrency.handle(),
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
@@ -62,8 +114,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync>
     }
 }
 
-impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
-    ProcessingStrategy<TPayload> for RunTaskInThreads<TPayload, TTransformed>
+impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
+    for RunTaskInThreads<TPayload, TTransformed>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
@@ -103,11 +155,14 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
                             }
                             Ok(_) => {}
                         },
-                        Ok(Err(e)) => {
+                        Ok(Err(RunTaskError::InvalidMessage(e))) => {
                             return Err(e);
                         }
-                        Err(e) => {
-                            log::error!("the thread crashed {}", e);
+                        Ok(Err(RunTaskError::RetryableError)) => {
+                            tracing::error!("retryable error");
+                        }
+                        Err(error) => {
+                            tracing::error!(%error, "the thread crashed");
                         }
                     }
                 } else {
@@ -128,7 +183,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
-        let handle = self.runtime.spawn(self.task_runner.get_task(message));
+        let task = self.task_runner.get_task(message);
+        let handle = self.runtime.spawn(task);
         self.handles.push_back(handle);
 
         Ok(())
@@ -148,16 +204,14 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let start = Instant::now();
-        let mut remaining: Option<Duration> = timeout;
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
-            if let Some(t) = remaining {
-                remaining = Some(t - start.elapsed());
-                if remaining.unwrap() <= Duration::from_secs(0) {
-                    log::warn!(
-                        "[{}] Timeout reached while waiting for tasks to finish",
-                        self.metric_name
+            if let Some(t) = timeout {
+                if start.elapsed() > t {
+                    tracing::warn!(
+                        %self.metric_name,
+                        "Timeout reached while waiting for tasks to finish",
                     );
                     break;
                 }
@@ -174,6 +228,8 @@ impl<TPayload: Clone + Send + Sync, TTransformed: Clone + Send + Sync + 'static>
         }
         self.handles.clear();
         self.metrics_buffer.flush();
+
+        let remaining = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
 
         let next_commit = self.next_step.join(remaining)?;
 
@@ -211,13 +267,15 @@ mod tests {
 
         struct IdentityTaskRunner {}
 
-        impl<T: Clone + Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
+        impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
             fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
                 Box::pin(async move { Ok(message) })
             }
         }
 
-        let mut strategy = RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), 1, None);
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy =
+            RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), &concurrency, None);
 
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 

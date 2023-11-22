@@ -8,6 +8,7 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 
+use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
 use rust_arroyo::utils::metrics::configure_metrics;
@@ -22,6 +23,7 @@ use crate::processors;
 use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
@@ -30,6 +32,7 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    python_max_queue_depth: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -39,6 +42,7 @@ pub fn consumer(
             skip_write,
             concurrency,
             use_rust_processor,
+            python_max_queue_depth,
         )
     });
 }
@@ -50,6 +54,7 @@ pub fn consumer_impl(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    python_max_queue_depth: Option<usize>,
 ) {
     setup_logging();
 
@@ -57,7 +62,7 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    log::info!("Starting Rust consumer with config: {:?}", consumer_config);
+    tracing::info!(?consumer_config, "Starting Rust consumer");
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
@@ -68,7 +73,9 @@ pub fn consumer_impl(
 
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
-        log::debug!("Using sentry dsn {:?}", dsn);
+        tracing::debug!(sentry_dsn = dsn);
+        // this forces anyhow to record stack traces when capturing an error:
+        std::env::set_var("RUST_BACKTRACE", "1");
         _sentry_guard = Some(setup_sentry(dsn));
     }
 
@@ -87,12 +94,7 @@ pub fn consumer_impl(
         tags.insert("storage", storage_name.as_str());
         tags.insert("consumer_group", consumer_group);
 
-        configure_metrics(Box::new(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.rust_consumer",
-            tags,
-        )));
+        configure_metrics(StatsDBackend::new(&host, port, "snuba.consumer", tags));
     }
 
     if !use_rust_processor {
@@ -101,27 +103,18 @@ pub fn consumer_impl(
 
     let first_storage = consumer_config.storages[0].clone();
 
-    log::info!("Starting consumer for {:?}", first_storage.name,);
-
-    let broker_config: HashMap<_, _> = consumer_config
-        .raw_topic
-        .broker_config
-        .iter()
-        .filter_map(|(k, v)| {
-            let v = v.as_ref()?;
-            if v.is_empty() {
-                return None;
-            }
-            Some((k.to_owned(), v.to_owned()))
-        })
-        .collect();
+    tracing::info!(
+        storage = first_storage.name,
+        "Starting consumer for {:?}",
+        first_storage.name,
+    );
 
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
         auto_offset_reset.to_owned(),
         false,
-        Some(broker_config),
+        Some(consumer_config.raw_topic.broker_config),
     );
 
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
@@ -134,14 +127,13 @@ pub fn consumer_impl(
             max_batch_size,
             max_batch_time,
             skip_write,
-            concurrency,
+            ConcurrencyConfig::new(concurrency),
+            python_max_queue_depth,
             use_rust_processor,
         )),
     );
 
-    processor.subscribe(Topic {
-        name: consumer_config.raw_topic.physical_topic_name.to_owned(),
-    });
+    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 
     let mut handle = processor.get_handle();
 
@@ -166,11 +158,7 @@ pub fn process_message(
     match processors::get_processing_function(name) {
         None => None,
         Some(func) => {
-            let payload = KafkaPayload {
-                key: None,
-                headers: None,
-                payload: Some(value),
-            };
+            let payload = KafkaPayload::new(None, None, Some(value));
 
             let meta = KafkaMessageMetadata {
                 partition,

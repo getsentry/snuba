@@ -237,7 +237,7 @@ test_data = [
     pytest.param(
         """
         MATCH (transactions)
-        SELECT col1
+        SELECT platform
         WHERE tags_key IN tuple('t1', 't2')
             AND finish_ts >= toDateTime('2021-01-01T00:00:00')
             AND finish_ts < toDateTime('2021-01-02T00:00:00')
@@ -247,7 +247,8 @@ test_data = [
             None,
             selected_columns=[
                 SelectedExpression(
-                    name="col1", expression=Column("_snuba_col1", None, "col1")
+                    name="platform",
+                    expression=Column("_snuba_platform", None, "platform"),
                 )
             ],
             condition=with_required(
@@ -263,7 +264,7 @@ test_data = [
         """
         MATCH (transactions)
         SELECT tags_key, tags_value
-        WHERE col IN tuple('t1', 't2')
+        WHERE release IN tuple('t1', 't2')
             AND finish_ts >= toDateTime('2021-01-01T00:00:00')
             AND finish_ts < toDateTime('2021-01-02T00:00:00')
             AND project_id = 1
@@ -302,7 +303,7 @@ test_data = [
             ],
             condition=with_required(
                 in_condition(
-                    Column("_snuba_col", None, "col"),
+                    Column("_snuba_release", None, "release"),
                     [Literal(None, "t1"), Literal(None, "t2")],
                 )
             ),

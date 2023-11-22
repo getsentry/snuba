@@ -56,7 +56,7 @@ impl ArroyoMetrics for TestingMetricsBackend {
         self.metric_calls.lock().unwrap().push(res);
     }
 
-    fn gauge(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         let builder = self.client.gauge_with_tags(key, value);
 
         let res = self
@@ -68,7 +68,7 @@ impl ArroyoMetrics for TestingMetricsBackend {
         self.metric_calls.lock().unwrap().push(res);
     }
 
-    fn timing(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+    fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
         let builder = self.client.time_with_tags(key, value);
 
         let res = self
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn testing_metrics_backend() {
-        let mut backend = TestingMetricsBackend::new("snuba.rust-consumer");
+        let backend = TestingMetricsBackend::new("snuba.rust-consumer");
 
         backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
         backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));

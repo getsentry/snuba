@@ -1,12 +1,17 @@
 use sentry::ClientInitGuard;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 pub fn setup_logging() {
-    let mut log_builder = pretty_env_logger::formatted_builder();
-    log_builder.parse_env("RUST_LOG");
-    let logger = sentry::integrations::log::SentryLogger::with_dest(log_builder.build());
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
 
-    log::set_boxed_logger(Box::new(logger)).unwrap();
-    log::set_max_level(log::LevelFilter::Trace);
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(filter_layer)
+        .with(sentry::integrations::tracing::layer())
+        .init();
 }
 
 pub fn setup_sentry(sentry_dsn: String) -> ClientInitGuard {

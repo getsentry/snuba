@@ -146,14 +146,14 @@ def test_replace_expression() -> None:
 def test_get_all_columns_legacy() -> None:
     query_body = {
         "selected_columns": [
-            ["f1", ["column1", "column2"], "f1_alias"],
+            ["f1", ["title", "message"], "f1_alias"],
             ["f2", [], "f2_alias"],
             ["formatDateTime", ["timestamp", "'%Y-%m-%d'"], "formatted_time"],
         ],
         "aggregations": [
             ["count", "platform", "platforms"],
             ["uniq", "platform", "uniq_platforms"],
-            ["testF", ["platform", ["anotherF", ["field2"]]], "top_platforms"],
+            ["testF", ["platform", ["anotherF", ["offset"]]], "top_platforms"],
         ],
         "conditions": [
             ["tags[sentry:dist]", "IN", ["dist1", "dist2"]],
@@ -161,7 +161,7 @@ def test_get_all_columns_legacy() -> None:
             ["timestamp", "<", "2020-01-02T12:00:00"],
             ["project_id", "=", 1],
         ],
-        "having": [["times_seen", ">", 1]],
+        "having": [["trace_sampled", ">", 1]],
         "groupby": [["format_eventid", ["event_id"]]],
     }
     events = get_dataset("events")
@@ -170,12 +170,12 @@ def test_get_all_columns_legacy() -> None:
     query, _ = parse_snql_query(str(request.query), events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("_snuba_column1", None, "column1"),
-        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_title", None, "title"),
+        Column("_snuba_message", None, "message"),
         Column("_snuba_platform", None, "platform"),
-        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_offset", None, "offset"),
         Column("_snuba_tags", None, "tags"),
-        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_trace_sampled", None, "trace_sampled"),
         Column("_snuba_event_id", None, "event_id"),
         Column("_snuba_timestamp", None, "timestamp"),
         Column("_snuba_project_id", None, "project_id"),
@@ -193,29 +193,29 @@ def test_get_all_columns_legacy() -> None:
 def test_get_all_columns() -> None:
     query_body = """
         MATCH (events)
-        SELECT f1(column1, column2) AS f1_alias,
+        SELECT f1(partition, release) AS f1_alias,
             f2() AS f2_alias,
             formatDateTime(timestamp, '%Y-%m-%d') AS formatted_time,
             count() AS platforms,
             uniq(platform) AS uniq_platforms,
-            testF(platform, anotherF(field2)) AS top_platforms
+            testF(platform, anotherF(title)) AS top_platforms
         BY format_eventid(event_id)
         WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
             AND timestamp >= toDateTime('2020-01-01 12:00:00')
             AND timestamp < toDateTime('2020-01-02 12:00:00')
             AND project_id = 1
-        HAVING times_seen > 1
+        HAVING trace_sampled > 1
         """
     events = get_dataset("events")
     query, _ = parse_snql_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("_snuba_column1", None, "column1"),
-        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_partition", None, "partition"),
+        Column("_snuba_release", None, "release"),
         Column("_snuba_platform", None, "platform"),
-        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_title", None, "title"),
         Column("_snuba_tags", None, "tags"),
-        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_trace_sampled", None, "trace_sampled"),
         Column("_snuba_event_id", None, "event_id"),
         Column("_snuba_timestamp", None, "timestamp"),
         Column("_snuba_project_id", None, "project_id"),
@@ -331,19 +331,6 @@ VALIDATION_TESTS = [
         },
         True,
         id="Alias redefines col and referenced",
-    ),
-    pytest.param(
-        {
-            "selected_columns": ["project_id", ["foo", ["event_id"], "event_id"]],
-            "conditions": [
-                ["whatsthis", "IN", ["a" * 32, "b" * 32]],
-                ["project_id", "=", 1],
-                ["timestamp", ">=", "2020-01-01T12:00:00"],
-                ["timestamp", "<", "2020-01-02T12:00:00"],
-            ],
-        },
-        False,
-        id="Alias referenced and not defined",
     ),
 ]
 

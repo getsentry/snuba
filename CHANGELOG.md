@@ -1,5 +1,67 @@
 # Changelog
 
+## 23.11.1
+
+### Various fixes & improvements
+
+- fix(validation): EntityContainsColumnValidator wasn't actually enabled (#4399) by @rahul-kumar-saini
+- ref: bump sentry-arroyo to 2.14.21 (#5079) by @getsentry-bot
+- feat(rust): Add building blocks for DLQ (#5072) by @lynnagara
+- fix: Remove unnecessary locking in metrics (#5077) by @untitaker
+- ref(rust): Ensure none keys are properly stripped from broker config (#5075) by @lynnagara
+- ref: Temporarily remove querylog rust consumer from gocd deployment (#5073) by @lynnagara
+- fix(rust): Kafka headers improvements (#5063) by @lynnagara
+- fix(rust): Clear all backpressure state between assignments (#5055) by @untitaker
+- ref: Bump sentry-kafka-schemas to 0.1.35 (#5062) by @lynnagara
+- Revert "feat: Experiment using statsdproxy for aggregation (#4734)" (201e07b0) by @getsentry-bot
+- Relicense under FSL-1.0-Apache-2.0 (#5058) by @chadwhitacre
+- add raw tags hash column to sets dist table (#5059) by @enochtangg
+- ci: Reduce Sentry test concurrency (#5061) by @lynnagara
+- fix(rust): Rename run_once metric (#5056) by @untitaker
+- feat(rust): Buffered messages option 3 (#5053) by @lynnagara
+- feat: Experiment using statsdproxy for aggregation (#4734) by @lynnagara
+- fix(rust): Rename metrics namespace, and implement one metric from python (#5036) by @untitaker
+- skip flake test_optimized_partition_tracker unit test (#5052) by @enochtangg
+- fix(generic-metrics): Add raw tags hash to gauges dist table (#5049) by @enochtangg
+- Add support for join queries to the subscription system (#5006) by @wedamija
+- ref: bump sentry-arroyo to 2.14.20 (#5047) by @getsentry-bot
+- Spawn only one Tokio Runtime (#5039) by @Swatinem
+- Avoid double locking (#5048) by @Swatinem
+- ref(rust): Add --python-max-queue-depth option (#5030) by @untitaker
+
+_Plus 11 more_
+
+## 23.11.0
+
+### Various fixes & improvements
+
+- Move `SchemaValidator` into async task  (#5037) by @Swatinem
+- Micro-optimize `ClickhouseWriter` (#5035) by @Swatinem
+- ref(rust): Add source information to `RunError` (#5034) by @loewenheim
+- fix(cli): Remove misleading defaults (#4837) by @untitaker
+- Remove `BadMessage` in favor of `anyhow::Error` (#5032) by @Swatinem
+- Remove some unused Send/Sync bounds (#5029) by @loewenheim
+- Use more early-returns (#5023) by @Swatinem
+- ref(rust): Fix inconsistency in metrics trait (#5027) by @lynnagara
+- feat(rust): Add strategy that produces the commit log topic (#4976) by @lynnagara
+- chore(rust): Move common functionality out (#5026) by @nikhars
+- ref(rust): Rename Transform to RunTask (#5021) by @lynnagara
+- Avoid Mutex on `AssignmentCallbacks` (#5025) by @Swatinem
+- ref: Remove most Clone bounds (#5020) by @loewenheim
+- feat(rust): Port the buffered messages class to Rust (#4993) by @lynnagara
+- fix(migration): move metrics migration into the right place (#5007) by @volokluev
+- feat(settings): Allow runtime configurable referrer overrides (#5005) by @nikhars
+- Optimize subset checks (#5018) by @Swatinem
+- ref: Rename and simplify TopicContent struct (#5017) by @loewenheim
+- Intern `Topic` and make it `Copy` (#5016) by @Swatinem
+- Avoid intermediate `HashMap` in TopicPartitionList (#5015) by @Swatinem
+- Give `Topic` and `Partition` a `new` fn (#5014) by @Swatinem
+- Apply clippy suggestions (#5008) by @Swatinem
+- ref: rust-rdkafka 0.36 (#5004) by @lynnagara
+- fix(metrics): add _raw_tags_hash column to distributed table (counters) (#4998) by @volokluev
+
+_Plus 75 more_
+
 ## 23.10.1
 
 ### Various fixes & improvements

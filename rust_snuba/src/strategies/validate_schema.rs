@@ -1,28 +1,30 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::{InnerMessage, Message};
 use sentry_kafka_schemas;
-use std::time::Duration;
 
 pub struct SchemaValidator {
-    schema: Option<sentry_kafka_schemas::Schema>,
+    schema: Option<Arc<sentry_kafka_schemas::Schema>>,
     enforce_schema: bool,
 }
 
 impl SchemaValidator {
-    pub fn new(logical_topic: String, enforce_schema: bool) -> Self {
-        let schema = match sentry_kafka_schemas::get_schema(&logical_topic, None) {
-            Ok(s) => Some(s),
-            Err(e) => {
+    pub fn new(logical_topic: &str, enforce_schema: bool) -> Self {
+        let schema = match sentry_kafka_schemas::get_schema(logical_topic, None) {
+            Ok(s) => Some(Arc::new(s)),
+            Err(error) => {
                 if enforce_schema {
-                    panic!("Schema error: {}", e);
+                    panic!("Schema error: {error}");
                 } else {
-                    log::error!("Schema error: {}", e);
+                    tracing::error!(%error, "Schema error");
                 }
 
                 None
@@ -38,56 +40,62 @@ impl SchemaValidator {
 
 impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
     fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
-        let mut errored = false;
-
-        if let Some(schema) = &self.schema {
-            let payload = message.payload().payload.unwrap();
-
-            let res = schema.validate_json(&payload);
-
-            if let Err(err) = res {
-                log::error!("Validation error {}", err);
-                if self.enforce_schema {
-                    errored = true;
-                };
-            }
-        }
+        let Some(schema) = self.schema.clone() else {
+            return Box::pin(async move { Ok(message) });
+        };
+        let enforce_schema = self.enforce_schema;
 
         Box::pin(async move {
-            if errored {
-                match message.inner_message {
-                    InnerMessage::BrokerMessage(ref broker_message) => {
-                        let partition = broker_message.partition.clone();
-                        let offset = broker_message.offset;
+            // FIXME: this will panic when the payload is empty
+            let payload = message.payload().payload().unwrap();
 
-                        Err(InvalidMessage { partition, offset })
-                    }
-                    _ => {
-                        panic!("Cannot return Invalid message error");
-                    }
+            let Err(error) = schema.validate_json(payload) else {
+                return Ok(message);
+            };
+
+            tracing::error!(%error, "Validation error");
+            if !enforce_schema {
+                return Ok(message);
+            };
+
+            match message.inner_message {
+                InnerMessage::BrokerMessage(ref broker_message) => {
+                    let partition = broker_message.partition;
+                    let offset = broker_message.offset;
+
+                    Err(RunTaskError::InvalidMessage(InvalidMessage {
+                        partition,
+                        offset,
+                    }))
                 }
-            } else {
-                Ok(message)
+                _ => {
+                    panic!("Cannot return Invalid message error");
+                }
             }
         })
     }
 }
 
 pub struct ValidateSchema {
-    inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
+    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
 }
 
 impl ValidateSchema {
-    pub fn new<N>(next_step: N, topic: String, enforce_schema: bool, concurrency: usize) -> Self
+    pub fn new<N>(
+        next_step: N,
+        topic: &str,
+        enforce_schema: bool,
+        concurrency: &ConcurrencyConfig,
+    ) -> Self
     where
         N: ProcessingStrategy<KafkaPayload> + 'static,
     {
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(SchemaValidator::new(topic, enforce_schema)),
             concurrency,
             Some("validate_schema"),
-        ));
+        );
 
         ValidateSchema { inner }
     }
@@ -128,12 +136,7 @@ mod tests {
 
     #[test]
     fn validate_schema() {
-        let partition = Partition {
-            topic: Topic {
-                name: "test".to_string(),
-            },
-            index: 0,
-        };
+        let partition = Partition::new(Topic::new("test"), 0);
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
@@ -156,7 +159,8 @@ mod tests {
             }
         }
 
-        let mut strategy = ValidateSchema::new(Noop {}, "outcomes".to_string(), true, 5);
+        let concurrency = ConcurrencyConfig::new(5);
+        let mut strategy = ValidateSchema::new(Noop {}, "outcomes", true, &concurrency);
 
         let example = "{
             \"project_id\": 1,
@@ -171,12 +175,8 @@ mod tests {
         let payload_str = example.to_string().as_bytes().to_vec();
         let message = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                payload: KafkaPayload {
-                    key: None,
-                    headers: None,
-                    payload: Some(payload_str.clone()),
-                },
-                partition: partition,
+                payload: KafkaPayload::new(None, None, Some(payload_str.clone())),
+                partition,
                 offset: 0,
                 timestamp: Utc::now(),
             }),

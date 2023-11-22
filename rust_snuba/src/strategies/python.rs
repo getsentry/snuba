@@ -4,6 +4,7 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread::sleep;
@@ -13,18 +14,18 @@ use anyhow::Error;
 
 use pyo3::prelude::*;
 
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, RowData};
 
 use crate::config::MessageProcessorConfig;
 
 enum TaskHandle {
     Procspawn {
         original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
     },
     Immediate {
         original_message_meta: Message<()>,
-        result: Result<BytesInsertBatch, String>,
+        result: Result<RowData, String>,
     },
 }
 
@@ -33,12 +34,14 @@ pub struct PythonTransformStep {
     handles: VecDeque<TaskHandle>,
     message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
+    max_queue_depth: usize,
 }
 
 impl PythonTransformStep {
     pub fn new<N>(
         processor_config: MessageProcessorConfig,
         processes: usize,
+        max_queue_depth: Option<usize>,
         next_step: N,
     ) -> Result<Self, Error>
     where
@@ -73,6 +76,7 @@ impl PythonTransformStep {
             handles: VecDeque::new(),
             message_carried_over: None,
             processing_pool,
+            max_queue_depth: max_queue_depth.unwrap_or(processes),
         })
     }
 
@@ -109,15 +113,23 @@ impl PythonTransformStep {
             };
             match message_result {
                 Ok(data) => {
+                    let replacement = BytesInsertBatch {
+                        rows: data.rows,
+                        // TODO: Actually implement this
+                        commit_log_offsets: BTreeMap::from([]),
+                    };
+
                     if let Err(SubmitError::MessageRejected(MessageRejected {
                         message: transformed_message,
-                    })) = self.next_step.submit(original_message_meta.replace(data))
+                    })) = self
+                        .next_step
+                        .submit(original_message_meta.replace(replacement))
                     {
                         self.message_carried_over = Some(transformed_message);
                     }
                 }
-                Err(e) => {
-                    log::error!("Invalid message {:?}", e);
+                Err(error) => {
+                    tracing::error!(error, "Invalid message");
                 }
             }
         }
@@ -131,25 +143,18 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        self.check_for_results();
-
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        //
-        // this threshold was chosen arbitrarily with no performance measuring, and we may also
-        // check for queued_count() > 0 instead, but the rough idea of comparing with
-        // active_count() is that we allow for one pending message per process, so that procspawn
-        // is able to keep CPU saturation high.
         if let Some(ref processing_pool) = self.processing_pool {
-            if processing_pool.queued_count() > processing_pool.active_count() {
-                log::debug!("python strategy provides backpressure");
+            if processing_pool.queued_count() > self.max_queue_depth {
+                tracing::debug!("python strategy provides backpressure");
                 return Err(SubmitError::MessageRejected(MessageRejected { message }));
             }
         }
 
-        log::debug!("processing message,  message={}", message);
+        tracing::debug!(%message, "processing message");
 
-        match &message.inner_message {
+        match message.inner_message {
             InnerMessage::AnyMessage(..) => {
                 panic!("AnyMessage cannot be processed");
             }
@@ -159,16 +164,14 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (
-                    payload.payload.clone(),
-                    *offset,
-                    partition.index,
-                    *timestamp,
-                );
+                // TODO: Handle None payload
+                let payload_bytes = (payload.payload().unwrap()).clone();
+
+                let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args| {
-                    log::debug!("processing message in subprocess,  args={:?}", args);
-                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    tracing::debug!(?args, "processing message in subprocess");
+                    Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -176,14 +179,15 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch {
+                        Ok(RowData {
                             rows: result_decoded,
                         })
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };
 
-                let original_message_meta = message.clone().replace(());
+                let original_message_meta =
+                    Message::new_broker_message((), partition, offset, timestamp);
 
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
@@ -256,23 +260,19 @@ mod tests {
                 python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
             },
             processes,
+            None,
             sink.clone(),
         )
         .unwrap();
 
         let _ = step.poll();
         step.submit(Message::new_broker_message(
-            KafkaPayload {
-                key: None,
-                headers: None,
-                payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            },
-            Partition {
-                topic: Topic {
-                    name: "test".to_owned(),
-                },
-                index: 1,
-            },
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
             1,
             Utc::now(),
         ))

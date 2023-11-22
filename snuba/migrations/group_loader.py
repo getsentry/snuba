@@ -311,6 +311,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0022_gauges_aggregate_table",
             "0023_gauges_raw_table",
             "0024_gauges_mv",
+            "0025_counters_add_raw_tags_hash_column",
+            "0026_gauges_add_raw_tags_hash_column",
+            "0027_sets_add_raw_tags_column",
         ]
 
 
