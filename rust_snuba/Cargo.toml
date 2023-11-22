@@ -11,6 +11,9 @@ members = ["rust_arroyo"]
 [features]
 ffi = ["pyo3/extension-module"]
 
+[profile.release]
+debug = 1
+
 [lib]
 # The name of the native library. This is the name which will be used in Python to import the
 # library (i.e. `import string_sum`). If you change this, you must also change the name of the
@@ -18,7 +21,7 @@ ffi = ["pyo3/extension-module"]
 name = "rust_snuba"
 
 # "cdylib" is necessary to produce a shared library for Python to import from.
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
@@ -43,5 +46,11 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = "1.5.0"
 
 [dev-dependencies]
+divan = "0.1.2"
+once_cell = "1.18.0"
 procspawn = { version = "0.10.2", features = ["test-support", "json"] }
 pyo3 = { version = "*", features = ["auto-initialize"] }
+
+[[bench]]
+name = "processors"
+harness = false
