@@ -81,56 +81,52 @@ impl PythonTransformStep {
     }
 
     fn check_for_results(&mut self) {
-        // procspawn has no join() timeout that does not consume the handle on timeout.
-        //
-        // Additionally we have observed, at least on MacOS, that procspawn's active_count() only
-        // decreases when the handle is consumed. Therefore our count of actually saturated
-        // processes is `self.processing_pool.active_count() - self.handles.len()`.
-        //
-        // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
-        // are done and all handles can be joined and consumed without waiting.
-        while {
-            let active_count = self
-                .processing_pool
-                .as_ref()
-                .map_or(0, |pool| pool.active_count());
-            let may_have_finished_handles = active_count <= self.handles.len();
-            may_have_finished_handles && !self.handles.is_empty()
-        } {
-            let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
-                TaskHandle::Procspawn {
-                    original_message_meta,
-                    join_handle,
-                } => {
-                    let handle = join_handle.into_inner().unwrap();
-                    let result = handle.join().expect("procspawn failed");
-                    (original_message_meta, result)
-                }
-                TaskHandle::Immediate {
-                    original_message_meta,
-                    result,
-                } => (original_message_meta, result),
-            };
-            match message_result {
-                Ok(data) => {
-                    let replacement = BytesInsertBatch {
-                        rows: data.rows,
-                        // TODO: Actually implement this
-                        commit_log_offsets: BTreeMap::from([]),
-                    };
+        if let Some(message_carried_over) = self.message_carried_over.take() {
+            if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
+                self.next_step.submit(message_carried_over)
+            {
+                self.message_carried_over = Some(message);
+                return;
+            }
+        }
 
-                    if let Err(SubmitError::MessageRejected(MessageRejected {
-                        message: transformed_message,
-                    })) = self
-                        .next_step
-                        .submit(original_message_meta.replace(replacement))
-                    {
-                        self.message_carried_over = Some(transformed_message);
-                    }
+        debug_assert!(self.message_carried_over.is_none());
+
+        let (original_message_meta, message_result) = match self.handles.pop_front() {
+            Some(TaskHandle::Procspawn {
+                original_message_meta,
+                join_handle,
+            }) => {
+                let handle = join_handle.into_inner().unwrap();
+                let result = handle.join().expect("procspawn failed");
+                (original_message_meta, result)
+            }
+            Some(TaskHandle::Immediate {
+                original_message_meta,
+                result,
+            }) => (original_message_meta, result),
+            None => return,
+        };
+
+        match message_result {
+            Ok(data) => {
+                let replacement = BytesInsertBatch {
+                    rows: data.rows,
+                    // TODO: Actually implement this
+                    commit_log_offsets: BTreeMap::from([]),
+                };
+
+                if let Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) = self
+                    .next_step
+                    .submit(original_message_meta.replace(replacement))
+                {
+                    self.message_carried_over = Some(transformed_message);
                 }
-                Err(error) => {
-                    tracing::error!(error, "Invalid message");
-                }
+            }
+            Err(error) => {
+                tracing::error!(error, "Invalid message");
             }
         }
     }
@@ -138,25 +134,31 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        self.check_for_results();
+        if self.handles.len() > self.max_queue_depth {
+            self.check_for_results();
+        }
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+        if self.message_carried_over.is_some() {
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
+        }
+
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        if let Some(ref processing_pool) = self.processing_pool {
-            if processing_pool.queued_count() > self.max_queue_depth {
-                tracing::debug!("python strategy provides backpressure");
-                return Err(SubmitError::MessageRejected(MessageRejected { message }));
-            }
+        if self.handles.len() > self.max_queue_depth {
+            tracing::debug!("python strategy provides backpressure");
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         tracing::debug!(%message, "processing message");
 
         match message.inner_message {
             InnerMessage::AnyMessage(..) => {
-                panic!("AnyMessage cannot be processed");
+                // Snuba message processors, as their interface is defined in Python, expect a
+                // single, specific partition/offset combination for every payload.
+                panic!("AnyMessage cannot be processed by a message processor");
             }
             InnerMessage::BrokerMessage(BrokerMessage {
                 payload,
@@ -296,5 +298,65 @@ mod tests {
     #[test]
     fn test_basic_two_processes() {
         run_basic(2);
+    }
+
+    struct BackpressureForever;
+
+    impl<T> ProcessingStrategy<T> for BackpressureForever {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+
+        fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+            Err(SubmitError::MessageRejected(MessageRejected { message }))
+        }
+
+        fn close(&mut self) {}
+        fn terminate(&mut self) {}
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn test_backpressure() {
+        let mut step = PythonTransformStep::new(
+            MessageProcessorConfig {
+                python_class_name: "OutcomesProcessor".to_owned(),
+                python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
+            },
+            2,
+            None,
+            BackpressureForever,
+        )
+        .unwrap();
+
+        step.poll().unwrap();
+        step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap();
+
+        step.join(None).unwrap();
+
+        assert!(matches!(step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap_err(), SubmitError::MessageRejected(_)));
     }
 }

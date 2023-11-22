@@ -54,3 +54,9 @@ pyo3 = { version = "*", features = ["auto-initialize"] }
 [[bench]]
 name = "processors"
 harness = false
+
+[[bin]]
+# this is not a proper benchmark since it runs forever.
+name = "python-processor-infinite"
+path = "bin/python_processor_infinite.rs"
+required-features = ["pyo3/auto-initialize"]
