@@ -33,6 +33,7 @@ impl BytesInsertBatch {
 
     pub fn merge(mut self, other: Self) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.commit_log_offsets.extend(other.commit_log_offsets);
         self.rows.num_rows += other.rows.num_rows;
         self.sum_message_timestamp_secs += other.sum_message_timestamp_secs;
         self.max_message_timestamp_secs = max(

@@ -80,8 +80,10 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
                         payload: BytesInsertBatch::new(
                             broker_message.timestamp,
                             transformed,
-                            // TODO: Actually implement this?
-                            BTreeMap::new(),
+                            BTreeMap::from([(
+                                broker_message.partition.index,
+                                (broker_message.offset, broker_message.timestamp),
+                            )]),
                         ),
                         partition: broker_message.partition,
                         offset: broker_message.offset,

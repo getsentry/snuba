@@ -135,8 +135,13 @@ impl PythonTransformStep {
                 let replacement = BytesInsertBatch::new(
                     original_message_meta.timestamp,
                     rows,
-                    // TODO: Actually implement this
-                    BTreeMap::new(),
+                    BTreeMap::from([(
+                        original_message_meta.partition.index,
+                        (
+                            original_message_meta.offset,
+                            original_message_meta.timestamp,
+                        ),
+                    )]),
                 );
 
                 let new_message = Message::new_broker_message(
