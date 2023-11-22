@@ -100,22 +100,19 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            if "referrer" not in request_parts.attribution_info["tenant_ids"]:
-                found_referrer = "<unknown>"
-            else:
-                found_referrer = str(
-                    request_parts.attribution_info["tenant_ids"]["referrer"]
-                )
-
-            if found_referrer != referrer:
+            tenant_referrer = request_parts.attribution_info["tenant_ids"].get(
+                "referrer"
+            )
+            if tenant_referrer != referrer:
                 metrics.increment(
                     "referrer_mismatch",
                     tags={
-                        "tenant_referrer": found_referrer,
+                        "tenant_referrer": tenant_referrer or "none",
                         "request_referrer": referrer,
                     },
                 )
-            referrer = found_referrer
+            # Handle an edge case where the legacy endpoint is used.
+            referrer = tenant_referrer or referrer
 
             if settings_class == HTTPQuerySettings:
                 query_settings: MutableMapping[str, bool | str] = {
