@@ -26,12 +26,12 @@ struct MessageMeta {
 enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
         submit_timestamp: SystemTime,
     },
     Immediate {
         original_message_meta: MessageMeta,
-        result: Result<BytesInsertBatch, String>,
+        result: Result<RowData, String>,
         submit_timestamp: SystemTime,
     },
 }
@@ -135,8 +135,13 @@ impl PythonTransformStep {
                 let replacement = BytesInsertBatch::new(
                     original_message_meta.timestamp,
                     rows,
-                    // TODO: Actually implement this
-                    BTreeMap::new(),
+                    BTreeMap::from([(
+                        original_message_meta.partition.index,
+                        (
+                            original_message_meta.offset,
+                            original_message_meta.timestamp,
+                        ),
+                    )]),
                 );
 
                 let new_message = Message::new_broker_message(
@@ -217,11 +222,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args: (Vec<u8>, u64, u16, DateTime<Utc>)| {
-                    let timestamp = args.3;
-                    let commit_log_offsets = BTreeMap::from([(args.2, (args.1, args.3))]);
-
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -229,11 +231,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch::new(
-                            timestamp,
-                            RowData::from_rows(result_decoded),
-                            commit_log_offsets,
-                        ))
+                        Ok(RowData::from_rows(result_decoded))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };
