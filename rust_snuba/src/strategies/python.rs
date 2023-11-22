@@ -4,7 +4,6 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 
-use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -175,6 +174,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args: (Vec<u8>, u64, u16, DateTime<Utc>)| {
+                    let timestamp = args.3;
                     let commit_log_offsets = BTreeMap::from([(args.2, (args.1, args.3))]);
 
                     tracing::debug!(?args, "processing message in subprocess");
@@ -187,7 +187,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
                         Ok(BytesInsertBatch::new(
-                            args.3,
+                            timestamp,
                             RowData::from_rows(result_decoded),
                             commit_log_offsets,
                         ))
