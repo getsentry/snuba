@@ -252,7 +252,7 @@ impl<T> Message<T> {
     }
 
     /// Map a fallible function over this messages's payload.
-    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+    pub fn try_map<TReplaced, E, F: Fn(T) -> Result<TReplaced, E>>(
         self,
         f: F,
     ) -> Result<Message<TReplaced>, E> {
