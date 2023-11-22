@@ -199,11 +199,7 @@ fn functions_payload() -> KafkaPayload {
         "device_class": 2,
         "retention_days": 30
     }"#;
-    KafkaPayload::new(
-        None,
-        None,
-        Some(data.as_bytes().to_vec()),
-    )
+    KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()))
 }
 
 fn profiles_payload() -> KafkaPayload {
@@ -231,11 +227,7 @@ fn profiles_payload() -> KafkaPayload {
         "version_code": "1337",
         "version_name": "v42.0.0"
     }"#;
-    KafkaPayload::new(
-        None,
-        None,
-        Some(data.as_bytes().to_vec()),
-    )
+    KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()))
 }
 
 fn querylog_payload() -> KafkaPayload {
@@ -333,11 +325,7 @@ fn querylog_payload() -> KafkaPayload {
         "projects": [1],
         "snql_anonymized": "MATCH Entity(events) SELECT tags_key, tags_value, (count() AS count), (min(timestamp) AS first_seen), (max(timestamp) AS last_seen) GROUP BY tags_key, tags_value WHERE greaterOrEquals(timestamp, toDateTime('$S')) AND less(timestamp, toDateTime('$S')) AND in(project_id, tuple(-1337)) AND in(project_id, tuple(-1337)) AND in(group_id, tuple(-1337)) ORDER BY count DESC LIMIT 4 BY tags_key LIMIT 1000 OFFSET 0"
     }"#;
-    KafkaPayload::new(
-        None,
-        None,
-        Some(data.as_bytes().to_vec()),
-    )
+    KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()))
 }
 
 fn spans_payload() -> KafkaPayload {
@@ -372,9 +360,5 @@ fn spans_payload() -> KafkaPayload {
         "tags": { "tag1": "value1", "tag2": "123", "tag3": "true" },
         "trace_id": "6f2a27f7-942d-4db1-b406-93524ed7da54"
     }"#;
-    KafkaPayload::new(
-        None,
-        None,
-        Some(data.as_bytes().to_vec()),
-    )
+    KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()))
 }
