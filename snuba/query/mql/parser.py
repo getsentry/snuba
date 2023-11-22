@@ -10,6 +10,8 @@ from snuba_sdk.dsl.dsl import EXPRESSION_OPERATORS, GRAMMAR, TERM_OPERATORS
 from snuba_sdk.timeseries import Metric
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, combine_and_conditions
@@ -218,6 +220,7 @@ class MQLVisitor(NodeVisitor):
 
 def parse_mql_query_initial(
     body: str,
+    mql_context: Mapping[str, Any],
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     """
     Parses the query body MQL generating the AST. This only takes into
@@ -230,7 +233,43 @@ def parse_mql_query_initial(
     except Exception as e:
         raise e
 
-    return parsed
+    print(parsed)
+
+    if "entity" not in mql_context:
+        raise InvalidQueryException("No entity specified in MQL context")
+    entity_name = mql_context["entity"]
+    entity_key = EntityKey(entity_name)
+    args = {
+        "from_clause": QueryEntity(
+            key=entity_key, schema=get_entity(entity_key).get_data_model()
+        ),
+        "condition": parsed["filters"],
+        "groupby": parsed["groupby"],
+    }
+    selected_columns = []
+    if "aggregate" in parsed:
+        selected_columns.append(parsed["aggregate"])
+    if "groupby" in parsed:
+        selected_columns.extend(parsed["groupby"])
+    args["selected_columns"] = selected_columns
+    set_mql_context_in_query(args, mql_context)
+
+    query = LogicalQuery(**args)
+    print(query.__dict__)
+    return query
+
+
+def set_mql_context_in_query(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    mql_context: Mapping[str, Any],
+) -> None:
+    # set indexer mappings
+    # set start and end time
+    # set rollup: order by, granularity, interval, with totals
+    # set scope: org_id, project_id, use_case_id
+    # set limit
+    # set offset
+    pass
 
 
 CustomProcessors = Sequence[
@@ -240,11 +279,13 @@ CustomProcessors = Sequence[
 
 def parse_mql_query(
     body: str,
+    mql_context: Mapping[str, Any],
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        parse_mql_query_initial(body)
+        query = parse_mql_query_initial(body, mql_context)
+        set_mql_context_in_query(query)
 
     # TODO: Create post processors for adding mql context fields into the query.
