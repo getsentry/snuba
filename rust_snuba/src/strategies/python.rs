@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Error;
 use chrono::{DateTime, Utc};
@@ -27,11 +27,22 @@ enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
         join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
+        submit_timestamp: SystemTime,
     },
     Immediate {
         original_message_meta: MessageMeta,
         result: Result<RowData, String>,
+        submit_timestamp: SystemTime,
     },
+}
+
+impl TaskHandle {
+    fn submit_timestamp(&self) -> SystemTime {
+        match self {
+            TaskHandle::Procspawn { submit_timestamp, .. } => *submit_timestamp,
+            TaskHandle::Immediate { submit_timestamp, .. } => *submit_timestamp,
+        }
+    }
 }
 
 pub struct PythonTransformStep {
@@ -101,6 +112,7 @@ impl PythonTransformStep {
             Some(TaskHandle::Procspawn {
                 original_message_meta,
                 join_handle,
+                ..
             }) => {
                 let handle = join_handle.into_inner().unwrap();
                 let result = handle.join().expect("procspawn failed");
@@ -109,6 +121,7 @@ impl PythonTransformStep {
             Some(TaskHandle::Immediate {
                 original_message_meta,
                 result,
+                ..
             }) => (original_message_meta, result),
             None => return,
         };
@@ -141,13 +154,30 @@ impl PythonTransformStep {
             }
         }
     }
+
+    fn queue_needs_drain(&self) -> bool {
+        if self.handles.len() > self.max_queue_depth {
+            return true;
+        }
+
+        if let Some(handle) = self.handles.front() {
+            if let Ok(elapsed) = handle.submit_timestamp().elapsed() {
+                if elapsed > Duration::from_secs(10) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        if self.handles.len() > self.max_queue_depth {
+        if self.queue_needs_drain() {
             self.check_for_results();
         }
+
         self.next_step.poll()
     }
 
@@ -158,7 +188,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        if self.handles.len() > self.max_queue_depth {
+        if self.queue_needs_drain() {
             tracing::debug!("python strategy provides backpressure");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
@@ -203,15 +233,19 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     timestamp,
                 };
 
+                let submit_timestamp = SystemTime::now();
+
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
 
                     self.handles.push_back(TaskHandle::Procspawn {
+                        submit_timestamp,
                         original_message_meta,
                         join_handle: Mutex::new(handle),
                     });
                 } else {
                     self.handles.push_back(TaskHandle::Immediate {
+                        submit_timestamp,
                         original_message_meta,
                         result: process_message(args),
                     });
