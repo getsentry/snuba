@@ -17,6 +17,7 @@ schema:
     },
     { name: trace_id, type: UUID },
     { name: span_id, type: UInt, args: { size: 64 } },
+    { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
     {
       name: parent_span_id,
       type: UInt,

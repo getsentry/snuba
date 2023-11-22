@@ -10,12 +10,14 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::Message;
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
+    metrics: BoxMetrics,
     skip_write: bool,
 }
 
@@ -23,6 +25,7 @@ impl ClickhouseWriter {
     pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
         ClickhouseWriter {
             client: Arc::new(client),
+            metrics: get_metrics(),
             skip_write,
         }
     }
@@ -32,27 +35,27 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
+        let metrics = self.metrics.clone();
 
         Box::pin(async move {
-            let rows = &message.payload().rows;
-
-            let len = rows.len();
-            let mut data = vec![];
-            for row in rows {
-                data.extend(row);
-                data.extend(b"\n");
-            }
+            let insert_batch = message.payload();
 
             if skip_write {
-                tracing::info!("skipping write of {} rows", len);
+                tracing::info!("skipping write of {} rows", insert_batch.len());
                 return Ok(message);
             }
 
             tracing::debug!("performing write");
-            let response = client.send(data).await.unwrap();
+            let response = client
+                .send(insert_batch.encoded_rows().to_vec())
+                .await
+                .unwrap();
 
             tracing::debug!(?response);
-            tracing::info!("Inserted {} rows", len);
+            tracing::info!("Inserted {} rows", insert_batch.len());
+
+            insert_batch.record_message_latency(&metrics);
+
             Ok(message)
         })
     }
