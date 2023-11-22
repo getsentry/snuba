@@ -192,11 +192,17 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         let duration = timeout.unwrap_or(Duration::ZERO);
         let consumer = self.consumer.as_mut().unwrap();
         let res = consumer.poll(duration);
+
         match res {
             None => Ok(None),
             Some(res) => {
-                let msg = res?;
-                Ok(Some(create_kafka_message(msg)))
+                let msg = create_kafka_message(res?);
+                self.offsets
+                    .lock()
+                    .unwrap()
+                    .insert(msg.partition, msg.offset);
+
+                Ok(Some(msg))
             }
         }
     }
@@ -360,7 +366,6 @@ mod tests {
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
 
-    #[ignore = "TODO: needs investigating, started failing on rdkafka 0.36"]
     #[tokio::test]
     async fn test_tell() {
         create_topic("test", 1).await;
