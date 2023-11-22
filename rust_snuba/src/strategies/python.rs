@@ -39,8 +39,12 @@ enum TaskHandle {
 impl TaskHandle {
     fn submit_timestamp(&self) -> SystemTime {
         match self {
-            TaskHandle::Procspawn { submit_timestamp, .. } => *submit_timestamp,
-            TaskHandle::Immediate { submit_timestamp, .. } => *submit_timestamp,
+            TaskHandle::Procspawn {
+                submit_timestamp, ..
+            } => *submit_timestamp,
+            TaskHandle::Immediate {
+                submit_timestamp, ..
+            } => *submit_timestamp,
         }
     }
 }
