@@ -2149,7 +2149,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": 1,
-                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
                             "selected_columns": [
                                 "event_id",
                                 "title",
