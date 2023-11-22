@@ -174,7 +174,7 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        if self.queue_needs_drain() {
+        while self.queue_needs_drain() {
             self.check_for_results();
         }
 
