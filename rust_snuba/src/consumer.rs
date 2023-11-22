@@ -5,8 +5,10 @@ use std::time::Duration;
 use chrono::{DateTime, NaiveDateTime, Utc};
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
@@ -119,6 +121,30 @@ pub fn consumer_impl(
 
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
+
+    // TODO: Create the policy
+    let dlq_policy = match consumer_config.dlq_topic {
+        None => None,
+        Some(dlq_topic_config) => {
+            let producer_config =
+                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+            let producer = KafkaProducer::new(producer_config);
+
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
+
+            Some(DlqPolicy::new(
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: Some(0.01),
+                    max_consecutive_count: Some(1000),
+                },
+            ))
+        }
+    };
+
     let mut processor = StreamProcessor::new(
         consumer,
         Box::new(ConsumerStrategyFactory::new(
@@ -131,6 +157,7 @@ pub fn consumer_impl(
             python_max_queue_depth,
             use_rust_processor,
         )),
+        dlq_policy,
     );
 
     processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
