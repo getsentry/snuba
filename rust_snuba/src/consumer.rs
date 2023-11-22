@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::KafkaMessageMetadata;
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -160,20 +160,26 @@ pub fn process_message(
         Some(func) => {
             let payload = KafkaPayload::new(None, None, Some(value));
 
+            let timestamp = DateTime::from_naive_utc_and_offset(
+                NaiveDateTime::from_timestamp_millis(millis_since_epoch)
+                    .unwrap_or(NaiveDateTime::MIN),
+                Utc,
+            );
+
             let meta = KafkaMessageMetadata {
                 partition,
                 offset,
-                timestamp: DateTime::from_naive_utc_and_offset(
-                    NaiveDateTime::from_timestamp_millis(millis_since_epoch)
-                        .unwrap_or(NaiveDateTime::MIN),
-                    Utc,
-                ),
+                timestamp,
             };
 
             let res = func(payload, meta);
-            println!("res {:?}", res);
-            let row = res.unwrap().rows[0].clone();
-            Some(row)
+            let batch = BytesInsertBatch::new(
+                timestamp,
+                res.unwrap(),
+                // TODO: Actually implement this?
+                BTreeMap::new(),
+            );
+            Some(batch.encoded_rows().to_vec())
         }
     }
 }

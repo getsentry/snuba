@@ -2,7 +2,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
 };
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
@@ -11,20 +11,25 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::Error;
-
+use chrono::{DateTime, Utc};
 use pyo3::prelude::*;
 
+use crate::config::MessageProcessorConfig;
 use crate::types::{BytesInsertBatch, RowData};
 
-use crate::config::MessageProcessorConfig;
+struct MessageMeta {
+    partition: Partition,
+    offset: u64,
+    timestamp: DateTime<Utc>,
+}
 
 enum TaskHandle {
     Procspawn {
-        original_message_meta: Message<()>,
+        original_message_meta: MessageMeta,
         join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
     },
     Immediate {
-        original_message_meta: Message<()>,
+        original_message_meta: MessageMeta,
         result: Result<RowData, String>,
     },
 }
@@ -113,17 +118,23 @@ impl PythonTransformStep {
             };
             match message_result {
                 Ok(data) => {
-                    let replacement = BytesInsertBatch {
-                        rows: data.rows,
+                    let replacement = BytesInsertBatch::new(
+                        original_message_meta.timestamp,
+                        data,
                         // TODO: Actually implement this
-                        commit_log_offsets: BTreeMap::from([]),
-                    };
+                        BTreeMap::new(),
+                    );
+
+                    let new_message = Message::new_broker_message(
+                        replacement,
+                        original_message_meta.partition,
+                        original_message_meta.offset,
+                        original_message_meta.timestamp,
+                    );
 
                     if let Err(SubmitError::MessageRejected(MessageRejected {
                         message: transformed_message,
-                    })) = self
-                        .next_step
-                        .submit(original_message_meta.replace(replacement))
+                    })) = self.next_step.submit(new_message)
                     {
                         self.message_carried_over = Some(transformed_message);
                     }
@@ -169,7 +180,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
-                let process_message = |args| {
+                let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
@@ -179,15 +190,16 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(RowData {
-                            rows: result_decoded,
-                        })
+                        Ok(RowData::from_rows(result_decoded))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };
 
-                let original_message_meta =
-                    Message::new_broker_message((), partition, offset, timestamp);
+                let original_message_meta = MessageMeta {
+                    partition,
+                    offset,
+                    timestamp,
+                };
 
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
