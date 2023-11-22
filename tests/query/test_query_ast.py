@@ -243,7 +243,13 @@ def test_initial_parsing_snql() -> None:
 def test_initial_parsing_mql() -> None:
     # Initial parsing created a map object for groupby clause, should be a list
     body = 'sum(`d:transactions/duration@millisecond`{foo:"foz", hee:"haw"}){bar:"baz"} by transaction'
-    parse_mql_query_initial(body, EntityKey.GENERIC_METRICS_DISTRIBUTIONS)
+    parse_mql_query_initial(
+        body,
+        {
+            "entity": "generic_metrics_distributions",
+            "indexer_mappings": {"d:transactions/duration@millisecond": 123456},
+        },
+    )
 
 
 def test_alias_regex_allows_parentheses() -> None:

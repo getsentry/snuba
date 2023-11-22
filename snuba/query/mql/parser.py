@@ -5,8 +5,8 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
-from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, Op
-from snuba_sdk.dsl.dsl import EXPRESSION_OPERATORS, GRAMMAR, TERM_OPERATORS
+from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, ConditionFunction, Op
+from snuba_sdk.dsl.dsl import EXPRESSION_OPERATORS, MQL_GRAMMAR, TERM_OPERATORS
 from snuba_sdk.timeseries import Metric
 
 from snuba.datasets.dataset import Dataset
@@ -79,7 +79,6 @@ class MQLVisitor(NodeVisitor):
         return float(node.text)
 
     def visit_filter(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
-        """ """
         args, packed_filters, packed_groupbys, *_ = children
         assert isinstance(args, dict)
         if packed_filters:
@@ -199,16 +198,16 @@ class MQLVisitor(NodeVisitor):
         return node.text
 
     def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
-        return {"metric_name": {"mri": str(node.text[1:-1]), "public_name": ""}}
+        return {"mri": str(node.text[1:-1])}
 
     def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
-        return {"metric_name": {"mri": str(node.text), "public_name": ""}}
+        return {"mri": str(node.text)}
 
     def visit_quoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
-        return {"metric_name": {"mri": "", "public_name": str(node.text[1:-1])}}
+        return {"public_name": str(node.text[1:-1])}
 
     def visit_unquoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
-        return {"metric_name": {"mri": "", "public_name": str(node.text)}}
+        return {"public_name": str(node.text)}
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
@@ -228,7 +227,7 @@ def parse_mql_query_initial(
     processors and are supposed to update the AST.
     """
     try:
-        exp_tree = GRAMMAR.parse(body)
+        exp_tree = MQL_GRAMMAR.parse(body)
         parsed = MQLVisitor().visit(exp_tree)
     except Exception as e:
         raise e
@@ -252,24 +251,58 @@ def parse_mql_query_initial(
     if "groupby" in parsed:
         selected_columns.extend(parsed["groupby"])
     args["selected_columns"] = selected_columns
-    set_mql_context_in_query(args, mql_context)
 
+    additional_args = extract_args_from_mql_context(args, parsed, mql_context)
+
+    # Merge args and additional args from mql context
+    args["condition"] = combine_and_conditions(
+        [args["condition"], additional_args["filters"]]
+    )
     query = LogicalQuery(**args)
     print(query.__dict__)
     return query
 
 
-def set_mql_context_in_query(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+def extract_args_from_mql_context(
+    args: Mapping[str, Any],
+    parsed: Mapping[str, Any],
     mql_context: Mapping[str, Any],
-) -> None:
-    # set indexer mappings
+) -> Mapping[str, Any]:
+    additional_args = {
+        "filters": [],
+    }
+    filters = []
+    if "indexer_mappings" not in mql_context:
+        raise InvalidQueryException("No indexer mappings specified in MQL context.")
+
+    # Extract metric id from indexer_mappings
+    if "mri" not in parsed and "public_name" in parsed:
+        public_name = parsed["public_name"]
+        mri = mql_context["indexer_mappings"][public_name]
+    else:
+        mri = parsed["mri"]
+
+    if mri not in mql_context["indexer_mappings"]:
+        raise InvalidQueryException("No mri specified in MQL context indexer_mappings.")
+    metric_id = mql_context["indexer_mappings"][mri]
+    filters.append(
+        binary_condition(
+            ConditionFunction.EQ.value,
+            Column(alias=None, table_name=None, column_name="metric_id"),
+            Literal(alias=None, value=metric_id),
+        )
+    )
+
+    # TODO:
+    # Extract tags mappings from indexer_mappings
     # set start and end time
     # set rollup: order by, granularity, interval, with totals
     # set scope: org_id, project_id, use_case_id
     # set limit
     # set offset
-    pass
+
+    additional_args["filters"] = combine_and_conditions(filters)
+    return additional_args
 
 
 CustomProcessors = Sequence[
@@ -285,7 +318,6 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_initial(body, mql_context)
-        set_mql_context_in_query(query)
+        parse_mql_query_initial(body, mql_context)
 
-    # TODO: Create post processors for adding mql context fields into the query.
+    # TODO: Add necessary post processors.
