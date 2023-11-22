@@ -20,9 +20,7 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&querylog_msg)?;
 
-    Ok(RowData {
-        rows: vec![serialized],
-    })
+    Ok(RowData::from_rows(vec![serialized]))
 }
 
 #[derive(Debug, Deserialize, Serialize)]

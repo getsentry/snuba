@@ -149,7 +149,7 @@ impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
         let keys = self.subscription_state.offsets.keys();
         let mut new_offset: Option<(Partition, u64)> = None;
         let mut ret_message: Option<BrokerMessage<TPayload>> = None;
-        for partition in keys.collect::<Vec<_>>() {
+        for partition in keys {
             if self.paused.contains(partition) {
                 continue;
             }

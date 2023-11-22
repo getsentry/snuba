@@ -77,13 +77,14 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
             match func(broker_message.payload, metadata) {
                 Ok(transformed) => Ok(Message {
                     inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                        payload: BytesInsertBatch {
-                            rows: transformed.rows,
-                            commit_log_offsets: BTreeMap::from([(
+                        payload: BytesInsertBatch::new(
+                            broker_message.timestamp,
+                            transformed,
+                            BTreeMap::from([(
                                 broker_message.partition.index,
                                 (broker_message.offset, broker_message.timestamp),
                             )]),
-                        },
+                        ),
                         partition: broker_message.partition,
                         offset: broker_message.offset,
                         timestamp: broker_message.timestamp,
@@ -122,12 +123,7 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        let accumulator = Arc::new(|mut acc: BytesInsertBatch, value: BytesInsertBatch| {
-            acc.rows.extend(value.rows);
-            acc.commit_log_offsets.extend(value.commit_log_offsets);
-            acc
-        });
-
+        let accumulator = Arc::new(BytesInsertBatch::merge);
         let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
             self.concurrency.concurrency,
             self.concurrency.handle(),
@@ -141,10 +137,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &clickhouse_concurrency,
             )),
             accumulator,
-            BytesInsertBatch {
-                rows: vec![],
-                commit_log_offsets: BTreeMap::new(),
-            },
+            BytesInsertBatch::default(),
             self.max_batch_size,
             self.max_batch_time,
         );
