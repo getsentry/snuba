@@ -203,21 +203,11 @@ def test_get_all_columns() -> None:
         WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
             AND timestamp >= toDateTime('2020-01-01 12:00:00')
             AND timestamp < toDateTime('2020-01-02 12:00:00')
-            AND project_id = 1
+            AND project_id IN tuple(1)
         HAVING trace_sampled > 1
         """
     events = get_dataset("events")
     query, _ = parse_snql_query(query_body, events)
-    a = query.get_condition()
-    b = a.parameters[1]
-    c = b.parameters[0]
-    print(type(c))
-    print(c)
-    print(c.parameters)
-    print(type(c.parameters[0]))
-    d = c.parameters[1]
-    print(type(c.parameters[1]))
-    print(d.value)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_partition", None, "partition"),
@@ -259,12 +249,25 @@ def test_initial_parsing_mql() -> None:
             "entity": "generic_metrics_distributions",
             "start": "2020-01-01T00:00:00",
             "end": "2020-01-01T01:00:00",
+            "rollup": {
+                "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
+                "granularity": "3600",
+                "interval": "3600",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_id": ["1"],
+                "project_id": ["11"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
             "indexer_mappings": {
-                "d:transactions/duration@millisecond": 123456,
-                "transaction": 789012,
-                "foo": 111111,
-                "hee": 222222,
-                "bar": 333333,
+                "d:transactions/duration@millisecond": "123456",
+                "transaction": "789012",
+                "foo": "111111",
+                "hee": "222222",
+                "bar": "333333",
             },
         },
     )
