@@ -12,7 +12,7 @@ from snuba_sdk.timeseries import Metric
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -229,8 +229,6 @@ def parse_mql_query_initial(
     except Exception as e:
         raise e
 
-    print(parsed)
-
     if "entity" not in mql_context:
         raise InvalidQueryException("No entity specified in MQL context")
     entity_name = mql_context["entity"]
@@ -240,20 +238,22 @@ def parse_mql_query_initial(
             key=entity_key, schema=get_entity(entity_key).get_data_model()
         ),
     }
-    # selected_columns = []
-    # if "aggregate" in parsed:
-    #     selected_columns.append(parsed["aggregate"])
-    # if "groupby" in parsed:
-    #     selected_columns.extend(parsed["groupby"])
-    # args["selected_columns"] = selected_columns
+    resolved_args = extract_args_from_mql_context(parsed, mql_context)
+    selected_columns = []
+    if "aggregate" in parsed:
+        selected_columns.append(parsed["aggregate"])
+    if "groupby" in resolved_args:
+        selected_columns.extend(resolved_args["groupby"])
 
-    extract_args_from_mql_context(parsed, mql_context)
+    args["selected_columns"] = selected_columns
+    args["groupby"] = resolved_args["groupby"]
+    args["condition"] = resolved_args["filters"]
+    args["order_by"] = resolved_args["order_by"]
+    args["limit"] = resolved_args["limit"]
+    args["offset"] = resolved_args["offset"]
+    args["granularity"] = resolved_args["granularity"]
+    args["totals"] = resolved_args["totals"]
 
-    # Merge args and additional args from mql context
-    # args["condition"] = combine_and_conditions(
-    #     [parsed["filters"], extracted_args["filters"]]
-    # )
-    # print(args)
     query = LogicalQuery(**args)
     print(query.__dict__)
     return query
@@ -263,7 +263,30 @@ def extract_args_from_mql_context(
     parsed: Mapping[str, Any],
     mql_context: Mapping[str, Any],
 ) -> Mapping[str, Any]:
-    extracted_args = {}
+    """
+    "mql_context": {
+        "entity": "generic_metrics_distributions"
+        "start": "2023-01-02T03:04:05+00:00",
+        "end": "2023-01-16T03:04:05+00:00",
+        "rollup": {
+                "orderby": {"column_name": "time", "direction": "ASC"},
+                "granularity": "3600",
+                "interval": "3600",
+                "with_totals": "",
+        },
+        "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["11"],
+                "use_case_id": "transactions",
+        },
+        "limit": "",
+        "offset": "",
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": "123456", ...
+        }
+    }
+    """
+    resolved_args = {}
     filters = []
     groupbys = []
     if "indexer_mappings" not in mql_context:
@@ -272,18 +295,21 @@ def extract_args_from_mql_context(
     filters.extend(extract_metric_id(parsed, mql_context))
     filters.extend(extract_resolved_tag_filters(parsed, mql_context))
     filters.extend(extract_start_end_time(parsed, mql_context))
+    filters.extend(extract_scope(parsed, mql_context))
     groupbys.extend(extract_resolved_gropupby(parsed, mql_context))
-    print(filters)
-    print(groupbys)
+    order_by, granularity, totals = extract_rollup(parsed, mql_context)
+    limit = extract_limit(mql_context)
+    offset = extract_offset(mql_context)
 
-    # TODO:
-    # set rollup: order by, granularity, interval, with totals
-    # set scope: org_id, project_id, use_case_id
-    # set limit
-    # set offset
+    resolved_args["filters"] = combine_and_conditions(filters)
+    resolved_args["groupby"] = groupbys
+    resolved_args["order_by"] = order_by
+    resolved_args["granularity"] = granularity
+    resolved_args["totals"] = totals
+    resolved_args["limit"] = limit
+    resolved_args["offset"] = offset
 
-    extracted_args["filters"] = combine_and_conditions(filters)
-    return extracted_args
+    return resolved_args
 
 
 def extract_metric_id(
@@ -312,31 +338,34 @@ def extract_metric_id(
 def extract_resolved_tag_filters(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract resolved tag filters from indexer_mappings
+    # Extract resolved tag filters from mql context indexer_mappings
     filters = []
     if "filters" in parsed:
         for filter in parsed["filters"]:
             operator, lhs, rhs = filter
             if lhs in mql_context["indexer_mappings"]:
                 resolved = mql_context["indexer_mappings"][lhs]
-                filters.append(
-                    binary_condition(
-                        operator,
-                        Column(
-                            alias=lhs,
-                            table_name=None,
-                            column_name=f"tags_raw[{resolved}]",
-                        ),
-                        Literal(alias=None, value=rhs),
-                    )
+                lhs_column_name = f"tags_raw[{resolved}]"
+            else:
+                lhs_column_name = lhs
+            filters.append(
+                binary_condition(
+                    operator,
+                    Column(
+                        alias=lhs,
+                        table_name=None,
+                        column_name=lhs_column_name,
+                    ),
+                    Literal(alias=None, value=rhs),
                 )
+            )
     return filters
 
 
 def extract_start_end_time(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract resolved tag filters from indexer_mappings
+    # Extract resolved tag filters from mql context
     filters = []
     if "start" not in mql_context or "end" not in mql_context:
         raise InvalidQueryException(
@@ -361,25 +390,129 @@ def extract_start_end_time(
     return filters
 
 
+def extract_scope(
+    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+) -> list[FunctionCall]:
+    # Extract scope from mql context
+    filters = []
+    if "scope" not in mql_context:
+        raise InvalidQueryException("No scope specified in MQL context.")
+    scope = mql_context["scope"]
+    filters.append(
+        binary_condition(
+            ConditionFunction.IN.value,
+            Column(alias=None, table_name=None, column_name="org_id"),
+            FunctionCall(
+                alias=None,
+                function_name="tuple",
+                parameters=[
+                    Literal(alias=None, value=org_id) for org_id in scope["org_id"]
+                ],
+            ),
+        )
+    )
+    filters.append(
+        binary_condition(
+            ConditionFunction.IN.value,
+            Column(alias=None, table_name=None, column_name="project_id"),
+            FunctionCall(
+                alias=None,
+                function_name="tuple",
+                parameters=[
+                    Literal(alias=None, value=project_id)
+                    for project_id in scope["project_id"]
+                ],
+            ),
+        )
+    )
+    filters.append(
+        binary_condition(
+            ConditionFunction.EQ.value,
+            Column(alias=None, table_name=None, column_name="use_case_id"),
+            Literal(alias=None, value=scope["use_case_id"]),
+        )
+    )
+    return filters
+
+
 def extract_resolved_gropupby(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract resolved groupby from indexer_mappings
+    # Extract resolved groupby from mql context indexer_mappings
     groupbys = []
     if "groupby" in parsed:
         for groupby_col_name in parsed["groupby"]:
-            resolved = mql_context["indexer_mappings"][groupby_col_name]
+            if groupby_col_name in mql_context["indexer_mappings"]:
+                resolved = mql_context["indexer_mappings"][groupby_col_name]
+                resolved_column_name = f"tags_raw[{resolved}]"
+            else:
+                resolved_column_name = groupby_col_name
             groupbys.append(
                 SelectedExpression(
                     name=groupby_col_name,
                     expression=Column(
                         alias=groupby_col_name,
                         table_name=None,
-                        column_name=f"tags_raw[{resolved}]",
+                        column_name=resolved_column_name,
                     ),
                 )
             )
     return groupbys
+
+
+def extract_rollup(
+    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+) -> tuple[list[FunctionCall], int, bool]:
+    # Extract rollup from mql context
+    if "rollup" not in mql_context:
+        raise InvalidQueryException("No rollup specified in MQL context.")
+
+    # Extract orderby clause
+    order_by = []
+    if "orderby" in mql_context:
+        for order_by_info in mql_context["rollup"]["orderby"]:
+            direction = (
+                OrderByDirection.ASC
+                if order_by_info["direction"] == "ASC"
+                else OrderByDirection.DESC
+            )
+            order_by.append(
+                OrderBy(
+                    direction,
+                    Column(
+                        alias=None,
+                        table_name=None,
+                        column_name=order_by_info["column_name"],
+                    ),
+                )
+            )
+
+    # Extract granularity
+    if "granularity" not in mql_context["rollup"]:
+        raise InvalidQueryException("No granularity specified in MQL context rollup.")
+    granularity = int(mql_context["rollup"]["granularity"])
+
+    # Extract with totals
+    with_totals = False
+    if (
+        "with_totals" in mql_context["rollup"]
+        and mql_context["rollup"]["with_totals"] == "True"
+    ):
+        with_totals = True
+
+    return order_by, granularity, with_totals
+
+
+def extract_limit(mql_context: Mapping[str, Any]) -> Optional[int]:
+    if "limit" in mql_context and mql_context["limit"] != "":
+        return int(mql_context["limit"])
+    return None
+
+
+def extract_offset(mql_context: Mapping[str, Any]) -> int:
+    if "limit" in mql_context and mql_context["offset"] != "":
+        return int(mql_context["offset"])
+    return 0
 
 
 CustomProcessors = Sequence[
