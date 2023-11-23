@@ -71,14 +71,14 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-struct OffsetStage {
+struct OffsetStage<C: AssignmentCallbacks> {
     staged_offsets: HashMap<Partition, u64>,
-    consumer: Arc<Mutex<BaseConsumer<CustomContext>>>,
+    consumer: Arc<Mutex<BaseConsumer<CustomContext<C>>>>,
 }
 
-impl CommitOffsets for OffsetStage {
+impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
     fn commit(
-        &mut self,
+        mut self,
         offsets: HashMap<Partition, u64>,
     ) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.staged_offsets.extend(offsets);
@@ -97,18 +97,18 @@ impl CommitOffsets for OffsetStage {
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        Ok(std::mem::take(&mut self.staged_offsets))
+        Ok(self.staged_offsets)
     }
 }
 
-pub struct CustomContext {
-    callbacks: Box<dyn AssignmentCallbacks>,
+pub struct CustomContext<C> {
+    callbacks: C,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
-impl ClientContext for CustomContext {}
+impl<C: Send + Sync> ClientContext for CustomContext<C> {}
 
-impl ConsumerContext for CustomContext {
+impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
     fn pre_rebalance(&self, rebalance: &Rebalance) {
         if let Rebalance::Revoke(list) = rebalance {
             let mut partitions: Vec<Partition> = Vec::new();
@@ -127,7 +127,8 @@ impl ConsumerContext for CustomContext {
                 offsets.remove(partition);
             }
 
-            self.callbacks.on_revoke(todo!(), partitions);
+            self.callbacks
+                .on_revoke::<OffsetStage<C>>(todo!(), partitions);
         }
     }
 
@@ -158,20 +159,20 @@ impl ConsumerContext for CustomContext {
     fn commit_callback(&self, _: KafkaResult<()>, _offsets: &TopicPartitionList) {}
 }
 
-pub struct KafkaConsumer {
+pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // TODO: This has to be an option as of now because rdkafka requires
     // callbacks during the instantiation. While the streaming processor
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    pub consumer: Option<Arc<Mutex<BaseConsumer<CustomContext>>>>,
+    pub consumer: Option<Arc<Mutex<BaseConsumer<CustomContext<C>>>>>,
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
     staged_offsets: HashMap<Partition, u64>,
 }
 
-impl KafkaConsumer {
+impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig) -> Self {
         Self {
             consumer: None,
@@ -183,12 +184,8 @@ impl KafkaConsumer {
     }
 }
 
-impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
-    fn subscribe(
-        &mut self,
-        topics: &[Topic],
-        callbacks: Box<dyn AssignmentCallbacks>,
-    ) -> Result<(), ConsumerError> {
+impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
+    fn subscribe(&mut self, topics: &[Topic], callbacks: C) -> Result<(), ConsumerError> {
         let context = CustomContext {
             callbacks,
             consumer_offsets: self.offsets.clone(),
@@ -196,7 +193,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 
         let mut config_obj: ClientConfig = self.config.clone().into();
 
-        let consumer: BaseConsumer<CustomContext> = config_obj
+        let consumer: BaseConsumer<CustomContext<C>> = config_obj
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
@@ -335,7 +332,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 mod tests {
     use super::{AssignmentCallbacks, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
-    use crate::backends::{CommitOffsets, Consumer};
+    use crate::backends::Consumer;
     use crate::types::{Partition, Topic};
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
     use rdkafka::client::DefaultClientContext;
@@ -347,7 +344,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: &mut dyn CommitOffsets, _: Vec<Partition>) {}
+        fn on_revoke<C>(&self, _: C, _: Vec<Partition>) {}
     }
 
     fn get_admin_client() -> AdminClient<DefaultClientContext> {
@@ -391,7 +388,7 @@ mod tests {
         );
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test");
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
+        let my_callbacks = EmptyCallbacks {};
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
 
@@ -408,9 +405,8 @@ mod tests {
         );
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test");
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         assert!(consumer.tell().is_err()); // Not subscribed yet
-        consumer.subscribe(&[topic], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
         // Getting the assignment may take a while, wait up to 5 seconds
@@ -438,8 +434,7 @@ mod tests {
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test2");
 
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        consumer.subscribe(&[topic], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 

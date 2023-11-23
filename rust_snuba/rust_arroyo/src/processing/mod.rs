@@ -55,7 +55,7 @@ impl<TPayload> ConsumerState<TPayload> {
     }
 }
 
-struct Callbacks<TPayload> {
+pub struct Callbacks<TPayload> {
     strategies: Arc<Mutex<ConsumerState<TPayload>>>,
 }
 
@@ -81,7 +81,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&self, commit_offsets: &mut dyn CommitOffsets, _: Vec<Partition>) {
+    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, _: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();
@@ -91,7 +91,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
                 tracing::info!("Committing offsets");
-                commit_offsets.commit(commit_request.positions);
+                let _ = commit_offsets.commit(commit_request.positions);
             }
         }
         stg.strategy = None;
@@ -121,7 +121,7 @@ impl<TPayload> Callbacks<TPayload> {
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
 pub struct StreamProcessor<TPayload: Clone> {
-    consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+    consumer: Arc<Mutex<dyn Consumer<TPayload, Callbacks<TPayload>>>>,
     consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
@@ -131,7 +131,7 @@ pub struct StreamProcessor<TPayload: Clone> {
 
 impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
-        consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
+        consumer: Arc<Mutex<dyn Consumer<TPayload, Callbacks<TPayload>>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     ) -> Self {
         let consumer_state = Arc::new(Mutex::new(ConsumerState {
@@ -155,8 +155,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks: Box<dyn AssignmentCallbacks> =
-            Box::new(Callbacks::new(self.consumer_state.clone()));
+        let callbacks = Callbacks::new(self.consumer_state.clone());
         self.consumer
             .lock()
             .unwrap()
