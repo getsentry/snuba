@@ -3,14 +3,14 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let mut msg: ProfileMessage = serde_json::from_slice(&payload_bytes)?;
+) -> anyhow::Result<RowData> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
     // we always want an empty string at least
     msg.device_classification = Some(msg.device_classification.unwrap_or_default());
@@ -19,9 +19,7 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&msg)?;
 
-    Ok(BytesInsertBatch {
-        rows: vec![serialized],
-    })
+    Ok(RowData::from_rows(vec![serialized]))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -93,11 +91,7 @@ mod tests {
             "version_code": "1337",
             "version_name": "v42.0.0"
         }"#;
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

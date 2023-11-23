@@ -20,11 +20,12 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.validation.validators import ColumnValidationMode
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
-from tests.helpers import write_unprocessed_events
+from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
@@ -891,6 +892,7 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
     def test_invalid_column(self) -> None:
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.ERROR)
         response = self.post(
             "/outcomes/snql",
             data=json.dumps(
@@ -909,15 +911,12 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        # TODO: when validation mode is ERROR this should be:
-        # assert response.status_code == 400
-        # assert (
-        #     json.loads(response.data)["error"]["message"]
-        #     == "validation failed for entity outcomes: query column(s) fake_column do not exist"
-        # )
-
-        # For now it's 500 since it's just a clickhouse error
-        assert response.status_code == 500
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.WARN)
+        assert response.status_code == 400
+        assert (
+            json.loads(response.data)["error"]["message"]
+            == "validation failed for entity outcomes: Entity outcomes: Query column 'fake_column' does not exist"
+        )
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(
@@ -950,8 +949,18 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fsdfsd do not exist",
+            "validation failed for entity events: Query column 'fsdfsd' does not exist",
             id="Invalid first Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.fsdfsd, e.fake_col, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
+            id="Invalid multiple Select columns",
         ),
         pytest.param(
             f"""{MATCH}
@@ -960,7 +969,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -970,7 +979,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid By column",
         ),
         pytest.param(
@@ -981,7 +990,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -991,7 +1000,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) status do not exist",
+            "validation failed for entity events: Query column 'status' does not exist",
             id="Mismatched Select columns",
         ),
         pytest.param(
@@ -1001,24 +1010,30 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fdsdsf do not exist",
+            "validation failed for entity events: Query column 'fdsdsf' does not exist",
             id="Invalid nested column",
         ),
     ]
 
+    @pytest.fixture()
     @pytest.mark.parametrize(
         "query, response_code, error_message", invalid_columns_composite_query_tests
     )
     def test_invalid_columns_composite_query(
         self, query: str, response_code: int, error_message: str
     ) -> None:
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
+        )
         response = self.post("/events/snql", data=json.dumps({"query": query}))
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
+        )
 
-        # TODO: when validation mode for events and groupedmessage is ERROR this should be:
-        # assert response.status_code == response_code
-        # assert json.loads(response.data)["error"]["message"] == error_message
-
-        assert response.status_code == 500
+        assert response.status_code == response_code
+        assert json.loads(response.data)["error"]["message"] == error_message
 
     def test_wrap_log_fn_with_ifnotfinite(self) -> None:
         """

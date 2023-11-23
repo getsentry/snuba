@@ -6,22 +6,21 @@ use crate::types::Message;
 use std::time::Duration;
 
 pub struct RunTask<TPayload, TTransformed> {
-    pub function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
+    pub function:
+        Box<dyn Fn(TPayload) -> Result<TTransformed, InvalidMessage> + Send + Sync + 'static>,
     pub next_step: Box<dyn ProcessingStrategy<TTransformed>>,
     pub message_carried_over: Option<Message<TTransformed>>,
     pub commit_request_carried_over: Option<CommitRequest>,
 }
 
 impl<TPayload, TTransformed> RunTask<TPayload, TTransformed> {
-    pub fn new<N>(
-        function: fn(TPayload) -> Result<TTransformed, InvalidMessage>,
-        next_step: N,
-    ) -> Self
+    pub fn new<N, F>(function: F, next_step: N) -> Self
     where
         N: ProcessingStrategy<TTransformed> + 'static,
+        F: Fn(TPayload) -> Result<TTransformed, InvalidMessage> + Send + Sync + 'static,
     {
         Self {
-            function,
+            function: Box::new(function),
             next_step: Box::new(next_step),
             message_carried_over: None,
             commit_request_carried_over: None,
@@ -64,7 +63,7 @@ impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
         }
 
         let next_message = message
-            .try_map(self.function)
+            .try_map(&self.function)
             .map_err(SubmitError::InvalidMessage)?;
 
         match self.next_step.submit(next_message) {

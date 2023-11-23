@@ -2,30 +2,51 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
 };
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Error;
-
+use chrono::{DateTime, Utc};
 use pyo3::prelude::*;
 
-use crate::types::BytesInsertBatch;
-
 use crate::config::MessageProcessorConfig;
+use crate::types::{BytesInsertBatch, RowData};
+
+struct MessageMeta {
+    partition: Partition,
+    offset: u64,
+    timestamp: DateTime<Utc>,
+}
 
 enum TaskHandle {
     Procspawn {
-        original_message_meta: Message<()>,
-        join_handle: Mutex<procspawn::JoinHandle<Result<BytesInsertBatch, String>>>,
+        original_message_meta: MessageMeta,
+        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
+        submit_timestamp: SystemTime,
     },
     Immediate {
-        original_message_meta: Message<()>,
-        result: Result<BytesInsertBatch, String>,
+        original_message_meta: MessageMeta,
+        result: Result<RowData, String>,
+        submit_timestamp: SystemTime,
     },
+}
+
+impl TaskHandle {
+    fn submit_timestamp(&self) -> SystemTime {
+        match self {
+            TaskHandle::Procspawn {
+                submit_timestamp, ..
+            } => *submit_timestamp,
+            TaskHandle::Immediate {
+                submit_timestamp, ..
+            } => *submit_timestamp,
+        }
+    }
 }
 
 pub struct PythonTransformStep {
@@ -80,74 +101,114 @@ impl PythonTransformStep {
     }
 
     fn check_for_results(&mut self) {
-        // procspawn has no join() timeout that does not consume the handle on timeout.
-        //
-        // Additionally we have observed, at least on MacOS, that procspawn's active_count() only
-        // decreases when the handle is consumed. Therefore our count of actually saturated
-        // processes is `self.processing_pool.active_count() - self.handles.len()`.
-        //
-        // If no process is saturated (i.e. above equation is <= 0), we can conclude that all tasks
-        // are done and all handles can be joined and consumed without waiting.
-        while {
-            let active_count = self
-                .processing_pool
-                .as_ref()
-                .map_or(0, |pool| pool.active_count());
-            let may_have_finished_handles = active_count <= self.handles.len();
-            may_have_finished_handles && !self.handles.is_empty()
-        } {
-            let (original_message_meta, message_result) = match self.handles.pop_front().unwrap() {
-                TaskHandle::Procspawn {
-                    original_message_meta,
-                    join_handle,
-                } => {
-                    let handle = join_handle.into_inner().unwrap();
-                    let result = handle.join().expect("procspawn failed");
-                    (original_message_meta, result)
+        if let Some(message_carried_over) = self.message_carried_over.take() {
+            if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
+                self.next_step.submit(message_carried_over)
+            {
+                self.message_carried_over = Some(message);
+                return;
+            }
+        }
+
+        debug_assert!(self.message_carried_over.is_none());
+
+        let (original_message_meta, message_result) = match self.handles.pop_front() {
+            Some(TaskHandle::Procspawn {
+                original_message_meta,
+                join_handle,
+                ..
+            }) => {
+                let handle = join_handle.into_inner().unwrap();
+                let result = handle.join().expect("procspawn failed");
+                (original_message_meta, result)
+            }
+            Some(TaskHandle::Immediate {
+                original_message_meta,
+                result,
+                ..
+            }) => (original_message_meta, result),
+            None => return,
+        };
+
+        match message_result {
+            Ok(rows) => {
+                let replacement = BytesInsertBatch::new(
+                    original_message_meta.timestamp,
+                    rows,
+                    BTreeMap::from([(
+                        original_message_meta.partition.index,
+                        (
+                            original_message_meta.offset,
+                            original_message_meta.timestamp,
+                        ),
+                    )]),
+                );
+
+                let new_message = Message::new_broker_message(
+                    replacement,
+                    original_message_meta.partition,
+                    original_message_meta.offset,
+                    original_message_meta.timestamp,
+                );
+
+                if let Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) = self.next_step.submit(new_message)
+                {
+                    self.message_carried_over = Some(transformed_message);
                 }
-                TaskHandle::Immediate {
-                    original_message_meta,
-                    result,
-                } => (original_message_meta, result),
-            };
-            match message_result {
-                Ok(data) => {
-                    if let Err(SubmitError::MessageRejected(MessageRejected {
-                        message: transformed_message,
-                    })) = self.next_step.submit(original_message_meta.replace(data))
-                    {
-                        self.message_carried_over = Some(transformed_message);
-                    }
-                }
-                Err(error) => {
-                    tracing::error!(error, "Invalid message");
+            }
+            Err(error) => {
+                tracing::error!(error, "Invalid message");
+            }
+        }
+    }
+
+    fn queue_needs_drain(&self) -> bool {
+        if self.handles.len() > self.max_queue_depth {
+            return true;
+        }
+
+        if let Some(handle) = self.handles.front() {
+            if let Ok(elapsed) = handle.submit_timestamp().elapsed() {
+                if elapsed > Duration::from_secs(10) {
+                    return true;
                 }
             }
         }
+
+        false
     }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        self.check_for_results();
+        while self.queue_needs_drain() {
+            self.check_for_results();
+        }
+
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+        if self.message_carried_over.is_some() {
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
+        }
+
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        if let Some(ref processing_pool) = self.processing_pool {
-            if processing_pool.queued_count() > self.max_queue_depth {
-                tracing::debug!("python strategy provides backpressure");
-                return Err(SubmitError::MessageRejected(MessageRejected { message }));
-            }
+        if self.queue_needs_drain() {
+            tracing::debug!("python strategy provides backpressure");
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         tracing::debug!(%message, "processing message");
 
         match message.inner_message {
             InnerMessage::AnyMessage(..) => {
-                panic!("AnyMessage cannot be processed");
+                // Snuba message processors, as their interface is defined in Python, expect a
+                // single, specific partition/offset combination for every payload.
+                panic!("AnyMessage cannot be processed by a message processor");
             }
             InnerMessage::BrokerMessage(BrokerMessage {
                 payload,
@@ -155,11 +216,14 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                let args = (payload.payload, offset, partition.index, timestamp);
+                // TODO: Handle None payload
+                let payload_bytes = (payload.payload().unwrap()).clone();
 
-                let process_message = |args| {
+                let args = (payload_bytes, offset, partition.index, timestamp);
+
+                let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<BytesInsertBatch> {
+                    Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
@@ -167,25 +231,30 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                         let result = fun.call1(py, args)?;
                         let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(BytesInsertBatch {
-                            rows: result_decoded,
-                        })
+                        Ok(RowData::from_rows(result_decoded))
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };
 
-                let original_message_meta =
-                    Message::new_broker_message((), partition, offset, timestamp);
+                let original_message_meta = MessageMeta {
+                    partition,
+                    offset,
+                    timestamp,
+                };
+
+                let submit_timestamp = SystemTime::now();
 
                 if let Some(ref processing_pool) = self.processing_pool {
                     let handle = processing_pool.spawn(args, process_message);
 
                     self.handles.push_back(TaskHandle::Procspawn {
+                        submit_timestamp,
                         original_message_meta,
                         join_handle: Mutex::new(handle),
                     });
                 } else {
                     self.handles.push_back(TaskHandle::Immediate {
+                        submit_timestamp,
                         original_message_meta,
                         result: process_message(args),
                     });
@@ -255,11 +324,11 @@ mod tests {
 
         let _ = step.poll();
         step.submit(Message::new_broker_message(
-            KafkaPayload {
-                key: None,
-                headers: None,
-                payload: Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            },
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
             Partition::new(Topic::new("test"), 1),
             1,
             Utc::now(),
@@ -284,5 +353,65 @@ mod tests {
     #[test]
     fn test_basic_two_processes() {
         run_basic(2);
+    }
+
+    struct BackpressureForever;
+
+    impl<T> ProcessingStrategy<T> for BackpressureForever {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+
+        fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+            Err(SubmitError::MessageRejected(MessageRejected { message }))
+        }
+
+        fn close(&mut self) {}
+        fn terminate(&mut self) {}
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn test_backpressure() {
+        let mut step = PythonTransformStep::new(
+            MessageProcessorConfig {
+                python_class_name: "OutcomesProcessor".to_owned(),
+                python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
+            },
+            2,
+            None,
+            BackpressureForever,
+        )
+        .unwrap();
+
+        step.poll().unwrap();
+        step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap();
+
+        step.join(None).unwrap();
+
+        assert!(matches!(step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap_err(), SubmitError::MessageRejected(_)));
     }
 }

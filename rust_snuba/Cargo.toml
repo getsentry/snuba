@@ -11,6 +11,9 @@ members = ["rust_arroyo"]
 [features]
 ffi = ["pyo3/extension-module"]
 
+[profile.release]
+debug = 1
+
 [lib]
 # The name of the native library. This is the name which will be used in Python to import the
 # library (i.e. `import string_sum`). If you change this, you must also change the name of the
@@ -18,7 +21,7 @@ ffi = ["pyo3/extension-module"]
 name = "rust_snuba"
 
 # "cdylib" is necessary to produce a shared library for Python to import from.
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
@@ -32,17 +35,28 @@ pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = "0.11.11"
 rust_arroyo = { path = "./rust_arroyo" }
 sentry = { version = "0.31.0", features = ["anyhow", "tracing"] }
-sentry-kafka-schemas = "0.1.32"
+sentry-kafka-schemas = "0.1.35"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serde_yaml = "0.9.19"
 thiserror = "1.0"
 tokio = { version = "1.19.2", features = ["full"] }
-statsdproxy = { version = "0.1.0", features = ["cadence"], git = "https://github.com/getsentry/statsdproxy", default-features = false }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = "1.5.0"
 
 [dev-dependencies]
+divan = "0.1.2"
+once_cell = "1.18.0"
 procspawn = { version = "0.10.2", features = ["test-support", "json"] }
 pyo3 = { version = "*", features = ["auto-initialize"] }
+
+[[bench]]
+name = "processors"
+harness = false
+
+[[bin]]
+# this is not a proper benchmark since it runs forever.
+name = "python-processor-infinite"
+path = "bin/python_processor_infinite.rs"
+required-features = ["pyo3/auto-initialize"]

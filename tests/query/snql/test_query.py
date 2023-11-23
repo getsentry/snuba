@@ -62,7 +62,7 @@ required_condition = binary_condition(
 
 test_cases = [
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} GRANULARITY 60",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -74,7 +74,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             granularity=60,
             condition=required_condition,
@@ -84,7 +86,7 @@ test_cases = [
         id="granularity on whole query",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} TOTALS true",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -96,7 +98,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             totals=True,
@@ -106,7 +110,7 @@ test_cases = [
         id="totals on whole query",
     ),
     pytest.param(
-        f"MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE {added_condition}",
+        f"MATCH (events SAMPLE 0.5) SELECT 4-5, event_id WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS,
@@ -120,7 +124,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             sample=0.5,
@@ -130,7 +136,7 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
+        f"MATCH (events) SELECT 4-5, event_id,title,release WHERE {added_condition} LIMIT 5 BY event_id,title,release",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -142,17 +148,21 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
-                SelectedExpression("e", Column("_snuba_e", None, "e")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+                SelectedExpression(
+                    "release", Column("_snuba_release", None, "release")
+                ),
             ],
             condition=required_condition,
             limitby=LimitBy(
                 5,
                 [
-                    Column("_snuba_c", None, "c"),
-                    Column("_snuba_d", None, "d"),
-                    Column("_snuba_e", None, "e"),
+                    Column("_snuba_event_id", None, "event_id"),
+                    Column("_snuba_title", None, "title"),
+                    Column("_snuba_release", None, "release"),
                 ],
             ),
             limit=1000,
@@ -161,7 +171,7 @@ test_cases = [
         id="limit by multiple columns",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
+        f"MATCH (events) SELECT 4-5, group_id WHERE {added_condition} LIMIT 5 BY group_id",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -173,17 +183,19 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id")
+                ),
             ],
             condition=required_condition,
-            limitby=LimitBy(5, [Column("_snuba_c", None, "c")]),
+            limitby=LimitBy(5, [Column("_snuba_group_id", None, "group_id")]),
             limit=1000,
             offset=0,
         ),
         id="limit by single column",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} LIMIT 5 OFFSET 3",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -195,7 +207,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             limit=5,
@@ -204,7 +218,7 @@ test_cases = [
         id="limit and offset",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x WHERE {added_condition} TOTALS true",
+        f"MATCH (events) SELECT 4-5, tags, arrayJoin(tags) AS x WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -216,11 +230,11 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("tags", Column("_snuba_tags", None, "tags")),
                 SelectedExpression(
                     "x",
                     FunctionCall(
-                        "_snuba_x", "arrayJoin", (Column("_snuba_c", None, "c"),)
+                        "_snuba_x", "arrayJoin", (Column("_snuba_tags", None, "tags"),)
                     ),
                 ),
             ],
@@ -232,7 +246,7 @@ test_cases = [
         id="Array join",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE {added_condition}",
+        f"MATCH (events) SELECT 4-5, 3* foo(partition) AS foo, partition WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -245,19 +259,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3* foo(c) AS foo",
+                    "3* foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3* foo(c) AS foo",
+                        "_snuba_3* foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             limit=1000,
@@ -267,7 +285,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
+        SELECT 4-5,3*foo(partition) AS foo,partition
         WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
         AND {added_condition}""",
         LogicalQuery(
@@ -282,19 +300,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -319,7 +341,7 @@ test_cases = [
         id="Basic query with word condition ops",
     ),
     pytest.param(
-        f"MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND {added_condition}",
+        f"MATCH (events) SELECT count() AS count BY tags[key], contexts[lcp.elementSize] WHERE contexts[lcp.elementSize] > 1 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -334,10 +356,10 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "measurements[lcp.elementSize]",
+                    "contexts[lcp.elementSize]",
                     SubscriptableReference(
-                        "_snuba_measurements[lcp.elementSize]",
-                        Column("_snuba_measurements", None, "measurements"),
+                        "_snuba_contexts[lcp.elementSize]",
+                        Column("_snuba_contexts", None, "contexts"),
                         Literal(None, "lcp.elementSize"),
                     ),
                 ),
@@ -353,8 +375,8 @@ test_cases = [
                     Literal(None, "key"),
                 ),
                 SubscriptableReference(
-                    "_snuba_measurements[lcp.elementSize]",
-                    Column("_snuba_measurements", None, "measurements"),
+                    "_snuba_contexts[lcp.elementSize]",
+                    Column("_snuba_contexts", None, "contexts"),
                     Literal(None, "lcp.elementSize"),
                 ),
             ],
@@ -363,8 +385,8 @@ test_cases = [
                 binary_condition(
                     "greater",
                     SubscriptableReference(
-                        "_snuba_measurements[lcp.elementSize]",
-                        Column("_snuba_measurements", None, "measurements"),
+                        "_snuba_contexts[lcp.elementSize]",
+                        Column("_snuba_contexts", None, "contexts"),
                         Literal(None, "lcp.elementSize"),
                     ),
                     Literal(None, 1),
@@ -377,13 +399,15 @@ test_cases = [
         id="Basic query with subscriptables",
     ),
     pytest.param(
-        f"MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), g(partition) AS goo, partition BY group_id, 2+7 WHERE {added_condition} ORDER BY offset DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id")
+                ),
                 SelectedExpression(
                     "2+7",
                     FunctionCall(
@@ -414,31 +438,39 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "goo",
-                    FunctionCall("_snuba_goo", "g", (Column("_snuba_c", None, "c"),)),
+                    FunctionCall(
+                        "_snuba_goo",
+                        "g",
+                        (Column("_snuba_partition", None, "partition"),),
+                    ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             groupby=[
-                Column("_snuba_d", None, "d"),
+                Column("_snuba_group_id", None, "group_id"),
                 FunctionCall(
                     "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
                 ),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            order_by=[
+                OrderBy(OrderByDirection.DESC, Column("_snuba_offset", None, "offset"))
+            ],
             limit=1000,
             offset=0,
         ),
         id="Simple complete query with example of parenthesized arithmetic expression in SELECT",
     ),
     pytest.param(
-        f"MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), foo(partition) AS thing2, partition BY offset, 2+7 WHERE {added_condition} ORDER BY group_id DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression("offset", Column("_snuba_offset", None, "offset")),
                 SelectedExpression(
                     "2+7",
                     FunctionCall(
@@ -470,26 +502,34 @@ test_cases = [
                 SelectedExpression(
                     "thing2",
                     FunctionCall(
-                        "_snuba_thing2", "foo", (Column("_snuba_c", None, "c"),)
+                        "_snuba_thing2",
+                        "foo",
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             groupby=[
-                Column("_snuba_d", None, "d"),
+                Column("_snuba_offset", None, "offset"),
                 FunctionCall(
                     "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
                 ),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            order_by=[
+                OrderBy(
+                    OrderByDirection.DESC, Column("_snuba_group_id", None, "group_id")
+                )
+            ],
             limit=1000,
             offset=0,
         ),
         id="Simple complete query with aliased function in SELECT",
     ),
     pytest.param(
-        f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
+        f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(partition) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -504,14 +544,16 @@ test_cases = [
                     Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
@@ -525,38 +567,42 @@ test_cases = [
         id="Basic query with date literals",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE partition<3 AND offset=2 AND project_id=2 AND group_id=3 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "less",
-                    Column("_snuba_time_seen", None, "time_seen"),
+                    Column("_snuba_partition", None, "partition"),
                     Literal(None, 3),
                 ),
                 binary_condition(
                     "and",
                     binary_condition(
                         "equals",
-                        Column("_snuba_last_seen", None, "last_seen"),
+                        Column("_snuba_offset", None, "offset"),
                         Literal(None, 2),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
                             "equals",
-                            Column("_snuba_c", None, "c"),
+                            Column("_snuba_project_id", None, "project_id"),
                             Literal(None, 2),
                         ),
                         binary_condition(
                             "and",
                             binary_condition(
                                 "equals",
-                                Column("_snuba_d", None, "d"),
+                                Column("_snuba_group_id", None, "group_id"),
                                 Literal(None, 3),
                             ),
                             required_condition,
@@ -570,12 +616,16 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE ((partition<3 OR offset=retention_days) OR title=platform) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
             condition=binary_condition(
                 "and",
                 binary_condition(
@@ -584,19 +634,19 @@ test_cases = [
                         "or",
                         binary_condition(
                             "less",
-                            Column("_snuba_time_seen", None, "time_seen"),
+                            Column("_snuba_partition", None, "partition"),
                             Literal(None, 3),
                         ),
                         binary_condition(
                             "equals",
-                            Column("_snuba_last_seen", None, "last_seen"),
-                            Column("_snuba_afternoon", None, "afternoon"),
+                            Column("_snuba_offset", None, "offset"),
+                            Column("_snuba_retention_days", None, "retention_days"),
                         ),
                     ),
                     binary_condition(
                         "equals",
-                        Column("_snuba_name", None, "name"),
-                        Column("_snuba_bob", None, "bob"),
+                        Column("_snuba_title", None, "title"),
+                        Column("_snuba_platform", None, "platform"),
                     ),
                 ),
                 required_condition,
@@ -607,27 +657,31 @@ test_cases = [
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE (title!=platform OR partition<offset AND (location=gps(user_id,user_name,user_email) OR group_id>0)) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "or",
                     binary_condition(
                         "notEquals",
-                        Column("_snuba_name", None, "name"),
-                        Column("_snuba_bob", None, "bob"),
+                        Column("_snuba_title", None, "title"),
+                        Column("_snuba_platform", None, "platform"),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
                             "less",
-                            Column("_snuba_last_seen", None, "last_seen"),
-                            Column("_snuba_afternoon", None, "afternoon"),
+                            Column("_snuba_partition", None, "partition"),
+                            Column("_snuba_offset", None, "offset"),
                         ),
                         binary_condition(
                             "or",
@@ -638,15 +692,15 @@ test_cases = [
                                     None,
                                     "gps",
                                     (
-                                        Column("_snuba_x", None, "x"),
-                                        Column("_snuba_y", None, "y"),
-                                        Column("_snuba_z", None, "z"),
+                                        Column("_snuba_user_id", None, "user_id"),
+                                        Column("_snuba_user_name", None, "user_name"),
+                                        Column("_snuba_user_email", None, "user_email"),
                                     ),
                                 ),
                             ),
                             binary_condition(
                                 "greater",
-                                Column("_snuba_times_seen", None, "times_seen"),
+                                Column("_snuba_group_id", None, "group_id"),
                                 Literal(None, 0),
                             ),
                         ),
@@ -661,7 +715,7 @@ test_cases = [
     ),
     pytest.param(
         """MATCH (events)
-        SELECT a, b[c]
+        SELECT event_id, tags[test]
         WHERE project_id IN tuple( 2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')""",
@@ -670,13 +724,15 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("a", Column("_snuba_a", None, "a")),
                 SelectedExpression(
-                    "b[c]",
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
+                SelectedExpression(
+                    "tags[test]",
                     SubscriptableReference(
-                        "_snuba_b[c]",
-                        Column("_snuba_b", None, "b"),
-                        key=Literal(None, "c"),
+                        "_snuba_tags[test]",
+                        Column("_snuba_tags", None, "tags"),
+                        key=Literal(None, "test"),
                     ),
                 ),
             ],
@@ -708,7 +764,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
+        SELECT 4-5,3*foo(partition) AS foo,partition
         WHERE {added_condition}""",
         LogicalQuery(
             QueryEntity(
@@ -722,19 +778,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             limit=1000,
@@ -744,8 +804,8 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
-        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
+        SELECT 4-5,3*foo(event_id) AS foo,event_id
+        WHERE or(equals(arrayExists(exception_stacks.type, '=', 'RuntimeException'), 1), equals(arrayAll(modules.name, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -758,19 +818,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(event_id) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(event_id) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_event_id", None, "event_id"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -804,7 +868,11 @@ test_cases = [
                                             ),
                                         ),
                                     ),
-                                    Column("_snuba_a", None, "a"),
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
                                 ),
                             ),
                             Literal(None, 1),
@@ -843,7 +911,7 @@ test_cases = [
                                             ),
                                         ),
                                     ),
-                                    Column("_snuba_b", None, "b"),
+                                    Column("_snuba_modules.name", None, "modules.name"),
                                 ),
                             ),
                             Literal(None, 1),
@@ -859,7 +927,7 @@ test_cases = [
         id="Special array join functions",
     ),
     pytest.param(
-        f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
+        f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -892,7 +960,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -945,7 +1015,7 @@ test_cases = [
         id="Basic join match",
     ),
     pytest.param(
-        f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.c
+        f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.event_id
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -979,7 +1049,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("t.c", Column("_snuba_t.c", "t", "c")),
+                SelectedExpression(
+                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -1035,7 +1107,7 @@ test_cases = [
         f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
-        SELECT 4-5, ga.c
+        SELECT 4-5, ga.offset
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -1084,7 +1156,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
+                SelectedExpression(
+                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -1142,7 +1216,7 @@ test_cases = [
             (e: events) -[assigned]-> (ga: groupassignee),
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: metrics_sets)
-        SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
+        SELECT 4-5, e.event_id, t.event_id, ga.offset, gm.offset, se.metric_id
         WHERE {build_cond('e')} AND {build_cond('t')}
         AND se.org_id = 1 AND se.project_id = 1
         AND se.timestamp >= toDateTime('2021-01-01') AND se.timestamp < toDateTime('2021-01-02')""",
@@ -1225,11 +1299,21 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
-                SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
-                SelectedExpression("gm.d", Column("_snuba_gm.d", "gm", "d")),
-                SelectedExpression("se.e", Column("_snuba_se.e", "se", "e")),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
+                ),
+                SelectedExpression(
+                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
+                ),
+                SelectedExpression(
+                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
+                ),
+                SelectedExpression(
+                    "gm.offset", Column("_snuba_gm.offset", "gm", "offset")
+                ),
+                SelectedExpression(
+                    "se.metric_id", Column("_snuba_se.metric_id", "se", "metric_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -1424,7 +1508,7 @@ test_cases = [
         id="sub query of sub query match",
     ),
     pytest.param(
-        f"""MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\'' AND {added_condition} """,
+        f"""MATCH (events) SELECT 4-5,3*foo(event_id) AS foo,event_id WHERE title<'stuff\\' "\\" stuff' AND culprit='"💩\\" \t \\'\\'' AND {added_condition} """,
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -1437,32 +1521,36 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(event_id) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(event_id) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_event_id", None, "event_id"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "less",
-                    Column("_snuba_a", None, "a"),
+                    Column("_snuba_title", None, "title"),
                     Literal(None, """stuff' "\\" stuff"""),
                 ),
                 binary_condition(
                     "and",
                     binary_condition(
                         "equals",
-                        Column("_snuba_b", None, "b"),
+                        Column("_snuba_culprit", None, "culprit"),
                         Literal(None, """"💩\\" \t ''"""),
                     ),
                     required_condition,

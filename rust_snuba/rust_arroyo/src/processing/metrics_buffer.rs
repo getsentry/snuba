@@ -2,12 +2,12 @@ use crate::utils::metrics::{get_metrics, Metrics};
 use core::fmt::Debug;
 use std::collections::BTreeMap;
 use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub struct MetricsBuffer {
-    metrics: Arc<Mutex<Box<dyn Metrics>>>,
+    metrics: Arc<dyn Metrics>,
     timers: BTreeMap<String, Duration>,
     gauges: BTreeMap<String, u64>,
     last_flush: Instant,

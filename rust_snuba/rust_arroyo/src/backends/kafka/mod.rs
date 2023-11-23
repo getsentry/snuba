@@ -11,7 +11,7 @@ use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
 use rdkafka::error::KafkaResult;
-use rdkafka::message::{BorrowedHeaders, BorrowedMessage, Message};
+use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -57,11 +57,11 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     let time_millis = msg.timestamp().to_millis().unwrap_or(0);
 
     BrokerMessage::new(
-        KafkaPayload {
-            key: msg.key().map(|k| k.to_vec()),
-            headers: msg.headers().map(BorrowedHeaders::detach),
-            payload: msg.payload().map(|p| p.to_vec()),
-        },
+        KafkaPayload::new(
+            msg.key().map(|k| k.to_vec()),
+            msg.headers().map(|h| h.into()),
+            msg.payload().map(|p| p.to_vec()),
+        ),
         partition,
         msg.offset() as u64,
         DateTime::from_naive_utc_and_offset(

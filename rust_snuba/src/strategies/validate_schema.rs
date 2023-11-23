@@ -47,7 +47,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
 
         Box::pin(async move {
             // FIXME: this will panic when the payload is empty
-            let payload = message.payload().payload.as_ref().unwrap();
+            let payload = message.payload().payload().unwrap();
 
             let Err(error) = schema.validate_json(payload) else {
                 return Ok(message);
@@ -175,11 +175,7 @@ mod tests {
         let payload_str = example.to_string().as_bytes().to_vec();
         let message = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                payload: KafkaPayload {
-                    key: None,
-                    headers: None,
-                    payload: Some(payload_str.clone()),
-                },
+                payload: KafkaPayload::new(None, None, Some(payload_str.clone())),
                 partition,
                 offset: 0,
                 timestamp: Utc::now(),
