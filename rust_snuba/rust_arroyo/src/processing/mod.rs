@@ -121,7 +121,7 @@ impl<TPayload> Callbacks<TPayload> {
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
 pub struct StreamProcessor<TPayload: Clone> {
-    consumer: Arc<Mutex<dyn Consumer<TPayload, Callbacks<TPayload>>>>,
+    consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
     consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
@@ -131,7 +131,7 @@ pub struct StreamProcessor<TPayload: Clone> {
 
 impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
-        consumer: Arc<Mutex<dyn Consumer<TPayload, Callbacks<TPayload>>>>,
+        consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     ) -> Self {
         let consumer_state = Arc::new(Mutex::new(ConsumerState {
@@ -156,11 +156,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
 
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks = Callbacks::new(self.consumer_state.clone());
-        self.consumer
-            .lock()
-            .unwrap()
-            .subscribe(&[topic], callbacks)
-            .unwrap();
+        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -170,12 +166,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         if self.consumer_state.lock().unwrap().is_paused {
             // If the consumer waas paused, it should not be returning any messages
             // on ``poll``.
-            let res = self
-                .consumer
-                .lock()
-                .unwrap()
-                .poll(Some(Duration::ZERO))
-                .unwrap();
+            let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
 
             match res {
                 None => {}
@@ -186,12 +177,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
             // even if there is no active assignment and/or processing strategy.
             let poll_start = Instant::now();
             //TODO: Support errors properly
-            match self
-                .consumer
-                .lock()
-                .unwrap()
-                .poll(Some(Duration::from_secs(1)))
-            {
+            match self.consumer.poll(Some(Duration::from_secs(1))) {
                 Ok(msg) => {
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
@@ -230,9 +216,8 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
-                let mut consumer = self.consumer.lock().unwrap();
-                consumer.stage_offsets(request.positions).unwrap();
-                consumer.commit_offsets().unwrap();
+                self.consumer.stage_offsets(request.positions).unwrap();
+                self.consumer.commit_offsets().unwrap();
             }
             Err(e) => {
                 println!("TODOO: Handle invalid message {:?}", e);
@@ -253,10 +238,9 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
             Ok(()) => {
                 // Resume if we are currently in a paused state
                 if consumer_state.is_paused {
-                    let mut consumer = self.consumer.lock().unwrap();
-                    let partitions = consumer.tell().unwrap().into_keys().collect();
+                    let partitions = self.consumer.tell().unwrap().into_keys().collect();
 
-                    match consumer.resume(partitions) {
+                    match self.consumer.resume(partitions) {
                         Ok(()) => {
                             consumer_state.is_paused = false;
                         }
@@ -293,10 +277,9 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         "Consumer is in backpressure state for more than 1 second, pausing",
                     );
 
-                    let mut consumer = self.consumer.lock().unwrap();
-                    let partitions = consumer.tell().unwrap().into_keys().collect();
+                    let partitions = self.consumer.tell().unwrap().into_keys().collect();
 
-                    match consumer.pause(partitions) {
+                    match self.consumer.pause(partitions) {
                         Ok(()) => {
                             consumer_state.is_paused = true;
                         }
@@ -330,7 +313,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 }
 
                 drop(trait_callbacks); // unlock mutex so we can close consumer
-                self.consumer.lock().unwrap().close();
+                self.consumer.close();
                 return Err(e);
             }
         }
@@ -343,11 +326,11 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     }
 
     pub fn shutdown(&mut self) {
-        self.consumer.lock().unwrap().close();
+        self.consumer.close();
     }
 
     pub fn tell(&self) -> HashMap<Partition, u64> {
-        self.consumer.lock().unwrap().tell().unwrap()
+        self.consumer.tell().unwrap()
     }
 }
 
@@ -363,7 +346,6 @@ mod tests {
     use crate::types::{Message, Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -416,12 +398,12 @@ mod tests {
     #[test]
     fn test_processor() {
         let broker = build_broker();
-        let consumer = Arc::new(Mutex::new(LocalConsumer::new(
+        let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
-        )));
+        ));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic::new("test1"));
@@ -437,12 +419,12 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer = Arc::new(Mutex::new(LocalConsumer::new(
+        let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
-        )));
+        ));
 
         let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
         processor.subscribe(Topic::new("test1"));
