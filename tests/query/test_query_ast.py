@@ -208,6 +208,16 @@ def test_get_all_columns() -> None:
         """
     events = get_dataset("events")
     query, _ = parse_snql_query(query_body, events)
+    a = query.get_condition()
+    b = a.parameters[1]
+    c = b.parameters[0]
+    print(type(c))
+    print(c)
+    print(c.parameters)
+    print(type(c.parameters[0]))
+    d = c.parameters[1]
+    print(type(c.parameters[1]))
+    print(d.value)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_partition", None, "partition"),
@@ -247,7 +257,15 @@ def test_initial_parsing_mql() -> None:
         body,
         {
             "entity": "generic_metrics_distributions",
-            "indexer_mappings": {"d:transactions/duration@millisecond": 123456},
+            "start": "2020-01-01T00:00:00",
+            "end": "2020-01-01T01:00:00",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "transaction": 789012,
+                "foo": 111111,
+                "hee": 222222,
+                "bar": 333333,
+            },
         },
     )
 
