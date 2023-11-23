@@ -255,7 +255,6 @@ def parse_mql_query_initial(
     args["totals"] = resolved_args["totals"]
 
     query = LogicalQuery(**args)
-    print(query.__dict__)
     return query
 
 
@@ -264,27 +263,31 @@ def extract_args_from_mql_context(
     mql_context: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     """
-    "mql_context": {
-        "entity": "generic_metrics_distributions"
-        "start": "2023-01-02T03:04:05+00:00",
-        "end": "2023-01-16T03:04:05+00:00",
-        "rollup": {
-                "orderby": {"column_name": "time", "direction": "ASC"},
-                "granularity": "3600",
-                "interval": "3600",
-                "with_totals": "",
-        },
-        "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["11"],
-                "use_case_id": "transactions",
-        },
-        "limit": "",
-        "offset": "",
-        "indexer_mappings": {
-            "d:transactions/duration@millisecond": "123456", ...
+    Extracts all metadata from MQL context, creates the appropriate expressions for them,
+    and returns them in a formatted dictionary.
+
+    Example MQL context dictionary:
+        "mql_context": {
+            "entity": "generic_metrics_distributions"
+            "start": "2023-01-02T03:04:05+00:00",
+            "end": "2023-01-16T03:04:05+00:00",
+            "rollup": {
+                    "orderby": {"column_name": "timestamp", "direction": "ASC"},
+                    "granularity": "3600",
+                    "interval": "3600",
+                    "with_totals": "",
+            },
+            "scope": {
+                    "org_ids": ["1"],
+                    "project_ids": ["11"],
+                    "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456", ...
+            }
         }
-    }
     """
     resolved_args = {}
     filters = []
