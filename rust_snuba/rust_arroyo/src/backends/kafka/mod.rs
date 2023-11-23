@@ -78,7 +78,7 @@ struct OffsetStage {
 
 impl CommitOffsets for OffsetStage {
     fn commit(
-        mut self: Box<Self>,
+        &mut self,
         offsets: HashMap<Partition, u64>,
     ) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.staged_offsets.extend(offsets);
@@ -97,7 +97,7 @@ impl CommitOffsets for OffsetStage {
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        Ok(self.staged_offsets)
+        Ok(std::mem::take(&mut self.staged_offsets))
     }
 }
 
@@ -222,7 +222,8 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 
         let duration = timeout.unwrap_or(Duration::ZERO);
         let consumer = self.consumer.as_mut().unwrap();
-        let res = consumer.lock().unwrap().poll(duration);
+        let consumer = consumer.lock().unwrap();
+        let res = consumer.poll(duration);
         match res {
             None => Ok(None),
             Some(res) => {
@@ -346,7 +347,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: Box<dyn CommitOffsets>, _: Vec<Partition>) {}
+        fn on_revoke(&self, _: &mut dyn CommitOffsets, _: Vec<Partition>) {}
     }
 
     fn get_admin_client() -> AdminClient<DefaultClientContext> {

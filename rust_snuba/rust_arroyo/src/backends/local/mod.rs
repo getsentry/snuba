@@ -5,7 +5,6 @@ use crate::types::{BrokerMessage, Partition, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -25,27 +24,27 @@ struct SubscriptionState {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-struct OffsetStage<TPayload> {
+struct OffsetStage<'a, TPayload> {
     group: String,
     staged_offsets: HashMap<Partition, u64>,
-    broker: Arc<Mutex<LocalBroker<TPayload>>>,
+    broker: &'a mut LocalBroker<TPayload>,
 }
 
-impl<TPayload> CommitOffsets for OffsetStage<TPayload> {
-    fn commit(mut self: Box<Self>, offsets: HashMap<Partition, u64>) -> HashMap<Partition, u64> {
+impl<'a, TPayload> CommitOffsets for OffsetStage<'a, TPayload> {
+    fn commit(
+        &mut self,
+        offsets: HashMap<Partition, u64>,
+    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.staged_offsets.extend(offsets);
-        self.broker
-            .lock()
-            .unwrap()
-            .commit(&self.group, self.staged_offsets.clone());
-        std::mem::take(&mut self.staged_offsets)
+        self.broker.commit(&self.group, self.staged_offsets.clone());
+        Ok(std::mem::take(&mut self.staged_offsets))
     }
 }
 
 pub struct LocalConsumer<TPayload> {
     id: Uuid,
     group: String,
-    broker: Arc<Mutex<LocalBroker<TPayload>>>,
+    broker: LocalBroker<TPayload>,
     pending_callback: VecDeque<Callback>,
     paused: HashSet<Partition>,
     // The offset that a the last ``EndOfPartition`` exception that was
@@ -68,7 +67,7 @@ impl<TPayload> LocalConsumer<TPayload> {
         Self {
             id,
             group,
-            broker: Arc::new(Mutex::new(broker)),
+            broker,
             pending_callback: VecDeque::new(),
             paused: HashSet::new(),
             subscription_state: SubscriptionState {
@@ -102,8 +101,6 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
         }
         let offsets = self
             .broker
-            .lock()
-            .unwrap()
             .subscribe(self.id, self.group.clone(), topics.to_vec())
             .unwrap();
         self.subscription_state.topics = topics.to_vec();
@@ -123,8 +120,6 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
 
         let partitions = self
             .broker
-            .lock()
-            .unwrap()
             .unsubscribe(self.id, self.group.clone())
             .unwrap();
         self.pending_callback
@@ -155,14 +150,14 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
                 }
                 Callback::Revoke(partitions) => {
                     if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
-                        let offset_stage = OffsetStage {
+                        let mut offset_stage = OffsetStage {
                             group: self.group.clone(),
                             staged_offsets: std::mem::take(
                                 &mut self.subscription_state.staged_positions,
                             ),
-                            broker: Arc::clone(&self.broker),
+                            broker: &mut self.broker,
                         };
-                        callbacks.on_revoke(Box::new(offset_stage), partitions.clone());
+                        callbacks.on_revoke(&mut offset_stage, partitions.clone());
                     }
                     self.subscription_state.offsets = HashMap::new();
                 }
@@ -178,12 +173,7 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
             }
 
             let offset = self.subscription_state.offsets[partition];
-            let message = self
-                .broker
-                .lock()
-                .unwrap()
-                .consume(partition, offset)
-                .unwrap();
+            let message = self.broker.consume(partition, offset).unwrap();
             match message {
                 Some(msg) => {
                     new_offset = Some((*partition, msg.offset + 1));
@@ -278,10 +268,7 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
         }
 
         let positions = std::mem::take(&mut self.subscription_state.staged_positions);
-        self.broker
-            .lock()
-            .unwrap()
-            .commit(&self.group, positions.clone());
+        self.broker.commit(&self.group, positions.clone());
         self.commit_offset_calls += 1;
 
         Ok(positions)
@@ -290,17 +277,15 @@ impl<TPayload: 'static> Consumer<TPayload> for LocalConsumer<TPayload> {
     fn close(&mut self) {
         let partitions = self
             .broker
-            .lock()
-            .unwrap()
             .unsubscribe(self.id, self.group.clone())
             .unwrap();
         if let Some(c) = self.subscription_state.callbacks.as_mut() {
-            let offset_stage = OffsetStage {
+            let mut offset_stage = OffsetStage {
                 group: self.group.clone(),
                 staged_offsets: std::mem::take(&mut self.subscription_state.staged_positions),
-                broker: Arc::clone(&self.broker),
+                broker: &mut self.broker,
             };
-            c.on_revoke(Box::new(offset_stage), partitions);
+            c.on_revoke(&mut offset_stage, partitions);
         }
         self.closed = true;
         self.close_calls += 1;
@@ -326,7 +311,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: Box<dyn CommitOffsets>, _: Vec<Partition>) {}
+        fn on_revoke(&self, _: &mut dyn CommitOffsets, _: Vec<Partition>) {}
     }
 
     fn build_broker() -> LocalBroker<String> {
@@ -412,7 +397,7 @@ mod tests {
                     ])
                 )
             }
-            fn on_revoke(&self, _: Box<dyn CommitOffsets>, partitions: Vec<Partition>) {
+            fn on_revoke(&self, _: &mut dyn CommitOffsets, partitions: Vec<Partition>) {
                 let topic1 = Topic::new("test1");
                 let topic2 = Topic::new("test2");
                 assert_eq!(
@@ -470,7 +455,7 @@ mod tests {
                     ),])
                 );
             }
-            fn on_revoke(&self, _: Box<dyn CommitOffsets>, _: Vec<Partition>) {}
+            fn on_revoke(&self, _: &mut dyn CommitOffsets, _: Vec<Partition>) {}
         }
 
         let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});

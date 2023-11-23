@@ -81,7 +81,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let mut stg = self.strategies.lock().unwrap();
         stg.strategy = Some(stg.processing_factory.create());
     }
-    fn on_revoke(&self, commit_offsets: Box<dyn CommitOffsets>, _: Vec<Partition>) {
+    fn on_revoke(&self, commit_offsets: &mut dyn CommitOffsets, _: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
         let start = Instant::now();

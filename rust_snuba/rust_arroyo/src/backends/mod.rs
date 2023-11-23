@@ -46,7 +46,7 @@ pub trait CommitOffsets {
     /// Returns a map of all offsets that were committed. This combines [`Consumer::stage_offsets`] and
     /// [`Consumer::commit_offsets`].
     fn commit(
-        self: Box<Self>,
+        &mut self,
         offsets: HashMap<Partition, u64>,
     ) -> Result<HashMap<Partition, u64>, ConsumerError>;
 }
@@ -55,7 +55,7 @@ pub trait CommitOffsets {
 /// the consumer when partitions are assigned/revoked.
 pub trait AssignmentCallbacks: Send + Sync {
     fn on_assign(&self, partitions: HashMap<Partition, u64>);
-    fn on_revoke(&self, commit_offsets: Box<dyn CommitOffsets>, partitions: Vec<Partition>);
+    fn on_revoke(&self, commit_offsets: &mut dyn CommitOffsets, partitions: Vec<Partition>);
 }
 
 /// This abstract class provides an interface for consuming messages from a
