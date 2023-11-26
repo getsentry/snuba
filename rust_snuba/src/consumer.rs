@@ -122,7 +122,6 @@ pub fn consumer_impl(
     let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
-    // TODO: Create the policy
     let dlq_policy = match consumer_config.dlq_topic {
         None => None,
         Some(dlq_topic_config) => {
