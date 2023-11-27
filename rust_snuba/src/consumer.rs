@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -119,7 +118,7 @@ pub fn consumer_impl(
         Some(consumer_config.raw_topic.broker_config),
     );
 
-    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
+    let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
