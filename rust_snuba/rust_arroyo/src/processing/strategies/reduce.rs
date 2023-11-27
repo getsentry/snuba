@@ -3,6 +3,7 @@ use crate::processing::strategies::{
     SubmitError,
 };
 use crate::types::{Message, Partition};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
@@ -50,6 +51,7 @@ pub struct Reduce<T, TResult> {
     batch_state: BatchState<T, TResult>,
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
+    metrics: BoxMetrics,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -130,6 +132,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             batch_state,
             message_carried_over: None,
             commit_request_carried_over: None,
+            metrics: get_metrics(),
         }
     }
 
@@ -153,38 +156,40 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             return Ok(());
         }
 
+        let batch_time = self.batch_state.batch_start_time.elapsed().ok();
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
-            || self
-                .batch_state
-                .batch_start_time
-                .elapsed()
-                .unwrap_or_default()
-                > self.max_batch_time;
+            || batch_time.unwrap_or_default() > self.max_batch_time;
 
-        if batch_complete || force {
-            let batch_state = mem::replace(
-                &mut self.batch_state,
-                BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
-            );
-
-            let next_message =
-                Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
-
-            match self.next_step.submit(next_message) {
-                Err(SubmitError::MessageRejected(MessageRejected {
-                    message: transformed_message,
-                })) => {
-                    self.message_carried_over = Some(transformed_message);
-                    return Ok(());
-                }
-                Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
-                }
-                Ok(_) => return Ok(()),
-            }
+        if !batch_complete && !force {
+            return Ok(());
         }
 
-        Ok(())
+        if let Some(batch_time) = batch_time {
+            self.metrics.timing(
+                "arroyo.strategies.reduce.batch_time",
+                batch_time.as_secs(),
+                None,
+            );
+        }
+
+        let batch_state = mem::replace(
+            &mut self.batch_state,
+            BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
+        );
+
+        let next_message =
+            Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
+
+        match self.next_step.submit(next_message) {
+            Err(SubmitError::MessageRejected(MessageRejected {
+                message: transformed_message,
+            })) => {
+                self.message_carried_over = Some(transformed_message);
+                Ok(())
+            }
+            Err(SubmitError::InvalidMessage(invalid_message)) => Err(invalid_message),
+            Ok(_) => Ok(()),
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
@@ -46,6 +46,8 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             }
 
             tracing::debug!("performing write");
+            let write_start = SystemTime::now();
+
             let response = client
                 .send(insert_batch.encoded_rows().to_vec())
                 .await
@@ -53,7 +55,20 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
             tracing::debug!(?response);
             tracing::info!("Inserted {} rows", insert_batch.len());
+            let write_finish = SystemTime::now();
 
+            if let Ok(elapsed) = write_finish.duration_since(write_start) {
+                metrics.timing(
+                    "insertions.batch_write_ms",
+                    elapsed.as_millis() as u64,
+                    None,
+                );
+            }
+            metrics.increment(
+                "insertions.batch_write_msgs",
+                insert_batch.len() as i64,
+                None,
+            );
             insert_batch.record_message_latency(&metrics);
 
             Ok(message)

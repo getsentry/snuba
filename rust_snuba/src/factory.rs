@@ -13,6 +13,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
+use rust_arroyo::utils::metrics::get_metrics;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -95,6 +96,8 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
                     // however, as Sentry captures `error` logs as errors by default,
                     // we would double-log this error here:
                     tracing::error!(%error, "Failed processing message");
+                    let metrics = get_metrics();
+                    metrics.increment("invalid_message", 1, None);
                     sentry::with_scope(
                         |_scope| {
                             // FIXME(swatinem): we already moved `broker_message.payload`
