@@ -6,8 +6,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, ConditionFunction, Op
-from snuba_sdk.dsl.dsl import EXPRESSION_OPERATORS, MQL_GRAMMAR, TERM_OPERATORS
-from snuba_sdk.timeseries import Metric
+from snuba_sdk.dsl.dsl import MQL_GRAMMAR
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -17,7 +16,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.util import parse_datetime
@@ -27,7 +26,7 @@ logger = logging.getLogger("snuba.mql.parser")
 
 class MQLVisitor(NodeVisitor):
     """
-    Builds Snuba AST expressions from the MQL Parsimonious parse tree.
+    Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
 
     def visit(self, node: Node) -> Any:
@@ -48,22 +47,16 @@ class MQLVisitor(NodeVisitor):
         except Exception as e:
             raise e
 
-    def visit_expression(self, node: Node, children: Sequence[Any]) -> LogicalQuery:
-        """
-        Top level node, simply returns the expression.
-        """
+    def visit_expression(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, Any]:
         args, zero_or_more_others = children
         return args
 
     def visit_expr_op(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Arithmetic function not supported yet")
-        return EXPRESSION_OPERATORS[node.text]
 
-    def visit_term(self, node: Node, children: Sequence[Any]) -> Any:
-        """
-        Checks if the current node contains two term children, if so
-        then merge them into a single Formula with the operator.
-        """
+    def visit_term(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
         term, zero_or_more_others = children
         if zero_or_more_others:
             raise InvalidQueryException("Arithmetic function not supported yet")
@@ -71,9 +64,8 @@ class MQLVisitor(NodeVisitor):
 
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Arithmetic function not supported yet")
-        return TERM_OPERATORS[node.text]
 
-    def visit_coefficient(self, node: Node, children: Any) -> Any:
+    def visit_coefficient(self, node: Node, children: Any) -> Mapping[str, Any]:
         return children[0]
 
     def visit_number(self, node: Node, children: Sequence[Any]) -> float:
@@ -101,7 +93,9 @@ class MQLVisitor(NodeVisitor):
 
         return args
 
-    def visit_condition(self, node: Node, children: Sequence[Any]) -> Expression:
+    def visit_condition(
+        self, node: Node, children: Sequence[Any]
+    ) -> Tuple[str, Any, Any]:
         condition_op, lhs, _, _, _, rhs = children
         op = Op.EQ
         if not condition_op and isinstance(rhs, list):
@@ -112,12 +106,8 @@ class MQLVisitor(NodeVisitor):
             elif isinstance(rhs, list):
                 op = Op.NOT_IN
         return (OPERATOR_TO_FUNCTION[op].value, lhs[0], rhs)
-        # return binary_condition(
-        #     OPERATOR_TO_FUNCTION[op].value, lhs[0], Literal(alias=None, value=rhs)
-        # )
 
     def visit_function(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
-        """ """
         target, packed_groupbys = children
         if packed_groupbys:
             group_by = packed_groupbys[0]
@@ -135,12 +125,12 @@ class MQLVisitor(NodeVisitor):
     def visit_condition_op(self, node: Node, children: Sequence[Any]) -> Op:
         return Op(node.text)
 
-    def visit_tag_key(self, node: Node, children: Sequence[Any]) -> Column:
+    def visit_tag_key(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
 
     def visit_tag_value(
         self, node: Node, children: Sequence[Union[str, Sequence[str]]]
-    ) -> Any:
+    ) -> str:
         tag_value = children[0]
         return tag_value
 
@@ -153,18 +143,16 @@ class MQLVisitor(NodeVisitor):
         _, _, first, zero_or_more_others, _, _ = children
         return [first, *(v for _, _, _, v in zero_or_more_others)]
 
-    def visit_group_by_name(
-        self, node: Node, children: Sequence[Any]
-    ) -> SelectedExpression:
+    def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
 
     def visit_group_by_name_tuple(
         self, node: Node, children: Sequence[Any]
-    ) -> Sequence[SelectedExpression]:
+    ) -> Sequence[str]:
         _, _, first, zero_or_more_others, _, _ = children
         return [first, *(v for _, _, _, v in zero_or_more_others)]
 
-    def visit_target(self, node: Node, children: Sequence[Any]) -> Any:
+    def visit_target(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
@@ -172,12 +160,15 @@ class MQLVisitor(NodeVisitor):
 
     def visit_variable(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Variables are not supported yet")
-        return None
 
-    def visit_nested_expression(self, node: Node, children: Sequence[Any]) -> Any:
+    def visit_nested_expression(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, Any]:
         return children[2]
 
-    def visit_aggregate(self, node: Node, children: Sequence[Any]) -> FunctionCall:
+    def visit_aggregate(
+        self, node: Node, children: Sequence[Any]
+    ) -> SelectedExpression:
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
         target["aggregate"] = SelectedExpression(
@@ -188,22 +179,29 @@ class MQLVisitor(NodeVisitor):
                 parameters=[Column(alias=None, table_name=None, column_name="value")],
             ),
         )
-
         return target
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
 
-    def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
+    def visit_quoted_mri(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, str]:
         return {"mri": str(node.text[1:-1])}
 
-    def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> Metric:
+    def visit_unquoted_mri(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, str]:
         return {"mri": str(node.text)}
 
-    def visit_quoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
+    def visit_quoted_public_name(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, str]:
         return {"public_name": str(node.text[1:-1])}
 
-    def visit_unquoted_public_name(self, node: Node, children: Sequence[Any]) -> Metric:
+    def visit_unquoted_public_name(
+        self, node: Node, children: Sequence[Any]
+    ) -> Mapping[str, str]:
         return {"public_name": str(node.text)}
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
@@ -409,7 +407,7 @@ def extract_scope(
                 alias=None,
                 function_name="tuple",
                 parameters=[
-                    Literal(alias=None, value=org_id) for org_id in scope["org_id"]
+                    Literal(alias=None, value=org_id) for org_id in scope["org_ids"]
                 ],
             ),
         )
@@ -423,7 +421,7 @@ def extract_scope(
                 function_name="tuple",
                 parameters=[
                     Literal(alias=None, value=project_id)
-                    for project_id in scope["project_id"]
+                    for project_id in scope["project_ids"]
                 ],
             ),
         )

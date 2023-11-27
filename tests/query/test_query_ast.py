@@ -256,8 +256,8 @@ def test_initial_parsing_mql() -> None:
                 "with_totals": "",
             },
             "scope": {
-                "org_id": ["1"],
-                "project_id": ["11"],
+                "org_ids": ["1"],
+                "project_ids": ["11"],
                 "use_case_id": "transactions",
             },
             "limit": "",
