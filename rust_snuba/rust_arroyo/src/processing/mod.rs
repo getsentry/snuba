@@ -89,7 +89,11 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
                 tracing::info!("Committing offsets");
-                let _ = commit_offsets.commit(commit_request.positions);
+                let res = commit_offsets.commit(commit_request.positions);
+
+                if let Err(err) = res {
+                    tracing::error!("Failed to commit offsets: {:?}", err);
+                }
             }
         }
         state.strategy = None;
