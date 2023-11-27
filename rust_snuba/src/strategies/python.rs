@@ -103,7 +103,7 @@ impl PythonTransformStep {
         })
     }
 
-    fn check_for_results(&mut self) {
+    fn check_for_results(&mut self, max_queue_depth: usize) {
         if let Some(message_carried_over) = self.message_carried_over.take() {
             if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
                 self.next_step.submit(message_carried_over)
@@ -114,6 +114,10 @@ impl PythonTransformStep {
         }
 
         debug_assert!(self.message_carried_over.is_none());
+
+        if !self.queue_needs_drain(max_queue_depth) {
+            return;
+        }
 
         let (original_message_meta, message_result) = match self.handles.pop_front() {
             Some(TaskHandle::Procspawn {
@@ -168,8 +172,8 @@ impl PythonTransformStep {
         }
     }
 
-    fn queue_needs_drain(&self) -> bool {
-        if self.handles.len() > self.max_queue_depth {
+    fn queue_needs_drain(&self, max_queue_depth: usize) -> bool {
+        if self.handles.len() > max_queue_depth {
             return true;
         }
 
@@ -187,9 +191,7 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        while self.queue_needs_drain() {
-            self.check_for_results();
-        }
+        self.check_for_results(self.max_queue_depth);
 
         self.next_step.poll()
     }
@@ -201,7 +203,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        if self.queue_needs_drain() {
+        if self.queue_needs_drain(self.max_queue_depth) {
             tracing::debug!("python strategy provides backpressure");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
@@ -287,7 +289,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         // while deadline has not yet passed
         while deadline.map_or(true, |x| x.elapsed().is_zero()) && !self.handles.is_empty() {
-            self.check_for_results();
+            self.check_for_results(0);
             sleep(Duration::from_millis(10));
         }
 
@@ -302,6 +304,8 @@ procspawn::enable_test_support!();
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     use super::*;
 
@@ -359,15 +363,21 @@ mod tests {
         run_basic(2);
     }
 
-    struct BackpressureForever;
+    #[derive(Clone)]
+    struct Backpressure(Arc<AtomicUsize>);
 
-    impl<T> ProcessingStrategy<T> for BackpressureForever {
+    impl<T> ProcessingStrategy<T> for Backpressure {
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
             Ok(None)
         }
 
         fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-            Err(SubmitError::MessageRejected(MessageRejected { message }))
+            if self.0.load(Ordering::Relaxed) > 0 {
+                self.0.fetch_sub(1, Ordering::Relaxed);
+                Err(SubmitError::MessageRejected(MessageRejected { message }))
+            } else {
+                Ok(())
+            }
         }
 
         fn close(&mut self) {}
@@ -382,6 +392,8 @@ mod tests {
 
     #[test]
     fn test_backpressure() {
+        let backpressure = Backpressure(Arc::new(2.into()));
+
         let mut step = PythonTransformStep::new(
             MessageProcessorConfig {
                 python_class_name: "OutcomesProcessor".to_owned(),
@@ -389,7 +401,7 @@ mod tests {
             },
             2,
             None,
-            BackpressureForever,
+            backpressure.clone(),
         )
         .unwrap();
 
@@ -407,6 +419,9 @@ mod tests {
 
         step.join(None).unwrap();
 
+        assert_eq!(backpressure.0.load(Ordering::Relaxed), 1);
+
+        step.poll().unwrap();
         assert!(matches!(step.submit(Message::new_broker_message(
             KafkaPayload::new(
                 None,
@@ -417,5 +432,23 @@ mod tests {
             1,
             Utc::now(),
         )).unwrap_err(), SubmitError::MessageRejected(_)));
+
+        step.join(None).unwrap();
+
+        assert_eq!(backpressure.0.load(Ordering::Relaxed), 0);
+
+        step.poll().unwrap();
+
+        // assert that after backpressure.0 has hit zero, we are able to submit messages again
+        step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap();
     }
 }
