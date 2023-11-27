@@ -44,7 +44,11 @@ schema:
     {
       name: last,
       type: AggregateFunction,
-      args: { func: argMax, arg_types: [{ type: Float, args: { size: 64 } }] },
+      args:
+        {
+          func: argMax,
+          arg_types: [{ type: Float, args: { size: 64 } }, { type: DateTime }],
+        },
     },
   ]
 
