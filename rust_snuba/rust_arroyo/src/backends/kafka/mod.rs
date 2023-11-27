@@ -436,7 +436,6 @@ mod tests {
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
-
         consumer.unsubscribe().unwrap();
         consumer.close();
 
