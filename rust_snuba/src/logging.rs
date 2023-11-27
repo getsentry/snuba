@@ -1,4 +1,6 @@
+use sentry::integrations::tracing::EventFilter;
 use sentry::ClientInitGuard;
+use tracing::Level;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
@@ -7,10 +9,18 @@ pub fn setup_logging() {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
 
+    // Capture errors & warnings as exceptions
+    let sentry_layer =
+        sentry::integrations::tracing::layer().event_filter(|metadata| match metadata.level() {
+            &Level::ERROR | &Level::WARN => EventFilter::Exception,
+            &Level::INFO => EventFilter::Breadcrumb,
+            &Level::DEBUG | &Level::TRACE => EventFilter::Ignore,
+        });
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .with(filter_layer)
-        .with(sentry::integrations::tracing::layer())
+        .with(sentry_layer)
         .init();
 }
 
