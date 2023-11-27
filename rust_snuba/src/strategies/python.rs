@@ -222,8 +222,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                // TODO: Handle None payload
-                let payload_bytes = (payload.payload().unwrap()).clone();
+                let payload_bytes = (payload.payload().unwrap_or_default()).clone();
 
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
