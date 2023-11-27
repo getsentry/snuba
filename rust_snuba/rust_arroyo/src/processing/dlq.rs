@@ -9,7 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-trait DlqProducer<TPayload> {
+pub trait DlqProducer<TPayload> {
     // Send a message to the DLQ.
     fn produce(
         &self,
@@ -40,13 +40,13 @@ impl<TPayload: 'static> DlqProducer<TPayload> for NoopDlqProducer {
 // Two additional fields are added to the headers of the Kafka message
 // "original_partition": The partition of the original message
 // "original_offset": The offset of the original message
-struct KafkaDlqProducer {
+pub struct KafkaDlqProducer {
     producer: Arc<KafkaProducer>,
     topic: TopicOrPartition,
 }
 
 impl KafkaDlqProducer {
-    fn new(producer: KafkaProducer, topic: Topic) -> Self {
+    pub fn new(producer: KafkaProducer, topic: Topic) -> Self {
         Self {
             producer: Arc::new(producer),
             topic: TopicOrPartition::Topic(topic),
@@ -100,17 +100,17 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
 // rather than rerouting every message to the DLQ.
 
 // The ratio and max_consecutive_count are counted on a per-partition basis.
-struct DlqLimit {
-    max_invalid_ratio: Option<f64>,
-    max_consecutive_count: Option<u64>,
+pub struct DlqLimit {
+    pub max_invalid_ratio: Option<f64>,
+    pub max_consecutive_count: Option<u64>,
 }
 
-struct DlqLimitState {}
+pub struct DlqLimitState {}
 
 // DLQ policy defines the DLQ configuration, and is passed to the stream processor
 // upon creation of the consumer. It consists of the DLQ producer implementation and
 // any limits that should be applied.
-struct DlqPolicy<TPayload> {
+pub struct DlqPolicy<TPayload> {
     producer: Box<dyn DlqProducer<TPayload>>,
     limit: DlqLimit,
 }
@@ -125,6 +125,12 @@ impl<TPayload> DlqPolicy<TPayload> {
 // in case they need to be placed in the DLQ.
 pub struct BufferedMessages<TPayload> {
     buffered_messages: BTreeMap<Partition, VecDeque<BrokerMessage<TPayload>>>,
+}
+
+impl<TPayload> Default for BufferedMessages<TPayload> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<TPayload> BufferedMessages<TPayload> {

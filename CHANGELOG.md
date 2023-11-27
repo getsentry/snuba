@@ -1,5 +1,29 @@
 # Changelog
 
+## 23.11.2
+
+### Various fixes & improvements
+
+- ref(rust): Add a few metrics missing from snuba dashboard (#5102) by @untitaker
+- ref(rust): Put back the querylog deployment (#5101) by @lynnagara
+- fix(rust): Capture warnings as exceptions (#5100) by @loewenheim
+- fix(rust): Untangle offset commit on revocation (#5095) by @loewenheim
+- fix(discover): Enable column validator on discover entities (#5094) by @evanh
+- fix: Skip warnings in gocd error checks (#5091) by @evanh
+- feat(rust): Populate commit_log_offsets so they can be produced (#5086) by @lynnagara
+- fix(rust-python): Join handles less frequently, fix backpressure bug (#5088) by @untitaker
+- fix(validation): Add missing replay columns (#5090) by @evanh
+- Add profile_id to spans query columns (#5087) by @enochtangg
+- feat(rust): Add snuba latency SLO metric (#5071) by @untitaker
+- fix: make sure SNUBA_RELEASE is set (#5085) by @MeredithAnya
+- ref: bump sentry-arroyo to 2.14.22 (#5089) by @getsentry-bot
+- fix(metrics) Add _indexed_tags_hash column to distributions (#5081) by @evanh
+- Add a benchmark to test Rust consumers (#5024) by @Swatinem
+- meta: Bump new development version (8b263f1c)
+- fix(rust): Fix the ProduceCommitLog strategy (#5076) by @lynnagara
+- fix(replacegroup): Catch bad datetime formats in ReplaceGroup (#5083) by @evanh
+- feat(self-hosted): disable allocation policy in self hosted (#5084) by @volokluev
+
 ## 23.11.1
 
 ### Various fixes & improvements

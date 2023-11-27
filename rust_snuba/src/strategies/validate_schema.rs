@@ -9,11 +9,13 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::{InnerMessage, Message};
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use sentry_kafka_schemas;
 
 pub struct SchemaValidator {
     schema: Option<Arc<sentry_kafka_schemas::Schema>>,
     enforce_schema: bool,
+    metrics: BoxMetrics,
 }
 
 impl SchemaValidator {
@@ -34,6 +36,7 @@ impl SchemaValidator {
         SchemaValidator {
             schema,
             enforce_schema,
+            metrics: get_metrics(),
         }
     }
 }
@@ -44,6 +47,7 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             return Box::pin(async move { Ok(message) });
         };
         let enforce_schema = self.enforce_schema;
+        let metrics = self.metrics.clone();
 
         Box::pin(async move {
             // FIXME: this will panic when the payload is empty
@@ -54,6 +58,8 @@ impl TaskRunner<KafkaPayload, KafkaPayload> for SchemaValidator {
             };
 
             tracing::error!(%error, "Validation error");
+            metrics.increment("schema_validation.failed", 1, None);
+
             if !enforce_schema {
                 return Ok(message);
             };

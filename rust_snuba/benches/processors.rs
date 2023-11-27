@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use divan::counter::ItemsCount;
@@ -10,7 +9,7 @@ use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
 use rust_arroyo::backends::{Consumer, ConsumerError};
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::{RunError, StreamProcessor};
+use rust_arroyo::processing::{Callbacks, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
@@ -84,7 +83,7 @@ fn run_bench(
             )
         })
         .bench_local_values(|((topic, consumer), factory)| {
-            let mut processor = StreamProcessor::new(consumer, factory);
+            let mut processor = StreamProcessor::new(consumer, factory, None);
             processor.subscribe(topic);
 
             loop {
@@ -147,7 +146,10 @@ fn create_factory(
 fn create_consumer(
     make_payload: fn() -> KafkaPayload,
     messages: usize,
-) -> (Topic, Arc<Mutex<dyn Consumer<KafkaPayload>>>) {
+) -> (
+    Topic,
+    Box<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>,
+) {
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
 
@@ -161,7 +163,7 @@ fn create_consumer(
     }
 
     let consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
-    let consumer = Arc::new(Mutex::new(consumer));
+    let consumer = Box::new(consumer);
 
     (topic, consumer)
 }
