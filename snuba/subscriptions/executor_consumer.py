@@ -188,7 +188,6 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-
         calculated_max_concurrent_queries = calculate_max_concurrent_queries(
             len(partitions),
             self.__total_partition_count,
