@@ -1,4 +1,4 @@
-mod dlq;
+pub mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
-use crate::processing::dlq::BufferedMessages;
+use crate::processing::dlq::{BufferedMessages, DlqPolicy};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -119,12 +119,15 @@ pub struct StreamProcessor<TPayload: Clone> {
     processor_handle: ProcessorHandle,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
+    #[allow(dead_code)]
+    dlq_policy: Option<DlqPolicy<TPayload>>,
 }
 
 impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
+        dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
         let consumer_state = Arc::new(Mutex::new(ConsumerState {
             processing_factory,
@@ -143,6 +146,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
             },
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             buffered_messages: BufferedMessages::new(),
+            dlq_policy,
         }
     }
 
@@ -331,7 +335,7 @@ mod tests {
     use super::strategies::{
         CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
     };
-    use super::StreamProcessor;
+    use super::*;
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalConsumer;
     use crate::backends::storages::memory::MemoryMessageStorage;
@@ -397,7 +401,7 @@ mod tests {
             false,
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
+        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
         processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
@@ -418,7 +422,7 @@ mod tests {
             false,
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}));
+        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
         processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());

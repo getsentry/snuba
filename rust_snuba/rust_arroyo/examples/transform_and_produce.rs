@@ -88,6 +88,7 @@ async fn main() {
             config,
             topic: Topic::new("test_out"),
         }),
+        None,
     );
     processor.subscribe(Topic::new("test_in"));
     println!("running processor. transforming from test_in to test_out");

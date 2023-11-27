@@ -83,7 +83,7 @@ fn run_bench(
             )
         })
         .bench_local_values(|((topic, consumer), factory)| {
-            let mut processor = StreamProcessor::new(consumer, factory);
+            let mut processor = StreamProcessor::new(consumer, factory, None);
             processor.subscribe(topic);
 
             loop {
