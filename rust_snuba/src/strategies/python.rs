@@ -100,7 +100,7 @@ impl PythonTransformStep {
         })
     }
 
-    fn check_for_results(&mut self) {
+    fn check_for_results(&mut self, max_queue_depth: usize) {
         if let Some(message_carried_over) = self.message_carried_over.take() {
             if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
                 self.next_step.submit(message_carried_over)
@@ -111,6 +111,10 @@ impl PythonTransformStep {
         }
 
         debug_assert!(self.message_carried_over.is_none());
+
+        if !self.queue_needs_drain(max_queue_depth) {
+            return;
+        }
 
         let (original_message_meta, message_result) = match self.handles.pop_front() {
             Some(TaskHandle::Procspawn {
@@ -164,8 +168,8 @@ impl PythonTransformStep {
         }
     }
 
-    fn queue_needs_drain(&self) -> bool {
-        if self.handles.len() > self.max_queue_depth {
+    fn queue_needs_drain(&self, max_queue_depth: usize) -> bool {
+        if self.handles.len() > max_queue_depth {
             return true;
         }
 
@@ -183,9 +187,7 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        while self.queue_needs_drain() {
-            self.check_for_results();
-        }
+        self.check_for_results(self.max_queue_depth);
 
         self.next_step.poll()
     }
@@ -197,7 +199,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
-        if self.queue_needs_drain() {
+        if self.queue_needs_drain(self.max_queue_depth) {
             tracing::debug!("python strategy provides backpressure");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
@@ -283,7 +285,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         // while deadline has not yet passed
         while deadline.map_or(true, |x| x.elapsed().is_zero()) && !self.handles.is_empty() {
-            self.check_for_results();
+            self.check_for_results(0);
             sleep(Duration::from_millis(10));
         }
 
