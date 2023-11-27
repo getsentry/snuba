@@ -6,14 +6,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::spans::SpanStatus;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes)?;
+) -> anyhow::Result<RowData> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,
@@ -54,7 +54,7 @@ pub fn process_message(
         rows.push(serialized);
     }
 
-    Ok(BytesInsertBatch { rows })
+    Ok(RowData::from_rows(rows))
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,11 +166,7 @@ mod tests {
             "device_class": 2,
             "retention_days": 30
         }"#;
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

@@ -8,12 +8,21 @@ schema:
     { name: transaction_id, type: UUID },
     { name: profile_id, type: UUID },
     { name: received, type: DateTime },
-    { name: android_api_level, type: UInt, args: { schema_modifiers: [nullable], size: 32 } },
+    { name: time, type: DateTime },
+    {
+      name: android_api_level,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 32 },
+    },
     { name: device_classification, type: String },
     { name: device_locale, type: String },
     { name: device_manufacturer, type: String },
     { name: device_model, type: String },
-    { name: device_os_build_number, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: device_os_build_number,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
     { name: device_os_name, type: String },
     { name: device_os_version, type: String },
     { name: architecture, type: String },
@@ -21,9 +30,9 @@ schema:
     { name: environment, type: String, args: { schema_modifiers: [nullable] } },
     { name: platform, type: String },
     { name: trace_id, type: UUID },
-    { name: transaction_name, type: String},
+    { name: transaction_name, type: String },
     { name: version_name, type: String },
-    { name: version_code, type: String},
+    { name: version_code, type: String },
   ]
 required_time_column: received
 
@@ -53,7 +62,7 @@ query_processors:
       time_group_columns:
         time: received
       time_parse_columns:
-      - received
+        - received
 
 validators:
   - validator: EntityRequiredColumnValidator

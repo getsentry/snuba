@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::backends::{AssignmentCallbacks, Consumer, ConsumerError};
+use crate::processing::dlq::BufferedMessages;
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -34,13 +35,28 @@ pub enum RunError {
     Pause(#[source] ConsumerError),
 }
 
-struct Strategies<TPayload> {
+struct ConsumerState<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
+    backpressure_timestamp: Option<Instant>,
+    is_paused: bool,
+    metrics_buffer: metrics_buffer::MetricsBuffer,
+}
+
+impl<TPayload> ConsumerState<TPayload> {
+    fn clear_backpressure(&mut self) {
+        if self.backpressure_timestamp.is_some() {
+            self.metrics_buffer.incr_timing(
+                "arroyo.consumer.backpressure.time",
+                self.backpressure_timestamp.unwrap().elapsed(),
+            );
+            self.backpressure_timestamp = None;
+        }
+    }
 }
 
 struct Callbacks<TPayload> {
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
+    strategies: Arc<Mutex<ConsumerState<TPayload>>>,
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
 }
 
@@ -85,6 +101,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             }
         }
         stg.strategy = None;
+        stg.is_paused = false;
+        stg.clear_backpressure();
 
         metrics.timing(
             "arroyo.consumer.join.time",
@@ -100,7 +118,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
 
 impl<TPayload> Callbacks<TPayload> {
     pub fn new(
-        strategies: Arc<Mutex<Strategies<TPayload>>>,
+        strategies: Arc<Mutex<ConsumerState<TPayload>>>,
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
     ) -> Self {
         Self {
@@ -114,42 +132,43 @@ impl<TPayload> Callbacks<TPayload> {
 /// instance and a ``ProcessingStrategy``, ensuring that processing
 /// strategies are instantiated on partition assignment and closed on
 /// partition revocation.
-pub struct StreamProcessor<TPayload> {
+pub struct StreamProcessor<TPayload: Clone> {
     consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
-    strategies: Arc<Mutex<Strategies<TPayload>>>,
+    consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
-    backpressure_timestamp: Option<Instant>,
-    is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
+    buffered_messages: BufferedMessages<TPayload>,
 }
 
-impl<TPayload: 'static> StreamProcessor<TPayload> {
+impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Arc<Mutex<dyn Consumer<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     ) -> Self {
-        let strategies = Arc::new(Mutex::new(Strategies {
+        let consumer_state = Arc::new(Mutex::new(ConsumerState {
             processing_factory,
             strategy: None,
+            backpressure_timestamp: None,
+            is_paused: false,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }));
 
         Self {
             consumer,
-            strategies,
+            consumer_state,
             message: None,
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
-            backpressure_timestamp: None,
-            is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+            buffered_messages: BufferedMessages::new(),
         }
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
         let callbacks: Box<dyn AssignmentCallbacks> = Box::new(Callbacks::new(
-            self.strategies.clone(),
+            self.consumer_state.clone(),
             self.consumer.clone(),
         ));
         self.consumer
@@ -160,7 +179,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
-        if self.is_paused {
+        let metrics = get_metrics();
+        metrics.increment("arroyo.consumer.run.count", 1, None);
+
+        if self.consumer_state.lock().unwrap().is_paused {
             // If the consumer waas paused, it should not be returning any messages
             // on ``poll``.
             let res = self
@@ -186,11 +208,16 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 .poll(Some(Duration::from_secs(1)))
             {
                 Ok(msg) => {
-                    self.message = msg.map(|inner| Message {
-                        inner_message: InnerMessage::BrokerMessage(inner),
-                    });
                     self.metrics_buffer
                         .incr_timing("arroyo.consumer.poll.time", poll_start.elapsed());
+
+                    if let Some(broker_msg) = msg {
+                        self.message = Some(Message {
+                            inner_message: InnerMessage::BrokerMessage(broker_msg.clone()),
+                        });
+
+                        self.buffered_messages.append(broker_msg);
+                    }
                 }
                 Err(error) => {
                     tracing::error!(%error, "poll error");
@@ -199,8 +226,12 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             }
         }
 
-        let mut trait_callbacks = self.strategies.lock().unwrap();
-        let Some(strategy) = trait_callbacks.strategy.as_mut() else {
+        // since we do not drive the kafka consumer at this point, it is safe to acquire the state
+        // lock, as we can be sure that for the rest of this function, no assignment callback will
+        // run.
+        let mut consumer_state = self.consumer_state.lock().unwrap();
+
+        let Some(strategy) = consumer_state.strategy.as_mut() else {
             match self.message.as_ref() {
                 None => return Ok(()),
                 Some(_) => return Err(RunError::InvalidState),
@@ -210,6 +241,10 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
+                for (partition, offset) in &request.positions {
+                    self.buffered_messages.pop(partition, offset - 1);
+                }
+
                 let mut consumer = self.consumer.lock().unwrap();
                 consumer.stage_offsets(request.positions).unwrap();
                 consumer.commit_offsets().unwrap();
@@ -228,16 +263,17 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             "arroyo.consumer.processing.time",
             processing_start.elapsed(),
         );
+
         match ret {
             Ok(()) => {
                 // Resume if we are currently in a paused state
-                if self.is_paused {
+                if consumer_state.is_paused {
                     let mut consumer = self.consumer.lock().unwrap();
                     let partitions = consumer.tell().unwrap().into_keys().collect();
 
                     match consumer.resume(partitions) {
                         Ok(()) => {
-                            self.is_paused = false;
+                            consumer_state.is_paused = false;
                         }
                         Err(error) => {
                             tracing::error!(%error, "pause error");
@@ -247,27 +283,22 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
                 }
 
                 // Clear backpressure timestamp if it is set
-                if self.backpressure_timestamp.is_some() {
-                    self.metrics_buffer.incr_timing(
-                        "arroyo.consumer.backpressure.time",
-                        self.backpressure_timestamp.unwrap().elapsed(),
-                    );
-                    self.backpressure_timestamp = None;
-                }
+                consumer_state.clear_backpressure();
             }
             Err(SubmitError::MessageRejected(MessageRejected { message })) => {
                 // Put back the carried over message
                 self.message = Some(message);
 
-                if self.backpressure_timestamp.is_none() {
-                    self.backpressure_timestamp = Some(Instant::now());
+                if consumer_state.backpressure_timestamp.is_none() {
+                    consumer_state.backpressure_timestamp = Some(Instant::now());
                 }
 
                 // If we are in the backpressure state for more than 1 second,
                 // we pause the consumer and hold the message until it is
                 // accepted, at which point we can resume consuming.
-                if !self.is_paused && self.backpressure_timestamp.is_some() {
-                    let backpressure_duration = self.backpressure_timestamp.unwrap().elapsed();
+                if !consumer_state.is_paused && consumer_state.backpressure_timestamp.is_some() {
+                    let backpressure_duration =
+                        consumer_state.backpressure_timestamp.unwrap().elapsed();
 
                     if backpressure_duration < Duration::from_secs(1) {
                         return Ok(());
@@ -282,7 +313,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
 
                     match consumer.pause(partitions) {
                         Ok(()) => {
-                            self.is_paused = true;
+                            consumer_state.is_paused = true;
                         }
                         Err(error) => {
                             tracing::error!(%error, "pause error");
@@ -307,7 +338,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
             .load(Ordering::Relaxed)
         {
             if let Err(e) = self.run_once() {
-                let mut trait_callbacks = self.strategies.lock().unwrap();
+                let mut trait_callbacks = self.consumer_state.lock().unwrap();
 
                 if let Some(strategy) = trait_callbacks.strategy.as_mut() {
                     strategy.terminate();
@@ -330,7 +361,7 @@ impl<TPayload: 'static> StreamProcessor<TPayload> {
         self.consumer.lock().unwrap().close();
     }
 
-    pub fn tell(self) -> HashMap<Partition, u64> {
+    pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.lock().unwrap().tell().unwrap()
     }
 }
