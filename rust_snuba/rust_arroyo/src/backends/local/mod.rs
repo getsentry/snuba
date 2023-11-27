@@ -1,6 +1,6 @@
 pub mod broker;
 
-use super::{AssignmentCallbacks, Consumer, ConsumerError};
+use super::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::types::{BrokerMessage, Partition, Topic};
 use broker::LocalBroker;
 use std::collections::HashSet;
@@ -16,15 +16,32 @@ enum Callback {
     Revoke(Vec<Partition>),
 }
 
-struct SubscriptionState {
+struct SubscriptionState<C> {
     topics: Vec<Topic>,
-    callbacks: Option<Box<dyn AssignmentCallbacks>>,
+    callbacks: Option<C>,
     offsets: HashMap<Partition, u64>,
     staged_positions: HashMap<Partition, u64>,
     last_eof_at: HashMap<Partition, u64>,
 }
 
-pub struct LocalConsumer<TPayload> {
+struct OffsetStage<'a, TPayload> {
+    group: String,
+    staged_offsets: HashMap<Partition, u64>,
+    broker: &'a mut LocalBroker<TPayload>,
+}
+
+impl<'a, TPayload> CommitOffsets for OffsetStage<'a, TPayload> {
+    fn commit(
+        mut self,
+        offsets: HashMap<Partition, u64>,
+    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
+        self.staged_offsets.extend(offsets);
+        self.broker.commit(&self.group, self.staged_offsets.clone());
+        Ok(self.staged_offsets)
+    }
+}
+
+pub struct LocalConsumer<TPayload, C> {
     id: Uuid,
     group: String,
     broker: LocalBroker<TPayload>,
@@ -33,14 +50,14 @@ pub struct LocalConsumer<TPayload> {
     // The offset that a the last ``EndOfPartition`` exception that was
     // raised at. To maintain consistency with the Confluent consumer, this
     // is only sent once per (partition, offset) pair.
-    subscription_state: SubscriptionState,
+    subscription_state: SubscriptionState<C>,
     enable_end_of_partition: bool,
     commit_offset_calls: u32,
     close_calls: u32,
     closed: bool,
 }
 
-impl<TPayload> LocalConsumer<TPayload> {
+impl<TPayload, C> LocalConsumer<TPayload, C> {
     pub fn new(
         id: Uuid,
         broker: LocalBroker<TPayload>,
@@ -73,12 +90,10 @@ impl<TPayload> LocalConsumer<TPayload> {
     }
 }
 
-impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
-    fn subscribe(
-        &mut self,
-        topics: &[Topic],
-        callbacks: Box<dyn AssignmentCallbacks>,
-    ) -> Result<(), ConsumerError> {
+impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
+    for LocalConsumer<TPayload, C>
+{
+    fn subscribe(&mut self, topics: &[Topic], callbacks: C) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
@@ -126,20 +141,21 @@ impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
             let callback = self.pending_callback.pop_front().unwrap();
             match callback {
                 Callback::Assign(offsets) => {
-                    match self.subscription_state.callbacks.as_mut() {
-                        None => {}
-                        Some(callbacks) => {
-                            callbacks.on_assign(offsets.clone());
-                        }
+                    if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
+                        callbacks.on_assign(offsets.clone());
                     }
                     self.subscription_state.offsets = offsets;
                 }
                 Callback::Revoke(partitions) => {
-                    match self.subscription_state.callbacks.as_mut() {
-                        None => {}
-                        Some(callbacks) => {
-                            callbacks.on_revoke(partitions.clone());
-                        }
+                    if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
+                        let offset_stage = OffsetStage {
+                            group: self.group.clone(),
+                            staged_offsets: std::mem::take(
+                                &mut self.subscription_state.staged_positions,
+                            ),
+                            broker: &mut self.broker,
+                        };
+                        callbacks.on_revoke(offset_stage, partitions.clone());
                     }
                     self.subscription_state.offsets = HashMap::new();
                 }
@@ -261,11 +277,13 @@ impl<TPayload> Consumer<TPayload> for LocalConsumer<TPayload> {
             .broker
             .unsubscribe(self.id, self.group.clone())
             .unwrap();
-        match self.subscription_state.callbacks.as_mut() {
-            None => {}
-            Some(c) => {
-                c.on_revoke(partitions);
-            }
+        if let Some(c) = self.subscription_state.callbacks.as_mut() {
+            let offset_stage = OffsetStage {
+                group: self.group.clone(),
+                staged_offsets: std::mem::take(&mut self.subscription_state.staged_positions),
+                broker: &mut self.broker,
+            };
+            c.on_revoke(offset_stage, partitions);
         }
         self.closed = true;
         self.close_calls += 1;
@@ -281,7 +299,7 @@ mod tests {
     use super::{AssignmentCallbacks, LocalConsumer};
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::backends::Consumer;
+    use crate::backends::{CommitOffsets, Consumer};
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::{HashMap, HashSet};
@@ -291,7 +309,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: Vec<Partition>) {}
+        fn on_revoke<C: CommitOffsets>(&self, _: C, _: Vec<Partition>) {}
     }
 
     fn build_broker() -> LocalBroker<String> {
@@ -314,11 +332,10 @@ mod tests {
         let topic1 = Topic::new("test1");
         let topic2 = Topic::new("test2");
 
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
         assert!(consumer.subscription_state.topics.is_empty());
 
-        let res = consumer.subscribe(&[topic1, topic2], my_callbacks);
+        let res = consumer.subscribe(&[topic1, topic2], EmptyCallbacks {});
         assert!(res.is_ok());
         assert_eq!(consumer.pending_callback.len(), 1);
 
@@ -377,7 +394,8 @@ mod tests {
                     ])
                 )
             }
-            fn on_revoke(&self, partitions: Vec<Partition>) {
+
+            fn on_revoke<C: CommitOffsets>(&self, _: C, partitions: Vec<Partition>) {
                 let topic1 = Topic::new("test1");
                 let topic2 = Topic::new("test2");
                 assert_eq!(
@@ -400,11 +418,9 @@ mod tests {
             }
         }
 
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
-
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
-        let _ = consumer.subscribe(&[topic1, topic2], my_callbacks);
+        let _ = consumer.subscribe(&[topic1, topic2], TheseCallbacks {});
         let _ = consumer.poll(Some(Duration::from_millis(100)));
 
         let _ = consumer.unsubscribe();
@@ -435,13 +451,12 @@ mod tests {
                     ),])
                 );
             }
-            fn on_revoke(&self, _: Vec<Partition>) {}
+            fn on_revoke<C: CommitOffsets>(&self, _: C, _: Vec<Partition>) {}
         }
 
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(TheseCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
 
-        let _ = consumer.subscribe(&[topic2], my_callbacks);
+        let _ = consumer.subscribe(&[topic2], TheseCallbacks {});
 
         let msg1 = consumer.poll(Some(Duration::from_millis(100))).unwrap();
         assert!(msg1.is_some());
@@ -464,9 +479,8 @@ mod tests {
         let broker = build_broker();
         let topic2 = Topic::new("test2");
         let partition = Partition::new(topic2, 0);
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
-        let _ = consumer.subscribe(&[topic2], my_callbacks);
+        let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
 
         assert_eq!(consumer.poll(None).unwrap(), None);
         let _ = consumer.pause(HashSet::from([partition]));
@@ -479,10 +493,9 @@ mod tests {
     #[test]
     fn test_commit() {
         let broker = build_broker();
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
         let topic2 = Topic::new("test2");
-        let _ = consumer.subscribe(&[topic2], my_callbacks);
+        let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
         let _ = consumer.poll(None);
         let positions = HashMap::from([(Partition::new(topic2, 0), 100)]);
         let stage_result = consumer.stage_offsets(positions.clone());
