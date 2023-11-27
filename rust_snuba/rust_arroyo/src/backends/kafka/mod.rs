@@ -234,8 +234,13 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         match res {
             None => Ok(None),
             Some(res) => {
-                let msg = res?;
-                Ok(Some(create_kafka_message(msg)))
+                let msg = create_kafka_message(res?);
+                self.offsets
+                    .lock()
+                    .unwrap()
+                    .insert(msg.partition, msg.offset);
+
+                Ok(Some(msg))
             }
         }
     }
@@ -402,7 +407,6 @@ mod tests {
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
 
-    #[ignore = "TODO: needs investigating, started failing on rdkafka 0.36"]
     #[tokio::test]
     async fn test_tell() {
         create_topic("test", 1).await;
@@ -419,8 +423,16 @@ mod tests {
         consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
-        // Getting the assignment may take a while, wait up to 5 seconds
-        consumer.poll(Some(Duration::from_millis(5000))).unwrap();
+        // Getting the assignment may take a while
+        for _ in 0..10 {
+            consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
+            if consumer.tell().unwrap().len() == 1 {
+                println!("Received assignment");
+                break;
+            }
+            sleep(Duration::from_millis(200));
+        }
+
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
