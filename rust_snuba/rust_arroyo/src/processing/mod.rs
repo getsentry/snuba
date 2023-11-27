@@ -191,9 +191,6 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                     return Err(RunError::Poll(error));
                 }
             }
-
-            self.metrics_buffer
-                .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
         }
 
         // since we do not drive the kafka consumer at this point, it is safe to acquire the state
@@ -207,9 +204,12 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             }
         };
-
         let poll_start = Instant::now();
         let commit_request = strategy.poll();
+
+        self.metrics_buffer
+            .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
+
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
