@@ -198,8 +198,7 @@ pub fn process_message(
             let batch = BytesInsertBatch::new(
                 timestamp,
                 res.unwrap(),
-                // TODO: Actually implement this?
-                BTreeMap::new(),
+                BTreeMap::from([(partition, (offset, timestamp))]),
             );
             Some(batch.encoded_rows().to_vec())
         }
