@@ -434,6 +434,8 @@ mod tests {
         assert_eq!(backpressure.0.load(Ordering::Relaxed), 0);
 
         step.poll().unwrap();
+
+        // assert that after backpressure.0 has hit zero, we are able to submit messages again
         step.submit(Message::new_broker_message(
             KafkaPayload::new(
                 None,
