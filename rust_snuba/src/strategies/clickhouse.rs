@@ -45,7 +45,6 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
                 return Ok(message);
             }
 
-
             tracing::debug!("performing write");
             let write_start = SystemTime::now();
 
@@ -59,9 +58,17 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             let write_finish = SystemTime::now();
 
             if let Ok(elapsed) = write_finish.duration_since(write_start) {
-                metrics.timing("insertions.batch_write_ms", elapsed.as_millis() as u64, None);
+                metrics.timing(
+                    "insertions.batch_write_ms",
+                    elapsed.as_millis() as u64,
+                    None,
+                );
             }
-            metrics.increment("insertions.batch_write_msgs", insert_batch.len() as i64, None);
+            metrics.increment(
+                "insertions.batch_write_msgs",
+                insert_batch.len() as i64,
+                None,
+            );
             insert_batch.record_message_latency(&metrics);
 
             Ok(message)

@@ -3,6 +3,7 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
@@ -55,6 +56,7 @@ pub struct PythonTransformStep {
     message_carried_over: Option<Message<BytesInsertBatch>>,
     processing_pool: Option<procspawn::Pool>,
     max_queue_depth: usize,
+    metrics: BoxMetrics,
 }
 
 impl PythonTransformStep {
@@ -97,6 +99,7 @@ impl PythonTransformStep {
             message_carried_over: None,
             processing_pool,
             max_queue_depth: max_queue_depth.unwrap_or(processes),
+            metrics: get_metrics(),
         })
     }
 
@@ -159,6 +162,7 @@ impl PythonTransformStep {
                 }
             }
             Err(error) => {
+                self.metrics.increment("invalid_message", 1, None);
                 tracing::error!(error, "Invalid message");
             }
         }
