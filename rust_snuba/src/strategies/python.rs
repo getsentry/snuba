@@ -298,6 +298,8 @@ procspawn::enable_test_support!();
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
 
@@ -355,15 +357,21 @@ mod tests {
         run_basic(2);
     }
 
-    struct BackpressureForever;
+    #[derive(Clone)]
+    struct Backpressure(Arc<AtomicUsize>);
 
-    impl<T> ProcessingStrategy<T> for BackpressureForever {
+    impl<T> ProcessingStrategy<T> for Backpressure {
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
             Ok(None)
         }
 
         fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-            Err(SubmitError::MessageRejected(MessageRejected { message }))
+            if self.0.load(Ordering::Relaxed) > 0 {
+                self.0.fetch_sub(1, Ordering::Relaxed);
+                Err(SubmitError::MessageRejected(MessageRejected { message }))
+            } else {
+                Ok(())
+            }
         }
 
         fn close(&mut self) {}
@@ -378,6 +386,8 @@ mod tests {
 
     #[test]
     fn test_backpressure() {
+        let backpressure = Backpressure(Arc::new(2.into()));
+
         let mut step = PythonTransformStep::new(
             MessageProcessorConfig {
                 python_class_name: "OutcomesProcessor".to_owned(),
@@ -385,7 +395,7 @@ mod tests {
             },
             2,
             None,
-            BackpressureForever,
+            backpressure.clone(),
         )
         .unwrap();
 
@@ -403,6 +413,9 @@ mod tests {
 
         step.join(None).unwrap();
 
+        assert_eq!(backpressure.0.load(Ordering::Relaxed), 1);
+
+        step.poll().unwrap();
         assert!(matches!(step.submit(Message::new_broker_message(
             KafkaPayload::new(
                 None,
@@ -413,5 +426,21 @@ mod tests {
             1,
             Utc::now(),
         )).unwrap_err(), SubmitError::MessageRejected(_)));
+
+        step.join(None).unwrap();
+
+        assert_eq!(backpressure.0.load(Ordering::Relaxed), 0);
+
+        step.poll().unwrap();
+        step.submit(Message::new_broker_message(
+            KafkaPayload::new(
+                None,
+                None,
+                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
+            ),
+            Partition::new(Topic::new("test"), 1),
+            1,
+            Utc::now(),
+        )).unwrap();
     }
 }
