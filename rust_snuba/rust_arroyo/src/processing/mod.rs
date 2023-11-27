@@ -204,7 +204,12 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             }
         };
+        let poll_start = Instant::now();
         let commit_request = strategy.poll();
+
+        self.metrics_buffer
+            .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
+
         match commit_request {
             Ok(None) => {}
             Ok(Some(request)) => {
