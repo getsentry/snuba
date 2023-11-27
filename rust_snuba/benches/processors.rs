@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use divan::counter::ItemsCount;
@@ -149,7 +148,7 @@ fn create_consumer(
     messages: usize,
 ) -> (
     Topic,
-    Arc<Mutex<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>>,
+    Box<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>,
 ) {
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
@@ -164,7 +163,7 @@ fn create_consumer(
     }
 
     let consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
-    let consumer = Arc::new(Mutex::new(consumer));
+    let consumer = Box::new(consumer);
 
     (topic, consumer)
 }
