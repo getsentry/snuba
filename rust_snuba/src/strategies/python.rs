@@ -222,8 +222,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 partition,
                 timestamp,
             }) => {
-                // TODO: Handle None payload
-                let payload_bytes = (payload.payload().unwrap()).clone();
+                // XXX: Python message processors do not support null payload, even though this is valid in
+                // Kafka so we convert it to an empty vec.
+                let payload_bytes = payload.payload().cloned().unwrap_or_default();
 
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
