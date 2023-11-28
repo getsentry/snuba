@@ -92,11 +92,10 @@ fn run_bench(
                     // FIXME: this pretty much means that we *polled* the partition to the end,
                     // it does not mean that we actually *committed* everything
                     // (aka we finished actually processing everything).
-                    return;
+                    break;
                 }
             }
-            // FIXME: this seems to deadlock?
-            //processor.shutdown();
+            processor.shutdown();
         });
 }
 

@@ -116,13 +116,9 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         if let Rebalance::Revoke(list) = rebalance {
             let mut partitions: Vec<Partition> = Vec::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
-                // TODO(swatinem)
-                partitions.push(Partition {
-                    topic: Topic::new(topic),
-                    index: partition_number as u16,
-                });
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
+                partitions.push(Partition::new(topic, index));
             }
 
             let mut offsets = self.consumer_offsets.lock().unwrap();
@@ -144,21 +140,14 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         if let Rebalance::Assign(list) = rebalance {
             let mut map: HashMap<Partition, u64> = HashMap::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
                 let offset = partition.offset().to_raw().unwrap();
-                map.insert(
-                    // TODO(swatinem)
-                    Partition {
-                        topic: Topic::new(topic),
-                        index: partition_number as u16,
-                    },
-                    offset as u64,
-                );
+                map.insert(Partition::new(topic, index), offset as u64);
             }
             let mut offsets = self.consumer_offsets.lock().unwrap();
-            for (partition, offset) in map.clone() {
-                offsets.insert(partition, offset);
+            for (partition, offset) in &map {
+                offsets.insert(*partition, *offset);
             }
             self.callbacks.on_assign(map);
         }

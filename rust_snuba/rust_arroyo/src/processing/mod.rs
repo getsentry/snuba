@@ -160,13 +160,11 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         metrics.increment("arroyo.consumer.run.count", 1, None);
 
         if self.consumer_state.lock().unwrap().is_paused {
-            // If the consumer waas paused, it should not be returning any messages
-            // on ``poll``.
+            // If the consumer was paused, it should not be returning any messages
+            // on `poll`.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
-
-            match res {
-                None => {}
-                Some(_) => return Err(RunError::InvalidState),
+            if res.is_some() {
+                return Err(RunError::InvalidState);
             }
         } else if self.message.is_none() {
             // Otherwise, we need to try fetch a new message from the consumer,
@@ -356,12 +354,9 @@ mod tests {
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-            Ok(match self.message.as_ref() {
-                None => None,
-                Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable()),
-                }),
-            })
+            Ok(self.message.as_ref().map(|message| CommitRequest {
+                positions: HashMap::from_iter(message.committable()),
+            }))
         }
 
         fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {
