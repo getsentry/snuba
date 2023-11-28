@@ -248,28 +248,19 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
         unimplemented!("Seek is not implemented");
     }
 
-    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+    fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         if self.closed {
             return Err(ConsumerError::ConsumerClosed);
         }
+
         if !self.is_subscribed(offsets.keys()) {
             return Err(ConsumerError::UnassignedPartition);
         }
 
-        self.subscription_state.staged_positions.extend(offsets);
-        Ok(())
-    }
-
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
-
-        let positions = std::mem::take(&mut self.subscription_state.staged_positions);
-        self.broker.commit(&self.group, positions.clone());
+        self.broker.commit(&self.group, offsets);
         self.commit_offset_calls += 1;
 
-        Ok(positions)
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -498,17 +489,14 @@ mod tests {
         let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
         let _ = consumer.poll(None);
         let positions = HashMap::from([(Partition::new(topic2, 0), 100)]);
-        let stage_result = consumer.stage_offsets(positions.clone());
-        assert!(stage_result.is_ok());
 
-        let offsets = consumer.commit_offsets();
+        let offsets = consumer.commit_offsets(positions.clone());
         assert!(offsets.is_ok());
-        assert_eq!(offsets.unwrap(), positions);
 
         // Stage invalid positions
         let invalid_positions = HashMap::from([(Partition::new(topic2, 1), 100)]);
 
-        let stage_result = consumer.stage_offsets(invalid_positions);
-        assert!(stage_result.is_err());
+        let commit_result = consumer.commit_offsets(invalid_positions);
+        assert!(commit_result.is_err());
     }
 }

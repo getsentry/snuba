@@ -15,7 +15,6 @@ use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::mem;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -177,7 +176,6 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    staged_offsets: HashMap<Partition, u64>,
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
@@ -187,7 +185,6 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
             config,
             state: KafkaConsumerState::NotSubscribed,
             offsets: Arc::new(Mutex::new(HashMap::new())),
-            staged_offsets: HashMap::new(),
         }
     }
 }
@@ -301,18 +298,11 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         Ok(())
     }
 
-    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        for (partition, offset) in offsets {
-            self.staged_offsets.insert(partition, offset);
-        }
-        Ok(())
-    }
-
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
-        for (partition, offset) in &self.staged_offsets {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in &offsets {
             partitions.add_partition_offset(
                 partition.topic.as_str(),
                 partition.index as i32,
@@ -327,10 +317,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        // Clear staged offsets
-        let prev_offsets = mem::take(&mut self.staged_offsets);
-
-        Ok(prev_offsets)
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -460,8 +447,6 @@ mod tests {
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
-        consumer.stage_offsets(positions.clone()).unwrap();
-
         // Wait until the consumer got an assignment
         for _ in 0..10 {
             consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
@@ -472,8 +457,7 @@ mod tests {
             sleep(Duration::from_millis(200));
         }
 
-        let res = consumer.commit_offsets().unwrap();
-        assert_eq!(res, positions);
+        consumer.commit_offsets(positions.clone()).unwrap();
         consumer.unsubscribe().unwrap();
         consumer.close();
         delete_topic("test2").await;

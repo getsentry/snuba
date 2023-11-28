@@ -153,14 +153,8 @@ pub trait Consumer<TPayload, C>: Send {
     /// exception will be raised and no offsets will be modified.
     fn seek(&self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 
-    /// Stage offsets to be committed. If an offset has already been staged
-    /// for a given partition, that offset is overwritten (even if the offset
-    /// moves in reverse.)
-    fn stage_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
-
-    /// Commit staged offsets. The return value of this method is a mapping
-    /// of streams with their committed offsets as values.
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError>;
+    /// Commit offsets.
+    fn commit_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 
     fn close(&mut self);
 
