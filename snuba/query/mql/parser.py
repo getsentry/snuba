@@ -18,8 +18,8 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
-from snuba.util import parse_datetime
 
 logger = logging.getLogger("snuba.mql.parser")
 
@@ -236,12 +236,9 @@ def parse_mql_query_initial(
             key=entity_key, schema=get_entity(entity_key).get_data_model()
         ),
     }
+
     resolved_args = extract_args_from_mql_context(parsed, mql_context)
-    selected_columns = []
-    if "aggregate" in parsed:
-        selected_columns.append(parsed["aggregate"])
-    if "groupby" in resolved_args:
-        selected_columns.extend(resolved_args["groupby"])
+    selected_columns = extract_selected_columns(parsed, resolved_args, mql_context)
 
     args["selected_columns"] = selected_columns
     args["groupby"] = resolved_args["groupby"]
@@ -256,6 +253,19 @@ def parse_mql_query_initial(
     return query
 
 
+def extract_selected_columns(
+    parsed: Mapping[str, Any],
+    resolved_args: Mapping[str, Any],
+    mql_context: Mapping[str, Any],
+) -> list[SelectedExpression]:
+    selected_columns = []
+    if "aggregate" in parsed:
+        selected_columns.append(parsed["aggregate"])
+    if "groupby" in resolved_args:
+        selected_columns.extend(resolved_args["groupby"])
+    return selected_columns
+
+
 def extract_args_from_mql_context(
     parsed: Mapping[str, Any],
     mql_context: Mapping[str, Any],
@@ -264,7 +274,7 @@ def extract_args_from_mql_context(
     Extracts all metadata from MQL context, creates the appropriate expressions for them,
     and returns them in a formatted dictionary.
 
-    Example MQL context dictionary:
+    Example MQL context:
         "mql_context": {
             "entity": "generic_metrics_distributions"
             "start": "2023-01-02T03:04:05+00:00",
@@ -281,7 +291,7 @@ def extract_args_from_mql_context(
                     "use_case_id": "transactions",
             },
             "limit": "",
-            "offset": "",
+            "offset": "0",
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456", ...
             }
@@ -323,7 +333,9 @@ def extract_metric_id(
         mri = parsed["mri"]
 
     if mri not in mql_context["indexer_mappings"]:
-        raise InvalidQueryException("No mri specified in MQL context indexer_mappings.")
+        raise InvalidQueryException(
+            "No mri to metric_id mapping found in MQL context indexer_mappings."
+        )
     metric_id = mql_context["indexer_mappings"][mri]
     return [
         (
@@ -366,7 +378,6 @@ def extract_resolved_tag_filters(
 def extract_start_end_time(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract resolved tag filters from mql context
     filters = []
     if "start" not in mql_context or "end" not in mql_context:
         raise InvalidQueryException(
@@ -377,7 +388,11 @@ def extract_start_end_time(
         binary_condition(
             ConditionFunction.GTE.value,
             Column(alias=None, table_name=None, column_name="timestamp"),
-            Literal(alias=None, value=parse_datetime(start)),
+            FunctionCall(
+                alias=None,
+                function_name="toDateTime",
+                parameters=[Literal(alias=None, value=start)],
+            ),
         )
     )
     end = mql_context["end"]
@@ -385,7 +400,11 @@ def extract_start_end_time(
         binary_condition(
             ConditionFunction.LT.value,
             Column(alias=None, table_name=None, column_name="timestamp"),
-            Literal(alias=None, value=parse_datetime(end)),
+            FunctionCall(
+                alias=None,
+                function_name="toDateTime",
+                parameters=[Literal(alias=None, value=end)],
+            ),
         )
     )
     return filters
@@ -394,7 +413,6 @@ def extract_start_end_time(
 def extract_scope(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract scope from mql context
     filters = []
     if "scope" not in mql_context:
         raise InvalidQueryException("No scope specified in MQL context.")
@@ -439,7 +457,6 @@ def extract_scope(
 def extract_resolved_gropupby(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> list[FunctionCall]:
-    # Extract resolved groupby from mql context indexer_mappings
     groupbys = []
     if "groupby" in parsed:
         for groupby_col_name in parsed["groupby"]:
@@ -464,11 +481,10 @@ def extract_resolved_gropupby(
 def extract_rollup(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
 ) -> tuple[list[FunctionCall], int, bool]:
-    # Extract rollup from mql context
     if "rollup" not in mql_context:
         raise InvalidQueryException("No rollup specified in MQL context.")
 
-    # Extract orderby clause
+    # Extract orderby
     order_by = []
     if "orderby" in mql_context:
         for order_by_info in mql_context["rollup"]["orderby"]:
@@ -505,13 +521,26 @@ def extract_rollup(
 
 
 def extract_limit(mql_context: Mapping[str, Any]) -> Optional[int]:
-    if "limit" in mql_context and mql_context["limit"] != "":
+    if (
+        "limit" in mql_context
+        and mql_context["limit"] != ""
+        and mql_context["limit"].isdigit()
+    ):
+        limit = int(mql_context["limit"])
+        if limit > 10000:
+            raise ParsingException(
+                "queries cannot have a limit higher than 10000", should_report=False
+            )
         return int(mql_context["limit"])
-    return None
+    return 1000
 
 
 def extract_offset(mql_context: Mapping[str, Any]) -> int:
-    if "limit" in mql_context and mql_context["offset"] != "":
+    if (
+        "limit" in mql_context
+        and mql_context["offset"] != ""
+        and mql_context["offset"].isdigit()
+    ):
         return int(mql_context["offset"])
     return 0
 

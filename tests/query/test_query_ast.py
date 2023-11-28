@@ -240,37 +240,55 @@ def test_initial_parsing_snql() -> None:
     assert isinstance(query.get_groupby(), list)
 
 
+def test_metrics_initial_parsing_snql() -> None:
+    query_body = "MATCH (generic_metrics_distributions) SELECT sum(value) AS dist_min WHERE org_id = 1 AND project_id = 11 AND metric_id = 0123456 AND timestamp >= toDateTime('2023-11-23T18:30:00') AND timestamp < toDateTime('2023-11-23T22:30:00') GRANULARITY 60"
+    query = parse_snql_query_initial(query_body)
+    print(query.__dict__)
+
+
 def test_initial_parsing_mql() -> None:
     # Initial parsing created a map object for groupby clause, should be a list
     body = 'sum(`d:transactions/duration@millisecond`{foo:"foz", hee:"haw"}){bar:"baz"} by transaction'
-    parse_mql_query_initial(
-        body,
-        {
-            "entity": "generic_metrics_distributions",
-            "start": "2020-01-01T00:00:00",
-            "end": "2020-01-01T01:00:00",
-            "rollup": {
-                "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
-                "granularity": "3600",
-                "interval": "3600",
-                "with_totals": "",
-            },
-            "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["11"],
-                "use_case_id": "transactions",
-            },
-            "limit": "",
-            "offset": "",
-            "indexer_mappings": {
-                "d:transactions/duration@millisecond": "123456",
-                "transaction": "789012",
-                "foo": "111111",
-                "hee": "222222",
-                "bar": "333333",
-            },
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
+            "granularity": "60",
+            "interval": "60",
+            "with_totals": "",
         },
-    )
+        "scope": {
+            "org_ids": ["1"],
+            "project_ids": ["11"],
+            "use_case_id": "transactions",
+        },
+        "limit": "",
+        "offset": "",
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": "123456",
+            "transaction": "789012",
+            "foo": "111111",
+            "hee": "222222",
+            "bar": "333333",
+        },
+    }
+
+    query = parse_mql_query_initial(body, mql_context)
+    print(query.__dict__)
+    # print(query.get_columns_referenced_in_select())
+    # assert query.get_columns_referenced_in_select() == {
+    #     Column("_snuba_value", None, "value"),
+    #     Column("_snuba_transaction", None, "tags_raw[789012]"),
+    # }
+    # print(query.get_groupby())
+    # print(query.get_all_ast_referenced_columns())
+    # print(query.get_orderby())
+    # print(query.get_limit())
+    # print(query.get_offset())
+    # print(query.has_totals())
+    # print(query.get_granularity())
 
 
 def test_alias_regex_allows_parentheses() -> None:
