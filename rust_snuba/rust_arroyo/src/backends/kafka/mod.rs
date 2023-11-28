@@ -70,11 +70,9 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-struct OffsetStage<C: AssignmentCallbacks> {
-    consumer: Arc<Mutex<Option<BaseConsumer<CustomContext<C>>>>>,
-}
+struct OffsetCommitter<C: AssignmentCallbacks>(Arc<Mutex<Option<BaseConsumer<CustomContext<C>>>>>);
 
-impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
+impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
     fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         let mut partitions = TopicPartitionList::with_capacity(offsets.len());
         for (partition, offset) in offsets {
@@ -85,7 +83,7 @@ impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
             )?;
         }
 
-        self.consumer
+        self.0
             .lock()
             .unwrap()
             .as_ref()
@@ -124,12 +122,10 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 offsets.remove(partition);
             }
 
-            let offset_stage = OffsetStage {
-                consumer: self.base_consumer.clone(),
-            };
+            let offset_stage = OffsetCommitter(self.base_consumer.clone());
 
             self.callbacks
-                .on_revoke::<OffsetStage<C>>(offset_stage, partitions);
+                .on_revoke::<OffsetCommitter<C>>(offset_stage, partitions);
         }
     }
 
