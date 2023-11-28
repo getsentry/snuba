@@ -71,22 +71,17 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
 }
 
 struct OffsetStage<C: AssignmentCallbacks> {
-    staged_offsets: HashMap<Partition, u64>,
     consumer: Arc<Mutex<Option<BaseConsumer<CustomContext<C>>>>>,
 }
 
 impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
-    fn commit(
-        mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
-        self.staged_offsets.extend(offsets);
-        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
-        for (partition, offset) in &self.staged_offsets {
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in offsets {
             partitions.add_partition_offset(
                 partition.topic.as_str(),
                 partition.index as i32,
-                Offset::from_raw(*offset as i64),
+                Offset::from_raw(offset as i64),
             )?;
         }
 
@@ -98,7 +93,7 @@ impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        Ok(self.staged_offsets)
+        Ok(())
     }
 }
 
@@ -130,7 +125,6 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             let offset_stage = OffsetStage {
-                staged_offsets: std::mem::take(&mut offsets),
                 consumer: self.base_consumer.clone(),
             };
 

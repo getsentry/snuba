@@ -45,10 +45,7 @@ pub trait CommitOffsets {
     ///
     /// Returns a map of all offsets that were committed. This combines [`Consumer::stage_offsets`] and
     /// [`Consumer::commit_offsets`].
-    fn commit(
-        self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<HashMap<Partition, u64>, ConsumerError>;
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 }
 
 /// This is basically an observer pattern to receive the callbacks from

@@ -20,24 +20,18 @@ struct SubscriptionState<C> {
     topics: Vec<Topic>,
     callbacks: Option<C>,
     offsets: HashMap<Partition, u64>,
-    staged_positions: HashMap<Partition, u64>,
     last_eof_at: HashMap<Partition, u64>,
 }
 
 struct OffsetStage<'a, TPayload> {
-    group: String,
-    staged_offsets: HashMap<Partition, u64>,
+    group: &'a str,
     broker: &'a mut LocalBroker<TPayload>,
 }
 
 impl<'a, TPayload> CommitOffsets for OffsetStage<'a, TPayload> {
-    fn commit(
-        mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
-        self.staged_offsets.extend(offsets);
-        self.broker.commit(&self.group, self.staged_offsets.clone());
-        Ok(self.staged_offsets)
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        self.broker.commit(self.group, offsets);
+        Ok(())
     }
 }
 
@@ -74,7 +68,6 @@ impl<TPayload, C> LocalConsumer<TPayload, C> {
                 topics: Vec::new(),
                 callbacks: None,
                 offsets: HashMap::new(),
-                staged_positions: HashMap::new(),
                 last_eof_at: HashMap::new(),
             },
             enable_end_of_partition,
@@ -106,7 +99,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
 
         self.pending_callback.push_back(Callback::Assign(offsets));
 
-        self.subscription_state.staged_positions.clear();
         self.subscription_state.last_eof_at.clear();
         Ok(())
     }
@@ -124,7 +116,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             .push_back(Callback::Revoke(partitions));
 
         self.subscription_state.topics.clear();
-        self.subscription_state.staged_positions.clear();
         self.subscription_state.last_eof_at.clear();
         Ok(())
     }
@@ -149,10 +140,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
                 Callback::Revoke(partitions) => {
                     if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
                         let offset_stage = OffsetStage {
-                            group: self.group.clone(),
-                            staged_offsets: std::mem::take(
-                                &mut self.subscription_state.staged_positions,
-                            ),
+                            group: &self.group,
                             broker: &mut self.broker,
                         };
                         callbacks.on_revoke(offset_stage, partitions.clone());
@@ -270,8 +258,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             .unwrap();
         if let Some(c) = self.subscription_state.callbacks.as_mut() {
             let offset_stage = OffsetStage {
-                group: self.group.clone(),
-                staged_offsets: std::mem::take(&mut self.subscription_state.staged_positions),
+                group: &self.group,
                 broker: &mut self.broker,
             };
             c.on_revoke(offset_stage, partitions);
