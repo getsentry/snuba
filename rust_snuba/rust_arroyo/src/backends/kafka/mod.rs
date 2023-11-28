@@ -15,7 +15,6 @@ use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::mem;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -71,27 +70,20 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-struct OffsetStage<C: AssignmentCallbacks> {
-    staged_offsets: HashMap<Partition, u64>,
-    consumer: Arc<Mutex<Option<BaseConsumer<CustomContext<C>>>>>,
-}
+struct OffsetCommitter<C: AssignmentCallbacks>(Arc<Mutex<Option<BaseConsumer<CustomContext<C>>>>>);
 
-impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
-    fn commit(
-        mut self,
-        offsets: HashMap<Partition, u64>,
-    ) -> Result<HashMap<Partition, u64>, ConsumerError> {
-        self.staged_offsets.extend(offsets);
-        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
-        for (partition, offset) in &self.staged_offsets {
+impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in offsets {
             partitions.add_partition_offset(
                 partition.topic.as_str(),
                 partition.index as i32,
-                Offset::from_raw(*offset as i64),
+                Offset::from_raw(offset as i64),
             )?;
         }
 
-        self.consumer
+        self.0
             .lock()
             .unwrap()
             .as_ref()
@@ -99,7 +91,7 @@ impl<C: AssignmentCallbacks> CommitOffsets for OffsetStage<C> {
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        Ok(self.staged_offsets)
+        Ok(())
     }
 }
 
@@ -116,13 +108,9 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         if let Rebalance::Revoke(list) = rebalance {
             let mut partitions: Vec<Partition> = Vec::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
-                // TODO(swatinem)
-                partitions.push(Partition {
-                    topic: Topic::new(topic),
-                    index: partition_number as u16,
-                });
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
+                partitions.push(Partition::new(topic, index));
             }
 
             let mut offsets = self.consumer_offsets.lock().unwrap();
@@ -130,13 +118,10 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 offsets.remove(partition);
             }
 
-            let offset_stage = OffsetStage {
-                staged_offsets: std::mem::take(&mut offsets),
-                consumer: self.base_consumer.clone(),
-            };
+            let offset_stage = OffsetCommitter(self.base_consumer.clone());
 
             self.callbacks
-                .on_revoke::<OffsetStage<C>>(offset_stage, partitions);
+                .on_revoke::<OffsetCommitter<C>>(offset_stage, partitions);
         }
     }
 
@@ -144,21 +129,14 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         if let Rebalance::Assign(list) = rebalance {
             let mut map: HashMap<Partition, u64> = HashMap::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
                 let offset = partition.offset().to_raw().unwrap();
-                map.insert(
-                    // TODO(swatinem)
-                    Partition {
-                        topic: Topic::new(topic),
-                        index: partition_number as u16,
-                    },
-                    offset as u64,
-                );
+                map.insert(Partition::new(topic, index), offset as u64);
             }
             let mut offsets = self.consumer_offsets.lock().unwrap();
-            for (partition, offset) in map.clone() {
-                offsets.insert(partition, offset);
+            for (partition, offset) in &map {
+                offsets.insert(*partition, *offset);
             }
             self.callbacks.on_assign(map);
         }
@@ -177,7 +155,6 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    staged_offsets: HashMap<Partition, u64>,
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
@@ -187,7 +164,6 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
             config,
             state: KafkaConsumerState::NotSubscribed,
             offsets: Arc::new(Mutex::new(HashMap::new())),
-            staged_offsets: HashMap::new(),
         }
     }
 }
@@ -234,8 +210,13 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         match res {
             None => Ok(None),
             Some(res) => {
-                let msg = res?;
-                Ok(Some(create_kafka_message(msg)))
+                let msg = create_kafka_message(res?);
+                self.offsets
+                    .lock()
+                    .unwrap()
+                    .insert(msg.partition, msg.offset);
+
+                Ok(Some(msg))
             }
         }
     }
@@ -296,18 +277,11 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         Ok(())
     }
 
-    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        for (partition, offset) in offsets {
-            self.staged_offsets.insert(partition, offset);
-        }
-        Ok(())
-    }
-
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
-        for (partition, offset) in &self.staged_offsets {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in &offsets {
             partitions.add_partition_offset(
                 partition.topic.as_str(),
                 partition.index as i32,
@@ -322,10 +296,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             .commit(&partitions, CommitMode::Sync)
             .unwrap();
 
-        // Clear staged offsets
-        let prev_offsets = mem::take(&mut self.staged_offsets);
-
-        Ok(prev_offsets)
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -402,7 +373,6 @@ mod tests {
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
 
-    #[ignore = "TODO: needs investigating, started failing on rdkafka 0.36"]
     #[tokio::test]
     async fn test_tell() {
         create_topic("test", 1).await;
@@ -419,8 +389,16 @@ mod tests {
         consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
-        // Getting the assignment may take a while, wait up to 5 seconds
-        consumer.poll(Some(Duration::from_millis(5000))).unwrap();
+        // Getting the assignment may take a while
+        for _ in 0..10 {
+            consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
+            if consumer.tell().unwrap().len() == 1 {
+                println!("Received assignment");
+                break;
+            }
+            sleep(Duration::from_millis(200));
+        }
+
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
@@ -448,8 +426,6 @@ mod tests {
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
-        consumer.stage_offsets(positions.clone()).unwrap();
-
         // Wait until the consumer got an assignment
         for _ in 0..10 {
             consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
@@ -460,8 +436,7 @@ mod tests {
             sleep(Duration::from_millis(200));
         }
 
-        let res = consumer.commit_offsets().unwrap();
-        assert_eq!(res, positions);
+        consumer.commit_offsets(positions.clone()).unwrap();
         consumer.unsubscribe().unwrap();
         consumer.close();
         delete_topic("test2").await;

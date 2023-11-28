@@ -177,30 +177,26 @@ pub fn process_message(
 ) -> Option<Vec<u8>> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    match processors::get_processing_function(name) {
-        None => None,
-        Some(func) => {
-            let payload = KafkaPayload::new(None, None, Some(value));
+    processors::get_processing_function(name).map(|func| {
+        let payload = KafkaPayload::new(None, None, Some(value));
 
-            let timestamp = DateTime::from_naive_utc_and_offset(
-                NaiveDateTime::from_timestamp_millis(millis_since_epoch)
-                    .unwrap_or(NaiveDateTime::MIN),
-                Utc,
-            );
+        let timestamp = DateTime::from_naive_utc_and_offset(
+            NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
+            Utc,
+        );
 
-            let meta = KafkaMessageMetadata {
-                partition,
-                offset,
-                timestamp,
-            };
+        let meta = KafkaMessageMetadata {
+            partition,
+            offset,
+            timestamp,
+        };
 
-            let res = func(payload, meta);
-            let batch = BytesInsertBatch::new(
-                timestamp,
-                res.unwrap(),
-                BTreeMap::from([(partition, (offset, timestamp))]),
-            );
-            Some(batch.encoded_rows().to_vec())
-        }
-    }
+        let res = func(payload, meta);
+        let batch = BytesInsertBatch::new(
+            timestamp,
+            res.unwrap(),
+            BTreeMap::from([(partition, (offset, timestamp))]),
+        );
+        batch.encoded_rows().to_vec()
+    })
 }
