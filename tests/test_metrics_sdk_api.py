@@ -9,10 +9,13 @@ from snuba_sdk import (
     AliasedExpression,
     Column,
     Condition,
+    Entity,
     Metric,
     MetricsQuery,
     MetricsScope,
     Op,
+    Query,
+    Request,
     Rollup,
     Timeseries,
 )
@@ -300,6 +303,43 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             data["totals"]["aggregate_value"] > 180
         )  # Should be more than the number of data points
 
+    def test_tag_key_value(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
+        query = (
+            Query(Entity(test_entity))
+            .set_select([Column("tags.key"), Column("tags.raw_value")])
+            .set_groupby([Column("tags.key"), Column("tags.raw_value")])
+            .set_where(
+                [
+                    Condition(Column("org_id"), Op.EQ, self.org_id),
+                    Condition(Column("project_id"), Op.IN, self.project_ids),
+                    Condition(Column("metric_id"), Op.EQ, self.metric_id),
+                    Condition(Column("timestamp"), Op.GTE, self.start_time),
+                    Condition(Column("timestamp"), Op.LT, self.end_time),
+                ]
+            )
+        )
+
+        response = self.app.post(
+            self.snql_route,
+            data=Request(
+                dataset=test_dataset,
+                app_id="test",
+                query=query,
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize(),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        rows = data["data"]
+        assert len(rows) == 1, rows
+        assert rows[0] == {
+            "tags.key": [int(k) for k in SHARED_TAGS.keys()],
+            "tags.raw_value": ["t1", "200"],
+        }
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
@@ -319,3 +359,9 @@ class TestMetricsSdkApiCounters(TestGenericMetricsSdkApiCounters):
     @pytest.fixture
     def tag_value_indexed(self) -> bool:
         return True
+
+    @pytest.mark.skip("tags.raw_value not in metrics")
+    def test_tag_key_value(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
+        pass
