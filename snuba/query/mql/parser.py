@@ -134,14 +134,15 @@ class MQLVisitor(NodeVisitor):
         tag_value = children[0]
         return tag_value
 
+    def visit_unquoted_string(self, node: Node, children: Sequence[Any]) -> str:
+        return str(node.text)
+
     def visit_quoted_string(self, node: Node, children: Sequence[Any]) -> str:
         return str(node.text[1:-1])
 
-    def visit_quoted_string_tuple(
-        self, node: Node, children: Sequence[Any]
-    ) -> Sequence[str]:
+    def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
         _, _, first, zero_or_more_others, _, _ = children
-        return [first, *(v for _, _, _, v in zero_or_more_others)]
+        return [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         return node.text
@@ -171,8 +172,15 @@ class MQLVisitor(NodeVisitor):
     ) -> SelectedExpression:
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
+
+        if "mri" in target:
+            metric_name = target["mri"]
+        elif "public_name" in target:
+            metric_name = target["public_name"]
+        else:
+            metric_name = ""
         target["aggregate"] = SelectedExpression(
-            name=None,
+            name=f"{aggregate_name}({metric_name})",
             expression=FunctionCall(
                 alias=None,
                 function_name=aggregate_name,
@@ -274,7 +282,7 @@ def extract_args_from_mql_context(
     Extracts all metadata from MQL context, creates the appropriate expressions for them,
     and returns them in a formatted dictionary.
 
-    Example MQL context:
+    Example of serialized MQL context:
         "mql_context": {
             "entity": "generic_metrics_distributions"
             "start": "2023-01-02T03:04:05+00:00",
@@ -486,7 +494,7 @@ def extract_rollup(
 
     # Extract orderby
     order_by = []
-    if "orderby" in mql_context:
+    if "orderby" in mql_context["rollup"]:
         for order_by_info in mql_context["rollup"]["orderby"]:
             direction = (
                 OrderByDirection.ASC
