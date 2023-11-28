@@ -62,4 +62,4 @@ path = "bin/python_processor_infinite.rs"
 required-features = ["pyo3/auto-initialize"]
 
 [patch.crates-io]
-rdkafka = { path = "../../rust-rdkafka" }
+rdkafka = { git = "https://github.com/loewenheim/rust-rdkafka", branch = "base-consumer" }
