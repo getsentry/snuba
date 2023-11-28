@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import pytest
 
@@ -23,6 +23,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
 from snuba.query.snql.parser import parse_snql_query
 
@@ -65,6 +66,66 @@ def with_required(condition: Optional[Expression] = None) -> Expression:
     return required
 
 
+def with_required_mql(condition: Optional[Expression] = None) -> Expression:
+    required = binary_condition(
+        BooleanFunctions.AND,
+        FunctionCall(
+            None,
+            "in",
+            (
+                Column("_snuba_project_id", None, "project_id"),
+                FunctionCall(None, "tuple", (Literal(None, 1),)),
+            ),
+        ),
+        binary_condition(
+            BooleanFunctions.AND,
+            FunctionCall(
+                None,
+                "in",
+                (
+                    Column("_snuba_org_id", None, "org_id"),
+                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                ),
+            ),
+            binary_condition(
+                BooleanFunctions.AND,
+                FunctionCall(
+                    None,
+                    "equals",
+                    (
+                        Column("_snuba_use_case_id", None, "use_case_id"),
+                        Literal(None, "transactions"),
+                    ),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    FunctionCall(
+                        None,
+                        "greaterOrEquals",
+                        (
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime(2021, 1, 1, 0, 0)),
+                        ),
+                    ),
+                    FunctionCall(
+                        None,
+                        "less",
+                        (
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime(2021, 1, 2, 0, 0)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    if condition:
+        return binary_condition(BooleanFunctions.AND, condition, required)
+
+    return required
+
+
 DEFAULT_TEST_QUERY_CONDITIONS = [
     "timestamp >= toDateTime('2021-01-01T00:00:00')",
     "timestamp < toDateTime('2021-01-02T00:00:00')",
@@ -76,7 +137,7 @@ def snql_conditions_with_default(*conditions: str) -> str:
     return " AND ".join(list(conditions) + DEFAULT_TEST_QUERY_CONDITIONS)
 
 
-test_cases = [
+snql_test_cases = [
     pytest.param(
         """
            MATCH (events)
@@ -1182,8 +1243,8 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_query", test_cases)
-def test_format_expressions(query_body: str, expected_query: Query) -> None:
+@pytest.mark.parametrize("query_body, expected_query", snql_test_cases)
+def test_format_expressions_from_snql(query_body: str, expected_query: Query) -> None:
     events = get_dataset("events")
     query, _ = parse_snql_query(str(query_body), events)
 
@@ -1257,3 +1318,162 @@ def test_treeify() -> None:
         Literal(None, 0),
     )
     assert having == expected
+
+
+mql_test_cases = [
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
+                "granularity": "60",
+                "interval": "60",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        Query(
+            QueryEntity(
+                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sum(d:transactions/duration@millisecond)",
+                    FunctionCall(
+                        None,
+                        "sum",
+                        (Column("_snuba_value", None, "value"),),
+                    ),
+                ),
+            ],
+            groupby=[],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                FunctionCall(
+                    None,
+                    "in",
+                    (
+                        Column("_snuba_project_id", None, "project_id"),
+                        FunctionCall(None, "tuple", (Literal(None, 1),)),
+                    ),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    FunctionCall(
+                        None,
+                        "in",
+                        (
+                            Column("_snuba_org_id", None, "org_id"),
+                            FunctionCall(None, "tuple", (Literal(None, 1),)),
+                        ),
+                    ),
+                    binary_condition(
+                        BooleanFunctions.AND,
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column("_snuba_use_case_id", None, "use_case_id"),
+                                Literal(None, "transactions"),
+                            ),
+                        ),
+                        binary_condition(
+                            BooleanFunctions.AND,
+                            FunctionCall(
+                                None,
+                                "greaterOrEquals",
+                                (
+                                    Column("_snuba_timestamp", None, "timestamp"),
+                                    Literal(None, datetime(2021, 1, 1, 0, 0)),
+                                ),
+                            ),
+                            binary_condition(
+                                BooleanFunctions.AND,
+                                FunctionCall(
+                                    None,
+                                    "less",
+                                    (
+                                        Column("_snuba_timestamp", None, "timestamp"),
+                                        Literal(None, datetime(2021, 1, 2, 0, 0)),
+                                    ),
+                                ),
+                                binary_condition(
+                                    BooleanFunctions.AND,
+                                    FunctionCall(
+                                        None,
+                                        "equals",
+                                        (
+                                            Column(
+                                                "_snuba_metric_id", None, "metric_id"
+                                            ),
+                                            Literal(None, "123456"),
+                                        ),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "in",
+                                        (
+                                            SubscriptableReference(
+                                                "_snuba_tags_raw[000888]",
+                                                Column(
+                                                    "_snuba_tags_raw", None, "tags_raw"
+                                                ),
+                                                Literal(None, "000888"),
+                                            ),
+                                            FunctionCall(
+                                                None,
+                                                "tuple",
+                                                (
+                                                    Literal(None, "dist1"),
+                                                    Literal(None, "dist2"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            order_by=[
+                OrderBy(
+                    OrderByDirection.ASC,
+                    Column(
+                        alias="_snuba_timestamp",
+                        table_name=None,
+                        column_name="timestamp",
+                    ),
+                )
+            ],
+            limit=1000,
+            granularity=60,
+        ),
+        id="Select metric with filter",
+    ),
+]
+
+
+@pytest.mark.parametrize("query_body, mql_context, expected_query", mql_test_cases)
+def test_format_expressions_from_mql(
+    query_body: str, mql_context: Dict[str, Any], expected_query: Query
+) -> None:
+    generic_metrics = get_dataset("generic_metrics")
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
