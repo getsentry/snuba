@@ -78,9 +78,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.storage_config.message_processor.python_class_name,
             ),
         ) {
-            (true, Some(func)) => {
-                make_rust_processor(next_step, func, &self.logical_topic_name, &self.concurrency)
-            }
+            (true, Some(func)) => make_rust_processor(
+                next_step,
+                func,
+                &self.logical_topic_name,
+                false,
+                &self.concurrency,
+            ),
             _ => Box::new(
                 PythonTransformStep::new(
                     self.storage_config.message_processor.clone(),
