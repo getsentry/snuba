@@ -23,12 +23,12 @@ struct SubscriptionState<C> {
     last_eof_at: HashMap<Partition, u64>,
 }
 
-struct OffsetStage<'a, TPayload> {
+struct OffsetCommitter<'a, TPayload> {
     group: &'a str,
     broker: &'a mut LocalBroker<TPayload>,
 }
 
-impl<'a, TPayload> CommitOffsets for OffsetStage<'a, TPayload> {
+impl<'a, TPayload> CommitOffsets for OffsetCommitter<'a, TPayload> {
     fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.broker.commit(self.group, offsets);
         Ok(())
@@ -139,7 +139,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
                 }
                 Callback::Revoke(partitions) => {
                     if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
-                        let offset_stage = OffsetStage {
+                        let offset_stage = OffsetCommitter {
                             group: &self.group,
                             broker: &mut self.broker,
                         };
@@ -257,7 +257,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             .unsubscribe(self.id, self.group.clone())
             .unwrap();
         if let Some(c) = self.subscription_state.callbacks.as_mut() {
-            let offset_stage = OffsetStage {
+            let offset_stage = OffsetCommitter {
                 group: &self.group,
                 broker: &mut self.broker,
             };
