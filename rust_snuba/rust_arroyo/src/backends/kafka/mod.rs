@@ -15,7 +15,6 @@ use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -71,9 +70,9 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-struct OffsetCommitter<C: AssignmentCallbacks>(Arc<RwLock<Option<BaseConsumer<CustomContext<C>>>>>);
+struct OffsetCommitter<'a, C: AssignmentCallbacks>(&'a BaseConsumer<CustomContext<C>>);
 
-impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
+impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
     fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         let mut partitions = TopicPartitionList::with_capacity(offsets.len());
         for (partition, offset) in offsets {
@@ -84,13 +83,7 @@ impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
             )?;
         }
 
-        self.0
-            .read()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .commit(&partitions, CommitMode::Sync)
-            .unwrap();
+        self.0.commit(&partitions, CommitMode::Sync).unwrap();
 
         Ok(())
     }
@@ -99,13 +92,12 @@ impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
 pub struct CustomContext<C: AssignmentCallbacks> {
     callbacks: C,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    base_consumer: Arc<RwLock<Option<BaseConsumer<Self>>>>,
 }
 
 impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {}
 
 impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
-    fn pre_rebalance(&self, rebalance: &Rebalance) {
+    fn pre_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Revoke(list) = rebalance {
             let mut partitions: Vec<Partition> = Vec::new();
             for partition in list.elements().iter() {
@@ -124,11 +116,11 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             self.callbacks
-                .on_revoke(OffsetCommitter(self.base_consumer.clone()), partitions);
+                .on_revoke(OffsetCommitter(base_consumer), partitions);
         }
     }
 
-    fn post_rebalance(&self, rebalance: &Rebalance) {
+    fn post_rebalance(&self, _base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
             let mut map: HashMap<Partition, u64> = HashMap::new();
             for partition in list.elements().iter() {
@@ -161,7 +153,7 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    pub consumer: Arc<RwLock<Option<BaseConsumer<CustomContext<C>>>>>,
+    pub consumer: Option<BaseConsumer<CustomContext<C>>>,
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
@@ -170,7 +162,7 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig) -> Self {
         Self {
-            consumer: Arc::new(RwLock::new(None)),
+            consumer: None,
             config,
             state: KafkaConsumerState::NotSubscribed,
             offsets: Arc::new(Mutex::new(HashMap::new())),
@@ -183,7 +175,6 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         let context = CustomContext {
             callbacks,
             consumer_offsets: self.offsets.clone(),
-            base_consumer: self.consumer.clone(),
         };
 
         let mut config_obj: ClientConfig = self.config.clone().into();
@@ -195,15 +186,14 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         consumer.subscribe(&topic_str)?;
 
-        *self.consumer.write().unwrap() = Some(consumer);
+        self.consumer = Some(consumer);
         self.state = KafkaConsumerState::Consuming;
         Ok(())
     }
 
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
-        let consumer = self.consumer.read().unwrap();
-        consumer.as_ref().unwrap().unsubscribe();
+        self.consumer.as_ref().unwrap().unsubscribe();
 
         Ok(())
     }
@@ -215,8 +205,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         self.state.assert_consuming_state()?;
 
         let duration = timeout.unwrap_or(Duration::ZERO);
-        let consumer = self.consumer.read().unwrap();
-        let res = consumer.as_ref().unwrap().poll(duration);
+        let res = self.consumer.as_ref().unwrap().poll(duration);
 
         match res {
             None => Ok(None),
@@ -250,8 +239,10 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             }
         }
 
-        let consumer = self.consumer.read().unwrap();
-        consumer.as_ref().unwrap().pause(&topic_partition_list)?;
+        self.consumer
+            .as_ref()
+            .unwrap()
+            .pause(&topic_partition_list)?;
 
         Ok(())
     }
@@ -267,8 +258,10 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
         }
 
-        let consumer = self.consumer.read().unwrap();
-        consumer.as_ref().unwrap().resume(&topic_partition_list)?;
+        self.consumer
+            .as_ref()
+            .unwrap()
+            .resume(&topic_partition_list)?;
 
         Ok(())
     }
@@ -300,8 +293,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             )?;
         }
 
-        let consumer = self.consumer.read().unwrap();
-        consumer
+        self.consumer
             .as_ref()
             .unwrap()
             .commit(&partitions, CommitMode::Sync)
@@ -312,7 +304,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
     fn close(&mut self) {
         self.state = KafkaConsumerState::Closed;
-        *self.consumer.write().unwrap() = None;
+        self.consumer = None;
     }
 
     fn closed(&self) -> bool {
