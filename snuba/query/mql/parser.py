@@ -20,6 +20,15 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
+from snuba.query.snql.anonymize import format_snql_anonymized
+from snuba.query.snql.parser import (
+    POST_PROCESSORS,
+    VALIDATORS,
+    _post_process,
+    _replace_time_condition,
+    _treeify_or_and_conditions,
+)
+from snuba.state import explain_meta
 
 logger = logging.getLogger("snuba.mql.parser")
 
@@ -311,10 +320,11 @@ def extract_args_from_mql_context(
     if "indexer_mappings" not in mql_context:
         raise InvalidQueryException("No indexer mappings specified in MQL context.")
 
+    filters.extend(extract_scope(parsed, mql_context))
+    filters.extend(extract_start_end_time(parsed, mql_context))
     filters.extend(extract_metric_id(parsed, mql_context))
     filters.extend(extract_resolved_tag_filters(parsed, mql_context))
-    filters.extend(extract_start_end_time(parsed, mql_context))
-    filters.extend(extract_scope(parsed, mql_context))
+
     groupbys.extend(extract_resolved_gropupby(parsed, mql_context))
     order_by, granularity, totals = extract_rollup(parsed, mql_context)
     limit = extract_limit(mql_context)
@@ -369,17 +379,38 @@ def extract_resolved_tag_filters(
                 lhs_column_name = f"tags_raw[{resolved}]"
             else:
                 lhs_column_name = lhs
-            filters.append(
-                binary_condition(
-                    operator,
-                    Column(
-                        alias=lhs,
-                        table_name=None,
-                        column_name=lhs_column_name,
-                    ),
-                    Literal(alias=None, value=rhs),
+
+            if isinstance(rhs, str):
+                filters.append(
+                    binary_condition(
+                        operator,
+                        Column(
+                            alias=lhs,
+                            table_name=None,
+                            column_name=lhs_column_name,
+                        ),
+                        Literal(alias=None, value=rhs),
+                    )
                 )
-            )
+            else:
+                filters.append(
+                    binary_condition(
+                        operator,
+                        Column(
+                            alias=lhs,
+                            table_name=None,
+                            column_name=lhs_column_name,
+                        ),
+                        FunctionCall(
+                            alias=None,
+                            function_name="tuple",
+                            parameters=[
+                                Literal(alias=None, value=item) for item in rhs
+                            ],
+                        ),
+                    )
+                )
+
     return filters
 
 
@@ -428,12 +459,13 @@ def extract_scope(
     filters.append(
         binary_condition(
             ConditionFunction.IN.value,
-            Column(alias=None, table_name=None, column_name="org_id"),
+            Column(alias=None, table_name=None, column_name="project_id"),
             FunctionCall(
                 alias=None,
                 function_name="tuple",
                 parameters=[
-                    Literal(alias=None, value=org_id) for org_id in scope["org_ids"]
+                    Literal(alias=None, value=int(project_id))
+                    for project_id in scope["project_ids"]
                 ],
             ),
         )
@@ -441,13 +473,13 @@ def extract_scope(
     filters.append(
         binary_condition(
             ConditionFunction.IN.value,
-            Column(alias=None, table_name=None, column_name="project_id"),
+            Column(alias=None, table_name=None, column_name="org_id"),
             FunctionCall(
                 alias=None,
                 function_name="tuple",
                 parameters=[
-                    Literal(alias=None, value=project_id)
-                    for project_id in scope["project_ids"]
+                    Literal(alias=None, value=int(org_id))
+                    for org_id in scope["org_ids"]
                 ],
             ),
         )
@@ -566,6 +598,37 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        parse_mql_query_initial(body, mql_context)
+        query = parse_mql_query_initial(body, mql_context)
 
-    # TODO: Add necessary post processors.
+    if settings and settings.get_dry_run():
+        explain_meta.set_original_ast(str(query))
+
+    # NOTE (volo): The anonymizer that runs after this function call chokes on
+    # OR and AND clauses with multiple parameters so we have to treeify them
+    # before we run the anonymizer and the rest of the post processors
+    with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+        _post_process(query, [_treeify_or_and_conditions], settings)
+
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
+
+    with sentry_sdk.start_span(op="processor", description="post_processors"):
+        _post_process(
+            query,
+            POST_PROCESSORS,
+            settings,
+        )
+
+    # Custom processing to tweak the AST before validation
+    with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        if custom_processing is not None:
+            _post_process(query, custom_processing, settings)
+
+    # Time based processing
+    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+        _post_process(query, [_replace_time_condition], settings)
+
+    # Validating
+    with sentry_sdk.start_span(op="validate", description="expression_validators"):
+        _post_process(query, VALIDATORS)
+    return query, snql_anonymized

@@ -240,12 +240,6 @@ def test_initial_parsing_snql() -> None:
     assert isinstance(query.get_groupby(), list)
 
 
-def test_metrics_initial_parsing_snql() -> None:
-    query_body = "MATCH (generic_metrics_distributions) SELECT sum(value) AS dist_min WHERE org_id = 1 AND project_id = 11 AND metric_id = 0123456 AND timestamp >= toDateTime('2023-11-23T18:30:00') AND timestamp < toDateTime('2023-11-23T22:30:00') GRANULARITY 60"
-    query = parse_snql_query_initial(query_body)
-    print(query.__dict__)
-
-
 def test_initial_parsing_mql() -> None:
     body = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}'
     serialized_mql_context = {
@@ -329,8 +323,6 @@ def test_equality_of__snql_and_mql_parsers() -> None:
     }
     snql_query = parse_snql_query_initial(snql_body)
     mql_body = parse_mql_query_initial(mql_body, serialized_mql_context)
-    print(snql_query.__dict__)
-    print(mql_body.__dict__)
     assert mql_body == snql_query
 
 
