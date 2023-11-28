@@ -71,7 +71,9 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-impl<C: AssignmentCallbacks> CommitOffsets for Arc<RwLock<Option<BaseConsumer<CustomContext<C>>>>> {
+struct OffsetCommitter<C: AssignmentCallbacks>(Arc<RwLock<Option<BaseConsumer<CustomContext<C>>>>>);
+
+impl<C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<C> {
     fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         let mut partitions = TopicPartitionList::with_capacity(offsets.len());
         for (partition, offset) in offsets {
@@ -82,7 +84,8 @@ impl<C: AssignmentCallbacks> CommitOffsets for Arc<RwLock<Option<BaseConsumer<Cu
             )?;
         }
 
-        self.read()
+        self.0
+            .read()
             .unwrap()
             .as_ref()
             .unwrap()
@@ -121,7 +124,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             self.callbacks
-                .on_revoke(self.base_consumer.clone(), partitions);
+                .on_revoke(OffsetCommitter(self.base_consumer.clone()), partitions);
         }
     }
 
