@@ -247,9 +247,8 @@ def test_metrics_initial_parsing_snql() -> None:
 
 
 def test_initial_parsing_mql() -> None:
-    # Initial parsing created a map object for groupby clause, should be a list
-    body = 'sum(`d:transactions/duration@millisecond`{foo:"foz", hee:"haw"}){bar:"baz"} by transaction'
-    mql_context = {
+    body = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}'
+    serialized_mql_context = {
         "entity": "generic_metrics_distributions",
         "start": "2023-11-23T18:30:00",
         "end": "2023-11-23T22:30:00",
@@ -268,27 +267,71 @@ def test_initial_parsing_mql() -> None:
         "offset": "",
         "indexer_mappings": {
             "d:transactions/duration@millisecond": "123456",
-            "transaction": "789012",
-            "foo": "111111",
-            "hee": "222222",
-            "bar": "333333",
+            "dist": "000888",
         },
     }
 
-    query = parse_mql_query_initial(body, mql_context)
-    print(query.__dict__)
-    # print(query.get_columns_referenced_in_select())
-    # assert query.get_columns_referenced_in_select() == {
-    #     Column("_snuba_value", None, "value"),
-    #     Column("_snuba_transaction", None, "tags_raw[789012]"),
-    # }
-    # print(query.get_groupby())
-    # print(query.get_all_ast_referenced_columns())
-    # print(query.get_orderby())
-    # print(query.get_limit())
-    # print(query.get_offset())
-    # print(query.has_totals())
-    # print(query.get_granularity())
+    query = parse_mql_query_initial(body, serialized_mql_context)
+    expressions = query.get_selected_columns()
+    assert len(expressions) == 1
+    assert sorted([expr.name for expr in expressions]) == [
+        "sum(d:transactions/duration@millisecond)",
+    ]
+    assert query.get_all_ast_referenced_columns() == {
+        Column(None, None, "org_id"),
+        Column(None, None, "project_id"),
+        Column(None, None, "use_case_id"),
+        Column(None, None, "metric_id"),
+        Column(None, None, "timestamp"),
+        Column(None, None, "value"),
+        Column("dist", None, "tags_raw[000888]"),
+    }
+    assert list(query.get_groupby()) == []
+    assert list(query.get_orderby()) == [
+        OrderBy(
+            OrderByDirection.ASC,
+            Column(
+                alias=None,
+                table_name=None,
+                column_name="timestamp",
+            ),
+        )
+    ]
+    assert query.get_limit() == 1000
+    assert query.get_offset() == 0
+    assert query.has_totals() == False
+    assert query.get_granularity() == 60
+
+
+def test_equality_of__snql_and_mql_parsers() -> None:
+    snql_body = "MATCH (generic_metrics_distributions) SELECT sum(value) AS dist_min WHERE org_id = 1 AND project_id = 11 AND metric_id = 0123456 AND timestamp >= toDateTime('2023-11-23T18:30:00') AND timestamp < toDateTime('2023-11-23T22:30:00') GRANULARITY 60"
+    mql_body = "sum(`d:transactions/duration@millisecond`)"
+    serialized_mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
+            "granularity": "60",
+            "interval": "60",
+            "with_totals": "",
+        },
+        "scope": {
+            "org_ids": ["1"],
+            "project_ids": ["11"],
+            "use_case_id": "transactions",
+        },
+        "limit": "",
+        "offset": "",
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": "123456",
+        },
+    }
+    snql_query = parse_snql_query_initial(snql_body)
+    mql_body = parse_mql_query_initial(mql_body, serialized_mql_context)
+    print(snql_query.__dict__)
+    print(mql_body.__dict__)
+    assert mql_body == snql_query
 
 
 def test_alias_regex_allows_parentheses() -> None:
