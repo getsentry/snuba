@@ -215,8 +215,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
-                self.consumer.stage_offsets(request.positions).unwrap();
-                self.consumer.commit_offsets().unwrap();
+                self.consumer.commit_offsets(request.positions).unwrap();
             }
             Err(e) => {
                 println!("TODOO: Handle invalid message {:?}", e);
