@@ -44,6 +44,16 @@ struct ConsumerState<TPayload> {
 }
 
 impl<TPayload> ConsumerState<TPayload> {
+    pub fn new(processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>) -> Self {
+        Self {
+            processing_factory,
+            strategy: None,
+            backpressure_timestamp: None,
+            is_paused: false,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+        }
+    }
+
     fn clear_backpressure(&mut self) {
         if self.backpressure_timestamp.is_some() {
             self.metrics_buffer.incr_timing(
@@ -133,13 +143,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
         dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState {
-            processing_factory,
-            strategy: None,
-            backpressure_timestamp: None,
-            is_paused: false,
-            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
-        }));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(processing_factory)));
 
         Self {
             consumer,
