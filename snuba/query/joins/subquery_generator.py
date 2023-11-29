@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import replace
-from typing import Generator, List, Mapping, Set
+from typing import Generator, Mapping
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -33,14 +35,18 @@ class SubqueryDraft:
 
     def __init__(self, data_source: Entity) -> None:
         self.__data_source = data_source
-        self.__selected_expressions: Set[SelectedExpression] = set()
-        self.__conditions: List[Expression] = []
+        self.__selected_expressions: set[SelectedExpression] = set()
+        self.__conditions: list[Expression] = []
+        self.__granularity: int | None = None
 
     def add_select_expression(self, expression: SelectedExpression) -> None:
         self.__selected_expressions.add(expression)
 
     def add_condition(self, condition: Expression) -> None:
         self.__conditions.append(condition)
+
+    def set_granularity(self, granularity: int | None) -> None:
+        self.__granularity = granularity
 
     def build_query(self) -> ProcessableQuery[Entity]:
         return LogicalQuery(
@@ -54,6 +60,7 @@ class SubqueryDraft:
             condition=combine_and_conditions(self.__conditions)
             if self.__conditions
             else None,
+            granularity=self.__granularity,
         )
 
 
@@ -276,6 +283,9 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
             query.set_ast_condition(combine_and_conditions(main_conditions))
         else:
             query.set_ast_condition(None)
+
+    for s in subqueries.values():
+        s.set_granularity(query.get_granularity())
 
     # TODO: push down the group by when it is the same as the join key.
     query.set_ast_groupby(
