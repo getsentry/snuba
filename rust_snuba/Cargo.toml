@@ -60,6 +60,3 @@ harness = false
 name = "python-processor-infinite"
 path = "bin/python_processor_infinite.rs"
 required-features = ["pyo3/auto-initialize"]
-
-[patch.crates-io]
-rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer" }
