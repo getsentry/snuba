@@ -160,33 +160,27 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
 
             let offset = self.subscription_state.offsets[partition];
             let message = self.broker.consume(partition, offset).unwrap();
-            match message {
-                Some(msg) => {
-                    new_offset = Some((*partition, msg.offset + 1));
-                    ret_message = Some(msg);
-                    break;
-                }
-                None => {
-                    if self.enable_end_of_partition
-                        && (!self.subscription_state.last_eof_at.contains_key(partition)
-                            || offset > self.subscription_state.last_eof_at[partition])
-                    {
-                        self.subscription_state
-                            .last_eof_at
-                            .insert(*partition, offset);
-                        return Err(ConsumerError::EndOfPartition);
-                    }
-                }
+            if let Some(msg) = message {
+                new_offset = Some((*partition, msg.offset + 1));
+                ret_message = Some(msg);
+                break;
+            }
+
+            if self.enable_end_of_partition
+                && (!self.subscription_state.last_eof_at.contains_key(partition)
+                    || offset > self.subscription_state.last_eof_at[partition])
+            {
+                self.subscription_state
+                    .last_eof_at
+                    .insert(*partition, offset);
+                return Err(ConsumerError::EndOfPartition);
             }
         }
 
-        match new_offset {
-            Some((partition, offset)) => {
-                self.subscription_state.offsets.insert(partition, offset);
-                Ok(ret_message)
-            }
-            None => Ok(None),
-        }
+        Ok(new_offset.and_then(|(partition, offset)| {
+            self.subscription_state.offsets.insert(partition, offset);
+            ret_message
+        }))
     }
 
     fn pause(&mut self, partitions: HashSet<Partition>) -> Result<(), ConsumerError> {

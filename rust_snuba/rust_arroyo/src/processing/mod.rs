@@ -89,7 +89,11 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
                 tracing::info!("Committing offsets");
-                let _ = commit_offsets.commit(commit_request.positions);
+                let res = commit_offsets.commit(commit_request.positions);
+
+                if let Err(err) = res {
+                    tracing::error!("Failed to commit offsets: {:?}", err);
+                }
             }
         }
         state.strategy = None;
@@ -160,13 +164,11 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         metrics.increment("arroyo.consumer.run.count", 1, None);
 
         if self.consumer_state.lock().unwrap().is_paused {
-            // If the consumer waas paused, it should not be returning any messages
-            // on ``poll``.
+            // If the consumer was paused, it should not be returning any messages
+            // on `poll`.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
-
-            match res {
-                None => {}
-                Some(_) => return Err(RunError::InvalidState),
+            if res.is_some() {
+                return Err(RunError::InvalidState);
             }
         } else if self.message.is_none() {
             // Otherwise, we need to try fetch a new message from the consumer,
@@ -355,12 +357,9 @@ mod tests {
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-            Ok(match self.message.as_ref() {
-                None => None,
-                Some(message) => Some(CommitRequest {
-                    positions: HashMap::from_iter(message.committable()),
-                }),
-            })
+            Ok(self.message.as_ref().map(|message| CommitRequest {
+                positions: HashMap::from_iter(message.committable()),
+            }))
         }
 
         fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {

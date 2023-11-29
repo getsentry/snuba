@@ -142,14 +142,11 @@ impl<TPayload> BufferedMessages<TPayload> {
 
     // Add message to the buffer.
     pub fn append(&mut self, message: BrokerMessage<TPayload>) {
-        match self.buffered_messages.get_mut(&message.partition) {
-            Some(messages) => {
-                messages.push_back(message);
-            }
-            None => {
-                self.buffered_messages
-                    .insert(message.partition, VecDeque::from([message]));
-            }
+        if let Some(messages) = self.buffered_messages.get_mut(&message.partition) {
+            messages.push_back(message);
+        } else {
+            self.buffered_messages
+                .insert(message.partition, VecDeque::from([message]));
         };
     }
 
