@@ -279,7 +279,12 @@ def extract_selected_columns(
     if "aggregate" in parsed:
         selected_columns.append(parsed["aggregate"])
     if "groupby" in resolved_args:
-        selected_columns.extend(resolved_args["groupby"])
+        columns = resolved_args["groupby"]
+        for column in columns:
+            assert isinstance(column, Column)
+            selected_columns.append(
+                SelectedExpression(name=column.alias, expression=column)
+            )
     return selected_columns
 
 
@@ -506,13 +511,10 @@ def extract_resolved_gropupby(
             else:
                 resolved_column_name = groupby_col_name
             groupbys.append(
-                SelectedExpression(
-                    name=groupby_col_name,
-                    expression=Column(
-                        alias=groupby_col_name,
-                        table_name=None,
-                        column_name=resolved_column_name,
-                    ),
+                Column(
+                    alias=groupby_col_name,
+                    table_name=None,
+                    column_name=resolved_column_name,
                 )
             )
     return groupbys
