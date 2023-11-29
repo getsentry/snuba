@@ -153,6 +153,7 @@ fn create_factory(
         concurrency,
         None,
         true,
+        None,
     );
     Box::new(factory)
 }

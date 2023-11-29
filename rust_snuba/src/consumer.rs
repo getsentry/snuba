@@ -34,6 +34,7 @@ pub fn consumer(
     concurrency: usize,
     use_rust_processor: bool,
     python_max_queue_depth: Option<usize>,
+    health_check_file: Option<&str>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -44,10 +45,12 @@ pub fn consumer(
             concurrency,
             use_rust_processor,
             python_max_queue_depth,
+            health_check_file,
         )
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
@@ -56,6 +59,7 @@ pub fn consumer_impl(
     concurrency: usize,
     use_rust_processor: bool,
     python_max_queue_depth: Option<usize>,
+    health_check_file: Option<&str>,
 ) {
     setup_logging();
 
@@ -151,6 +155,7 @@ pub fn consumer_impl(
             ConcurrencyConfig::new(concurrency),
             python_max_queue_depth,
             use_rust_processor,
+            health_check_file.map(ToOwned::to_owned),
         )),
         dlq_policy,
     );
