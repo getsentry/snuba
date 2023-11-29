@@ -33,7 +33,7 @@ from snuba.state import explain_meta
 logger = logging.getLogger("snuba.mql.parser")
 
 
-class MQLVisitor(NodeVisitor):
+class MQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
@@ -57,33 +57,47 @@ class MQLVisitor(NodeVisitor):
             raise e
 
     def visit_expression(
-        self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, Any]:
+        self, node: Node, children: Tuple[dict[str, str | dict[str, str]], Any]
+    ) -> dict[str, str | dict[str, str]]:
         args, zero_or_more_others = children
         return args
 
     def visit_expr_op(self, node: Node, children: Sequence[Any]) -> Any:
         raise InvalidQueryException("Arithmetic function not supported yet")
 
-    def visit_term(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
+    def visit_term(
+        self, node: Node, children: Tuple[dict[str, str | dict[str, str]], Any]
+    ) -> dict[str, str | dict[str, str]]:
         term, zero_or_more_others = children
         if zero_or_more_others:
             raise InvalidQueryException("Arithmetic function not supported yet")
         return term
 
-    def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
+    def visit_term_op(self, node: Node, children: Sequence[Any]) -> str:
         raise InvalidQueryException("Arithmetic function not supported yet")
 
-    def visit_coefficient(self, node: Node, children: Any) -> Mapping[str, Any]:
+    def visit_coefficient(
+        self, node: Node, children: Tuple[dict[str, str | dict[str, str]]]
+    ) -> dict[str, str | dict[str, str]]:
         return children[0]
 
     def visit_number(self, node: Node, children: Sequence[Any]) -> float:
         return float(node.text)
 
-    def visit_filter(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
+    def visit_filter(
+        self,
+        node: Node,
+        children: Tuple[
+            dict[str, list[str]],
+            Sequence[Any],
+            Sequence[Any],
+            Any,
+        ],
+    ) -> dict[str, list[str]]:
         args, packed_filters, packed_groupbys, *_ = children
         assert isinstance(args, dict)
         if packed_filters:
+            assert isinstance(packed_filters, list)
             _, _, first, zero_or_more_others, *_ = packed_filters[0]
             new_filters = [first, *(v for _, _, _, v in zero_or_more_others)]
             if "filters" in args:
@@ -92,6 +106,7 @@ class MQLVisitor(NodeVisitor):
                 args["filters"] = new_filters
 
         if packed_groupbys:
+            assert isinstance(packed_groupbys, list)
             group_by = packed_groupbys[0]
             if not isinstance(group_by, list):
                 group_by = [group_by]
@@ -103,30 +118,67 @@ class MQLVisitor(NodeVisitor):
         return args
 
     def visit_condition(
-        self, node: Node, children: Sequence[Any]
-    ) -> Tuple[str, Any, Any]:
+        self,
+        node: Node,
+        children: Tuple[
+            Optional[list[Op]], Sequence[str], Any, Any, Any, Union[str, Sequence[str]]
+        ],
+    ) -> Tuple[str, str, Union[str, Sequence[str]]]:
         condition_op, lhs, _, _, _, rhs = children
         op = Op.EQ
         if not condition_op and isinstance(rhs, list):
             op = Op.IN
-        elif len(condition_op) == 1 and condition_op[0] == Op.NOT:
+        elif (
+            isinstance(condition_op, list)
+            and len(condition_op) == 1
+            and condition_op[0] == Op.NOT
+        ):
             if isinstance(rhs, str):
                 op = Op.NEQ
             elif isinstance(rhs, list):
                 op = Op.NOT_IN
         return (OPERATOR_TO_FUNCTION[op].value, lhs[0], rhs)
 
-    def visit_function(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
+    def visit_function(
+        self,
+        node: Node,
+        children: Tuple[
+            dict[
+                str,
+                Union[
+                    str,
+                    Sequence[str],
+                    Tuple[str, str, Union[str, Sequence[str]]],
+                    SelectedExpression,
+                ],
+            ],
+            Sequence[Union[str, Sequence[str]]],
+        ],
+    ) -> dict[
+        str,
+        Union[
+            str,
+            Sequence[str],
+            Tuple[str, str, Union[str, Sequence[str]]],
+            SelectedExpression,
+        ],
+    ]:
+        print("visited function")
+        print(children)
         target, packed_groupbys = children
         if packed_groupbys:
             group_by = packed_groupbys[0]
-            if not isinstance(group_by, list):
+            if isinstance(group_by, str):
                 group_by = [group_by]
             target["groupby"] = group_by
 
         return target
 
-    def visit_group_by(self, node: Node, children: Sequence[Any]) -> Any:
+    def visit_group_by(
+        self,
+        node: Node,
+        children: Tuple[Any, Any, Any, Sequence[Sequence[str]]],
+    ) -> Sequence[str]:
         *_, groupby = children
         columns = groupby[0]
         return columns
@@ -135,18 +187,21 @@ class MQLVisitor(NodeVisitor):
         return Op(node.text)
 
     def visit_tag_key(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return node.text
 
     def visit_tag_value(
-        self, node: Node, children: Sequence[Union[str, Sequence[str]]]
-    ) -> str:
+        self, node: Node, children: Sequence[Sequence[str]]
+    ) -> Union[str, Sequence[str]]:
         tag_value = children[0]
         return tag_value
 
     def visit_unquoted_string(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return str(node.text)
 
     def visit_quoted_string(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return str(node.text[1:-1])
 
     def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
@@ -154,6 +209,7 @@ class MQLVisitor(NodeVisitor):
         return [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return node.text
 
     def visit_group_by_name_tuple(
@@ -162,23 +218,33 @@ class MQLVisitor(NodeVisitor):
         _, _, first, zero_or_more_others, _, _ = children
         return [first, *(v for _, _, _, v in zero_or_more_others)]
 
-    def visit_target(self, node: Node, children: Sequence[Any]) -> Mapping[str, Any]:
+    def visit_target(
+        self,
+        node: Node,
+        children: Sequence[Union[Mapping[str, str], Sequence[Mapping[str, str]]]],
+    ) -> Mapping[str, str]:
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
+        assert isinstance(target, dict)
         return target
 
-    def visit_variable(self, node: Node, children: Sequence[Any]) -> Any:
+    def visit_variable(self, node: Node, children: Sequence[Any]) -> str:
         raise InvalidQueryException("Variables are not supported yet")
 
     def visit_nested_expression(
-        self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, Any]:
+        self, node: Node, children: Tuple[Any, Any, dict[str, str | dict[str, str]]]
+    ) -> dict[str, str | dict[str, str]]:
+        print("nested_expression")
         return children[2]
 
     def visit_aggregate(
-        self, node: Node, children: Sequence[Any]
-    ) -> SelectedExpression:
+        self,
+        node: Node,
+        children: Tuple[
+            str, Tuple[Any, Any, dict[str, Union[str, SelectedExpression]], Any, Any]
+        ],
+    ) -> dict[str, Union[str, SelectedExpression]]:
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
 
@@ -193,35 +259,37 @@ class MQLVisitor(NodeVisitor):
             expression=FunctionCall(
                 alias=None,
                 function_name=aggregate_name,
-                parameters=[Column(alias=None, table_name=None, column_name="value")],
+                parameters=(Column(alias=None, table_name=None, column_name="value"),),
             ),
         )
         return target
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return node.text
 
-    def visit_quoted_mri(
-        self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, str]:
+    def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> dict[str, str]:
+        assert isinstance(node.text, str)
         return {"mri": str(node.text[1:-1])}
 
-    def visit_unquoted_mri(
-        self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, str]:
+    def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> dict[str, str]:
+        assert isinstance(node.text, str)
         return {"mri": str(node.text)}
 
     def visit_quoted_public_name(
         self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, str]:
+    ) -> dict[str, str]:
+        assert isinstance(node.text, str)
         return {"public_name": str(node.text[1:-1])}
 
     def visit_unquoted_public_name(
         self, node: Node, children: Sequence[Any]
-    ) -> Mapping[str, str]:
+    ) -> dict[str, str]:
+        assert isinstance(node.text, str)
         return {"public_name": str(node.text)}
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return node.text
 
     def generic_visit(self, node: Node, children: Sequence[Any]) -> Any:
@@ -248,7 +316,7 @@ def parse_mql_query_initial(
         raise InvalidQueryException("No entity specified in MQL context")
     entity_name = mql_context["entity"]
     entity_key = EntityKey(entity_name)
-    args = {
+    args: dict[str, Any] = {
         "from_clause": QueryEntity(
             key=entity_key, schema=get_entity(entity_key).get_data_model()
         ),
@@ -319,7 +387,7 @@ def extract_args_from_mql_context(
             }
         }
     """
-    resolved_args = {}
+    resolved_args: dict[str, Any] = {}
     filters = []
     groupbys = []
     if "indexer_mappings" not in mql_context:
@@ -409,9 +477,9 @@ def extract_resolved_tag_filters(
                         FunctionCall(
                             alias=None,
                             function_name="tuple",
-                            parameters=[
+                            parameters=tuple(
                                 Literal(alias=None, value=item) for item in rhs
-                            ],
+                            ),
                         ),
                     )
                 )
@@ -435,7 +503,7 @@ def extract_start_end_time(
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
-                parameters=[Literal(alias=None, value=start)],
+                parameters=(Literal(alias=None, value=start),),
             ),
         )
     )
@@ -447,7 +515,7 @@ def extract_start_end_time(
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
-                parameters=[Literal(alias=None, value=end)],
+                parameters=(Literal(alias=None, value=end),),
             ),
         )
     )
@@ -468,10 +536,10 @@ def extract_scope(
             FunctionCall(
                 alias=None,
                 function_name="tuple",
-                parameters=[
+                parameters=tuple(
                     Literal(alias=None, value=int(project_id))
                     for project_id in scope["project_ids"]
-                ],
+                ),
             ),
         )
     )
@@ -482,10 +550,10 @@ def extract_scope(
             FunctionCall(
                 alias=None,
                 function_name="tuple",
-                parameters=[
+                parameters=tuple(
                     Literal(alias=None, value=int(org_id))
                     for org_id in scope["org_ids"]
-                ],
+                ),
             ),
         )
     )
@@ -501,7 +569,7 @@ def extract_scope(
 
 def extract_resolved_gropupby(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[FunctionCall]:
+) -> list[Column]:
     groupbys = []
     if "groupby" in parsed:
         for groupby_col_name in parsed["groupby"]:
@@ -522,7 +590,7 @@ def extract_resolved_gropupby(
 
 def extract_rollup(
     parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> tuple[list[FunctionCall], int, bool]:
+) -> tuple[list[OrderBy], int, bool]:
     if "rollup" not in mql_context:
         raise InvalidQueryException("No rollup specified in MQL context.")
 
