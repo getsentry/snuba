@@ -7,12 +7,12 @@ use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::types::{KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> anyhow::Result<RowData> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -20,7 +20,11 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&querylog_msg)?;
 
-    Ok(RowData::from_rows(vec![serialized]))
+    Ok(InsertBatch {
+        rows: RowData::from_rows(vec![serialized]),
+        origin_timestamp: None,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]

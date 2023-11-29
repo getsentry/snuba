@@ -16,7 +16,7 @@ use chrono::{DateTime, Utc};
 use pyo3::prelude::*;
 
 use crate::config::MessageProcessorConfig;
-use crate::types::{BytesInsertBatch, RowData};
+use crate::types::{BytesInsertBatch, InsertBatch, RowData};
 
 struct MessageMeta {
     partition: Partition,
@@ -27,12 +27,12 @@ struct MessageMeta {
 enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
-        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
+        join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
         submit_timestamp: SystemTime,
     },
     Immediate {
         original_message_meta: MessageMeta,
-        result: Result<RowData, String>,
+        result: Result<InsertBatch, String>,
         submit_timestamp: SystemTime,
     },
 }
@@ -138,10 +138,12 @@ impl PythonTransformStep {
         };
 
         match message_result {
-            Ok(rows) => {
+            Ok(insert_batch) => {
                 let replacement = BytesInsertBatch::new(
+                    insert_batch.rows,
                     original_message_meta.timestamp,
-                    rows,
+                    insert_batch.origin_timestamp,
+                    insert_batch.sentry_received_timestamp,
                     BTreeMap::from([(
                         original_message_meta.partition.index,
                         (
@@ -230,15 +232,23 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
                     tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<RowData> {
+                    Python::with_gil(|py| -> PyResult<InsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
                                 .into();
 
                         let result = fun.call1(py, args)?;
-                        let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(RowData::from_rows(result_decoded))
+                        let (result_decoded, origin_timestamp, sentry_received_timestamp): (
+                            Vec<Vec<u8>>,
+                            _,
+                            _,
+                        ) = result.extract(py)?;
+                        Ok(InsertBatch {
+                            rows: RowData::from_rows(result_decoded),
+                            origin_timestamp,
+                            sentry_received_timestamp,
+                        })
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };

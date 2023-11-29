@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<RowData> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -22,7 +22,11 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&span)?;
 
-    Ok(RowData::from_rows(vec![serialized]))
+    Ok(InsertBatch {
+        rows: RowData::from_rows(vec![serialized]),
+        origin_timestamp: None,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]

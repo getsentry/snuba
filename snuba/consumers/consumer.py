@@ -91,6 +91,9 @@ class CommitLogConfig(NamedTuple):
 
 class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
+
+    # refer to InsertBatch for the meaning of these values, or the Rust
+    # implementation of BytesInsertBatch
     origin_timestamp: Optional[datetime]
     sentry_received_timestamp: Optional[datetime] = None
 
