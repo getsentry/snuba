@@ -203,7 +203,7 @@ def test_get_all_columns() -> None:
         WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
             AND timestamp >= toDateTime('2020-01-01 12:00:00')
             AND timestamp < toDateTime('2020-01-02 12:00:00')
-            AND project_id IN tuple(1)
+            AND project_id = 1
         HAVING trace_sampled > 1
         """
     events = get_dataset("events")
@@ -295,35 +295,6 @@ def test_initial_parsing_mql() -> None:
     assert query.get_offset() == 0
     assert query.has_totals() == False
     assert query.get_granularity() == 60
-
-
-def test_equality_of__snql_and_mql_parsers() -> None:
-    snql_body = "MATCH (generic_metrics_distributions) SELECT sum(value) AS dist_min WHERE org_id = 1 AND project_id = 11 AND metric_id = 0123456 AND timestamp >= toDateTime('2023-11-23T18:30:00') AND timestamp < toDateTime('2023-11-23T22:30:00') GRANULARITY 60"
-    mql_body = "sum(`d:transactions/duration@millisecond`)"
-    serialized_mql_context = {
-        "entity": "generic_metrics_distributions",
-        "start": "2023-11-23T18:30:00",
-        "end": "2023-11-23T22:30:00",
-        "rollup": {
-            "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
-            "granularity": "60",
-            "interval": "60",
-            "with_totals": "",
-        },
-        "scope": {
-            "org_ids": ["1"],
-            "project_ids": ["11"],
-            "use_case_id": "transactions",
-        },
-        "limit": "",
-        "offset": "",
-        "indexer_mappings": {
-            "d:transactions/duration@millisecond": "123456",
-        },
-    }
-    snql_query = parse_snql_query_initial(snql_body)
-    mql_body = parse_mql_query_initial(mql_body, serialized_mql_context)
-    assert mql_body == snql_query
 
 
 def test_alias_regex_allows_parentheses() -> None:

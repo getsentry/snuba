@@ -66,66 +66,6 @@ def with_required(condition: Optional[Expression] = None) -> Expression:
     return required
 
 
-def with_required_mql(condition: Optional[Expression] = None) -> Expression:
-    required = binary_condition(
-        BooleanFunctions.AND,
-        FunctionCall(
-            None,
-            "in",
-            (
-                Column("_snuba_project_id", None, "project_id"),
-                FunctionCall(None, "tuple", (Literal(None, 1),)),
-            ),
-        ),
-        binary_condition(
-            BooleanFunctions.AND,
-            FunctionCall(
-                None,
-                "in",
-                (
-                    Column("_snuba_org_id", None, "org_id"),
-                    FunctionCall(None, "tuple", (Literal(None, 1),)),
-                ),
-            ),
-            binary_condition(
-                BooleanFunctions.AND,
-                FunctionCall(
-                    None,
-                    "equals",
-                    (
-                        Column("_snuba_use_case_id", None, "use_case_id"),
-                        Literal(None, "transactions"),
-                    ),
-                ),
-                binary_condition(
-                    BooleanFunctions.AND,
-                    FunctionCall(
-                        None,
-                        "greaterOrEquals",
-                        (
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime(2021, 1, 1, 0, 0)),
-                        ),
-                    ),
-                    FunctionCall(
-                        None,
-                        "less",
-                        (
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime(2021, 1, 2, 0, 0)),
-                        ),
-                    ),
-                ),
-            ),
-        ),
-    )
-
-    if condition:
-        return binary_condition(BooleanFunctions.AND, condition, required)
-
-    return required
-
-
 DEFAULT_TEST_QUERY_CONDITIONS = [
     "timestamp >= toDateTime('2021-01-01T00:00:00')",
     "timestamp < toDateTime('2021-01-02T00:00:00')",
