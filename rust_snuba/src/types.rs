@@ -33,6 +33,10 @@ impl LatencyRecorder {
     }
 
     fn send_metric(&self, metrics: &BoxMetrics, write_time: DateTime<Utc>, metric_name: &str) {
+        if self.num_values == 0 {
+            return;
+        }
+
         let into_latency = |ts: DateTime<Utc>| (write_time - ts).num_seconds().try_into().ok();
 
         if let Some(ts) = DateTime::from_timestamp(self.max_secs, 0).and_then(into_latency) {
