@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 pub mod commit_offsets;
+pub mod healthcheck;
 pub mod produce;
 pub mod reduce;
 pub mod run_task;

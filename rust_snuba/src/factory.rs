@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -10,7 +11,6 @@ use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategy
 use crate::config;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
-use crate::strategies::healthcheck::HealthCheck;
 use crate::strategies::processor::make_rust_processor;
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
