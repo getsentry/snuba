@@ -122,8 +122,15 @@ impl<TPayload> LocalBroker<TPayload> {
 
     pub fn unsubscribe(&mut self, id: Uuid, group: String) -> Result<Vec<Partition>, BrokerError> {
         let mut ret_partitions = Vec::new();
-        let group_subscriptions = self.subscriptions.get_mut(&group).unwrap();
-        let subscribed_topics = group_subscriptions.get(&id).unwrap();
+
+        let Some(group_subscriptions) = self.subscriptions.get_mut(&group) else {
+            return Ok(vec![]);
+        };
+
+        let Some(subscribed_topics) = group_subscriptions.get(&id) else {
+            return Ok(vec![]);
+        };
+
         for topic in subscribed_topics.iter() {
             let partitions = self.storage.partition_count(topic)?;
             for n in 0..partitions {

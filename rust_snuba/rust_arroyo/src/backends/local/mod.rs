@@ -246,16 +246,18 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     }
 
     fn close(&mut self) {
-        let partitions = self
-            .broker
-            .unsubscribe(self.id, self.group.clone())
-            .unwrap();
-        if let Some(c) = self.subscription_state.callbacks.as_mut() {
-            let offset_stage = OffsetCommitter {
-                group: &self.group,
-                broker: &mut self.broker,
-            };
-            c.on_revoke(offset_stage, partitions);
+        if !self.subscription_state.topics.is_empty() {
+            let partitions = self
+                .broker
+                .unsubscribe(self.id, self.group.clone())
+                .unwrap();
+            if let Some(c) = self.subscription_state.callbacks.as_mut() {
+                let offset_stage = OffsetCommitter {
+                    group: &self.group,
+                    broker: &mut self.broker,
+                };
+                c.on_revoke(offset_stage, partitions);
+            }
         }
         self.closed = true;
         self.close_calls += 1;
