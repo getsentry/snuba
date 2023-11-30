@@ -9,10 +9,13 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
+use crate::backends::kafka::config::KafkaConfig;
+use crate::backends::kafka::types::KafkaPayload;
+use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition};
+use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
@@ -136,6 +139,23 @@ pub struct StreamProcessor<TPayload: Clone> {
     metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
     dlq_policy: DlqPolicyWrapper<TPayload>,
+}
+
+impl StreamProcessor<KafkaPayload> {
+    pub fn with_kafka(
+        config: KafkaConfig,
+        factory: Box<dyn ProcessingStrategyFactory<KafkaPayload>>,
+        topic: Topic,
+        dlq_policy: Option<DlqPolicy<KafkaPayload>>,
+    ) -> Self {
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory)));
+        let callbacks = Callbacks(consumer_state.clone());
+
+        // TODO: Can this fail?
+        let consumer = Box::new(KafkaConsumer::new(config, &[topic], callbacks).unwrap());
+
+        Self::new(consumer, consumer_state, dlq_policy)
+    }
 }
 
 impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
