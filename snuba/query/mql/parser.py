@@ -163,8 +163,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             SelectedExpression,
         ],
     ]:
-        print("visited function")
-        print(children)
         target, packed_groupbys = children
         if packed_groupbys:
             group_by = packed_groupbys[0]
@@ -235,7 +233,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_nested_expression(
         self, node: Node, children: Tuple[Any, Any, dict[str, str | dict[str, str]]]
     ) -> dict[str, str | dict[str, str]]:
-        print("nested_expression")
         return children[2]
 
     def visit_aggregate(
