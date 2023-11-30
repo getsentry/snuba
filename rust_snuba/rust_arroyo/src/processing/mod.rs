@@ -365,6 +365,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.tell().unwrap()
     }
+
+    pub fn shutdown(self) {}
 }
 
 #[cfg(test)]

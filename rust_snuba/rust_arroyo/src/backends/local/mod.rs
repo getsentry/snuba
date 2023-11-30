@@ -87,6 +87,8 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
         let subscribed = &self.subscription_state.offsets;
         partitions.all(|partition| subscribed.contains_key(partition))
     }
+
+    pub fn shutdown(self) {}
 }
 
 impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>

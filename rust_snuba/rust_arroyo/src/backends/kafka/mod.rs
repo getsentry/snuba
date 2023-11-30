@@ -190,6 +190,8 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
             offsets,
         })
     }
+
+    pub fn shutdown(self) {}
 }
 
 impl<C: AssignmentCallbacks> Drop for KafkaConsumer<C> {
@@ -383,7 +385,7 @@ mod tests {
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
-        std::mem::drop(consumer);
+        consumer.shutdown();
 
         delete_topic("test").await;
     }
@@ -415,7 +417,8 @@ mod tests {
         }
 
         consumer.commit_offsets(positions.clone()).unwrap();
-        std::mem::drop(consumer);
+        consumer.shutdown();
+
         delete_topic("test2").await;
     }
 
