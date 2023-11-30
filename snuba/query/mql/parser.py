@@ -31,6 +31,8 @@ from snuba.query.snql.parser import (
 )
 from snuba.state import explain_meta
 
+AGGREGATE_ALIAS = "aggregate_value"
+
 logger = logging.getLogger("snuba.mql.parser")
 
 
@@ -396,7 +398,7 @@ def extract_selected_columns(
             selected_aggregate_column = SelectedExpression(
                 name=f"{aggregate_name}({params_str})({metric_name})",
                 expression=CurriedFunctionCall(
-                    alias=f"{aggregate_name}({params_str})({metric_name})",
+                    alias=AGGREGATE_ALIAS,
                     internal_function=FunctionCall(
                         alias=None,
                         function_name=aggregate_name,
@@ -413,7 +415,7 @@ def extract_selected_columns(
             selected_aggregate_column = SelectedExpression(
                 name=f"{aggregate_name}({metric_name})",
                 expression=FunctionCall(
-                    alias=None,
+                    alias=AGGREGATE_ALIAS,
                     function_name=aggregate_name,
                     parameters=(
                         Column(alias=None, table_name=None, column_name="value"),
