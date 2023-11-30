@@ -103,11 +103,15 @@ impl PythonTransformStep {
         })
     }
 
+    #[tracing::instrument(skip(self))]
     fn check_for_results(&mut self, max_queue_depth: usize) {
         if let Some(message_carried_over) = self.message_carried_over.take() {
+            tracing::debug!("resubmitting carried over message");
+            // TODO: handle InvalidMessage here
             if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
                 self.next_step.submit(message_carried_over)
             {
+                tracing::debug!("failed to resubmit, returning");
                 self.message_carried_over = Some(message);
                 return;
             }
@@ -116,6 +120,7 @@ impl PythonTransformStep {
         debug_assert!(self.message_carried_over.is_none());
 
         if !self.queue_needs_drain(max_queue_depth) {
+            tracing::debug!("queue_needs_drain=false, returning");
             return;
         }
 
@@ -126,6 +131,7 @@ impl PythonTransformStep {
                 ..
             }) => {
                 let handle = join_handle.into_inner().unwrap();
+                tracing::debug!("joining procspawn handle");
                 let result = handle.join().expect("procspawn failed");
                 (original_message_meta, result)
             }
@@ -134,7 +140,10 @@ impl PythonTransformStep {
                 result,
                 ..
             }) => (original_message_meta, result),
-            None => return,
+            None => {
+                tracing::debug!("self.handles is empty, returning");
+                return;
+            },
         };
 
         match message_result {
@@ -158,10 +167,13 @@ impl PythonTransformStep {
                     original_message_meta.timestamp,
                 );
 
+                tracing::debug!("forwarding new result to next step");
+
                 if let Err(SubmitError::MessageRejected(MessageRejected {
                     message: transformed_message,
                 })) = self.next_step.submit(new_message)
                 {
+                    tracing::debug!("failed to forward");
                     self.message_carried_over = Some(transformed_message);
                 }
             }
@@ -170,9 +182,14 @@ impl PythonTransformStep {
                 tracing::error!(error, "Invalid message");
             }
         }
+
+        tracing::debug!("done with check_for_results, returning");
     }
 
+    #[tracing::instrument(skip_all)]
     fn queue_needs_drain(&self, max_queue_depth: usize) -> bool {
+        tracing::debug!(self.handles.len = self.handles.len());
+
         if self.handles.len() > max_queue_depth {
             return true;
         }
@@ -191,7 +208,9 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        tracing::debug!("python poll");
         self.check_for_results(self.max_queue_depth);
+        tracing::debug!("python end poll");
 
         self.next_step.poll()
     }
