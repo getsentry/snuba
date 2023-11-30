@@ -94,14 +94,16 @@ class SpanEventExample:
                 "is_segment": 0,
                 "segment_name": self.transaction_name,
                 "start_timestamp": int(
-                    datetime.utcfromtimestamp(
-                        self.start_timestamp_ms / 1000
+                    datetime.fromtimestamp(
+                        self.start_timestamp_ms / 1000,
+                        tz=timezone.utc,
                     ).timestamp()
                 ),
                 "start_ms": self.start_timestamp_ms % 1000,
                 "end_timestamp": int(
-                    datetime.utcfromtimestamp(
-                        (self.start_timestamp_ms + self.duration_ms) / 1000
+                    datetime.fromtimestamp(
+                        (self.start_timestamp_ms + self.duration_ms) / 1000,
+                        tz=timezone.utc,
                     ).timestamp()
                 ),
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
