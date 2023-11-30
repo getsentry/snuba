@@ -57,6 +57,7 @@ impl<TPayload, C> LocalConsumer<TPayload, C> {
         broker: LocalBroker<TPayload>,
         group: String,
         enable_end_of_partition: bool,
+        callbacks: C,
     ) -> Self {
         Self {
             id,
@@ -66,7 +67,7 @@ impl<TPayload, C> LocalConsumer<TPayload, C> {
             paused: HashSet::new(),
             subscription_state: SubscriptionState {
                 topics: Vec::new(),
-                callbacks: None,
+                callbacks: Some(callbacks),
                 offsets: HashMap::new(),
                 last_eof_at: HashMap::new(),
             },
@@ -306,7 +307,13 @@ mod tests {
         let topic1 = Topic::new("test1");
         let topic2 = Topic::new("test2");
 
-        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(
+            Uuid::nil(),
+            broker,
+            "test_group".to_string(),
+            true,
+            EmptyCallbacks {},
+        );
         assert!(consumer.subscription_state.topics.is_empty());
 
         let res = consumer.subscribe(&[topic1, topic2], EmptyCallbacks {});
@@ -392,7 +399,13 @@ mod tests {
             }
         }
 
-        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(
+            Uuid::nil(),
+            broker,
+            "test_group".to_string(),
+            true,
+            TheseCallbacks {},
+        );
 
         let _ = consumer.subscribe(&[topic1, topic2], TheseCallbacks {});
         let _ = consumer.poll(Some(Duration::from_millis(100)));
@@ -428,7 +441,13 @@ mod tests {
             fn on_revoke<C: CommitOffsets>(&self, _: C, _: Vec<Partition>) {}
         }
 
-        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
+        let mut consumer = LocalConsumer::new(
+            Uuid::nil(),
+            broker,
+            "test_group".to_string(),
+            true,
+            TheseCallbacks {},
+        );
 
         let _ = consumer.subscribe(&[topic2], TheseCallbacks {});
 
@@ -453,7 +472,13 @@ mod tests {
         let broker = build_broker();
         let topic2 = Topic::new("test2");
         let partition = Partition::new(topic2, 0);
-        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
+        let mut consumer = LocalConsumer::new(
+            Uuid::nil(),
+            broker,
+            "test_group".to_string(),
+            false,
+            EmptyCallbacks {},
+        );
         let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
 
         assert_eq!(consumer.poll(None).unwrap(), None);
@@ -467,7 +492,13 @@ mod tests {
     #[test]
     fn test_commit() {
         let broker = build_broker();
-        let mut consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), false);
+        let mut consumer = LocalConsumer::new(
+            Uuid::nil(),
+            broker,
+            "test_group".to_string(),
+            false,
+            EmptyCallbacks {},
+        );
         let topic2 = Topic::new("test2");
         let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
         let _ = consumer.poll(None);

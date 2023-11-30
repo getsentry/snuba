@@ -5,8 +5,9 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::processing::StreamProcessor;
+use rust_arroyo::processing::{Callbacks, ConsumerState, StreamProcessor};
 use rust_arroyo::types::Topic;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct TestFactory {}
@@ -26,10 +27,13 @@ fn main() {
         false,
         None,
     );
-    let consumer = Box::new(KafkaConsumer::new(config));
+
+    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+
+    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
     let topic = Topic::new("test_static");
 
-    let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
+    let mut processor = StreamProcessor::new(consumer, consumer_state, None);
     processor.subscribe(topic);
     for _ in 0..20 {
         processor.run_once().unwrap();

@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -10,7 +11,7 @@ use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::StreamProcessor;
+use rust_arroyo::processing::{Callbacks, ConsumerState, StreamProcessor};
 use rust_arroyo::types::Topic;
 use rust_arroyo::utils::metrics::configure_metrics;
 
@@ -122,8 +123,23 @@ pub fn consumer_impl(
         Some(consumer_config.raw_topic.broker_config),
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
+
+    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(
+        ConsumerStrategyFactory::new(
+            first_storage,
+            logical_topic_name,
+            max_batch_size,
+            max_batch_time,
+            skip_write,
+            ConcurrencyConfig::new(concurrency),
+            python_max_queue_depth,
+            use_rust_processor,
+            health_check_file.map(ToOwned::to_owned),
+        ),
+    ))));
+
+    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
 
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let producer_config =
@@ -144,21 +160,7 @@ pub fn consumer_impl(
         )
     });
 
-    let mut processor = StreamProcessor::new(
-        consumer,
-        Box::new(ConsumerStrategyFactory::new(
-            first_storage,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            skip_write,
-            ConcurrencyConfig::new(concurrency),
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file.map(ToOwned::to_owned),
-        )),
-        dlq_policy,
-    );
+    let mut processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
 
     processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 

@@ -24,7 +24,8 @@ fn main() {
         false,
         None,
     );
-    let mut consumer = KafkaConsumer::new(config);
+
+    let mut consumer = KafkaConsumer::new(config, EmptyCallbacks {}).unwrap();
     let topic = Topic::new("test_static");
     let res = consumer.subscribe(&[topic], EmptyCallbacks {});
     assert!(res.is_ok());

@@ -142,47 +142,46 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    pub consumer: Option<BaseConsumer<CustomContext<C>>>,
-    config: KafkaConfig,
+    pub consumer: BaseConsumer<CustomContext<C>>,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
-    pub fn new(config: KafkaConfig) -> Self {
-        Self {
-            consumer: None,
-            config,
-            state: KafkaConsumerState::NotSubscribed,
-            offsets: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
-    fn subscribe(&mut self, topics: &[Topic], callbacks: C) -> Result<(), ConsumerError> {
+    pub fn new(config: KafkaConfig, callbacks: C) -> Result<Self, ConsumerError> {
+        let offsets = Arc::new(Mutex::new(HashMap::new()));
         let context = CustomContext {
             callbacks,
-            consumer_offsets: self.offsets.clone(),
+            consumer_offsets: offsets.clone(),
         };
 
-        let mut config_obj: ClientConfig = self.config.clone().into();
+        let mut config_obj: ClientConfig = config.into();
 
+        // TODO: Can this actually fail?
         let consumer: BaseConsumer<CustomContext<C>> = config_obj
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
 
-        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
-        consumer.subscribe(&topic_str)?;
+        Ok(Self {
+            consumer,
+            state: KafkaConsumerState::NotSubscribed,
+            offsets,
+        })
+    }
+}
 
-        self.consumer = Some(consumer);
+impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
+    fn subscribe(&mut self, topics: &[Topic], _callbacks: C) -> Result<(), ConsumerError> {
+        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
+        self.consumer.subscribe(&topic_str)?;
+
         self.state = KafkaConsumerState::Consuming;
         Ok(())
     }
 
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
-        self.consumer.as_ref().unwrap().unsubscribe();
+        self.consumer.unsubscribe();
 
         Ok(())
     }
@@ -194,7 +193,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         self.state.assert_consuming_state()?;
 
         let duration = timeout.unwrap_or(Duration::ZERO);
-        let res = self.consumer.as_ref().unwrap().poll(duration);
+        let res = self.consumer.poll(duration);
 
         match res {
             None => Ok(None),
@@ -228,10 +227,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             }
         }
 
-        self.consumer
-            .as_ref()
-            .unwrap()
-            .pause(&topic_partition_list)?;
+        self.consumer.pause(&topic_partition_list)?;
 
         Ok(())
     }
@@ -247,10 +243,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
         }
 
-        self.consumer
-            .as_ref()
-            .unwrap()
-            .resume(&topic_partition_list)?;
+        self.consumer.resume(&topic_partition_list)?;
 
         Ok(())
     }
@@ -282,18 +275,14 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             )?;
         }
 
-        self.consumer
-            .as_ref()
-            .unwrap()
-            .commit(&partitions, CommitMode::Sync)
-            .unwrap();
+        self.consumer.commit(&partitions, CommitMode::Sync).unwrap();
 
         Ok(())
     }
 
+    // TODO: This should probably go
     fn close(&mut self) {
         self.state = KafkaConsumerState::Closed;
-        self.consumer = None;
     }
 
     fn closed(&self) -> bool {
@@ -359,10 +348,9 @@ mod tests {
             false,
             None,
         );
-        let mut consumer = KafkaConsumer::new(configuration);
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        let my_callbacks = EmptyCallbacks {};
-        consumer.subscribe(&[topic], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
     }
 
     #[tokio::test]
@@ -375,7 +363,7 @@ mod tests {
             false,
             None,
         );
-        let mut consumer = KafkaConsumer::new(configuration);
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
         assert!(consumer.tell().is_err()); // Not subscribed yet
         consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
@@ -411,7 +399,7 @@ mod tests {
             None,
         );
 
-        let mut consumer = KafkaConsumer::new(configuration);
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test2");
 
         consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();

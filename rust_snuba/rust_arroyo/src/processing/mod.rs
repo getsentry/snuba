@@ -35,7 +35,7 @@ pub enum RunError {
     Pause(#[source] ConsumerError),
 }
 
-struct ConsumerState<TPayload> {
+pub struct ConsumerState<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
     backpressure_timestamp: Option<Instant>,
@@ -65,7 +65,7 @@ impl<TPayload> ConsumerState<TPayload> {
     }
 }
 
-pub struct Callbacks<TPayload>(Arc<Mutex<ConsumerState<TPayload>>>);
+pub struct Callbacks<TPayload>(pub Arc<Mutex<ConsumerState<TPayload>>>);
 
 #[derive(Debug, Clone)]
 pub struct ProcessorHandle {
@@ -140,11 +140,9 @@ pub struct StreamProcessor<TPayload: Clone> {
 impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
-        processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
+        consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
         dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(processing_factory)));
-
         Self {
             consumer,
             consumer_state,
@@ -401,14 +399,18 @@ mod tests {
     #[test]
     fn test_processor() {
         let broker = build_broker();
+
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
         processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
@@ -422,14 +424,17 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
         processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());

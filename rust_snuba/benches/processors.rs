@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Once;
+use std::sync::{Arc, Mutex, Once};
 use std::time::Duration;
 
 use divan::counter::ItemsCount;
@@ -11,7 +11,7 @@ use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
 use rust_arroyo::backends::{Consumer, ConsumerError};
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::{Callbacks, RunError, StreamProcessor};
+use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_arroyo::utils::metrics::{configure_metrics, Metrics};
@@ -92,13 +92,10 @@ fn run_bench(
     bencher
         .counter(ItemsCount::new(MSG_COUNT))
         .with_inputs(|| {
-            (
-                create_consumer(make_payload, MSG_COUNT),
-                create_factory(concurrency, processor, schema),
-            )
+            create_consumer_and_state(concurrency, processor, schema, make_payload, MSG_COUNT)
         })
-        .bench_local_values(|((topic, consumer), factory)| {
-            let mut processor = StreamProcessor::new(consumer, factory, None);
+        .bench_local_values(|(topic, consumer, consumer_state)| {
+            let mut processor = StreamProcessor::new(consumer, consumer_state, None);
             processor.subscribe(topic);
 
             loop {
@@ -158,13 +155,19 @@ fn create_factory(
     Box::new(factory)
 }
 
-fn create_consumer(
+fn create_consumer_and_state(
+    concurrency: usize,
+    processor: &str,
+    schema: &str,
     make_payload: fn() -> KafkaPayload,
     messages: usize,
 ) -> (
     Topic,
     Box<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>,
+    Arc<Mutex<ConsumerState<KafkaPayload>>>,
 ) {
+    let factory = create_factory(concurrency, processor, schema);
+    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory)));
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
 
@@ -177,10 +180,16 @@ fn create_consumer(
         broker.produce(&partition, make_payload()).unwrap();
     }
 
-    let consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
+    let consumer = LocalConsumer::new(
+        Uuid::nil(),
+        broker,
+        "test_group".to_string(),
+        true,
+        Callbacks(consumer_state.clone()),
+    );
     let consumer = Box::new(consumer);
 
-    (topic, consumer)
+    (topic, consumer, consumer_state)
 }
 
 fn functions_payload() -> KafkaPayload {
