@@ -192,14 +192,13 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     }
 }
 
-impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
-    fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
-        self.state.assert_consuming_state()?;
+impl<C: AssignmentCallbacks> Drop for KafkaConsumer<C> {
+    fn drop(&mut self) {
         self.consumer.unsubscribe();
-
-        Ok(())
     }
+}
 
+impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
     fn poll(
         &mut self,
         timeout: Option<Duration>,
@@ -384,7 +383,6 @@ mod tests {
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
-        consumer.unsubscribe().unwrap();
         std::mem::drop(consumer);
 
         delete_topic("test").await;
@@ -417,7 +415,6 @@ mod tests {
         }
 
         consumer.commit_offsets(positions.clone()).unwrap();
-        consumer.unsubscribe().unwrap();
         std::mem::drop(consumer);
         delete_topic("test2").await;
     }

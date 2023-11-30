@@ -13,7 +13,6 @@ pub struct RebalanceNotSupported;
 
 enum Callback {
     Assign(HashMap<Partition, u64>),
-    Revoke(Vec<Partition>),
 }
 
 struct SubscriptionState<C> {
@@ -93,19 +92,6 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
 impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     for LocalConsumer<TPayload, C>
 {
-    fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
-        let partitions = self
-            .broker
-            .unsubscribe(self.id, self.group.clone())
-            .unwrap();
-        self.pending_callback
-            .push_back(Callback::Revoke(partitions));
-
-        self.subscription_state.topics.clear();
-        self.subscription_state.last_eof_at.clear();
-        Ok(())
-    }
-
     fn poll(
         &mut self,
         _timeout: Option<Duration>,
@@ -118,16 +104,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
                         callbacks.on_assign(offsets.clone());
                     }
                     self.subscription_state.offsets = offsets;
-                }
-                Callback::Revoke(partitions) => {
-                    if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
-                        let offset_stage = OffsetCommitter {
-                            group: &self.group,
-                            broker: &mut self.broker,
-                        };
-                        callbacks.on_revoke(offset_stage, partitions.clone());
-                    }
-                    self.subscription_state.offsets = HashMap::new();
                 }
             }
         }
@@ -285,12 +261,6 @@ mod tests {
         ]);
         assert_eq!(consumer.subscription_state.offsets, expected);
         assert_eq!(consumer.pending_callback.len(), 0);
-
-        let res = consumer.unsubscribe();
-        assert!(res.is_ok());
-        assert_eq!(consumer.pending_callback.len(), 1);
-        let _ = consumer.poll(Some(Duration::from_millis(100)));
-        assert!(consumer.subscription_state.offsets.is_empty());
     }
 
     #[test]
@@ -365,9 +335,6 @@ mod tests {
             TheseCallbacks {},
         );
 
-        let _ = consumer.poll(Some(Duration::from_millis(100)));
-
-        let _ = consumer.unsubscribe();
         let _ = consumer.poll(Some(Duration::from_millis(100)));
     }
 
