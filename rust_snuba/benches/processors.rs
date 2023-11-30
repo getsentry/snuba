@@ -178,6 +178,7 @@ fn create_stream_processor(
         broker,
         "test_group".to_string(),
         true,
+        &[topic],
         Callbacks(consumer_state.clone()),
     );
     let consumer = Box::new(consumer);

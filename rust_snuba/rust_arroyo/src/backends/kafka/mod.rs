@@ -25,7 +25,6 @@ pub mod types;
 
 #[derive(Eq, Hash, PartialEq)]
 enum KafkaConsumerState {
-    NotSubscribed,
     Consuming,
     #[allow(dead_code)]
     Error,
@@ -38,7 +37,6 @@ enum KafkaConsumerState {
 impl KafkaConsumerState {
     fn assert_consuming_state(&self) -> Result<(), ConsumerError> {
         match self {
-            KafkaConsumerState::NotSubscribed => Err(ConsumerError::NotSubscribed),
             KafkaConsumerState::Error => Err(ConsumerError::ConsumerErrored),
             _ => Ok(()),
         }
@@ -169,7 +167,7 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
-    pub fn new(config: KafkaConfig, callbacks: C) -> Result<Self, ConsumerError> {
+    pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
         let context = CustomContext {
             callbacks,
@@ -183,23 +181,18 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
 
+        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
+        consumer.subscribe(&topic_str)?;
+
         Ok(Self {
             consumer,
-            state: KafkaConsumerState::NotSubscribed,
+            state: KafkaConsumerState::Consuming,
             offsets,
         })
     }
 }
 
 impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
-    fn subscribe(&mut self, topics: &[Topic]) -> Result<(), ConsumerError> {
-        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
-        self.consumer.subscribe(&topic_str)?;
-
-        self.state = KafkaConsumerState::Consuming;
-        Ok(())
-    }
-
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
         self.consumer.unsubscribe();
@@ -360,9 +353,8 @@ mod tests {
             false,
             None,
         );
-        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        consumer.subscribe(&[topic]).unwrap();
+        KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
     }
 
     #[tokio::test]
@@ -375,10 +367,8 @@ mod tests {
             false,
             None,
         );
-        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        assert!(consumer.tell().is_err()); // Not subscribed yet
-        consumer.subscribe(&[topic]).unwrap();
+        let mut consumer = KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
         // Getting the assignment may take a while
@@ -411,10 +401,8 @@ mod tests {
             None,
         );
 
-        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test2");
-
-        consumer.subscribe(&[topic]).unwrap();
+        let mut consumer = KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 

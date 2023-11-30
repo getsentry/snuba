@@ -157,8 +157,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         }
     }
 
-    pub fn subscribe(&mut self, topic: Topic) {
-        self.consumer.subscribe(&[topic]).unwrap();
+    pub fn subscribe(&mut self, _topic: Topic) {
+        // self.consumer.subscribe(&[topic]).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -425,11 +425,11 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
             Callbacks(consumer_state.clone()),
         ));
 
         let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -449,11 +449,11 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
             Callbacks(consumer_state.clone()),
         ));
 
         let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();

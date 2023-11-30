@@ -55,23 +55,33 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
         broker: LocalBroker<TPayload>,
         group: String,
         enable_end_of_partition: bool,
+        topics: &[Topic],
         callbacks: C,
     ) -> Self {
-        Self {
+        let mut ret = Self {
             id,
             group,
             broker,
             pending_callback: VecDeque::new(),
             paused: HashSet::new(),
             subscription_state: SubscriptionState {
-                topics: Vec::new(),
+                topics: topics.to_vec(),
                 callbacks: Some(callbacks),
                 offsets: HashMap::new(),
                 last_eof_at: HashMap::new(),
             },
             enable_end_of_partition,
             commit_offset_calls: 0,
-        }
+        };
+
+        let offsets = ret
+            .broker
+            .subscribe(ret.id, ret.group.clone(), topics.to_vec())
+            .unwrap();
+
+        ret.pending_callback.push_back(Callback::Assign(offsets));
+
+        ret
     }
 
     fn is_subscribed<'p>(&self, mut partitions: impl Iterator<Item = &'p Partition>) -> bool {
@@ -83,19 +93,6 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
 impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     for LocalConsumer<TPayload, C>
 {
-    fn subscribe(&mut self, topics: &[Topic]) -> Result<(), ConsumerError> {
-        let offsets = self
-            .broker
-            .subscribe(self.id, self.group.clone(), topics.to_vec())
-            .unwrap();
-        self.subscription_state.topics = topics.to_vec();
-
-        self.pending_callback.push_back(Callback::Assign(offsets));
-
-        self.subscription_state.last_eof_at.clear();
-        Ok(())
-    }
-
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         let partitions = self
             .broker
@@ -274,12 +271,10 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic1, topic2],
             EmptyCallbacks {},
         );
-        assert!(consumer.subscription_state.topics.is_empty());
 
-        let res = consumer.subscribe(&[topic1, topic2]);
-        assert!(res.is_ok());
         assert_eq!(consumer.pending_callback.len(), 1);
 
         let _ = consumer.poll(Some(Duration::from_millis(100)));
@@ -366,10 +361,10 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic1, topic2],
             TheseCallbacks {},
         );
 
-        let _ = consumer.subscribe(&[topic1, topic2]);
         let _ = consumer.poll(Some(Duration::from_millis(100)));
 
         let _ = consumer.unsubscribe();
@@ -408,10 +403,9 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic2],
             TheseCallbacks {},
         );
-
-        let _ = consumer.subscribe(&[topic2]);
 
         let msg1 = consumer.poll(Some(Duration::from_millis(100))).unwrap();
         assert!(msg1.is_some());
@@ -439,9 +433,9 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[topic2],
             EmptyCallbacks {},
         );
-        let _ = consumer.subscribe(&[topic2]);
 
         assert_eq!(consumer.poll(None).unwrap(), None);
         let _ = consumer.pause(HashSet::from([partition]));
@@ -454,15 +448,15 @@ mod tests {
     #[test]
     fn test_commit() {
         let broker = build_broker();
+        let topic2 = Topic::new("test2");
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            &[topic2],
             EmptyCallbacks {},
         );
-        let topic2 = Topic::new("test2");
-        let _ = consumer.subscribe(&[topic2]);
         let _ = consumer.poll(None);
         let positions = HashMap::from([(Partition::new(topic2, 0), 100)]);
 

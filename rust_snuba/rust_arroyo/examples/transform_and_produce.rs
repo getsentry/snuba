@@ -89,9 +89,16 @@ async fn main() {
         },
     ))));
 
-    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
+    let consumer = Box::new(
+        KafkaConsumer::new(
+            config,
+            &[Topic::new("test_in")],
+            Callbacks(consumer_state.clone()),
+        )
+        .unwrap(),
+    );
+
     let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-    processor.subscribe(Topic::new("test_in"));
     println!("running processor. transforming from test_in to test_out");
     processor.run().unwrap();
 }

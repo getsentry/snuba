@@ -139,7 +139,10 @@ pub fn consumer_impl(
         ),
     ))));
 
-    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
+    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+
+    let consumer =
+        Box::new(KafkaConsumer::new(config, &[topic], Callbacks(consumer_state.clone())).unwrap());
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
@@ -166,8 +169,6 @@ pub fn consumer_impl(
     };
 
     let mut processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
-
-    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 
     let mut handle = processor.get_handle();
 

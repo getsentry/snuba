@@ -30,11 +30,11 @@ fn main() {
 
     let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
 
-    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
     let topic = Topic::new("test_static");
+    let consumer =
+        Box::new(KafkaConsumer::new(config, &[topic], Callbacks(consumer_state.clone())).unwrap());
 
     let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-    processor.subscribe(topic);
     for _ in 0..20 {
         processor.run_once().unwrap();
     }

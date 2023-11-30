@@ -25,10 +25,8 @@ fn main() {
         None,
     );
 
-    let mut consumer = KafkaConsumer::new(config, EmptyCallbacks {}).unwrap();
     let topic = Topic::new("test_static");
-    let res = consumer.subscribe(&[topic]);
-    assert!(res.is_ok());
+    let mut consumer = KafkaConsumer::new(config, &[topic], EmptyCallbacks {}).unwrap();
     println!("Subscribed");
     for _ in 0..20 {
         println!("Polling");
