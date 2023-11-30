@@ -182,9 +182,7 @@ fn create_stream_processor(
     );
     let consumer = Box::new(consumer);
 
-    let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-    processor.subscribe(topic);
-    processor
+    StreamProcessor::new(consumer, consumer_state, None)
 }
 
 fn functions_payload() -> KafkaPayload {
