@@ -143,7 +143,7 @@ impl PythonTransformStep {
             None => {
                 tracing::debug!("self.handles is empty, returning");
                 return;
-            },
+            }
         };
 
         match message_result {
