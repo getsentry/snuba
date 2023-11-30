@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, ConditionFunction, Op
+from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
 from snuba.datasets.dataset import Dataset
@@ -17,6 +18,7 @@ from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
@@ -30,8 +32,6 @@ from snuba.query.snql.parser import (
     _treeify_or_and_conditions,
 )
 from snuba.state import explain_meta
-
-AGGREGATE_ALIAS = "aggregate_value"
 
 logger = logging.getLogger("snuba.mql.parser")
 
@@ -377,7 +377,7 @@ def parse_mql_query_initial(
     args["totals"] = resolved_args["totals"]
 
     query = LogicalQuery(**args)
-    return query
+    return parsed, query
 
 
 def extract_selected_columns(
@@ -474,8 +474,6 @@ def extract_args_from_mql_context(
 
     filters.extend(extract_scope(parsed, mql_context))
     filters.extend(extract_start_end_time(parsed, mql_context, entity_key))
-    filters.extend(extract_metric_id(parsed, mql_context))
-    filters.extend(extract_resolved_tag_filters(parsed, mql_context))
 
     groupbys.extend(extract_resolved_gropupby(parsed, mql_context))
     order_by, granularity, totals = extract_rollup(parsed, mql_context)
@@ -491,79 +489,6 @@ def extract_args_from_mql_context(
     resolved_args["offset"] = offset
 
     return resolved_args
-
-
-def extract_metric_id(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[FunctionCall]:
-    if "mri" not in parsed and "public_name" in parsed:
-        public_name = parsed["public_name"]
-        mri = mql_context["indexer_mappings"][public_name]
-    else:
-        mri = parsed["mri"]
-
-    if mri not in mql_context["indexer_mappings"]:
-        raise InvalidQueryException(
-            "No mri to metric_id mapping found in MQL context indexer_mappings."
-        )
-    metric_id = mql_context["indexer_mappings"][mri]
-    return [
-        (
-            binary_condition(
-                ConditionFunction.EQ.value,
-                Column(alias=None, table_name=None, column_name="metric_id"),
-                Literal(alias=None, value=metric_id),
-            )
-        )
-    ]
-
-
-def extract_resolved_tag_filters(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[FunctionCall]:
-    # Extract resolved tag filters from mql context indexer_mappings
-    filters = []
-    if "filters" in parsed:
-        for filter in parsed["filters"]:
-            operator, lhs, rhs = filter
-            if lhs in mql_context["indexer_mappings"]:
-                resolved = mql_context["indexer_mappings"][lhs]
-                lhs_column_name = f"tags_raw[{resolved}]"
-            else:
-                lhs_column_name = lhs
-
-            if isinstance(rhs, str):
-                filters.append(
-                    binary_condition(
-                        operator,
-                        Column(
-                            alias=lhs,
-                            table_name=None,
-                            column_name=lhs_column_name,
-                        ),
-                        Literal(alias=None, value=rhs),
-                    )
-                )
-            else:
-                filters.append(
-                    binary_condition(
-                        operator,
-                        Column(
-                            alias=lhs,
-                            table_name=None,
-                            column_name=lhs_column_name,
-                        ),
-                        FunctionCall(
-                            alias=None,
-                            function_name="tuple",
-                            parameters=tuple(
-                                Literal(alias=None, value=item) for item in rhs
-                            ),
-                        ),
-                    )
-                )
-
-    return filters
 
 
 def extract_start_end_time(
@@ -747,7 +672,10 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_initial(body, mql_context)
+        parsed, query = parse_mql_query_initial(body, mql_context)
+
+    with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
+        query = resolve_mappings(query, parsed, mql_context)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
