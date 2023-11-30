@@ -690,17 +690,13 @@ def extract_rollup(
             )
 
     # Extract granularity
+    # TODO: We eventually want to move the automatic granularity functionality in Sentry into here.
     if "granularity" not in mql_context["rollup"]:
         raise InvalidQueryException("No granularity specified in MQL context rollup.")
     granularity = int(mql_context["rollup"]["granularity"])
 
     # Extract with totals
-    with_totals = False
-    if (
-        "with_totals" in mql_context["rollup"]
-        and mql_context["rollup"]["with_totals"] == "True"
-    ):
-        with_totals = True
+    with_totals = mql_context["rollup"].get("with_totals") == "True"
 
     return order_by, granularity, with_totals
 
