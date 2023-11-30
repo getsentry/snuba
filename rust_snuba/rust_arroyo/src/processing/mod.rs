@@ -158,8 +158,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks = Callbacks(self.consumer_state.clone());
-        self.consumer.subscribe(&[topic], callbacks).unwrap();
+        self.consumer.subscribe(&[topic]).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -337,7 +336,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 }
 
                 drop(trait_callbacks); // unlock mutex so we can close consumer
-                self.consumer.close();
                 return Err(e);
             }
         }
@@ -350,7 +348,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     pub fn shutdown(&mut self) {
-        self.consumer.close();
+        // self.consumer.close();
     }
 
     pub fn tell(&self) -> HashMap<Partition, u64> {

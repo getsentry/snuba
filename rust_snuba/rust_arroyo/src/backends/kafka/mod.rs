@@ -29,7 +29,6 @@ enum KafkaConsumerState {
     Consuming,
     #[allow(dead_code)]
     Error,
-    Closed,
     #[allow(dead_code)]
     Assigning,
     #[allow(dead_code)]
@@ -39,7 +38,6 @@ enum KafkaConsumerState {
 impl KafkaConsumerState {
     fn assert_consuming_state(&self) -> Result<(), ConsumerError> {
         match self {
-            KafkaConsumerState::Closed => Err(ConsumerError::ConsumerClosed),
             KafkaConsumerState::NotSubscribed => Err(ConsumerError::NotSubscribed),
             KafkaConsumerState::Error => Err(ConsumerError::ConsumerErrored),
             _ => Ok(()),
@@ -194,7 +192,7 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
 }
 
 impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
-    fn subscribe(&mut self, topics: &[Topic], _callbacks: C) -> Result<(), ConsumerError> {
+    fn subscribe(&mut self, topics: &[Topic]) -> Result<(), ConsumerError> {
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         self.consumer.subscribe(&topic_str)?;
 
@@ -302,15 +300,6 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
         Ok(())
     }
-
-    // TODO: This should probably go
-    fn close(&mut self) {
-        self.state = KafkaConsumerState::Closed;
-    }
-
-    fn closed(&self) -> bool {
-        self.state == KafkaConsumerState::Closed
-    }
 }
 
 #[cfg(test)]
@@ -373,7 +362,7 @@ mod tests {
         );
         let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
+        consumer.subscribe(&[topic]).unwrap();
     }
 
     #[tokio::test]
@@ -389,7 +378,7 @@ mod tests {
         let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
         assert!(consumer.tell().is_err()); // Not subscribed yet
-        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
+        consumer.subscribe(&[topic]).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
         // Getting the assignment may take a while
@@ -406,7 +395,7 @@ mod tests {
         // One partition was assigned
         assert!(offsets.len() == 1);
         consumer.unsubscribe().unwrap();
-        consumer.close();
+        std::mem::drop(consumer);
 
         delete_topic("test").await;
     }
@@ -425,7 +414,7 @@ mod tests {
         let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test2");
 
-        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
+        consumer.subscribe(&[topic]).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
@@ -441,7 +430,7 @@ mod tests {
 
         consumer.commit_offsets(positions.clone()).unwrap();
         consumer.unsubscribe().unwrap();
-        consumer.close();
+        std::mem::drop(consumer);
         delete_topic("test2").await;
     }
 

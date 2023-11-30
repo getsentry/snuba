@@ -90,7 +90,7 @@ pub trait AssignmentCallbacks: Send + Sync {
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
 pub trait Consumer<TPayload, C>: Send {
-    fn subscribe(&mut self, topic: &[Topic], callbacks: C) -> Result<(), ConsumerError>;
+    fn subscribe(&mut self, topic: &[Topic]) -> Result<(), ConsumerError>;
 
     fn unsubscribe(&mut self) -> Result<(), ConsumerError>;
 
@@ -152,10 +152,6 @@ pub trait Consumer<TPayload, C>: Send {
 
     /// Commit offsets.
     fn commit_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
-
-    fn close(&mut self);
-
-    fn closed(&self) -> bool;
 }
 
 pub trait Producer<TPayload>: Send + Sync {
