@@ -22,6 +22,7 @@ from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
+    MAX_LIMIT,
     POST_PROCESSORS,
     VALIDATORS,
     _post_process,
@@ -361,7 +362,7 @@ def parse_mql_query_initial(
         ),
     }
 
-    resolved_args = extract_args_from_mql_context(parsed, mql_context)
+    resolved_args = extract_args_from_mql_context(parsed, mql_context, entity_key)
     selected_columns = extract_selected_columns(parsed, resolved_args)
 
     args["selected_columns"] = selected_columns
@@ -434,6 +435,7 @@ def extract_selected_columns(
 def extract_args_from_mql_context(
     parsed: Mapping[str, Any],
     mql_context: Mapping[str, Any],
+    entity_key: EntityKey,
 ) -> Mapping[str, Any]:
     """
     Extracts all metadata from MQL context, creates the appropriate expressions for them,
@@ -469,7 +471,7 @@ def extract_args_from_mql_context(
         raise InvalidQueryException("No indexer mappings specified in MQL context.")
 
     filters.extend(extract_scope(parsed, mql_context))
-    filters.extend(extract_start_end_time(parsed, mql_context))
+    filters.extend(extract_start_end_time(parsed, mql_context, entity_key))
     filters.extend(extract_metric_id(parsed, mql_context))
     filters.extend(extract_resolved_tag_filters(parsed, mql_context))
 
@@ -563,18 +565,22 @@ def extract_resolved_tag_filters(
 
 
 def extract_start_end_time(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+    parsed: Mapping[str, Any], mql_context: Mapping[str, Any], entity_key: EntityKey
 ) -> list[FunctionCall]:
     filters = []
     if "start" not in mql_context or "end" not in mql_context:
         raise InvalidQueryException(
             "No start or end specified in MQL context indexer_mappings."
         )
+    entity = get_entity(entity_key)
+    required_timestamp_column = (
+        entity.required_time_column if entity.required_time_column else "timestamp"
+    )
     start = mql_context["start"]
     filters.append(
         binary_condition(
             ConditionFunction.GTE.value,
-            Column(alias=None, table_name=None, column_name="timestamp"),
+            Column(alias=None, table_name=None, column_name=required_timestamp_column),
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
@@ -586,7 +592,7 @@ def extract_start_end_time(
     filters.append(
         binary_condition(
             ConditionFunction.LT.value,
-            Column(alias=None, table_name=None, column_name="timestamp"),
+            Column(alias=None, table_name=None, column_name=required_timestamp_column),
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
@@ -708,7 +714,7 @@ def extract_limit(mql_context: Mapping[str, Any]) -> Optional[int]:
         and mql_context["limit"].isdigit()
     ):
         limit = int(mql_context["limit"])
-        if limit > 10000:
+        if limit > MAX_LIMIT:
             raise ParsingException(
                 "queries cannot have a limit higher than 10000", should_report=False
             )
