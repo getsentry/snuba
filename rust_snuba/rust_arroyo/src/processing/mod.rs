@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
-use crate::types::{InnerMessage, Message, Partition, Topic};
+use crate::types::{InnerMessage, Message, Partition};
 use crate::utils::metrics::{get_metrics, Metrics};
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
@@ -155,10 +155,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             buffered_messages: BufferedMessages::new(),
             dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
-    }
-
-    pub fn subscribe(&mut self, _topic: Topic) {
-        // self.consumer.subscribe(&[topic]).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -322,7 +318,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     /// The main run loop, see class docstring for more information.
-    pub fn run(&mut self) -> Result<(), RunError> {
+    pub fn run(mut self) -> Result<(), RunError> {
         while !self
             .processor_handle
             .shutdown_requested
@@ -339,16 +335,11 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 return Err(e);
             }
         }
-        self.shutdown();
         Ok(())
     }
 
     pub fn get_handle(&self) -> ProcessorHandle {
         self.processor_handle.clone()
-    }
-
-    pub fn shutdown(&mut self) {
-        // self.consumer.close();
     }
 
     pub fn tell(&self) -> HashMap<Partition, u64> {

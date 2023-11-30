@@ -168,7 +168,7 @@ pub fn consumer_impl(
         }),
     };
 
-    let mut processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
+    let processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
 
     let mut handle = processor.get_handle();
 

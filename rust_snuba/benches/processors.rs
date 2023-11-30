@@ -104,7 +104,6 @@ fn run_bench(
                     break;
                 }
             }
-            processor.shutdown();
         });
 }
 

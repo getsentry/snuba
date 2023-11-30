@@ -98,7 +98,7 @@ async fn main() {
         .unwrap(),
     );
 
-    let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+    let processor = StreamProcessor::new(consumer, consumer_state, None);
     println!("running processor. transforming from test_in to test_out");
     processor.run().unwrap();
 }
