@@ -160,7 +160,7 @@ pub fn consumer_impl(
     );
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
-    let processor = StreamProcessor::with_kafka(config, Box::new(factory), topic, dlq_policy);
+    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 

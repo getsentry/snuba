@@ -26,12 +26,8 @@ fn main() {
         None,
     );
 
-    let mut processor = StreamProcessor::with_kafka(
-        config,
-        Box::new(TestFactory {}),
-        Topic::new("test_static"),
-        None,
-    );
+    let mut processor =
+        StreamProcessor::with_kafka(config, TestFactory {}, Topic::new("test_static"), None);
 
     for _ in 0..20 {
         processor.run_once().unwrap();

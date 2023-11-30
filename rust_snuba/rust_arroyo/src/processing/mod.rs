@@ -142,13 +142,13 @@ pub struct StreamProcessor<TPayload: Clone> {
 }
 
 impl StreamProcessor<KafkaPayload> {
-    pub fn with_kafka(
+    pub fn with_kafka<F: ProcessingStrategyFactory<KafkaPayload> + 'static>(
         config: KafkaConfig,
-        factory: Box<dyn ProcessingStrategyFactory<KafkaPayload>>,
+        factory: F,
         topic: Topic,
         dlq_policy: Option<DlqPolicy<KafkaPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory)));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(factory))));
         let callbacks = Callbacks(consumer_state.clone());
 
         // TODO: Can this fail?

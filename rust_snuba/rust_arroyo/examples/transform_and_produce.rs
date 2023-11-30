@@ -80,11 +80,11 @@ async fn main() {
         None,
     );
 
-    let factory = Box::new(ReverseStringAndProduceStrategyFactory {
+    let factory = ReverseStringAndProduceStrategyFactory {
         concurrency: ConcurrencyConfig::new(5),
         config: config.clone(),
         topic: Topic::new("test_out"),
-    });
+    };
 
     let processor = StreamProcessor::with_kafka(config, factory, Topic::new("test_in"), None);
     println!("running processor. transforming from test_in to test_out");
