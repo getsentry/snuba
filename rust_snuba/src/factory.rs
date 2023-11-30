@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -23,6 +24,7 @@ pub struct ConsumerStrategyFactory {
     concurrency: ConcurrencyConfig,
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
+    health_check_file: Option<String>,
 }
 
 impl ConsumerStrategyFactory {
@@ -36,6 +38,7 @@ impl ConsumerStrategyFactory {
         concurrency: ConcurrencyConfig,
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
+        health_check_file: Option<String>,
     ) -> Self {
         Self {
             storage_config,
@@ -46,6 +49,7 @@ impl ConsumerStrategyFactory {
             concurrency,
             python_max_queue_depth,
             use_rust_processor,
+            health_check_file,
         }
     }
 }
@@ -72,7 +76,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             self.max_batch_time,
         );
 
-        match (
+        let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
@@ -94,6 +98,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 )
                 .unwrap(),
             ),
+        };
+
+        if let Some(path) = &self.health_check_file {
+            Box::new(HealthCheck::new(processor, path))
+        } else {
+            processor
         }
     }
 }
