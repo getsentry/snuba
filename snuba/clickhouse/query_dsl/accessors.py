@@ -25,6 +25,61 @@ from snuba.query.matchers import (
     String,
 )
 
+from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+
+def get_object_ids_in_condition(condition: Expression, object_column: str) -> Optional[Set[int]]:
+    """
+    Extract project ids from an expression. Returns None if no project
+    if condition is found. It returns an empty set of conflicting project_id
+    conditions are found.
+    """
+    match = FunctionCall(
+        String(ConditionFunctions.EQ),
+        (
+            Column(column_name=String(object_column)),
+            Literal(value=Param("object_id", Any(int))),
+        ),
+    ).match(condition)
+    if match is not None:
+        return {match.integer("object_id")}
+
+    match = is_in_condition_pattern(
+        Column(column_name=String(object_column))
+    ).match(condition)
+    if match is not None:
+        objects = match.expression("sequence")
+        assert isinstance(objects, FunctionCallExpr)
+        return {
+            lit.value
+            for lit in objects.parameters
+            if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
+        }
+
+    match = FunctionCall(
+        Param(
+            "operator",
+            Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
+        ),
+        (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
+    ).match(condition)
+    if match is not None:
+        lhs_objects = get_object_ids_in_condition(match.expression("lhs"))
+        rhs_objects = get_object_ids_in_condition(match.expression("rhs"))
+        if lhs_objects is None:
+            return rhs_objects
+        elif rhs_objects is None:
+            return lhs_objects
+        else:
+            return (
+                lhs_objects & rhs_objects
+                if match.string("operator") == BooleanFunctions.AND
+                else lhs_objects | rhs_objects
+            )
+
+    return None
+
+
 
 def get_object_ids_in_query_ast(
     query: AbstractQuery, object_column: str
@@ -36,57 +91,25 @@ def get_object_ids_in_query_ast(
     It works like get_project_ids_in_query with the exception that
     boolean functions are supported here.
     """
+    from_clause = query.get_from_clause()
+    if isinstance(from_clause, SimpleDataSource):
+        condition = query.get_condition()
 
-    def get_object_ids_in_condition(condition: Expression) -> Optional[Set[int]]:
-        """
-        Extract project ids from an expression. Returns None if no project
-        if condition is found. It returns an empty set of conflicting project_id
-        conditions are found.
-        """
-        match = FunctionCall(
-            String(ConditionFunctions.EQ),
-            (
-                Column(column_name=String(object_column)),
-                Literal(value=Param("object_id", Any(int))),
-            ),
-        ).match(condition)
-        if match is not None:
-            return {match.integer("object_id")}
+    elif isinstance(from_clause, ProcessableQuery):
+        return _get_allocation_policies(cast(Query, from_clause))
+    elif isinstance(from_clause, CompositeQuery):
+        return _get_allocation_policies(from_clause)
+    elif isinstance(from_clause, JoinClause):
+        # HACK (Volo): Joins are a weird case for allocation policies and we don't
+        # actually use them anywhere so I'm purposefully just kicking this can down the
+        # road
+        return [DEFAULT_PASSTHROUGH_POLICY]
+    else:
+        logger.exception(
+            f"Could not determine allocation policies for {clickhouse_query}"
+        )
+        return [DEFAULT_PASSTHROUGH_POLICY]
 
-        match = is_in_condition_pattern(
-            Column(column_name=String(object_column))
-        ).match(condition)
-        if match is not None:
-            objects = match.expression("sequence")
-            assert isinstance(objects, FunctionCallExpr)
-            return {
-                lit.value
-                for lit in objects.parameters
-                if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
-            }
-
-        match = FunctionCall(
-            Param(
-                "operator",
-                Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
-            ),
-            (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
-        ).match(condition)
-        if match is not None:
-            lhs_objects = get_object_ids_in_condition(match.expression("lhs"))
-            rhs_objects = get_object_ids_in_condition(match.expression("rhs"))
-            if lhs_objects is None:
-                return rhs_objects
-            elif rhs_objects is None:
-                return lhs_objects
-            else:
-                return (
-                    lhs_objects & rhs_objects
-                    if match.string("operator") == BooleanFunctions.AND
-                    else lhs_objects | rhs_objects
-                )
-
-        return None
 
     condition = query.get_condition()
     return get_object_ids_in_condition(condition) if condition is not None else None
