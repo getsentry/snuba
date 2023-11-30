@@ -6,7 +6,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, ConditionFunction, Op
-from snuba_sdk.dsl.dsl import MQL_GRAMMAR
+from snuba_sdk.mql.mql import MQL_GRAMMAR
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -16,7 +16,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
@@ -163,7 +163,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             SelectedExpression,
         ],
     ]:
-        target, packed_groupbys = children
+        targets, packed_groupbys = children
+        target = targets[0]
         if packed_groupbys:
             group_by = packed_groupbys[0]
             if isinstance(group_by, str):
@@ -244,22 +245,52 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> dict[str, Union[str, SelectedExpression]]:
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
-
-        if "mri" in target:
-            metric_name = target["mri"]
-        elif "public_name" in target:
-            metric_name = target["public_name"]
-        else:
-            metric_name = ""
-        target["aggregate"] = SelectedExpression(
-            name=f"{aggregate_name}({metric_name})",
-            expression=FunctionCall(
-                alias=None,
-                function_name=aggregate_name,
-                parameters=(Column(alias=None, table_name=None, column_name="value"),),
-            ),
-        )
+        target["aggregate"] = {
+            "name": aggregate_name,
+        }
         return target
+
+    def visit_curried_aggregate(
+        self,
+        node: Node,
+        children: Tuple[
+            str,
+            Tuple[Any, Any, Sequence[Sequence[Union[str, int, float]]], Any, Any],
+            Tuple[Any, Any, dict[str, Union[str, SelectedExpression]], Any, Any],
+        ],
+    ) -> dict[str, Union[str, SelectedExpression]]:
+        aggregate_name, agg_params, zero_or_one = children
+        _, _, target, _, *_ = zero_or_one
+        _, _, agg_param_list, _, *_ = agg_params
+        aggregate_params = agg_param_list[0] if agg_param_list else []
+        target["aggregate"] = {
+            "name": aggregate_name,
+            "params": aggregate_params,
+        }
+        return target
+
+    def visit_param(
+        self, node: Node, children: Tuple[Union[str, int, float], Any]
+    ) -> Union[str, int, float]:
+        param, *_ = children
+        return param
+
+    def visit_param_expression(
+        self, node: Node, children: Tuple[Union[str, int, float], Any]
+    ) -> Union[str, int, float]:
+        (param,) = children
+        return param
+
+    def visit_aggregate_list(
+        self,
+        node: Node,
+        children: Tuple[list[Union[str, int, float]], Optional[Union[str, int, float]]],
+    ) -> Sequence[str | int | float]:
+        agg_params, param = children
+        if param is not None:
+            agg_params.append(param)
+        assert isinstance(agg_params, list)
+        return agg_params
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -304,6 +335,17 @@ def parse_mql_query_initial(
     processors and are supposed to update the AST.
     """
     try:
+        """
+        Example of parsed tree for:
+        'max(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by transaction',
+
+        {
+            'public_name': 'transaction.user',
+            'filters': [('notIn', 'dist', ['dist1', 'dist2']), ('equals', 'foo', 'bar')],
+            'aggregate': {'name': 'max'},
+            'groupby': ['transaction']
+        }
+        """
         exp_tree = MQL_GRAMMAR.parse(body)
         parsed = MQLVisitor().visit(exp_tree)
     except Exception as e:
@@ -320,7 +362,7 @@ def parse_mql_query_initial(
     }
 
     resolved_args = extract_args_from_mql_context(parsed, mql_context)
-    selected_columns = extract_selected_columns(parsed, resolved_args, mql_context)
+    selected_columns = extract_selected_columns(parsed, resolved_args)
 
     args["selected_columns"] = selected_columns
     args["groupby"] = resolved_args["groupby"]
@@ -338,11 +380,47 @@ def parse_mql_query_initial(
 def extract_selected_columns(
     parsed: Mapping[str, Any],
     resolved_args: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
 ) -> list[SelectedExpression]:
     selected_columns = []
     if "aggregate" in parsed:
-        selected_columns.append(parsed["aggregate"])
+        aggregate_name = parsed["aggregate"]["name"]
+        if "mri" not in parsed and "public_name" in parsed:
+            metric_name = parsed["public_name"]
+        else:
+            metric_name = parsed["mri"]
+
+        if "params" in parsed["aggregate"]:
+            params = parsed["aggregate"]["params"]
+            params_str = ", ".join(map(str, params))
+            selected_aggregate_column = SelectedExpression(
+                name=f"{aggregate_name}({params_str})({metric_name})",
+                expression=CurriedFunctionCall(
+                    alias=f"{aggregate_name}({params_str})({metric_name})",
+                    internal_function=FunctionCall(
+                        alias=None,
+                        function_name=aggregate_name,
+                        parameters=tuple(
+                            Literal(alias=None, value=param) for param in params
+                        ),
+                    ),
+                    parameters=(
+                        Column(alias=None, table_name=None, column_name="value"),
+                    ),
+                ),
+            )
+        else:
+            selected_aggregate_column = SelectedExpression(
+                name=f"{aggregate_name}({metric_name})",
+                expression=FunctionCall(
+                    alias=None,
+                    function_name=aggregate_name,
+                    parameters=(
+                        Column(alias=None, table_name=None, column_name="value"),
+                    ),
+                ),
+            )
+        selected_columns.append(selected_aggregate_column)
+
     if "groupby" in resolved_args:
         columns = resolved_args["groupby"]
         for column in columns:

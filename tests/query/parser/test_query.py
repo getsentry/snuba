@@ -16,6 +16,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
+    CurriedFunctionCall,
     Expression,
     FunctionCall,
     Lambda,
@@ -1406,7 +1407,7 @@ mql_test_cases = [
         id="Select metric with filter",
     ),
     pytest.param(
-        'max(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by transaction',
+        'quantiles(0.5)(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by transaction',
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -1439,10 +1440,10 @@ mql_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "max(transaction.user)",
-                    FunctionCall(
-                        None,
-                        "max",
+                    "quantiles(0.5)(transaction.user)",
+                    CurriedFunctionCall(
+                        "_snuba_quantiles(0.5)(transaction.user)",
+                        FunctionCall(None, "quantiles", (Literal(None, 0.5),)),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
