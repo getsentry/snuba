@@ -166,6 +166,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         TODO: For the top level span belonging to a transaction, we do not know how to fill these
               values yet. For now lets just set them to their default values.
         """
+        if "sentry_tags" not in span_event:
+            return
+
         sentry_tags = span_event["sentry_tags"].copy()
         sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
         processed["sentry_tags.key"] = sentry_tag_keys
