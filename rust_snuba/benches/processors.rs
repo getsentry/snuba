@@ -8,7 +8,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::local::broker::LocalBroker;
 use rust_arroyo::backends::local::LocalConsumer;
 use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
-use rust_arroyo::backends::{Consumer, ConsumerError};
+use rust_arroyo::backends::ConsumerError;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
@@ -92,12 +92,9 @@ fn run_bench(
     bencher
         .counter(ItemsCount::new(MSG_COUNT))
         .with_inputs(|| {
-            create_consumer_and_state(concurrency, processor, schema, make_payload, MSG_COUNT)
+            create_stream_processor(concurrency, processor, schema, make_payload, MSG_COUNT)
         })
-        .bench_local_values(|(topic, consumer, consumer_state)| {
-            let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-            processor.subscribe(topic);
-
+        .bench_local_values(|mut processor| {
             loop {
                 let res = processor.run_once();
                 if matches!(res, Err(RunError::Poll(ConsumerError::EndOfPartition))) {
@@ -155,17 +152,13 @@ fn create_factory(
     Box::new(factory)
 }
 
-fn create_consumer_and_state(
+fn create_stream_processor(
     concurrency: usize,
     processor: &str,
     schema: &str,
     make_payload: fn() -> KafkaPayload,
     messages: usize,
-) -> (
-    Topic,
-    Box<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>,
-    Arc<Mutex<ConsumerState<KafkaPayload>>>,
-) {
+) -> StreamProcessor<KafkaPayload> {
     let factory = create_factory(concurrency, processor, schema);
     let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory)));
     let topic = Topic::new("test");
@@ -189,7 +182,9 @@ fn create_consumer_and_state(
     );
     let consumer = Box::new(consumer);
 
-    (topic, consumer, consumer_state)
+    let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+    processor.subscribe(topic);
+    processor
 }
 
 fn functions_payload() -> KafkaPayload {
