@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import Entity, Table
+from snuba.query.data_source.simple import Entity, SimpleDataSource, Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -25,15 +25,16 @@ from snuba.query.matchers import (
     String,
 )
 
-from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 
-def get_object_ids_in_condition(condition: Expression, object_column: str) -> Optional[Set[int]]:
+def get_object_ids_in_condition(condition: Expression, object_column: str) -> Set[int]:
     """
     Extract project ids from an expression. Returns None if no project
     if condition is found. It returns an empty set of conflicting project_id
     conditions are found.
     """
+    import pdb
+
+    pdb.set_trace()
     match = FunctionCall(
         String(ConditionFunctions.EQ),
         (
@@ -44,9 +45,9 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Op
     if match is not None:
         return {match.integer("object_id")}
 
-    match = is_in_condition_pattern(
-        Column(column_name=String(object_column))
-    ).match(condition)
+    match = is_in_condition_pattern(Column(column_name=String(object_column))).match(
+        condition
+    )
     if match is not None:
         objects = match.expression("sequence")
         assert isinstance(objects, FunctionCallExpr)
@@ -64,8 +65,12 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Op
         (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
     ).match(condition)
     if match is not None:
-        lhs_objects = get_object_ids_in_condition(match.expression("lhs"))
-        rhs_objects = get_object_ids_in_condition(match.expression("rhs"))
+        lhs_objects = get_object_ids_in_condition(
+            match.expression("lhs"), object_column
+        )
+        rhs_objects = get_object_ids_in_condition(
+            match.expression("rhs"), object_column
+        )
         if lhs_objects is None:
             return rhs_objects
         elif rhs_objects is None:
@@ -77,13 +82,10 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Op
                 else lhs_objects | rhs_objects
             )
 
-    return None
+    return set()
 
 
-
-def get_object_ids_in_query_ast(
-    query: AbstractQuery, object_column: str
-) -> Optional[Set[int]]:
+def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set[int]:
     """
     Finds the object ids (e.g. project ids) this query is filtering according to the AST
     query representation.
@@ -91,28 +93,19 @@ def get_object_ids_in_query_ast(
     It works like get_project_ids_in_query with the exception that
     boolean functions are supported here.
     """
+    condition = query.get_condition()
+    if not condition:
+        return set()
+    this_query_object_ids = get_object_ids_in_condition(condition, object_column)
+
     from_clause = query.get_from_clause()
     if isinstance(from_clause, SimpleDataSource):
-        condition = query.get_condition()
+        return this_query_object_ids
 
-    elif isinstance(from_clause, ProcessableQuery):
-        return _get_allocation_policies(cast(Query, from_clause))
-    elif isinstance(from_clause, CompositeQuery):
-        return _get_allocation_policies(from_clause)
-    elif isinstance(from_clause, JoinClause):
-        # HACK (Volo): Joins are a weird case for allocation policies and we don't
-        # actually use them anywhere so I'm purposefully just kicking this can down the
-        # road
-        return [DEFAULT_PASSTHROUGH_POLICY]
-    else:
-        logger.exception(
-            f"Could not determine allocation policies for {clickhouse_query}"
-        )
-        return [DEFAULT_PASSTHROUGH_POLICY]
-
-
-    condition = query.get_condition()
-    return get_object_ids_in_condition(condition) if condition is not None else None
+    elif isinstance(from_clause, AbstractQuery):
+        subquery_project_ids = get_object_ids_in_query_ast(from_clause, object_column)
+        return subquery_project_ids.union(this_query_object_ids)
+    return set()
 
 
 def get_time_range_expressions(
