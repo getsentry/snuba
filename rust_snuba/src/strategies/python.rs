@@ -27,6 +27,7 @@ struct MessageMeta {
 enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
+        // NOTE: this `Mutex` purely exists to make `TaskHandle` `Sync`
         join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
         submit_timestamp: SystemTime,
     },
@@ -249,7 +250,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
-                    tracing::debug!(?args, "processing message in subprocess");
+                    tracing::debug!(args=?(args.1, args.2, args.3), "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<RowData> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
