@@ -10,7 +10,7 @@ use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
-use rdkafka::error::KafkaResult;
+use rdkafka::error::KafkaError;
 use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
@@ -94,7 +94,32 @@ pub struct CustomContext<C: AssignmentCallbacks> {
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
-impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {}
+impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
+    fn log(&self, level: RDKafkaLogLevel, fac: &str, log_message: &str) {
+        match level {
+            RDKafkaLogLevel::Emerg
+            | RDKafkaLogLevel::Alert
+            | RDKafkaLogLevel::Critical
+            | RDKafkaLogLevel::Error => {
+                tracing::error!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Warning => {
+                tracing::warn!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Notice | RDKafkaLogLevel::Info => {
+                tracing::info!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Debug => {
+                tracing::debug!("librdkafka: {fac} {log_message}");
+            }
+        }
+    }
+
+    fn error(&self, error: KafkaError, reason: &str) {
+        let err: &dyn std::error::Error = &error;
+        tracing::error!(err, "librdkafka: {error}: {reason}");
+    }
+}
 
 impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
     fn pre_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
@@ -132,8 +157,6 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             self.callbacks.on_assign(map);
         }
     }
-
-    fn commit_callback(&self, _: KafkaResult<()>, _offsets: &TopicPartitionList) {}
 }
 
 pub struct KafkaConsumer<C: AssignmentCallbacks> {
