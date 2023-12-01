@@ -10,7 +10,7 @@ pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 #[derive(Debug, Default, Clone)]
 struct LatencyRecorder {
     sum_secs: f64,
-    max_secs: i64,
+    max_secs: u64,
     num_values: usize,
 }
 
@@ -19,7 +19,7 @@ impl From<DateTime<Utc>> for LatencyRecorder {
         let value = value.timestamp();
         LatencyRecorder {
             sum_secs: value as f64,
-            max_secs: value,
+            max_secs: value as u64,
             num_values: 1,
         }
     }
@@ -37,28 +37,14 @@ impl LatencyRecorder {
             return;
         }
 
-        let into_latency = |ts: DateTime<Utc>| (write_time - ts).num_seconds().try_into().ok();
+        let write_time = write_time.timestamp() as u64;
 
-        if let Some(ts) = DateTime::from_timestamp(self.max_secs, 0).and_then(into_latency) {
-            metrics.timing(&format!("insertions.max_{}", metric_name), ts, None);
-        } else {
-            tracing::error!(
-                "overflow while trying to calculate insertions.max_{} metric",
-                metric_name
-            );
-        }
+        let latency = self.max_secs.saturating_sub(write_time) * 1000;
+        metrics.timing(&format!("insertions.max_{}_ms", metric_name), latency, None);
 
-        if let Some(latency) =
-            DateTime::from_timestamp((self.sum_secs / self.num_values as f64) as i64, 0)
-                .and_then(into_latency)
-        {
-            metrics.timing(&format!("insertions.{}", metric_name), latency, None);
-        } else {
-            tracing::error!(
-                "overflow while trying to calculate insertions.{} metric",
-                metric_name
-            );
-        }
+        let latency =
+            ((self.sum_secs * 1000.0 / self.num_values as f64) as u64).saturating_sub(write_time);
+        metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
     }
 }
 
@@ -136,14 +122,11 @@ impl BytesInsertBatch {
         let write_time = Utc::now();
 
         self.message_timestamp
-            .send_metric(metrics, write_time, "latency_ms");
+            .send_metric(metrics, write_time, "latency");
         self.origin_timestamp
-            .send_metric(metrics, write_time, "end_to_end_latency_ms");
-        self.sentry_received_timestamp.send_metric(
-            metrics,
-            write_time,
-            "sentry_received_latency_ms",
-        );
+            .send_metric(metrics, write_time, "end_to_end_latency");
+        self.sentry_received_timestamp
+            .send_metric(metrics, write_time, "sentry_received_latency");
     }
 
     pub fn len(&self) -> usize {
