@@ -4,7 +4,7 @@ from typing import Any, Mapping
 
 from snuba_sdk.conditions import ConditionFunction
 
-from snuba.query.conditions import binary_condition, combine_and_conditions
+from snuba.query.conditions import binary_condition
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
@@ -19,15 +19,18 @@ def resolve_mappings(
     mimics the behavior of the indexer to resolve the metric_id and tag filters
     by using the indexer_mapping provided by the client.
     """
-    filters = extract_metric_id(parsed, mql_context)
-    filters.extend(extract_resolved_tag_filters(parsed, mql_context))
-    query.add_condition_to_ast(combine_and_conditions(filters))
+    resolve_metric_id_processor(query, parsed, mql_context)
+    resolve_tag_filters_processor(query, parsed, mql_context)
+    resolve_gropupby_processor(query, parsed, mql_context)
     return query
 
 
-def extract_metric_id(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[FunctionCall]:
+def resolve_metric_id_processor(
+    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+) -> None:
+    """
+    Adds the resolved metric_id to the AST conditions
+    """
     if "mri" not in parsed and "public_name" in parsed:
         public_name = parsed["public_name"]
         mri = mql_context["indexer_mappings"][public_name]
@@ -39,60 +42,59 @@ def extract_metric_id(
             "No mri to metric_id mapping found in MQL context indexer_mappings."
         )
     metric_id = mql_context["indexer_mappings"][mri]
-    return [
-        (
-            binary_condition(
-                ConditionFunction.EQ.value,
-                Column(alias=None, table_name=None, column_name="metric_id"),
-                Literal(alias=None, value=metric_id),
-            )
+    query.add_condition_to_ast(
+        binary_condition(
+            ConditionFunction.EQ.value,
+            Column(alias=None, table_name=None, column_name="metric_id"),
+            Literal(alias=None, value=metric_id),
         )
-    ]
+    )
 
 
-def extract_resolved_tag_filters(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[FunctionCall]:
-    # Extract resolved tag filters from mql context indexer_mappings
-    filters = []
-    if "filters" in parsed:
-        for filter in parsed["filters"]:
-            operator, lhs, rhs = filter
-            if lhs in mql_context["indexer_mappings"]:
-                resolved = mql_context["indexer_mappings"][lhs]
+def resolve_tag_filters_processor(
+    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+) -> None:
+    """
+    Traverse through all conditions of the AST,
+    then finds and replaces tag filters with resolved names
+    """
+    conditions = parsed.get("filters", None)
+    if conditions:
+        for condition in conditions:
+            assert isinstance(condition, FunctionCall)
+            column = condition.parameters[0]  # lhs
+            assert isinstance(column, Column)
+            column_name = column.column_name
+            if column_name in mql_context["indexer_mappings"]:
+                resolved = mql_context["indexer_mappings"][column_name]
                 lhs_column_name = f"tags_raw[{resolved}]"
-            else:
-                lhs_column_name = lhs
-
-            if isinstance(rhs, str):
-                filters.append(
-                    binary_condition(
-                        operator,
-                        Column(
-                            alias=lhs,
-                            table_name=None,
-                            column_name=lhs_column_name,
-                        ),
-                        Literal(alias=None, value=rhs),
-                    )
+                replace_column = Column(
+                    alias=column_name,
+                    table_name=None,
+                    column_name=lhs_column_name,
                 )
-            else:
-                filters.append(
-                    binary_condition(
-                        operator,
-                        Column(
-                            alias=lhs,
-                            table_name=None,
-                            column_name=lhs_column_name,
-                        ),
-                        FunctionCall(
-                            alias=None,
-                            function_name="tuple",
-                            parameters=tuple(
-                                Literal(alias=None, value=item) for item in rhs
-                            ),
-                        ),
-                    )
-                )
+                query.find_and_replace_column_in_condition(column_name, replace_column)
 
-    return filters
+
+def resolve_gropupby_processor(
+    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+) -> None:
+    """
+    Iterates through the groupby and selected_columns in AST,
+    then finds and replaces the groupby column with resolved names
+    """
+    groupbys = parsed.get("groupby", None)
+    if groupbys:
+        for groupby_column in groupbys:
+            assert isinstance(groupby_column, Column)
+            if groupby_column.column_name in mql_context["indexer_mappings"]:
+                resolved = mql_context["indexer_mappings"][groupby_column.column_name]
+                resolved_column_name = f"tags_raw[{resolved}]"
+                column = Column(
+                    alias=groupby_column.column_name,
+                    table_name=None,
+                    column_name=resolved_column_name,
+                )
+                query.find_and_replace_column_in_groupby_and_selected_columns(
+                    groupby_column.column_name, column
+                )
