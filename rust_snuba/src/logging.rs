@@ -24,7 +24,7 @@ pub fn setup_logging() {
         .init();
 }
 
-pub fn setup_sentry(sentry_dsn: String) -> ClientInitGuard {
+pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
         sentry::ClientOptions {

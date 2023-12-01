@@ -495,6 +495,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
+name = "filetime"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4029edd3e734da6fe05b6cd7bd2960760a616bd2ddd0d59a0124746d6272af0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "redox_syscall 0.3.5",
+ "windows-sys",
+]
+
+[[package]]
 name = "findshlibs"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1409,7 +1421,7 @@ checksum = "4c42a9226546d68acdd9c0a280d17ce19bfe27a46bf68784e4066115788d008e"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.4.1",
  "smallvec",
  "windows-targets",
 ]
@@ -1481,9 +1493,9 @@ dependencies = [
 
 [[package]]
 name = "procspawn"
-version = "0.10.3"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84c82677a5c230101fb709f4c421bf1ac249fd56266be1d735306598d0ffeff8"
+checksum = "8d59f115c63b1eed96002d9df8dfe022ba07e0d70b42890d34bc34f4342bae6b"
 dependencies = [
  "backtrace",
  "ctor",
@@ -1639,8 +1651,7 @@ dependencies = [
 [[package]]
 name = "rdkafka"
 version = "0.36.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54f02a5a40220f8a2dfa47ddb38ba9064475a5807a69504b6f91711df2eea63"
+source = "git+https://github.com/getsentry/rust-rdkafka?branch=base-consumer#c811175785c74bb9be4dc6f132dd8834ff57287a"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1657,14 +1668,22 @@ dependencies = [
 [[package]]
 name = "rdkafka-sys"
 version = "4.7.0+2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55e0d2f9ba6253f6ec72385e453294f8618e9e15c2c6aba2a5c01ccf9622d615"
+source = "git+https://github.com/getsentry/rust-rdkafka?branch=base-consumer#c811175785c74bb9be4dc6f132dd8834ff57287a"
 dependencies = [
  "cmake",
  "libc",
  "libz-sys",
  "num_enum",
  "pkg-config",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567664f262709473930a4bf9e51bf2ebf3348f2e748ccc50dea20646858f8f29"
+dependencies = [
+ "bitflags 1.3.2",
 ]
 
 [[package]]
@@ -1781,6 +1800,7 @@ dependencies = [
  "chrono",
  "clap 2.34.0",
  "env_logger",
+ "filetime",
  "futures",
  "once_cell",
  "rdkafka",
@@ -1925,9 +1945,9 @@ checksum = "836fa6a3e1e547f9a2c4040802ec865b5d85f4014efe00555d7090a3dcaa1090"
 
 [[package]]
 name = "sentry"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ce4b57f1b521f674df7a1d200be8ff5d74e3712020ee25b553146657b5377d5"
+checksum = "9b596ee5f4e76638de6063ca96fd3d923675416461fc7f1b77406dc2f32d1979"
 dependencies = [
  "httpdate",
  "native-tls",
@@ -1945,9 +1965,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-anyhow"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8868ca6e513f7a80b394b7e0f4b6071afeebb69e62b5e4aafe37b45e431fac8b"
+checksum = "0d956b9a5d5facc962eaae0206fd785bb641a412c395c9a1a914719af35c9dd5"
 dependencies = [
  "anyhow",
  "sentry-backtrace",
@@ -1956,9 +1976,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-backtrace"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58cc8d4e04a73de8f718dc703943666d03f25d3e9e4d0fb271ca0b8c76dfa00e"
+checksum = "e6510a97162c288989a6310766bcadfc83ec98ad73121674463b055c42189e85"
 dependencies = [
  "backtrace",
  "once_cell",
@@ -1968,9 +1988,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-contexts"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6436c1bad22cdeb02179ea8ef116ffc217797c028927def303bc593d9320c0d1"
+checksum = "64e2552a4a578aade01bd44691e6805c32bac34fc918f1675739fbbf2add8460"
 dependencies = [
  "hostname",
  "libc",
@@ -1982,9 +2002,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-core"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "901f761681f97db3db836ef9e094acdd8756c40215326c194201941947164ef1"
+checksum = "ebb7a6ad833035f6b36db3e61e450643eec8a3c5f2839b8e41c74a73e57c6bae"
 dependencies = [
  "once_cell",
  "rand 0.8.5",
@@ -1995,9 +2015,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-debug-images"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afdb263e73d22f39946f6022ed455b7561b22ff5553aca9be3c6a047fa39c328"
+checksum = "0bcd02214397892a3ec25372cc68c210d858f39314535f5d640bdf41294fd441"
 dependencies = [
  "findshlibs",
  "once_cell",
@@ -2024,9 +2044,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-panic"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74fbf1c163f8b6a9d05912e1b272afa27c652e8b47ea60cb9a57ad5e481eea99"
+checksum = "0866e2ba7615fe37e0e485f2373bf9dabbb255f82637b5fe47902095790bbbc9"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
@@ -2034,9 +2054,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-tracing"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82eabcab0a047040befd44599a1da73d3adb228ff53b5ed9795ae04535577704"
+checksum = "53ef38653386354058f30b3c6d0bf764c59ee6270cd769ac4620a2d2fd60c8fe"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
@@ -2046,9 +2066,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-types"
-version = "0.31.8"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da956cca56e0101998c8688bc65ce1a96f00673a0e58e663664023d4c7911e82"
+checksum = "26342e85c6b3332273b820d5be6b93027fe991ded23a2aa6fb88a5a28c845c40"
 dependencies = [
  "debugid",
  "hex",
@@ -2261,7 +2281,7 @@ checksum = "7ef1adac450ad7f4b3c28589471ade84f25f731a7a0fe30d71dfa9f60fd808e5"
 dependencies = [
  "cfg-if 1.0.0",
  "fastrand",
- "redox_syscall",
+ "redox_syscall 0.4.1",
  "rustix",
  "windows-sys",
 ]

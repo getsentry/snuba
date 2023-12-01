@@ -277,22 +277,15 @@ impl<T> fmt::Display for Message<T> {
             }) => {
                 write!(
                     f,
-                    "Message<{}>(partition={}), offset={}",
+                    "Message<{}>(partition={partition}), offset={offset}",
                     type_name::<T>(),
-                    &partition,
-                    &offset
                 )
             }
             InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
                 write!(
                     f,
-                    "Message<{}>(committable={})",
+                    "Message<{}>(committable={committable:?})",
                     type_name::<T>(),
-                    &committable
-                        .iter()
-                        .map(|(k, v)| format!("{}:{}", k, v))
-                        .collect::<Vec<_>>()
-                        .join(",")
                 )
             }
         }

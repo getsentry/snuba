@@ -13,6 +13,7 @@ use crate::processing::strategies::{
 };
 use crate::types::Message;
 
+#[derive(Clone, Debug)]
 pub enum RunTaskError {
     RetryableError,
     InvalidMessage(InvalidMessage),

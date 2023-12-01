@@ -8,6 +8,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
+use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::processors::ProcessingFunction;
@@ -66,38 +67,33 @@ impl MessageProcessor {
         self,
         msg: BrokerMessage<KafkaPayload>,
     ) -> Result<Message<BytesInsertBatch>, RunTaskError> {
-        // FIXME: this will panic when the payload is empty
-        let payload = msg.payload.payload().unwrap();
-
         let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
         });
+
+        let kafka_payload = &msg.payload.clone();
+        let payload = kafka_payload.payload().ok_or(maybe_err.clone())?;
 
         if self.validate_schema(payload).is_err() {
             return Err(maybe_err);
         };
 
         self.process_payload(msg).map_err(|error| {
-            // TODO: after moving to `tracing`, we can properly attach `err` to the log.
-            // however, as Sentry captures `error` logs as errors by default,
-            // we would double-log this error here:
-            tracing::error!(%error, "Failed processing message");
-            let metrics = get_metrics();
-            metrics.increment("invalid_message", 1, None);
+            self.metrics.increment("invalid_message", 1, None);
+
             sentry::with_scope(
-                |_scope| {
-                    // FIXME(swatinem): we already moved `broker_message.payload`
-                    // let payload = broker_message
-                    //     .payload
-                    //     .payload
-                    //     .as_deref()
-                    //     .map(String::from_utf8_lossy)
-                    //     .into();
-                    // scope.set_extra("payload", payload)
+                |scope| {
+                    let payload = String::from_utf8_lossy(payload).into();
+                    scope.set_extra("payload", payload)
                 },
                 || {
+                    // FIXME: We are double-reporting errors here, as capturing
+                    // the error via `tracing::error` will not attach the anyhow
+                    // stack trace, but `capture_anyhow` will.
                     sentry::integrations::anyhow::capture_anyhow(&error);
+                    let error: &dyn std::error::Error = error.as_ref();
+                    tracing::error!(error, "Failed processing message");
                 },
             );
 
@@ -114,9 +110,18 @@ impl MessageProcessor {
         let Err(error) = schema.validate_json(payload) else {
             return Ok(());
         };
-
-        tracing::error!(%error, "Validation error");
         self.metrics.increment("schema_validation.failed", 1, None);
+
+        sentry::with_scope(
+            |scope| {
+                let payload = String::from_utf8_lossy(payload).into();
+                scope.set_extra("payload", payload)
+            },
+            || {
+                let error: &dyn std::error::Error = &error;
+                tracing::error!(error, "Validation error");
+            },
+        );
 
         if !self.enforce_schema {
             Ok(())
@@ -161,7 +166,11 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
             _ => panic!("Unexpected message type"),
         };
 
-        Box::pin(self.clone().process_message(broker_message))
+        Box::pin(
+            self.clone()
+                .process_message(broker_message)
+                .bind_hub(Hub::new_from_top(Hub::current())),
+        )
     }
 }
 

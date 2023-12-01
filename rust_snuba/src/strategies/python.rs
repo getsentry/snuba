@@ -27,6 +27,7 @@ struct MessageMeta {
 enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
+        // NOTE: this `Mutex` purely exists to make `TaskHandle` `Sync`
         join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
         submit_timestamp: SystemTime,
     },
@@ -103,11 +104,15 @@ impl PythonTransformStep {
         })
     }
 
+    #[tracing::instrument(skip(self))]
     fn check_for_results(&mut self, max_queue_depth: usize) {
         if let Some(message_carried_over) = self.message_carried_over.take() {
+            tracing::debug!("resubmitting carried over message");
+            // TODO: handle InvalidMessage here
             if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
                 self.next_step.submit(message_carried_over)
             {
+                tracing::debug!("failed to resubmit, returning");
                 self.message_carried_over = Some(message);
                 return;
             }
@@ -116,6 +121,7 @@ impl PythonTransformStep {
         debug_assert!(self.message_carried_over.is_none());
 
         if !self.queue_needs_drain(max_queue_depth) {
+            tracing::debug!("queue_needs_drain=false, returning");
             return;
         }
 
@@ -126,6 +132,7 @@ impl PythonTransformStep {
                 ..
             }) => {
                 let handle = join_handle.into_inner().unwrap();
+                tracing::debug!("joining procspawn handle");
                 let result = handle.join().expect("procspawn failed");
                 (original_message_meta, result)
             }
@@ -134,7 +141,10 @@ impl PythonTransformStep {
                 result,
                 ..
             }) => (original_message_meta, result),
-            None => return,
+            None => {
+                tracing::debug!("self.handles is empty, returning");
+                return;
+            }
         };
 
         match message_result {
@@ -160,10 +170,13 @@ impl PythonTransformStep {
                     original_message_meta.timestamp,
                 );
 
+                tracing::debug!("forwarding new result to next step");
+
                 if let Err(SubmitError::MessageRejected(MessageRejected {
                     message: transformed_message,
                 })) = self.next_step.submit(new_message)
                 {
+                    tracing::debug!("failed to forward");
                     self.message_carried_over = Some(transformed_message);
                 }
             }
@@ -172,9 +185,14 @@ impl PythonTransformStep {
                 tracing::error!(error, "Invalid message");
             }
         }
+
+        tracing::debug!("done with check_for_results, returning");
     }
 
+    #[tracing::instrument(skip_all)]
     fn queue_needs_drain(&self, max_queue_depth: usize) -> bool {
+        tracing::debug!(self.handles.len = self.handles.len());
+
         if self.handles.len() > max_queue_depth {
             return true;
         }
@@ -193,20 +211,23 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        tracing::debug!("python poll start");
         self.check_for_results(self.max_queue_depth);
+        tracing::debug!("python poll end");
 
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         if self.message_carried_over.is_some() {
+            tracing::debug!("python strategy provides backpressure due to next_step");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
         if self.queue_needs_drain(self.max_queue_depth) {
-            tracing::debug!("python strategy provides backpressure");
+            tracing::debug!("python strategy provides backpressure due to full queue");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
@@ -231,7 +252,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
-                    tracing::debug!(?args, "processing message in subprocess");
+                    tracing::debug!(args=?(args.1, args.2, args.3), "processing message in subprocess");
                     Python::with_gil(|py| -> PyResult<InsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
@@ -262,7 +283,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let submit_timestamp = SystemTime::now();
 
                 if let Some(ref processing_pool) = self.processing_pool {
+                    tracing::debug!("processing_pool.spawn start");
                     let handle = processing_pool.spawn(args, process_message);
+                    tracing::debug!("processing_pool.spawn end");
 
                     self.handles.push_back(TaskHandle::Procspawn {
                         submit_timestamp,
