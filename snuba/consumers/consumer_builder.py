@@ -161,7 +161,6 @@ class ConsumerBuilder:
         input_topic: Topic,
         dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
-
         configuration = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
             group_id=self.group_id,
@@ -347,6 +346,13 @@ class ConsumerBuilder:
 
         if instruction.policy == DlqReplayPolicy.REINSERT_DLQ:
             dlq_policy = self.__build_default_dlq_policy()
+            # We don't need to apply the limit to the DLQ consumer, just reinsert all
+            # if that option was selected
+            dlq_policy = DlqPolicy(
+                dlq_policy.producer,
+                None,
+                dlq_policy.max_buffered_messages_per_partition,
+            )
         elif instruction.policy == DlqReplayPolicy.DROP_INVALID_MESSAGES:
             dlq_policy = DlqPolicy(
                 NoopDlqProducer(),
