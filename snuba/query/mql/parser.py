@@ -5,7 +5,6 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
-from snuba_sdk.conditions import OPERATOR_TO_FUNCTION, ConditionFunction, Op
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
@@ -14,7 +13,12 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import binary_condition, combine_and_conditions
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+    combine_and_conditions,
+)
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
@@ -97,50 +101,96 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Any,
         ],
     ) -> dict[str, list[str]]:
-        args, packed_filters, packed_groupbys, *_ = children
-        assert isinstance(args, dict)
+        target, packed_filters, packed_groupbys, *_ = children
+        assert isinstance(target, dict)
         if packed_filters:
             assert isinstance(packed_filters, list)
-            _, _, first, zero_or_more_others, *_ = packed_filters[0]
-            new_filters = [first, *(v for _, _, _, v in zero_or_more_others)]
-            if "filters" in args:
-                args["filters"] = args["filters"] + new_filters
+            _, _, filter_expr, *_ = packed_filters[0]
+            if "filters" in target:
+                target["filters"] = target["filters"] + [filter_expr]
             else:
-                args["filters"] = new_filters
+                target["filters"] = [filter_expr]
 
         if packed_groupbys:
             assert isinstance(packed_groupbys, list)
             group_by = packed_groupbys[0]
             if not isinstance(group_by, list):
                 group_by = [group_by]
-            if "groupby" in args:
-                args["groupby"] = args["groupby"] + group_by
+            if "groupby" in target:
+                target["groupby"] = target["groupby"] + group_by
             else:
-                args["groupby"] = group_by
+                target["groupby"] = group_by
 
-        return args
+        return target
 
-    def visit_condition(
+    def _filter(
+        self, children: Sequence[Any], operator: BooleanFunctions
+    ) -> FunctionCall:
+        first, zero_or_more_others = children
+        filters: Sequence[FunctionCall] = [
+            first,
+            *(v for _, _, _, v in zero_or_more_others),
+        ]
+        if len(filters) == 1:
+            return filters[0]
+        else:
+            # We flatten all filters into a single condition since Snuba supports it.
+            return FunctionCall(None, operator, tuple(filters))
+
+    def visit_filter_expr(self, node: Node, children: Sequence[Any]) -> Any:
+        return self._filter(children, BooleanFunctions.OR)
+
+    def visit_filter_term(self, node: Node, children: Sequence[Any]) -> Any:
+        return self._filter(children, BooleanFunctions.AND)
+
+    def visit_filter_factor(
         self,
         node: Node,
         children: Tuple[
-            Optional[list[Op]], Sequence[str], Any, Any, Any, Union[str, Sequence[str]]
+            Optional[list[ConditionFunctions]],
+            Sequence[str],
+            Any,
+            Any,
+            Any,
+            Union[str, Sequence[str]],
         ],
     ) -> Tuple[str, str, Union[str, Sequence[str]]]:
-        condition_op, lhs, _, _, _, rhs = children
-        op = Op.EQ
-        if not condition_op and isinstance(rhs, list):
-            op = Op.IN
-        elif (
-            isinstance(condition_op, list)
-            and len(condition_op) == 1
-            and condition_op[0] == Op.NOT
-        ):
-            if isinstance(rhs, str):
-                op = Op.NEQ
-            elif isinstance(rhs, list):
-                op = Op.NOT_IN
-        return (OPERATOR_TO_FUNCTION[op].value, lhs[0], rhs)
+        factor, *_ = children
+        if isinstance(factor, FunctionCall):
+            # If we have a parenthesized expression, we just return it.
+            return factor
+        condition_op, lhs, _, _, _, rhs = factor
+        if isinstance(rhs, list):
+            if not condition_op:
+                op = ConditionFunctions.IN
+            elif len(condition_op) == 1 and condition_op[0] == "!":
+                op = ConditionFunctions.NOT_IN
+            return FunctionCall(
+                None,
+                op,
+                (
+                    Column(None, None, lhs[0]),
+                    FunctionCall(
+                        None,
+                        "tuple",
+                        tuple(Literal(None, value) for value in rhs),
+                    ),
+                ),
+            )
+        else:
+            if not condition_op:
+                op = ConditionFunctions.EQ
+            elif len(condition_op) == 1 and condition_op[0] == "!":
+                op = ConditionFunctions.NEQ
+            return FunctionCall(
+                None,
+                op,
+                (Column(None, None, lhs[0]), Literal(None, rhs)),
+            )
+
+    def visit_nested_expr(self, node: Node, children: Sequence[Any]) -> Any:
+        _, _, filter_expr, *_ = children
+        return filter_expr
 
     def visit_function(
         self,
@@ -170,8 +220,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target = targets[0]
         if packed_groupbys:
             group_by = packed_groupbys[0]
-            if isinstance(group_by, str):
-                group_by = [group_by]
             target["groupby"] = group_by
 
         return target
@@ -181,12 +229,22 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         node: Node,
         children: Tuple[Any, Any, Any, Sequence[Sequence[str]]],
     ) -> Sequence[str]:
-        *_, groupby = children
-        columns = groupby[0]
+        *_, groupbys = children
+        groupby = groupbys[0]
+        if isinstance(groupby, str):
+            groupby = [groupby]
+        columns = [
+            Column(
+                alias=column_name,
+                table_name=None,
+                column_name=column_name,
+            )
+            for column_name in groupby
+        ]
         return columns
 
-    def visit_condition_op(self, node: Node, children: Sequence[Any]) -> Op:
-        return Op(node.text)
+    def visit_condition_op(self, node: Node, children: Sequence[Any]) -> str:
+        return node.text
 
     def visit_tag_key(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -248,9 +306,26 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> dict[str, Union[str, SelectedExpression]]:
         aggregate_name, zero_or_one = children
         _, _, target, zero_or_more_others, *_ = zero_or_one
-        target["aggregate"] = {
-            "name": aggregate_name,
-        }
+        if "mri" in target:
+            metric_name = target["mri"]
+        else:
+            metric_name = target["public_name"]
+        selected_aggregate_column = [
+            SelectedExpression(
+                f"{aggregate_name}({metric_name})",
+                FunctionCall(
+                    AGGREGATE_ALIAS,
+                    aggregate_name,
+                    (Column(None, None, "value"),),
+                ),
+            ),
+        ]
+        if "selected_aggregate" in target:
+            target["selected_aggregate"] = (
+                selected_aggregate_column + target["selected_aggregate"]
+            )
+        else:
+            target["selected_aggregate"] = selected_aggregate_column
         return target
 
     def visit_curried_aggregate(
@@ -266,10 +341,35 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-        target["aggregate"] = {
-            "name": aggregate_name,
-            "params": aggregate_params,
-        }
+
+        if "mri" in target:
+            metric_name = target["mri"]
+        else:
+            metric_name = target["public_name"]
+        params_str = ", ".join(map(str, aggregate_params))
+        selected_aggregate_column = [
+            SelectedExpression(
+                f"{aggregate_name}({params_str})({metric_name})",
+                CurriedFunctionCall(
+                    AGGREGATE_ALIAS,
+                    FunctionCall(
+                        None,
+                        aggregate_name,
+                        tuple(
+                            Literal(alias=None, value=param)
+                            for param in aggregate_params
+                        ),
+                    ),
+                    (Column(None, None, "value"),),
+                ),
+            )
+        ]
+        if "selected_aggregate" in target:
+            target["selected_aggregate"] = (
+                selected_aggregate_column + target["selected_aggregate"]
+            )
+        else:
+            target["selected_aggregate"] = selected_aggregate_column
         return target
 
     def visit_param(
@@ -331,7 +431,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 def parse_mql_query_initial(
     body: str,
     mql_context: Mapping[str, Any],
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[Mapping[str, Any], Union[CompositeQuery[QueryEntity], LogicalQuery]]:
     """
     Parses the query body MQL generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -340,17 +440,29 @@ def parse_mql_query_initial(
     try:
         """
         Example of parsed tree for:
-        'max(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by transaction',
+        'max(transaction.user{dist:["dist1", "dist2"]}) by transaction',
 
         {
             'public_name': 'transaction.user',
-            'filters': [('notIn', 'dist', ['dist1', 'dist2']), ('equals', 'foo', 'bar')],
-            'aggregate': {'name': 'max'},
-            'groupby': ['transaction']
+            'selected_aggregate': [SelectedExpression(name='sum(d:transactions/duration@millisecond)', expression=sum(value) AS `aggregate_value`)],
+            'filters': [ IN(dist, tuple('dist1', 'dist2')) ],
+            'groupby': [Column('transaction')]
         }
         """
         exp_tree = MQL_GRAMMAR.parse(body)
-        parsed = MQLVisitor().visit(exp_tree)
+        parsed: dict[str, Any] = MQLVisitor().visit(exp_tree)
+        selected_columns = assemble_selected_columns(
+            parsed.get("selected_aggregate", None), parsed.get("groupby", None)
+        )
+        conditions = parsed.get("filters", None)
+        if conditions:
+            conditions = combine_and_conditions(conditions)
+        query = LogicalQuery(
+            from_clause=None,
+            selected_columns=selected_columns,
+            condition=conditions,
+            groupby=parsed.get("groupby", None),
+        )
     except Exception as e:
         raise e
 
@@ -358,83 +470,36 @@ def parse_mql_query_initial(
         raise InvalidQueryException("No entity specified in MQL context")
     entity_name = mql_context["entity"]
     entity_key = EntityKey(entity_name)
-    args: dict[str, Any] = {
-        "from_clause": QueryEntity(
-            key=entity_key, schema=get_entity(entity_key).get_data_model()
-        ),
-    }
+    query.set_from_clause(
+        QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
+    )
 
-    resolved_args = extract_args_from_mql_context(parsed, mql_context, entity_key)
-    selected_columns = extract_selected_columns(parsed, resolved_args)
+    mql_context_args = extract_mql_context_args(parsed, mql_context, entity_key)
+    query.add_condition_to_ast(mql_context_args["filters"])
+    query.set_ast_orderby(mql_context_args["order_by"])
+    query.set_limit(mql_context_args["limit"])
+    query.set_offset(mql_context_args["offset"])
+    query.set_granularity(mql_context_args["granularity"])
+    query.set_totals(mql_context_args["totals"])
 
-    args["selected_columns"] = selected_columns
-    args["groupby"] = resolved_args["groupby"]
-    args["condition"] = resolved_args["filters"]
-    args["order_by"] = resolved_args["order_by"]
-    args["limit"] = resolved_args["limit"]
-    args["offset"] = resolved_args["offset"]
-    args["granularity"] = resolved_args["granularity"]
-    args["totals"] = resolved_args["totals"]
-
-    query = LogicalQuery(**args)
     return parsed, query
 
 
-def extract_selected_columns(
-    parsed: Mapping[str, Any],
-    resolved_args: Mapping[str, Any],
-) -> list[SelectedExpression]:
-    selected_columns = []
-    if "aggregate" in parsed:
-        aggregate_name = parsed["aggregate"]["name"]
-        if "mri" not in parsed and "public_name" in parsed:
-            metric_name = parsed["public_name"]
-        else:
-            metric_name = parsed["mri"]
-
-        if "params" in parsed["aggregate"]:
-            params = parsed["aggregate"]["params"]
-            params_str = ", ".join(map(str, params))
-            selected_aggregate_column = SelectedExpression(
-                name=f"{aggregate_name}({params_str})({metric_name})",
-                expression=CurriedFunctionCall(
-                    alias=AGGREGATE_ALIAS,
-                    internal_function=FunctionCall(
-                        alias=None,
-                        function_name=aggregate_name,
-                        parameters=tuple(
-                            Literal(alias=None, value=param) for param in params
-                        ),
-                    ),
-                    parameters=(
-                        Column(alias=None, table_name=None, column_name="value"),
-                    ),
-                ),
-            )
-        else:
-            selected_aggregate_column = SelectedExpression(
-                name=f"{aggregate_name}({metric_name})",
-                expression=FunctionCall(
-                    alias=AGGREGATE_ALIAS,
-                    function_name=aggregate_name,
-                    parameters=(
-                        Column(alias=None, table_name=None, column_name="value"),
-                    ),
-                ),
-            )
-        selected_columns.append(selected_aggregate_column)
-
-    if "groupby" in resolved_args:
-        columns = resolved_args["groupby"]
-        for column in columns:
-            assert isinstance(column, Column)
-            selected_columns.append(
-                SelectedExpression(name=column.alias, expression=column)
-            )
+def assemble_selected_columns(
+    selected_aggregate: Optional[Sequence[SelectedExpression]],
+    groupby: Optional[Sequence[Column]],
+) -> Sequence[SelectedExpression]:
+    selected_columns = selected_aggregate if selected_aggregate else []
+    if groupby:
+        groupby_selected_columns = [
+            SelectedExpression(name=column.alias, expression=column)
+            for column in groupby
+        ]
+        selected_columns.extend(groupby_selected_columns)
     return selected_columns
 
 
-def extract_args_from_mql_context(
+def extract_mql_context_args(
     parsed: Mapping[str, Any],
     mql_context: Mapping[str, Any],
     entity_key: EntityKey,
@@ -466,29 +531,25 @@ def extract_args_from_mql_context(
             }
         }
     """
-    resolved_args: dict[str, Any] = {}
+    mql_context_args: dict[str, Any] = {}
     filters = []
-    groupbys = []
     if "indexer_mappings" not in mql_context:
         raise InvalidQueryException("No indexer mappings specified in MQL context.")
 
     filters.extend(extract_scope(parsed, mql_context))
     filters.extend(extract_start_end_time(parsed, mql_context, entity_key))
-
-    groupbys.extend(extract_resolved_gropupby(parsed, mql_context))
     order_by, granularity, totals = extract_rollup(parsed, mql_context)
     limit = extract_limit(mql_context)
     offset = extract_offset(mql_context)
 
-    resolved_args["filters"] = combine_and_conditions(filters)
-    resolved_args["groupby"] = groupbys
-    resolved_args["order_by"] = order_by
-    resolved_args["granularity"] = granularity
-    resolved_args["totals"] = totals
-    resolved_args["limit"] = limit
-    resolved_args["offset"] = offset
+    mql_context_args["filters"] = combine_and_conditions(filters)
+    mql_context_args["order_by"] = order_by
+    mql_context_args["granularity"] = granularity
+    mql_context_args["totals"] = totals
+    mql_context_args["limit"] = limit
+    mql_context_args["offset"] = offset
 
-    return resolved_args
+    return mql_context_args
 
 
 def extract_start_end_time(
@@ -506,7 +567,7 @@ def extract_start_end_time(
     start = mql_context["start"]
     filters.append(
         binary_condition(
-            ConditionFunction.GTE.value,
+            ConditionFunctions.GTE,
             Column(alias=None, table_name=None, column_name=required_timestamp_column),
             FunctionCall(
                 alias=None,
@@ -518,7 +579,7 @@ def extract_start_end_time(
     end = mql_context["end"]
     filters.append(
         binary_condition(
-            ConditionFunction.LT.value,
+            ConditionFunctions.LT,
             Column(alias=None, table_name=None, column_name=required_timestamp_column),
             FunctionCall(
                 alias=None,
@@ -539,7 +600,7 @@ def extract_scope(
     scope = mql_context["scope"]
     filters.append(
         binary_condition(
-            ConditionFunction.IN.value,
+            ConditionFunctions.IN,
             Column(alias=None, table_name=None, column_name="project_id"),
             FunctionCall(
                 alias=None,
@@ -553,7 +614,7 @@ def extract_scope(
     )
     filters.append(
         binary_condition(
-            ConditionFunction.IN.value,
+            ConditionFunctions.IN,
             Column(alias=None, table_name=None, column_name="org_id"),
             FunctionCall(
                 alias=None,
@@ -567,33 +628,12 @@ def extract_scope(
     )
     filters.append(
         binary_condition(
-            ConditionFunction.EQ.value,
+            ConditionFunctions.EQ,
             Column(alias=None, table_name=None, column_name="use_case_id"),
             Literal(alias=None, value=scope["use_case_id"]),
         )
     )
     return filters
-
-
-def extract_resolved_gropupby(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> list[Column]:
-    groupbys = []
-    if "groupby" in parsed:
-        for groupby_col_name in parsed["groupby"]:
-            if groupby_col_name in mql_context["indexer_mappings"]:
-                resolved = mql_context["indexer_mappings"][groupby_col_name]
-                resolved_column_name = f"tags_raw[{resolved}]"
-            else:
-                resolved_column_name = groupby_col_name
-            groupbys.append(
-                Column(
-                    alias=groupby_col_name,
-                    table_name=None,
-                    column_name=resolved_column_name,
-                )
-            )
-    return groupbys
 
 
 def extract_rollup(
