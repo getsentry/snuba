@@ -183,11 +183,11 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     // Blocks until all messages up to the committable have been produced so
     // they are safe to commit.
     pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
-        for (p, values) in self.futures.iter_mut() {
-            while let Some((offset, future)) = values.front_mut() {
-                if let Some(committable_offset) = committable.get(p) {
+        for (p, committable_offset) in committable {
+            if let Some(values) = self.futures.get_mut(&p) {
+                if let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
-                    if *committable_offset > *offset {
+                    if committable_offset > *offset {
                         let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
                             self.runtime.block_on(future);
 
@@ -196,6 +196,8 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
                         } else {
                             values.pop_front();
                         }
+                    } else {
+                        break;
                     }
                 }
             }
