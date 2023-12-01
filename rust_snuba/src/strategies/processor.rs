@@ -46,7 +46,8 @@ fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
             if enforce_schema {
                 panic!("Schema error: {error}");
             } else {
-                tracing::error!(%error, "Schema error");
+                let error: &dyn std::error::Error = &error;
+                tracing::error!(error, "Schema error");
             }
 
             None

@@ -18,7 +18,7 @@ pub fn setup_logging() {
         });
 
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json())
         .with(filter_layer)
         .with(sentry_layer)
         .init();
