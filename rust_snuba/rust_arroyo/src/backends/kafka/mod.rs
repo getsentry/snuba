@@ -116,8 +116,8 @@ impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
     }
 
     fn error(&self, error: KafkaError, reason: &str) {
-        let err: &dyn std::error::Error = &error;
-        tracing::error!(err, "librdkafka: {error}: {reason}");
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error, "librdkafka: {error}: {reason}");
     }
 }
 

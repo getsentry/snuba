@@ -92,7 +92,8 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
                 let res = commit_offsets.commit(commit_request.positions);
 
                 if let Err(err) = res {
-                    tracing::error!("Failed to commit offsets: {:?}", err);
+                    let error: &dyn std::error::Error = &err;
+                    tracing::error!(error, "Failed to commit offsets");
                 }
             }
         }
@@ -188,9 +189,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         self.buffered_messages.append(broker_msg);
                     }
                 }
-                Err(error) => {
-                    tracing::error!(%error, "poll error");
-                    return Err(RunError::Poll(error));
+                Err(err) => {
+                    let error: &dyn std::error::Error = &err;
+                    tracing::error!(error, "poll error");
+                    return Err(RunError::Poll(err));
                 }
             }
         }
@@ -246,9 +248,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             consumer_state.is_paused = false;
                         }
-                        Err(error) => {
-                            tracing::error!(%error, "pause error");
-                            return Err(RunError::Pause(error));
+                        Err(err) => {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "pause error");
+                            return Err(RunError::Pause(err));
                         }
                     }
                 }
@@ -285,9 +288,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             consumer_state.is_paused = true;
                         }
-                        Err(error) => {
-                            tracing::error!(%error, "pause error");
-                            return Err(RunError::Pause(error));
+                        Err(err) => {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "pause error");
+                            return Err(RunError::Pause(err));
                         }
                     }
                 }
