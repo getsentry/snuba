@@ -1,10 +1,13 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import pytest
-from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
+from sentry_kafka_schemas.schema_types.snuba_spans_v1 import (
+    SpanEvent,
+    _MeasurementValue,
+)
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -39,6 +42,7 @@ class SpanEventExample:
     transaction_name: str
     user_id: Optional[str]
     user_name: Optional[str]
+    measurements: Dict[str, _MeasurementValue]
 
     def serialize(self) -> SpanEvent:
         return {
@@ -75,6 +79,7 @@ class SpanEventExample:
                 "sentry:user": self.user_id or "",
             },
             "trace_id": self.trace_id,
+            "measurements": self.measurements,
         }
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
@@ -89,14 +94,16 @@ class SpanEventExample:
                 "is_segment": 0,
                 "segment_name": self.transaction_name,
                 "start_timestamp": int(
-                    datetime.utcfromtimestamp(
-                        self.start_timestamp_ms / 1000
+                    datetime.fromtimestamp(
+                        self.start_timestamp_ms / 1000,
+                        tz=timezone.utc,
                     ).timestamp()
                 ),
                 "start_ms": self.start_timestamp_ms % 1000,
                 "end_timestamp": int(
-                    datetime.utcfromtimestamp(
-                        (self.start_timestamp_ms + self.duration_ms) / 1000
+                    datetime.fromtimestamp(
+                        (self.start_timestamp_ms + self.duration_ms) / 1000,
+                        tz=timezone.utc,
                     ).timestamp()
                 ),
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
@@ -123,8 +130,8 @@ class SpanEventExample:
                     "transaction.method",
                 ],
                 "tags.value": ["123", "value1", "123", "True", "GET", "200", "GET"],
-                "measurements.key": [],
-                "measurements.value": [],
+                "measurements.key": ["memory"],
+                "measurements.value": [1000.0],
                 "partition": meta.partition,
                 "offset": meta.offset,
                 "retention_days": self.retention_days,
@@ -190,7 +197,7 @@ def compare_types_and_values(dict1: Any, dict2: Any) -> bool:
 @pytest.mark.redis_db
 class TestSpansProcessor:
     @staticmethod
-    def __get_timestamps() -> Tuple[float, float]:
+    def __get_timestamps() -> Tuple[float, float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=1000)
         start_timestamp = timestamp - timedelta(seconds=10)
         received = timestamp + timedelta(seconds=1)
@@ -208,6 +215,7 @@ class TestSpansProcessor:
             group_raw="deadbeefdeadbeef",
             http_method="POST",
             http_referer="tagstore.something",
+            measurements={"memory": {"value": 1000.0}},
             module="http",
             op="navigation",
             organization_id=69,
