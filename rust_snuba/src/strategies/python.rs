@@ -208,22 +208,23 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        tracing::debug!("python poll");
+        tracing::debug!("python poll start");
         self.check_for_results(self.max_queue_depth);
-        tracing::debug!("python end poll");
+        tracing::debug!("python poll end");
 
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         if self.message_carried_over.is_some() {
+            tracing::debug!("python strategy provides backpressure due to next_step");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
         if self.queue_needs_drain(self.max_queue_depth) {
-            tracing::debug!("python strategy provides backpressure");
+            tracing::debug!("python strategy provides backpressure due to full queue");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
@@ -271,7 +272,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let submit_timestamp = SystemTime::now();
 
                 if let Some(ref processing_pool) = self.processing_pool {
+                    tracing::debug!("processing_pool.spawn start");
                     let handle = processing_pool.spawn(args, process_message);
+                    tracing::debug!("processing_pool.spawn end");
 
                     self.handles.push_back(TaskHandle::Procspawn {
                         submit_timestamp,
