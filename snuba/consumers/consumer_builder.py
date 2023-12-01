@@ -348,6 +348,7 @@ class ConsumerBuilder:
             dlq_policy = self.__build_default_dlq_policy()
             # We don't need to apply the limit to the DLQ consumer, just reinsert all
             # if that option was selected
+            assert dlq_policy is not None
             dlq_policy = DlqPolicy(
                 dlq_policy.producer,
                 None,
