@@ -22,4 +22,3 @@ Features:
 - Provides a migration system to apply DDL changes to Clickhouse both in a single node and distributed environment.
 - Ingest data directly from Kafka
 - Supports both point in time queries and streaming queries.
-- Provides allocation policy framework to rate limit and throttle Clickhouse queries among multiple tenants
