@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence, Set, Tuple, Union, cast
 
-from snuba.query import ProcessableQuery
+from snuba.query import FromClauseNotSet, ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -95,10 +95,12 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set
         return set()
     this_query_object_ids = get_object_ids_in_condition(condition, object_column)
 
-    from_clause = query.get_from_clause()
+    try:
+        from_clause = query.get_from_clause()
+    except FromClauseNotSet:
+        return this_query_object_ids
     if isinstance(from_clause, SimpleDataSource):
         return this_query_object_ids
-
     elif isinstance(from_clause, AbstractQuery):
         subquery_project_ids = get_object_ids_in_query_ast(from_clause, object_column)
         return subquery_project_ids.union(this_query_object_ids)

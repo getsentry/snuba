@@ -82,3 +82,15 @@ def test_get_object_ids_in_query_ast(obj_condition, expected_project_ids):
     )
     project_ids = get_object_ids_in_query_ast(query, "project_id")
     assert project_ids == expected_project_ids
+
+    # test the case where the from clause is not set
+    query = Query(
+        None,
+        selected_columns=[
+            SelectedExpression("platform", Column("_snuba_platform", None, "platform")),
+        ],
+        groupby=[],
+        condition=where_clause,
+    )
+    project_ids = get_object_ids_in_query_ast(query, "project_id")
+    assert project_ids == expected_project_ids
