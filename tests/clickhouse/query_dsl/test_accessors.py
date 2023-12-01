@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 import pytest
@@ -8,7 +10,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 
 
@@ -48,7 +50,9 @@ from snuba.query.logical import Query
         ),
     ],
 )
-def test_get_object_ids_in_query_ast(obj_condition, expected_project_ids) -> None:
+def test_get_object_ids_in_query_ast(
+    obj_condition: Expression, expected_project_ids: set[int]
+) -> None:
     where_clause = binary_condition(
         BooleanFunctions.AND,
         FunctionCall(
