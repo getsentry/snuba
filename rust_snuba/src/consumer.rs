@@ -196,10 +196,12 @@ pub fn process_message(
             timestamp,
         };
 
-        let res = func(payload, meta);
+        let res = func(payload, meta).unwrap();
         let batch = BytesInsertBatch::new(
+            res.rows,
             timestamp,
-            res.unwrap(),
+            res.origin_timestamp,
+            res.sentry_received_timestamp,
             BTreeMap::from([(partition, (offset, timestamp))]),
         );
         batch.encoded_rows().to_vec()

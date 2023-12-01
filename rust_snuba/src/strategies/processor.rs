@@ -12,7 +12,7 @@ use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::processors::ProcessingFunction;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -59,7 +59,7 @@ struct MessageProcessor {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
     metrics: BoxMetrics,
-    func: fn(KafkaPayload, KafkaMessageMetadata) -> anyhow::Result<RowData>,
+    func: ProcessingFunction,
 }
 
 impl MessageProcessor {
@@ -144,8 +144,10 @@ impl MessageProcessor {
         let transformed = (self.func)(msg.payload, metadata)?;
 
         let payload = BytesInsertBatch::new(
+            transformed.rows,
             msg.timestamp,
-            transformed,
+            transformed.origin_timestamp,
+            transformed.sentry_received_timestamp,
             BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
         );
         Ok(Message::new_broker_message(
@@ -180,6 +182,7 @@ mod tests {
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use rust_arroyo::types::{Message, Partition, Topic};
 
+    use crate::types::{InsertBatch, RowData};
     use crate::Noop;
 
     #[test]
@@ -190,8 +193,12 @@ mod tests {
         fn noop_processor(
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
-        ) -> anyhow::Result<RowData> {
-            Ok(RowData::from_rows([]))
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch {
+                rows: RowData::from_rows([]),
+                origin_timestamp: None,
+                sentry_received_timestamp: None,
+            })
         }
 
         let mut strategy =
