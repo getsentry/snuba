@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
-use crate::processing::dlq::{BufferedMessages, DlqPolicy};
+use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -88,6 +88,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         if let Some(s) = state.strategy.as_mut() {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
+                // TODO: DLQ should be flushed here as well
                 tracing::info!("Committing offsets");
                 let res = commit_offsets.commit(commit_request.positions);
 
@@ -124,11 +125,10 @@ pub struct StreamProcessor<TPayload: Clone> {
     processor_handle: ProcessorHandle,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
-    #[allow(dead_code)]
-    dlq_policy: Option<DlqPolicy<TPayload>>,
+    dlq_policy: DlqPolicyWrapper<TPayload>,
 }
 
-impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
+impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
@@ -151,7 +151,7 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
             },
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             buffered_messages: BufferedMessages::new(),
-            dlq_policy,
+            dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
     }
 
@@ -221,11 +221,19 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
+                self.dlq_policy.flush(request.positions.clone());
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
-            Err(e) => {
-                println!("TODOO: Handle invalid message {:?}", e);
-            }
+            Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {
+                Some(msg) => {
+                    self.message = Some(Message {
+                        inner_message: InnerMessage::BrokerMessage(msg),
+                    });
+                }
+                None => {
+                    tracing::error!("Could not find invalid message in buffer");
+                }
+            },
         };
 
         let Some(msg_s) = self.message.take() else {
@@ -297,8 +305,16 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 }
             }
             Err(SubmitError::InvalidMessage(message)) => {
-                // TODO: Put this into the DLQ once we have one
-                tracing::error!(?message, "Invalid message");
+                let invalid_message = self
+                    .buffered_messages
+                    .pop(&message.partition, message.offset);
+
+                if let Some(msg) = invalid_message {
+                    tracing::error!(?message, "Invalid message");
+                    self.dlq_policy.produce(msg);
+                } else {
+                    tracing::error!(?message, "Could not retrieve invalid message from buffer");
+                }
             }
         }
         Ok(())

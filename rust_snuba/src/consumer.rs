@@ -125,24 +125,29 @@ pub fn consumer_impl(
     let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+    // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
+    // writing to the DLQ topics in prod.
+    let dlq_policy = match skip_write {
+        true => None,
+        false => consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer_config =
+                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+            let producer = KafkaProducer::new(producer_config);
 
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-        DlqPolicy::new(
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: Some(0.01),
-                max_consecutive_count: Some(1000),
-            },
-        )
-    });
+            DlqPolicy::new(
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: Some(0.01),
+                    max_consecutive_count: Some(1000),
+                },
+            )
+        }),
+    };
 
     let mut processor = StreamProcessor::new(
         consumer,
