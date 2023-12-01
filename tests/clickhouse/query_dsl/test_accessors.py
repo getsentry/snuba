@@ -48,7 +48,7 @@ from snuba.query.logical import Query
         ),
     ],
 )
-def test_get_object_ids_in_query_ast(obj_condition, expected_project_ids):
+def test_get_object_ids_in_query_ast(obj_condition, expected_project_ids) -> None:
     where_clause = binary_condition(
         BooleanFunctions.AND,
         FunctionCall(
