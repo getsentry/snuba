@@ -68,9 +68,9 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Se
         rhs_objects = get_object_ids_in_condition(
             match.expression("rhs"), object_column
         )
-        if lhs_objects is None:
+        if not lhs_objects:
             return rhs_objects
-        elif rhs_objects is None:
+        elif not rhs_objects:
             return lhs_objects
         else:
             return (
@@ -90,7 +90,6 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set
     It works like get_project_ids_in_query with the exception that
     boolean functions are supported here.
     """
-
     condition = query.get_condition()
     if not condition:
         return set()
