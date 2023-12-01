@@ -78,6 +78,29 @@ class TestSnQLApi(BaseApiTest):
             [get_raw_transaction()],
         )
 
+    def test_buggy_query(self) -> None:
+        query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
+        `aggregate_value` BY toStartOfInterval(timestamp, toIntervalSecond(1800), 'Universal') AS `time`
+        WHERE granularity = 60 AND metric_id = 87269488 AND (org_id IN array(1) AND project_id IN array(1)
+        AND use_case_id = 'custom') AND timestamp >= toDateTime('2023-11-27T14:00:00') AND timestamp <
+        toDateTime('2023-11-28T14:30:00') ORDER BY time ASC"""
+        response = self.post(
+            "/generic_metrics/snql",
+            data=json.dumps(
+                {
+                    "query": query,
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+
     def test_simple_query(self) -> None:
         response = self.post(
             "/discover/snql",
