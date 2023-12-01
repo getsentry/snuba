@@ -184,8 +184,7 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     // they are safe to commit.
     pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
         for (p, values) in self.futures.iter_mut() {
-            while !values.is_empty() {
-                let (offset, future) = &mut values[0];
+            while let Some((offset, future)) = values.front_mut() {
                 if let Some(committable_offset) = committable.get(p) {
                     // The committable offset is message's offset + 1
                     if *committable_offset > *offset {
