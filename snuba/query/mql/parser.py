@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
@@ -37,6 +37,9 @@ from snuba.query.snql.parser import (
 )
 from snuba.state import explain_meta
 
+MQL_VISITOR_DICT = Dict[
+    str, Union[str, Union[str, List[SelectedExpression], List[Column]]]
+]
 logger = logging.getLogger("snuba.mql.parser")
 
 
@@ -64,8 +67,13 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             raise e
 
     def visit_expression(
-        self, node: Node, children: Tuple[dict[str, str | dict[str, str]], Any]
-    ) -> dict[str, str | dict[str, str]]:
+        self,
+        node: Node,
+        children: Tuple[
+            MQL_VISITOR_DICT,
+            Any,
+        ],
+    ) -> MQL_VISITOR_DICT:
         args, zero_or_more_others = children
         return args
 
@@ -73,8 +81,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         raise InvalidQueryException("Arithmetic function not supported yet")
 
     def visit_term(
-        self, node: Node, children: Tuple[dict[str, str | dict[str, str]], Any]
-    ) -> dict[str, str | dict[str, str]]:
+        self,
+        node: Node,
+        children: Tuple[MQL_VISITOR_DICT, Any],
+    ) -> MQL_VISITOR_DICT:
         term, zero_or_more_others = children
         if zero_or_more_others:
             raise InvalidQueryException("Arithmetic function not supported yet")
@@ -84,8 +94,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         raise InvalidQueryException("Arithmetic function not supported yet")
 
     def visit_coefficient(
-        self, node: Node, children: Tuple[dict[str, str | dict[str, str]]]
-    ) -> dict[str, str | dict[str, str]]:
+        self,
+        node: Node,
+        children: Tuple[MQL_VISITOR_DICT],
+    ) -> MQL_VISITOR_DICT:
         return children[0]
 
     def visit_number(self, node: Node, children: Sequence[Any]) -> float:
@@ -95,18 +107,19 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            dict[str, list[str]],
+            MQL_VISITOR_DICT,
             Sequence[Any],
             Sequence[Any],
             Any,
         ],
-    ) -> dict[str, list[str]]:
+    ) -> MQL_VISITOR_DICT:
         target, packed_filters, packed_groupbys, *_ = children
         assert isinstance(target, dict)
         if packed_filters:
             assert isinstance(packed_filters, list)
             _, _, filter_expr, *_ = packed_filters[0]
             if "filters" in target:
+                assert isinstance(target["filters"], list)
                 target["filters"] = target["filters"] + [filter_expr]
             else:
                 target["filters"] = [filter_expr]
@@ -117,15 +130,14 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             if not isinstance(group_by, list):
                 group_by = [group_by]
             if "groupby" in target:
+                assert isinstance(target["groupby"], list)
                 target["groupby"] = target["groupby"] + group_by
             else:
                 target["groupby"] = group_by
 
         return target
 
-    def _filter(
-        self, children: Sequence[Any], operator: BooleanFunctions
-    ) -> FunctionCall:
+    def _filter(self, children: Sequence[Any], operator: str) -> FunctionCall:
         first, zero_or_more_others = children
         filters: Sequence[FunctionCall] = [
             first,
@@ -146,24 +158,20 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[
-            Optional[list[ConditionFunctions]],
-            Sequence[str],
-            Any,
-            Any,
-            Any,
-            Union[str, Sequence[str]],
-        ],
-    ) -> Tuple[str, str, Union[str, Sequence[str]]]:
+        children: Tuple[Sequence[Union[str, Sequence[str]]], Any],
+    ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
             return factor
         condition_op, lhs, _, _, _, rhs = factor
+        condition_op_value = (
+            "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
+        )
         if isinstance(rhs, list):
-            if not condition_op:
+            if not condition_op_value:
                 op = ConditionFunctions.IN
-            elif len(condition_op) == 1 and condition_op[0] == "!":
+            elif condition_op_value == "!":
                 op = ConditionFunctions.NOT_IN
             return FunctionCall(
                 None,
@@ -178,14 +186,18 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 ),
             )
         else:
-            if not condition_op:
+            assert isinstance(rhs, str)
+            if not condition_op_value:
                 op = ConditionFunctions.EQ
-            elif len(condition_op) == 1 and condition_op[0] == "!":
+            elif condition_op_value == "!":
                 op = ConditionFunctions.NEQ
             return FunctionCall(
                 None,
                 op,
-                (Column(None, None, lhs[0]), Literal(None, rhs)),
+                (
+                    Column(None, None, lhs[0]),
+                    Literal(None, rhs),
+                ),
             )
 
     def visit_nested_expr(self, node: Node, children: Sequence[Any]) -> Any:
@@ -196,26 +208,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            dict[
-                str,
-                Union[
-                    str,
-                    Sequence[str],
-                    Tuple[str, str, Union[str, Sequence[str]]],
-                    SelectedExpression,
-                ],
+            Tuple[
+                MQL_VISITOR_DICT,
             ],
-            Sequence[Union[str, Sequence[str]]],
+            Sequence[list[Column]],
         ],
-    ) -> dict[
-        str,
-        Union[
-            str,
-            Sequence[str],
-            Tuple[str, str, Union[str, Sequence[str]]],
-            SelectedExpression,
-        ],
-    ]:
+    ) -> MQL_VISITOR_DICT:
         targets, packed_groupbys = children
         target = targets[0]
         if packed_groupbys:
@@ -228,7 +226,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[Any, Any, Any, Sequence[Sequence[str]]],
-    ) -> Sequence[str]:
+    ) -> list[Column]:
         *_, groupbys = children
         groupby = groupbys[0]
         if isinstance(groupby, str):
@@ -244,6 +242,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return columns
 
     def visit_condition_op(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
         return node.text
 
     def visit_tag_key(self, node: Node, children: Sequence[Any]) -> str:
@@ -281,8 +280,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_target(
         self,
         node: Node,
-        children: Sequence[Union[Mapping[str, str], Sequence[Mapping[str, str]]]],
-    ) -> Mapping[str, str]:
+        children: Sequence[Union[MQL_VISITOR_DICT, Sequence[MQL_VISITOR_DICT]]],
+    ) -> MQL_VISITOR_DICT:
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
@@ -293,39 +292,41 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         raise InvalidQueryException("Variables are not supported yet")
 
     def visit_nested_expression(
-        self, node: Node, children: Tuple[Any, Any, dict[str, str | dict[str, str]]]
-    ) -> dict[str, str | dict[str, str]]:
+        self, node: Node, children: Tuple[Any, Any, MQL_VISITOR_DICT]
+    ) -> MQL_VISITOR_DICT:
         return children[2]
 
     def visit_aggregate(
         self,
         node: Node,
         children: Tuple[
-            str, Tuple[Any, Any, dict[str, Union[str, SelectedExpression]], Any, Any]
+            str,
+            Tuple[
+                Any,
+                Any,
+                MQL_VISITOR_DICT,
+                Any,
+                Any,
+            ],
         ],
-    ) -> dict[str, Union[str, SelectedExpression]]:
+    ) -> MQL_VISITOR_DICT:
         aggregate_name, zero_or_one = children
-        _, _, target, zero_or_more_others, *_ = zero_or_one
+        _, _, target, *_ = zero_or_one
         if "mri" in target:
             metric_name = target["mri"]
         else:
             metric_name = target["public_name"]
-        selected_aggregate_column = [
+        selected_aggregate = [
             SelectedExpression(
-                f"{aggregate_name}({metric_name})",
-                FunctionCall(
-                    AGGREGATE_ALIAS,
-                    aggregate_name,
-                    (Column(None, None, "value"),),
+                name=f"{aggregate_name}({metric_name})",
+                expression=FunctionCall(
+                    alias=AGGREGATE_ALIAS,
+                    function_name=aggregate_name,
+                    parameters=tuple(Column(None, None, "value")),
                 ),
             ),
         ]
-        if "selected_aggregate" in target:
-            target["selected_aggregate"] = (
-                selected_aggregate_column + target["selected_aggregate"]
-            )
-        else:
-            target["selected_aggregate"] = selected_aggregate_column
+        target["selected_aggregate"] = selected_aggregate
         return target
 
     def visit_curried_aggregate(
@@ -334,9 +335,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         children: Tuple[
             str,
             Tuple[Any, Any, Sequence[Sequence[Union[str, int, float]]], Any, Any],
-            Tuple[Any, Any, dict[str, Union[str, SelectedExpression]], Any, Any],
+            Tuple[Any, Any, MQL_VISITOR_DICT, Any, Any],
         ],
-    ) -> dict[str, Union[str, SelectedExpression]]:
+    ) -> MQL_VISITOR_DICT:
         aggregate_name, agg_params, zero_or_one = children
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
@@ -364,12 +365,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 ),
             )
         ]
-        if "selected_aggregate" in target:
-            target["selected_aggregate"] = (
-                selected_aggregate_column + target["selected_aggregate"]
-            )
-        else:
-            target["selected_aggregate"] = selected_aggregate_column
+        target["selected_aggregate"] = selected_aggregate_column
         return target
 
     def visit_param(
@@ -381,14 +377,14 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_param_expression(
         self, node: Node, children: Tuple[Union[str, int, float], Any]
     ) -> Union[str, int, float]:
-        (param,) = children
+        param = children[0]
         return param
 
     def visit_aggregate_list(
         self,
         node: Node,
         children: Tuple[list[Union[str, int, float]], Optional[Union[str, int, float]]],
-    ) -> Sequence[str | int | float]:
+    ) -> Sequence[Union[str, int, float]]:
         agg_params, param = children
         if param is not None:
             agg_params.append(param)
@@ -445,7 +441,7 @@ def parse_mql_query_initial(
         {
             'public_name': 'transaction.user',
             'selected_aggregate': [SelectedExpression(name='sum(d:transactions/duration@millisecond)', expression=sum(value) AS `aggregate_value`)],
-            'filters': [ IN(dist, tuple('dist1', 'dist2')) ],
+            'filters': [IN(dist, tuple('dist1', 'dist2'))],
             'groupby': [Column('transaction')]
         }
         """
@@ -486,9 +482,9 @@ def parse_mql_query_initial(
 
 
 def assemble_selected_columns(
-    selected_aggregate: Optional[Sequence[SelectedExpression]],
-    groupby: Optional[Sequence[Column]],
-) -> Sequence[SelectedExpression]:
+    selected_aggregate: Optional[list[SelectedExpression]],
+    groupby: Optional[list[Column]],
+) -> list[SelectedExpression]:
     selected_columns = selected_aggregate if selected_aggregate else []
     if groupby:
         groupby_selected_columns = [

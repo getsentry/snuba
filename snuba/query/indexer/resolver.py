@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Union
 
 from snuba_sdk.conditions import ConditionFunction
 
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 
 
 def resolve_mappings(
-    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-):
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    parsed: Mapping[str, Any],
+    mql_context: Mapping[str, Any],
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     """
     At the time of writting (Nov 30, 2023), the indexer is called within sentry.
     This might be subjected to change in the future. As a result, this function
@@ -26,7 +30,9 @@ def resolve_mappings(
 
 
 def resolve_metric_id_processor(
-    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    parsed: Mapping[str, Any],
+    mql_context: Mapping[str, Any],
 ) -> None:
     """
     Adds the resolved metric_id to the AST conditions
@@ -52,7 +58,9 @@ def resolve_metric_id_processor(
 
 
 def resolve_tag_filters_processor(
-    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    parsed: Mapping[str, Any],
+    mql_context: Mapping[str, Any],
 ) -> None:
     """
     Traverse through all conditions of the AST,
@@ -77,7 +85,9 @@ def resolve_tag_filters_processor(
 
 
 def resolve_gropupby_processor(
-    query: LogicalQuery, parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    parsed: Mapping[str, Any],
+    mql_context: Mapping[str, Any],
 ) -> None:
     """
     Iterates through the groupby and selected_columns in AST,

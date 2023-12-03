@@ -20,13 +20,14 @@ from typing import (
 )
 
 from snuba.clickhouse.columns import Any, ColumnSet
-from snuba.query.conditions import BooleanFunctions, FunctionCall, binary_condition
+from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import (
     Column,
     Expression,
     ExpressionVisitor,
+    FunctionCall,
     SubscriptableReference,
 )
 
@@ -421,7 +422,7 @@ class Query(DataSource, ABC):
 
     def find_and_replace_column_in_condition(
         self, find_column_name: str, replace_column: Column
-    ) -> Optional[Expression]:
+    ) -> None:
         condition = self.get_condition()
         new_conditions = self._rebuild_condition_tree_with_replaced_column(
             condition, find_column_name, replace_column
@@ -429,25 +430,30 @@ class Query(DataSource, ABC):
         self.set_ast_condition(new_conditions)
 
     def _rebuild_condition_tree_with_replaced_column(
-        self, condition: Expression, find_column_name: str, replace_column: Column
-    ) -> Optional[Expression]:
+        self,
+        condition: Optional[Expression],
+        find_column_name: str,
+        replace_column: Column,
+    ) -> Expression:
         assert isinstance(condition, FunctionCall)
         parameters = []
         for parameter in condition.parameters:
             if isinstance(parameter, FunctionCall):
-                parameter = self._rebuild_condition_tree_with_replaced_column(
+                new_parameter = self._rebuild_condition_tree_with_replaced_column(
                     parameter, find_column_name, replace_column
                 )
-            if isinstance(parameter, Column):
-                if parameter.column_name == find_column_name:
-                    parameter = replace_column
-            parameters.append(parameter)
+                parameters.append(new_parameter)
+            else:
+                if isinstance(parameter, Column):
+                    if parameter.column_name == find_column_name:
+                        parameter = replace_column
+                parameters.append(parameter)
 
-        return FunctionCall(None, condition.function_name, parameters)
+        return FunctionCall(None, condition.function_name, tuple(parameters))
 
     def find_and_replace_column_in_groupby_and_selected_columns(
         self, find_column_name: str, replace_column: Column
-    ) -> Optional[Expression]:
+    ) -> None:
         groupby = self.get_groupby()
         new_groupby_columns = []
         for column in groupby:
