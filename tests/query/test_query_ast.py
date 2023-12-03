@@ -241,7 +241,7 @@ def test_initial_parsing_snql() -> None:
 
 
 def test_initial_parsing_mql() -> None:
-    body = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction)'
+    body = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)'
     serialized_mql_context = {
         "entity": "generic_metrics_distributions",
         "start": "2023-11-23T18:30:00",
@@ -267,12 +267,12 @@ def test_initial_parsing_mql() -> None:
 
     _, query = parse_mql_query_initial(body, serialized_mql_context)
     expressions = query.get_selected_columns()
-    assert len(expressions) == 2
+    assert len(expressions) == 3
     assert sorted([expr.name for expr in expressions]) == [
+        "status_code",
         "sum(d:transactions/duration@millisecond)",
         "transaction",
     ]
-    print(query.get_all_ast_referenced_columns())
     assert query.get_all_ast_referenced_columns() == {
         Column(None, None, "org_id"),
         Column(None, None, "project_id"),
@@ -281,8 +281,12 @@ def test_initial_parsing_mql() -> None:
         Column(None, None, "value"),
         Column(None, None, "dist"),
         Column("transaction", None, "transaction"),
+        Column("status_code", None, "status_code"),
     }
-    assert list(query.get_groupby()) == [Column("transaction", None, "transaction")]
+    assert list(query.get_groupby()) == [
+        Column("transaction", None, "transaction"),
+        Column("status_code", None, "status_code"),
+    ]
     assert list(query.get_orderby()) == [
         OrderBy(
             OrderByDirection.ASC,
