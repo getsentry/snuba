@@ -76,19 +76,8 @@ mql_test_cases = [
                         None,
                         "in",
                         (
-                            SubscriptableReference(
-                                "_snuba_tags_raw[000888]",
-                                Column("_snuba_tags_raw", None, "tags_raw"),
-                                Literal(None, "000888"),
-                            ),
-                            FunctionCall(
-                                None,
-                                "tuple",
-                                (
-                                    Literal(None, "dist1"),
-                                    Literal(None, "dist2"),
-                                ),
-                            ),
+                            Column("_snuba_project_id", None, "project_id"),
+                            FunctionCall(None, "tuple", (Literal(None, 1),)),
                         ),
                     ),
                     binary_condition(
@@ -97,7 +86,7 @@ mql_test_cases = [
                             None,
                             "in",
                             (
-                                Column("_snuba_project_id", None, "project_id"),
+                                Column("_snuba_org_id", None, "org_id"),
                                 FunctionCall(None, "tuple", (Literal(None, 1),)),
                             ),
                         ),
@@ -105,36 +94,24 @@ mql_test_cases = [
                             BooleanFunctions.AND,
                             FunctionCall(
                                 None,
-                                "in",
+                                "equals",
                                 (
-                                    Column("_snuba_org_id", None, "org_id"),
-                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                    Column("_snuba_use_case_id", None, "use_case_id"),
+                                    Literal(None, "transactions"),
                                 ),
                             ),
                             binary_condition(
                                 BooleanFunctions.AND,
                                 FunctionCall(
                                     None,
-                                    "equals",
+                                    "greaterOrEquals",
                                     (
-                                        Column(
-                                            "_snuba_use_case_id", None, "use_case_id"
-                                        ),
-                                        Literal(None, "transactions"),
+                                        Column("_snuba_timestamp", None, "timestamp"),
+                                        Literal(None, datetime(2021, 1, 1, 0, 0)),
                                     ),
                                 ),
                                 binary_condition(
                                     BooleanFunctions.AND,
-                                    FunctionCall(
-                                        None,
-                                        "greaterOrEquals",
-                                        (
-                                            Column(
-                                                "_snuba_timestamp", None, "timestamp"
-                                            ),
-                                            Literal(None, datetime(2021, 1, 1, 0, 0)),
-                                        ),
-                                    ),
                                     FunctionCall(
                                         None,
                                         "less",
@@ -143,6 +120,27 @@ mql_test_cases = [
                                                 "_snuba_timestamp", None, "timestamp"
                                             ),
                                             Literal(None, datetime(2021, 1, 2, 0, 0)),
+                                        ),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "in",
+                                        (
+                                            SubscriptableReference(
+                                                "_snuba_tags_raw[000888]",
+                                                Column(
+                                                    "_snuba_tags_raw", None, "tags_raw"
+                                                ),
+                                                Literal(None, "000888"),
+                                            ),
+                                            FunctionCall(
+                                                None,
+                                                "tuple",
+                                                (
+                                                    Literal(None, "dist1"),
+                                                    Literal(None, "dist2"),
+                                                ),
+                                            ),
                                         ),
                                     ),
                                 ),
@@ -167,7 +165,7 @@ mql_test_cases = [
         id="Select metric with filter",
     ),
     pytest.param(
-        'quantiles(0.5, 0.75)(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by (transaction, status_code)',
+        'quantiles(0.5, 0.75)(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -200,10 +198,12 @@ mql_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "quantiles(0.5)(transaction.user)",
+                    "quantiles(0.5, 0.75)(transaction.user)",
                     CurriedFunctionCall(
                         "_snuba_aggregate_value",
-                        FunctionCall(None, "quantiles", (Literal(None, 0.5),)),
+                        FunctionCall(
+                            None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
+                        ),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
@@ -234,109 +234,103 @@ mql_test_cases = [
                     BooleanFunctions.AND,
                     FunctionCall(
                         None,
-                        "notIn",
+                        "in",
                         (
-                            SubscriptableReference(
-                                "_snuba_tags_raw[000888]",
-                                Column(
-                                    "_snuba_tags_raw",
-                                    None,
-                                    "tags_raw",
-                                ),
-                                Literal(None, "000888"),
-                            ),
-                            FunctionCall(
-                                None,
-                                "tuple",
-                                (
-                                    Literal(None, "dist1"),
-                                    Literal(None, "dist2"),
-                                ),
-                            ),
+                            Column("_snuba_project_id", None, "project_id"),
+                            FunctionCall(None, "tuple", (Literal(None, 1),)),
                         ),
                     ),
                     binary_condition(
                         BooleanFunctions.AND,
                         FunctionCall(
                             None,
-                            "equals",
+                            "in",
                             (
-                                SubscriptableReference(
-                                    "_snuba_tags_raw[000777]",
-                                    Column(
-                                        "_snuba_tags_raw",
-                                        None,
-                                        "tags_raw",
-                                    ),
-                                    Literal(None, "000777"),
-                                ),
-                                Literal(None, "bar"),
+                                Column("_snuba_org_id", None, "org_id"),
+                                FunctionCall(None, "tuple", (Literal(None, 1),)),
                             ),
                         ),
                         binary_condition(
                             BooleanFunctions.AND,
                             FunctionCall(
                                 None,
-                                "in",
+                                "equals",
                                 (
-                                    Column("_snuba_project_id", None, "project_id"),
-                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                    Column(
+                                        "_snuba_use_case_id",
+                                        None,
+                                        "use_case_id",
+                                    ),
+                                    Literal(None, "transactions"),
                                 ),
                             ),
                             binary_condition(
                                 BooleanFunctions.AND,
                                 FunctionCall(
                                     None,
-                                    "in",
+                                    "greaterOrEquals",
                                     (
-                                        Column("_snuba_org_id", None, "org_id"),
-                                        FunctionCall(
-                                            None, "tuple", (Literal(None, 1),)
+                                        Column(
+                                            "_snuba_timestamp",
+                                            None,
+                                            "timestamp",
                                         ),
+                                        Literal(None, datetime(2021, 1, 1, 1, 36)),
                                     ),
                                 ),
                                 binary_condition(
                                     BooleanFunctions.AND,
                                     FunctionCall(
                                         None,
-                                        "equals",
+                                        "less",
                                         (
                                             Column(
-                                                "_snuba_use_case_id",
+                                                "_snuba_timestamp",
                                                 None,
-                                                "use_case_id",
+                                                "timestamp",
                                             ),
-                                            Literal(None, "transactions"),
+                                            Literal(None, datetime(2021, 1, 5, 4, 15)),
                                         ),
                                     ),
                                     binary_condition(
                                         BooleanFunctions.AND,
                                         FunctionCall(
                                             None,
-                                            "greaterOrEquals",
+                                            "notIn",
                                             (
-                                                Column(
-                                                    "_snuba_timestamp",
-                                                    None,
-                                                    "timestamp",
+                                                SubscriptableReference(
+                                                    "_snuba_tags_raw[000888]",
+                                                    Column(
+                                                        "_snuba_tags_raw",
+                                                        None,
+                                                        "tags_raw",
+                                                    ),
+                                                    Literal(None, "000888"),
                                                 ),
-                                                Literal(
-                                                    None, datetime(2021, 1, 1, 1, 36)
+                                                FunctionCall(
+                                                    None,
+                                                    "tuple",
+                                                    (
+                                                        Literal(None, "dist1"),
+                                                        Literal(None, "dist2"),
+                                                    ),
                                                 ),
                                             ),
                                         ),
                                         FunctionCall(
                                             None,
-                                            "less",
+                                            "equals",
                                             (
-                                                Column(
-                                                    "_snuba_timestamp",
-                                                    None,
-                                                    "timestamp",
+                                                SubscriptableReference(
+                                                    "_snuba_tags_raw[000777]",
+                                                    Column(
+                                                        "_snuba_tags_raw",
+                                                        None,
+                                                        "tags_raw",
+                                                    ),
+                                                    Literal(None, "000777"),
                                                 ),
-                                                Literal(
-                                                    None, datetime(2021, 1, 5, 4, 15)
-                                                ),
+                                                Literal(None, "bar"),
                                             ),
                                         ),
                                     ),
