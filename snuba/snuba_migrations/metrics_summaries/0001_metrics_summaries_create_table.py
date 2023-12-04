@@ -7,9 +7,9 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.schemas import Float
 
-storage_set_name = StorageSetKey.SPANS
-local_table_name = "spans_local"
-dist_table_name = "spans_dist"
+storage_set_name = StorageSetKey.METRICS_SUMMARIES
+local_table_name = "metrics_summaries_local"
+dist_table_name = "metrics_summaries_dist"
 
 UNKNOWN_SPAN_STATUS = 2
 
