@@ -27,9 +27,9 @@ mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
+                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
                 "granularity": "60",
-                "interval": "60",
+                "interval": "",
                 "with_totals": "",
             },
             "scope": {
@@ -152,10 +152,10 @@ mql_test_cases = [
             order_by=[
                 OrderBy(
                     OrderByDirection.ASC,
-                    Column(
-                        alias="_snuba_timestamp",
-                        table_name=None,
-                        column_name="timestamp",
+                    FunctionCall(
+                        alias="_snuba_aggregate_value",
+                        function_name="sum",
+                        parameters=(Column("_snuba_value", None, "value"),),
                     ),
                 )
             ],
@@ -171,9 +171,9 @@ mql_test_cases = [
             "start": "2021-01-01T01:36:00",
             "end": "2021-01-05T04:15:00",
             "rollup": {
-                "orderby": [],
+                "orderby": {"column_name": "", "direction": ""},
                 "granularity": "3600",
-                "interval": "60",
+                "interval": "",
                 "with_totals": "",
             },
             "scope": {
@@ -367,6 +367,5 @@ def test_format_expressions_from_mql(
 ) -> None:
     generic_metrics = get_dataset("generic_metrics")
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-
     eq, reason = query.equals(expected_query)
     assert eq, reason

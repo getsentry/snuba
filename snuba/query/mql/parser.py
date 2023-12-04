@@ -24,6 +24,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.mql.mql_context import Limit, MetricsScope, MQLContext, Offset, Rollup
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
@@ -36,6 +37,7 @@ from snuba.query.snql.parser import (
     _treeify_or_and_conditions,
 )
 from snuba.state import explain_meta
+from snuba.util import parse_datetime
 
 MQL_VISITOR_DICT = Dict[
     str, Union[str, Union[str, List[SelectedExpression], List[Column]]]
@@ -426,7 +428,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
 def parse_mql_query_initial(
     body: str,
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
 ) -> Tuple[Mapping[str, Any], Union[CompositeQuery[QueryEntity], LogicalQuery]]:
     """
     Parses the query body MQL generating the AST. This only takes into
@@ -462,15 +464,14 @@ def parse_mql_query_initial(
     except Exception as e:
         raise e
 
-    if "entity" not in mql_context:
+    if not mql_context.entity:
         raise InvalidQueryException("No entity specified in MQL context")
-    entity_name = mql_context["entity"]
-    entity_key = EntityKey(entity_name)
+    entity_key = EntityKey(mql_context.entity)
     query.set_from_clause(
         QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
     )
 
-    mql_context_args = extract_mql_context_args(parsed, mql_context, entity_key)
+    mql_context_args = extract_mql_context(parsed, mql_context, entity_key)
     query.add_condition_to_ast(mql_context_args["filters"])
     query.set_ast_orderby(mql_context_args["order_by"])
     query.set_limit(mql_context_args["limit"])
@@ -495,9 +496,9 @@ def assemble_selected_columns(
     return selected_columns
 
 
-def extract_mql_context_args(
+def extract_mql_context(
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
     entity_key: EntityKey,
 ) -> Mapping[str, Any]:
     """
@@ -529,11 +530,11 @@ def extract_mql_context_args(
     """
     mql_context_args: dict[str, Any] = {}
     filters = []
-    if "indexer_mappings" not in mql_context:
+    if not mql_context.indexer_mappings:
         raise InvalidQueryException("No indexer mappings specified in MQL context.")
 
-    filters.extend(extract_scope(parsed, mql_context))
-    filters.extend(extract_start_end_time(parsed, mql_context, entity_key))
+    filters.extend(extract_scope_filters(parsed, mql_context))
+    filters.extend(extract_start_end_time_filters(parsed, mql_context, entity_key))
     order_by, granularity, totals = extract_rollup(parsed, mql_context)
     limit = extract_limit(mql_context)
     offset = extract_offset(mql_context)
@@ -548,11 +549,11 @@ def extract_mql_context_args(
     return mql_context_args
 
 
-def extract_start_end_time(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any], entity_key: EntityKey
+def extract_start_end_time_filters(
+    parsed: Mapping[str, Any], mql_context: MQLContext, entity_key: EntityKey
 ) -> list[FunctionCall]:
     filters = []
-    if "start" not in mql_context or "end" not in mql_context:
+    if not mql_context.start or not mql_context.end:
         raise InvalidQueryException(
             "No start or end specified in MQL context indexer_mappings."
         )
@@ -560,7 +561,6 @@ def extract_start_end_time(
     required_timestamp_column = (
         entity.required_time_column if entity.required_time_column else "timestamp"
     )
-    start = mql_context["start"]
     filters.append(
         binary_condition(
             ConditionFunctions.GTE,
@@ -568,11 +568,10 @@ def extract_start_end_time(
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
-                parameters=(Literal(alias=None, value=start),),
+                parameters=(Literal(alias=None, value=mql_context.start.isoformat()),),
             ),
         )
     )
-    end = mql_context["end"]
     filters.append(
         binary_condition(
             ConditionFunctions.LT,
@@ -580,20 +579,19 @@ def extract_start_end_time(
             FunctionCall(
                 alias=None,
                 function_name="toDateTime",
-                parameters=(Literal(alias=None, value=end),),
+                parameters=(Literal(alias=None, value=mql_context.end.isoformat()),),
             ),
         )
     )
     return filters
 
 
-def extract_scope(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
+def extract_scope_filters(
+    parsed: Mapping[str, Any], mql_context: MQLContext
 ) -> list[FunctionCall]:
     filters = []
-    if "scope" not in mql_context:
+    if not mql_context.scope:
         raise InvalidQueryException("No scope specified in MQL context.")
-    scope = mql_context["scope"]
     filters.append(
         binary_condition(
             ConditionFunctions.IN,
@@ -602,8 +600,8 @@ def extract_scope(
                 alias=None,
                 function_name="tuple",
                 parameters=tuple(
-                    Literal(alias=None, value=int(project_id))
-                    for project_id in scope["project_ids"]
+                    Literal(alias=None, value=project_id)
+                    for project_id in mql_context.scope.project_ids
                 ),
             ),
         )
@@ -617,7 +615,7 @@ def extract_scope(
                 function_name="tuple",
                 parameters=tuple(
                     Literal(alias=None, value=int(org_id))
-                    for org_id in scope["org_ids"]
+                    for org_id in mql_context.scope.org_ids
                 ),
             ),
         )
@@ -626,72 +624,64 @@ def extract_scope(
         binary_condition(
             ConditionFunctions.EQ,
             Column(alias=None, table_name=None, column_name="use_case_id"),
-            Literal(alias=None, value=scope["use_case_id"]),
+            Literal(alias=None, value=mql_context.scope.use_case_id),
         )
     )
     return filters
 
 
 def extract_rollup(
-    parsed: Mapping[str, Any], mql_context: Mapping[str, Any]
-) -> tuple[list[OrderBy], int, bool]:
-    if "rollup" not in mql_context:
+    parsed: Mapping[str, Any], mql_context: MQLContext
+) -> tuple[Optional[OrderBy], int, bool]:
+    if not mql_context.rollup:
         raise InvalidQueryException("No rollup specified in MQL context.")
 
-    # Extract orderby
+    # Extract orderby, TODO: we need to change this when we actually support order_by
     order_by = []
-    if "orderby" in mql_context["rollup"]:
-        for order_by_info in mql_context["rollup"]["orderby"]:
-            direction = (
-                OrderByDirection.ASC
-                if order_by_info["direction"] == "ASC"
-                else OrderByDirection.DESC
+    if mql_context.rollup.orderby:
+        order_by = [
+            OrderBy(
+                mql_context.rollup.orderby,
+                Column(
+                    alias=None,
+                    table_name=None,
+                    column_name=AGGREGATE_ALIAS,
+                ),
             )
-            order_by.append(
-                OrderBy(
-                    direction,
-                    Column(
-                        alias=None,
-                        table_name=None,
-                        column_name=order_by_info["column_name"],
-                    ),
-                )
+        ]
+    elif mql_context.rollup.interval:
+        order_by = [
+            OrderBy(
+                OrderByDirection.ASC,
+                Column(
+                    alias=None,
+                    table_name=None,
+                    column_name="timestamp",
+                ),
             )
+        ]
 
     # Extract granularity
     # TODO: We eventually want to move the automatic granularity functionality in Sentry into here.
-    if "granularity" not in mql_context["rollup"]:
+    if not mql_context.rollup.granularity:
         raise InvalidQueryException("No granularity specified in MQL context rollup.")
-    granularity = int(mql_context["rollup"]["granularity"])
 
-    # Extract with totals
-    with_totals = mql_context["rollup"].get("with_totals") == "True"
-
-    return order_by, granularity, with_totals
+    return order_by, mql_context.rollup.granularity, mql_context.rollup.totals
 
 
-def extract_limit(mql_context: Mapping[str, Any]) -> Optional[int]:
-    if (
-        "limit" in mql_context
-        and mql_context["limit"] != ""
-        and mql_context["limit"].isdigit()
-    ):
-        limit = int(mql_context["limit"])
-        if limit > MAX_LIMIT:
+def extract_limit(mql_context: MQLContext) -> int:
+    if mql_context.limit:
+        if mql_context.limit.limit > MAX_LIMIT:
             raise ParsingException(
                 "queries cannot have a limit higher than 10000", should_report=False
             )
-        return int(mql_context["limit"])
+        return mql_context.limit.limit
     return 1000
 
 
-def extract_offset(mql_context: Mapping[str, Any]) -> int:
-    if (
-        "limit" in mql_context
-        and mql_context["offset"] != ""
-        and mql_context["offset"].isdigit()
-    ):
-        return int(mql_context["offset"])
+def extract_offset(mql_context: MQLContext) -> int:
+    if mql_context.offset:
+        return mql_context.offset.offset
     return 0
 
 
@@ -700,16 +690,71 @@ CustomProcessors = Sequence[
 ]
 
 
+def build_mql_context(mql_context_dict: Mapping[str, Any]) -> MQLContext:
+    if "scope" not in mql_context_dict:
+        raise InvalidQueryException("No scope specified in MQL context.")
+    if "rollup" not in mql_context_dict:
+        raise InvalidQueryException("No rollup specified in MQL context.")
+
+    # Create scope object
+    scope = MetricsScope(
+        org_ids=list(map(int, mql_context_dict["scope"]["org_ids"])),
+        project_ids=list(map(int, mql_context_dict["scope"]["project_ids"])),
+        use_case_id=mql_context_dict["scope"]["use_case_id"],
+    )
+
+    # create rollup object
+    direction = None
+    if mql_context_dict["rollup"]["orderby"]["direction"] != "":
+        direction = OrderByDirection(mql_context_dict["rollup"]["orderby"]["direction"])
+    granularity = int(mql_context_dict["rollup"]["granularity"])
+    interval = None
+    if mql_context_dict["rollup"]["interval"] != "":
+        interval = int(mql_context_dict["rollup"]["interval"])
+    totals = False
+    if mql_context_dict["rollup"]["with_totals"] == "True":
+        totals = True
+    rollup = Rollup(
+        orderby=direction,
+        granularity=granularity,
+        interval=interval,
+        totals=totals,
+    )
+
+    # Create limit and offset object
+    limit = None
+    if mql_context_dict["limit"] != "":
+        limit = Limit(int(mql_context_dict["limit"]))
+    offset = None
+    if mql_context_dict["offset"] != "":
+        offset = Offset(int(mql_context_dict["offset"]))
+
+    return MQLContext(
+        entity=mql_context_dict["entity"],
+        start=parse_datetime(mql_context_dict["start"]),
+        end=parse_datetime(mql_context_dict["end"]),
+        rollup=rollup,
+        scope=scope,
+        limit=limit,
+        offset=offset,
+        indexer_mappings=mql_context_dict["indexer_mappings"],
+    )
+
+
 def parse_mql_query(
     body: str,
-    mql_context: Mapping[str, Any],
+    mql_context_dict: Mapping[str, Any],
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+    with sentry_sdk.start_span(
+        op="validate", description="load_and_validate_mql_context"
+    ):
+        mql_context = build_mql_context(mql_context_dict)
+        mql_context.validate()
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         parsed, query = parse_mql_query_initial(body, mql_context)
-
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
         query = resolve_mappings(query, parsed, mql_context)
 
@@ -744,4 +789,5 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
+    print(query.get_orderby())
     return query, snql_anonymized

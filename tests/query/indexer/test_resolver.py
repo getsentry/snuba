@@ -17,6 +17,7 @@ from snuba.query.indexer.resolver import (
     resolve_tag_filters_processor,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.mql.mql_context import MQLContext
 
 metric_id_test_cases = [
     pytest.param(
@@ -40,11 +41,7 @@ metric_id_test_cases = [
             offset=0,
         ),
         {"mri": "d:transactions/duration@millisecond"},
-        {
-            "indexer_mappings": {
-                "d:transactions/duration@millisecond": "123456",
-            },
-        },
+        MQLContext(indexer_mappings={"d:transactions/duration@millisecond": "123456"}),
         LogicalQuery(
             from_clause=QueryEntity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -97,12 +94,12 @@ metric_id_test_cases = [
             offset=0,
         ),
         {"public_name": "transaction.user"},
-        {
-            "indexer_mappings": {
+        MQLContext(
+            indexer_mappings={
                 "transaction.user": "s:transactions/user@none",
                 "s:transactions/user@none": "567890",
             }
-        },
+        ),
         LogicalQuery(
             from_clause=QueryEntity(
                 EntityKey.GENERIC_METRICS_SETS,
@@ -143,7 +140,7 @@ metric_id_test_cases = [
 def test_resolve_metric_id_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
     expected_query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
     resolve_metric_id_processor(query, parsed, mql_context)
@@ -195,11 +192,7 @@ groupby_test_cases = [
                 "transactions",
             ),
         },
-        {
-            "indexer_mappings": {
-                "transactions": "111111",
-            }
-        },
+        MQLContext(indexer_mappings={"transactions": "111111"}),
         LogicalQuery(
             from_clause=QueryEntity(
                 EntityKey.GENERIC_METRICS_SETS,
@@ -248,7 +241,7 @@ groupby_test_cases = [
 def test_resolve_gropupby_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
     expected_query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
     resolve_gropupby_processor(query, parsed, mql_context)
@@ -304,11 +297,7 @@ tag_filter_test_cases = [
                 ),
             ]
         },
-        {
-            "indexer_mappings": {
-                "foo": "999999",
-            },
-        },
+        MQLContext(indexer_mappings={"foo": "999999"}),
         LogicalQuery(
             from_clause=QueryEntity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -431,12 +420,7 @@ tag_filter_test_cases = [
                 ),
             ]
         },
-        {
-            "indexer_mappings": {
-                "foo": "999999",
-                "dist": "888888",
-            },
-        },
+        MQLContext(indexer_mappings={"foo": "999999", "dist": "888888"}),
         LogicalQuery(
             from_clause=QueryEntity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -501,7 +485,7 @@ tag_filter_test_cases = [
 def test_resolve_tag_filters_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
     expected_query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
     resolve_tag_filters_processor(query, parsed, mql_context)
