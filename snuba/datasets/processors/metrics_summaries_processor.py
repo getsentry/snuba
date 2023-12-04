@@ -25,7 +25,7 @@ MetricsSummaryEvent = MutableMapping[str, Any]
 RetentionDays = int
 
 
-class SpansMessageProcessor(DatasetMessageProcessor):
+class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     """
     Message processor for writing spans data to the spans table.
     The implementation has taken inspiration from the transactions processor.
