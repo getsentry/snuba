@@ -692,10 +692,20 @@ CustomProcessors = Sequence[
 
 
 def build_mql_context(mql_context_dict: Mapping[str, Any]) -> MQLContext:
-    if "scope" not in mql_context_dict:
-        raise InvalidQueryException("No scope specified in MQL context.")
-    if "rollup" not in mql_context_dict:
-        raise InvalidQueryException("No rollup specified in MQL context.")
+    fields = [
+        "entity",
+        "start",
+        "end",
+        "scope",
+        "rollup",
+        "limit",
+        "offset",
+        "indexer_mappings",
+    ]
+    for field in fields:
+        if field not in mql_context_dict:
+            print(f"No {field} specified in MQL context.")
+            raise InvalidQueryException(f"No {field} specified in MQL context.")
 
     # Create scope object
     scope = MetricsScope(
@@ -729,7 +739,6 @@ def build_mql_context(mql_context_dict: Mapping[str, Any]) -> MQLContext:
     offset = None
     if mql_context_dict["offset"] != "":
         offset = Offset(int(mql_context_dict["offset"]))
-
     return MQLContext(
         entity=mql_context_dict["entity"],
         start=parse_datetime(mql_context_dict["start"]),
@@ -790,5 +799,4 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
-    print(query.get_orderby())
     return query, snql_anonymized
