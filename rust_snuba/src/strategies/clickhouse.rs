@@ -42,19 +42,19 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
             if skip_write {
                 tracing::info!("skipping write of {} rows", insert_batch.len());
-                return Ok(message);
+            } else {
+                tracing::debug!("performing write");
+                let write_start = SystemTime::now();
+
+                let response = client
+                    .send(insert_batch.encoded_rows().to_vec())
+                    .await
+                    .unwrap();
+
+                tracing::debug!(?response);
+                tracing::info!("Inserted {} rows", insert_batch.len());
             }
 
-            tracing::debug!("performing write");
-            let write_start = SystemTime::now();
-
-            let response = client
-                .send(insert_batch.encoded_rows().to_vec())
-                .await
-                .unwrap();
-
-            tracing::debug!(?response);
-            tracing::info!("Inserted {} rows", insert_batch.len());
             let write_finish = SystemTime::now();
 
             if let Ok(elapsed) = write_finish.duration_since(write_start) {
