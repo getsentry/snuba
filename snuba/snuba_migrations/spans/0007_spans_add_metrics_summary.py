@@ -3,6 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 
 storage_set_name = StorageSetKey.SPANS
@@ -22,16 +23,32 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=local_table_name,
-                column=Column("metrics_summary", String()),
+                column=Column(
+                    "metrics_summary",
+                    String(
+                        Modifiers(
+                            default="''",
+                            codecs=["ZSTD(1)"],
+                        )
+                    ),
+                ),
                 target=OperationTarget.LOCAL,
-                after="span_id",
+                after="measurements",
             ),
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=dist_table_name,
-                column=Column("metrics_summary", String()),
+                column=Column(
+                    "metrics_summary",
+                    String(
+                        Modifiers(
+                            default="''",
+                            codecs=["ZSTD(1)"],
+                        )
+                    ),
+                ),
                 target=OperationTarget.DISTRIBUTED,
-                after="span_id",
+                after="measurements",
             ),
         ]
 
