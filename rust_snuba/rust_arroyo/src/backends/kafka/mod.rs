@@ -369,6 +369,7 @@ mod tests {
             "my-group".to_string(),
             "latest".to_string(),
             false,
+            30_000,
             None,
         );
         let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
@@ -384,6 +385,7 @@ mod tests {
             "my-group-1".to_string(),
             "latest".to_string(),
             false,
+            30_000,
             None,
         );
         let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
@@ -419,6 +421,7 @@ mod tests {
             "my-group-2".to_string(),
             "latest".to_string(),
             false,
+            30_000,
             None,
         );
 

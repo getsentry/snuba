@@ -78,6 +78,7 @@ async fn main() {
         "my_group".to_string(),
         "latest".to_string(),
         false,
+        30_000,
         None,
     );
 

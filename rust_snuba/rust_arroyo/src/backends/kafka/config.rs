@@ -22,6 +22,7 @@ impl KafkaConfig {
         group_id: String,
         auto_offset_reset: String,
         _strict_offset_reset: bool, // TODO: Implement this
+        max_poll_interval_ms: usize,
         override_params: Option<HashMap<String, String>>,
     ) -> Self {
         let mut config = KafkaConfig::new_config(bootstrap_servers, None);
@@ -32,6 +33,20 @@ impl KafkaConfig {
         config
             .config_map
             .insert("auto.offset.reset".to_string(), auto_offset_reset);
+
+        config.config_map.insert(
+            "max.poll.interval.ms".to_string(),
+            max_poll_interval_ms.to_string(),
+        );
+
+        // HACK: If the max poll interval is less than 45 seconds, set the session timeout
+        // to the same. (its default is 45 seconds and it must be <= to max.poll.interval.ms)
+        if max_poll_interval_ms < 45_000 {
+            config.config_map.insert(
+                "session.timeout.ms".to_string(),
+                max_poll_interval_ms.to_string(),
+            );
+        }
 
         apply_override_params(config, override_params)
     }
@@ -81,6 +96,7 @@ mod tests {
             "my-group".to_string(),
             "error".to_string(),
             false,
+            30_000,
             Some(HashMap::from([(
                 "queued.max.messages.kbytes".to_string(),
                 "1000000".to_string(),
