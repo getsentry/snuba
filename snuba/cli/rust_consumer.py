@@ -113,9 +113,15 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
 @click.option(
-    "--max-interval-poll-ms",
+    "--max-poll-interval-ms",
     type=int,
     default=30000,
+)
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
 def rust_consumer(
     *,
@@ -136,8 +142,9 @@ def rust_consumer(
     concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
+    max_poll_interval_ms: int,
     python_max_queue_depth: Optional[int],
-    max_interval_poll_ms: int,
+    health_check_file: Optional[str],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -163,7 +170,8 @@ def rust_consumer(
 
     import rust_snuba
 
-    os.environ["RUST_LOG"] = log_level.lower()
+    # TODO: remove after debugging
+    os.environ["RUST_LOG"] = "debug" if not use_rust_processor else log_level.lower()
 
     # XXX: Temporary way to quickly test different values for concurrency
     # Should be removed before this is put into  prod
@@ -178,6 +186,7 @@ def rust_consumer(
         skip_write,
         concurrency_override or concurrency or 1,
         use_rust_processor,
+        max_poll_interval_ms,
         python_max_queue_depth,
-        max_interval_poll_ms,
+        health_check_file,
     )

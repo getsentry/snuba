@@ -39,11 +39,20 @@ pub enum ProducerError {
     ProducerErrorred,
 }
 
+/// This abstracts the committing of partition offsets.
+pub trait CommitOffsets {
+    /// Commit the partition offsets stored in this object, plus the ones passed in `offsets`.
+    ///
+    /// Returns a map of all offsets that were committed. This combines [`Consumer::stage_offsets`] and
+    /// [`Consumer::commit_offsets`].
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
+}
+
 /// This is basically an observer pattern to receive the callbacks from
 /// the consumer when partitions are assigned/revoked.
 pub trait AssignmentCallbacks: Send + Sync {
     fn on_assign(&self, partitions: HashMap<Partition, u64>);
-    fn on_revoke(&self, partitions: Vec<Partition>);
+    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, partitions: Vec<Partition>);
 }
 
 /// This abstract class provides an interface for consuming messages from a
@@ -80,12 +89,8 @@ pub trait AssignmentCallbacks: Send + Sync {
 /// occurs even if the consumer retains ownership of the partition across
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
-pub trait Consumer<TPayload>: Send {
-    fn subscribe(
-        &mut self,
-        topic: &[Topic],
-        callbacks: Box<dyn AssignmentCallbacks>,
-    ) -> Result<(), ConsumerError>;
+pub trait Consumer<TPayload, C>: Send {
+    fn subscribe(&mut self, topic: &[Topic], callbacks: C) -> Result<(), ConsumerError>;
 
     fn unsubscribe(&mut self) -> Result<(), ConsumerError>;
 
@@ -145,14 +150,8 @@ pub trait Consumer<TPayload>: Send {
     /// exception will be raised and no offsets will be modified.
     fn seek(&self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 
-    /// Stage offsets to be committed. If an offset has already been staged
-    /// for a given partition, that offset is overwritten (even if the offset
-    /// moves in reverse.)
-    fn stage_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
-
-    /// Commit staged offsets. The return value of this method is a mapping
-    /// of streams with their committed offsets as values.
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError>;
+    /// Commit offsets.
+    fn commit_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
 
     fn close(&mut self);
 

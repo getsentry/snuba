@@ -24,6 +24,15 @@ schema:
         },
     },
     {
+      name: tags.raw_value,
+      type: Array,
+      args:
+        {
+          schema_modifiers: [readonly],
+          inner_type: { type: String },
+        },
+    },
+    {
       name: value,
       type: AggregateFunction,
       args:

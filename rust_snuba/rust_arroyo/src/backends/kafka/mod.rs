@@ -1,5 +1,6 @@
 use super::kafka::config::KafkaConfig;
 use super::AssignmentCallbacks;
+use super::CommitOffsets;
 use super::Consumer as ArroyoConsumer;
 use super::ConsumerError;
 use crate::backends::kafka::types::KafkaPayload;
@@ -9,12 +10,11 @@ use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
-use rdkafka::error::KafkaResult;
+use rdkafka::error::KafkaError;
 use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::mem;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -70,25 +70,65 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
     )
 }
 
-pub struct CustomContext {
-    callbacks: Box<dyn AssignmentCallbacks>,
+struct OffsetCommitter<'a, C: AssignmentCallbacks>(&'a BaseConsumer<CustomContext<C>>);
+
+impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
+    fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in offsets {
+            partitions.add_partition_offset(
+                partition.topic.as_str(),
+                partition.index as i32,
+                Offset::from_raw(offset as i64),
+            )?;
+        }
+
+        self.0.commit(&partitions, CommitMode::Sync).unwrap();
+
+        Ok(())
+    }
+}
+
+pub struct CustomContext<C: AssignmentCallbacks> {
+    callbacks: C,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
-impl ClientContext for CustomContext {}
+impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
+    fn log(&self, level: RDKafkaLogLevel, fac: &str, log_message: &str) {
+        match level {
+            RDKafkaLogLevel::Emerg
+            | RDKafkaLogLevel::Alert
+            | RDKafkaLogLevel::Critical
+            | RDKafkaLogLevel::Error => {
+                tracing::error!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Warning => {
+                tracing::warn!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Notice | RDKafkaLogLevel::Info => {
+                tracing::info!("librdkafka: {fac} {log_message}");
+            }
+            RDKafkaLogLevel::Debug => {
+                tracing::debug!("librdkafka: {fac} {log_message}");
+            }
+        }
+    }
 
-impl ConsumerContext for CustomContext {
-    fn pre_rebalance(&self, rebalance: &Rebalance) {
+    fn error(&self, error: KafkaError, reason: &str) {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error, "librdkafka: {error}: {reason}");
+    }
+}
+
+impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
+    fn pre_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Revoke(list) = rebalance {
             let mut partitions: Vec<Partition> = Vec::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
-                // TODO(swatinem)
-                partitions.push(Partition {
-                    topic: Topic::new(topic),
-                    index: partition_number as u16,
-                });
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
+                partitions.push(Partition::new(topic, index));
             }
 
             let mut offsets = self.consumer_offsets.lock().unwrap();
@@ -96,68 +136,54 @@ impl ConsumerContext for CustomContext {
                 offsets.remove(partition);
             }
 
-            self.callbacks.on_revoke(partitions);
+            self.callbacks
+                .on_revoke(OffsetCommitter(base_consumer), partitions);
         }
     }
 
-    fn post_rebalance(&self, rebalance: &Rebalance) {
+    fn post_rebalance(&self, _base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
             let mut map: HashMap<Partition, u64> = HashMap::new();
             for partition in list.elements().iter() {
-                let topic = partition.topic();
-                let partition_number = partition.partition();
+                let topic = Topic::new(partition.topic());
+                let index = partition.partition() as u16;
                 let offset = partition.offset().to_raw().unwrap();
-                map.insert(
-                    // TODO(swatinem)
-                    Partition {
-                        topic: Topic::new(topic),
-                        index: partition_number as u16,
-                    },
-                    offset as u64,
-                );
+                map.insert(Partition::new(topic, index), offset as u64);
             }
             let mut offsets = self.consumer_offsets.lock().unwrap();
-            for (partition, offset) in map.clone() {
-                offsets.insert(partition, offset);
+            for (partition, offset) in &map {
+                offsets.insert(*partition, *offset);
             }
             self.callbacks.on_assign(map);
         }
     }
-
-    fn commit_callback(&self, _: KafkaResult<()>, _offsets: &TopicPartitionList) {}
 }
 
-pub struct KafkaConsumer {
+pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // TODO: This has to be an option as of now because rdkafka requires
     // callbacks during the instantiation. While the streaming processor
     // can only pass the callbacks during the subscribe call.
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
-    pub consumer: Option<BaseConsumer<CustomContext>>,
+    pub consumer: Option<BaseConsumer<CustomContext<C>>>,
     config: KafkaConfig,
     state: KafkaConsumerState,
     offsets: Arc<Mutex<HashMap<Partition, u64>>>,
-    staged_offsets: HashMap<Partition, u64>,
 }
 
-impl KafkaConsumer {
+impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig) -> Self {
         Self {
             consumer: None,
             config,
             state: KafkaConsumerState::NotSubscribed,
             offsets: Arc::new(Mutex::new(HashMap::new())),
-            staged_offsets: HashMap::new(),
         }
     }
 }
 
-impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
-    fn subscribe(
-        &mut self,
-        topics: &[Topic],
-        callbacks: Box<dyn AssignmentCallbacks>,
-    ) -> Result<(), ConsumerError> {
+impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
+    fn subscribe(&mut self, topics: &[Topic], callbacks: C) -> Result<(), ConsumerError> {
         let context = CustomContext {
             callbacks,
             consumer_offsets: self.offsets.clone(),
@@ -165,11 +191,13 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 
         let mut config_obj: ClientConfig = self.config.clone().into();
 
-        let consumer: BaseConsumer<CustomContext> = config_obj
+        let consumer: BaseConsumer<CustomContext<C>> = config_obj
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
+
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         consumer.subscribe(&topic_str)?;
+
         self.consumer = Some(consumer);
         self.state = KafkaConsumerState::Consuming;
         Ok(())
@@ -177,8 +205,7 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
 
     fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
-        let consumer = self.consumer.as_mut().unwrap();
-        consumer.unsubscribe();
+        self.consumer.as_ref().unwrap().unsubscribe();
 
         Ok(())
     }
@@ -190,13 +217,18 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         self.state.assert_consuming_state()?;
 
         let duration = timeout.unwrap_or(Duration::ZERO);
-        let consumer = self.consumer.as_mut().unwrap();
-        let res = consumer.poll(duration);
+        let res = self.consumer.as_ref().unwrap().poll(duration);
+
         match res {
             None => Ok(None),
             Some(res) => {
-                let msg = res?;
-                Ok(Some(create_kafka_message(msg)))
+                let msg = create_kafka_message(res?);
+                self.offsets
+                    .lock()
+                    .unwrap()
+                    .insert(msg.partition, msg.offset);
+
+                Ok(Some(msg))
             }
         }
     }
@@ -219,8 +251,10 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
             }
         }
 
-        let consumer = self.consumer.as_ref().unwrap();
-        consumer.pause(&topic_partition_list)?;
+        self.consumer
+            .as_ref()
+            .unwrap()
+            .pause(&topic_partition_list)?;
 
         Ok(())
     }
@@ -236,8 +270,10 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
             topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
         }
 
-        let consumer = self.consumer.as_mut().unwrap();
-        consumer.resume(&topic_partition_list)?;
+        self.consumer
+            .as_ref()
+            .unwrap()
+            .resume(&topic_partition_list)?;
 
         Ok(())
     }
@@ -257,18 +293,11 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
         Ok(())
     }
 
-    fn stage_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        for (partition, offset) in offsets {
-            self.staged_offsets.insert(partition, offset);
-        }
-        Ok(())
-    }
-
-    fn commit_offsets(&mut self) -> Result<HashMap<Partition, u64>, ConsumerError> {
+    fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let mut partitions = TopicPartitionList::with_capacity(self.staged_offsets.len());
-        for (partition, offset) in &self.staged_offsets {
+        let mut partitions = TopicPartitionList::with_capacity(offsets.len());
+        for (partition, offset) in &offsets {
             partitions.add_partition_offset(
                 partition.topic.as_str(),
                 partition.index as i32,
@@ -276,14 +305,13 @@ impl ArroyoConsumer<KafkaPayload> for KafkaConsumer {
             )?;
         }
 
-        let consumer = self.consumer.as_mut().unwrap();
-        consumer.commit(&partitions, CommitMode::Sync).unwrap();
+        self.consumer
+            .as_ref()
+            .unwrap()
+            .commit(&partitions, CommitMode::Sync)
+            .unwrap();
 
-        // Clear staged offsets
-        let cleared_map = HashMap::new();
-        let prev_offsets = mem::replace(&mut self.staged_offsets, cleared_map);
-
-        Ok(prev_offsets)
+        Ok(())
     }
 
     fn close(&mut self) {
@@ -312,7 +340,7 @@ mod tests {
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
         fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke(&self, _: Vec<Partition>) {}
+        fn on_revoke<C>(&self, _: C, _: Vec<Partition>) {}
     }
 
     fn get_admin_client() -> AdminClient<DefaultClientContext> {
@@ -357,11 +385,10 @@ mod tests {
         );
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test");
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
+        let my_callbacks = EmptyCallbacks {};
         consumer.subscribe(&[topic], my_callbacks).unwrap();
     }
 
-    #[ignore = "TODO: needs investigating, started failing on rdkafka 0.36"]
     #[tokio::test]
     async fn test_tell() {
         create_topic("test", 1).await;
@@ -375,13 +402,20 @@ mod tests {
         );
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test");
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
         assert!(consumer.tell().is_err()); // Not subscribed yet
-        consumer.subscribe(&[topic], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
-        // Getting the assignment may take a while, wait up to 5 seconds
-        consumer.poll(Some(Duration::from_millis(5000))).unwrap();
+        // Getting the assignment may take a while
+        for _ in 0..10 {
+            consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
+            if consumer.tell().unwrap().len() == 1 {
+                println!("Received assignment");
+                break;
+            }
+            sleep(Duration::from_millis(200));
+        }
+
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
@@ -406,12 +440,9 @@ mod tests {
         let mut consumer = KafkaConsumer::new(configuration);
         let topic = Topic::new("test2");
 
-        let my_callbacks: Box<dyn AssignmentCallbacks> = Box::new(EmptyCallbacks {});
-        consumer.subscribe(&[topic], my_callbacks).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
-
-        consumer.stage_offsets(positions.clone()).unwrap();
 
         // Wait until the consumer got an assignment
         for _ in 0..10 {
@@ -423,8 +454,7 @@ mod tests {
             sleep(Duration::from_millis(200));
         }
 
-        let res = consumer.commit_offsets().unwrap();
-        assert_eq!(res, positions);
+        consumer.commit_offsets(positions.clone()).unwrap();
         consumer.unsubscribe().unwrap();
         consumer.close();
         delete_topic("test2").await;

@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::sync::Once;
 use std::time::Duration;
 
 use divan::counter::ItemsCount;
@@ -10,9 +11,10 @@ use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
 use rust_arroyo::backends::{Consumer, ConsumerError};
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::{RunError, StreamProcessor};
+use rust_arroyo::processing::{Callbacks, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
+use rust_arroyo::utils::metrics::{configure_metrics, Metrics};
 use rust_snuba::{
     ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StorageConfig,
 };
@@ -23,6 +25,7 @@ fn main() {
 }
 
 const MSG_COUNT: usize = 5_000;
+static METRICS_INIT: Once = Once::new();
 
 #[divan::bench(consts = [1, 4, 16])]
 fn functions<const N: usize>(bencher: divan::Bencher) {
@@ -75,6 +78,17 @@ fn run_bench(
     processor: &str,
     schema: &str,
 ) {
+    METRICS_INIT.call_once(|| {
+        #[derive(Debug)]
+        struct Noop;
+        impl Metrics for Noop {
+            fn increment(&self, _key: &str, _value: i64, _tags: Option<HashMap<&str, &str>>) {}
+            fn gauge(&self, _key: &str, _value: u64, _tags: Option<HashMap<&str, &str>>) {}
+            fn timing(&self, _key: &str, _value: u64, _tags: Option<HashMap<&str, &str>>) {}
+        }
+
+        configure_metrics(Noop)
+    });
     bencher
         .counter(ItemsCount::new(MSG_COUNT))
         .with_inputs(|| {
@@ -84,7 +98,7 @@ fn run_bench(
             )
         })
         .bench_local_values(|((topic, consumer), factory)| {
-            let mut processor = StreamProcessor::new(consumer, factory);
+            let mut processor = StreamProcessor::new(consumer, factory, None);
             processor.subscribe(topic);
 
             loop {
@@ -93,11 +107,10 @@ fn run_bench(
                     // FIXME: this pretty much means that we *polled* the partition to the end,
                     // it does not mean that we actually *committed* everything
                     // (aka we finished actually processing everything).
-                    return;
+                    break;
                 }
             }
-            // FIXME: this seems to deadlock?
-            //processor.shutdown();
+            processor.shutdown();
         });
 }
 
@@ -140,6 +153,7 @@ fn create_factory(
         concurrency,
         None,
         true,
+        None,
     );
     Box::new(factory)
 }
@@ -147,7 +161,10 @@ fn create_factory(
 fn create_consumer(
     make_payload: fn() -> KafkaPayload,
     messages: usize,
-) -> (Topic, Arc<Mutex<dyn Consumer<KafkaPayload>>>) {
+) -> (
+    Topic,
+    Box<dyn Consumer<KafkaPayload, Callbacks<KafkaPayload>>>,
+) {
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
 
@@ -161,7 +178,7 @@ fn create_consumer(
     }
 
     let consumer = LocalConsumer::new(Uuid::nil(), broker, "test_group".to_string(), true);
-    let consumer = Arc::new(Mutex::new(consumer));
+    let consumer = Box::new(consumer);
 
     (topic, consumer)
 }

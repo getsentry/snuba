@@ -308,7 +308,7 @@ class TestSnQLApi(BaseApiTest):
                             AND timestamp < toDateTime('{self.next_time.isoformat()}')
                             AND project_id IN tuple({self.project_id})
                             LIMIT 5""",
-                            "tenant_ids": {"referrer": "r", "organization_id": 123},
+                            "tenant_ids": {"referrer": "test", "organization_id": 123},
                         }
                     ),
                 ).data
@@ -814,7 +814,7 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "app_id": "something-good",
                     "parent_api": "some/endpoint",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    "tenant_ids": {"referrer": "test", "organization_id": 123},
                 }
             ),
         )
