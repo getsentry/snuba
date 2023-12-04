@@ -363,7 +363,7 @@ class GroupAttributesLoader(DirectoryLoader):
 
 class MetricsSummariesLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.group_attributes")
+        super().__init__("snuba.snuba_migrations.metrics_summaries")
 
     def get_migrations(self) -> Sequence[str]:
         return [
