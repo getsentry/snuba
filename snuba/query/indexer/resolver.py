@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Union
 
-from snuba_sdk.conditions import ConditionFunction
-
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -50,7 +48,7 @@ def resolve_metric_id_processor(
     metric_id = mql_context["indexer_mappings"][mri]
     query.add_condition_to_ast(
         binary_condition(
-            ConditionFunction.EQ.value,
+            ConditionFunctions.EQ,
             Column(alias=None, table_name=None, column_name="metric_id"),
             Literal(alias=None, value=metric_id),
         )
