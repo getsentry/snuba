@@ -82,7 +82,7 @@ pub fn consumer_impl(
         tracing::debug!(sentry_dsn = dsn);
         // this forces anyhow to record stack traces when capturing an error:
         std::env::set_var("RUST_BACKTRACE", "1");
-        _sentry_guard = Some(setup_sentry(dsn));
+        _sentry_guard = Some(setup_sentry(&dsn));
     }
 
     // setup arroyo metrics
@@ -141,24 +141,29 @@ pub fn consumer_impl(
 
     let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+    // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
+    // writing to the DLQ topics in prod.
+    let dlq_policy = match skip_write {
+        true => None,
+        false => consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer_config =
+                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+            let producer = KafkaProducer::new(producer_config);
 
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-        DlqPolicy::new(
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: Some(0.01),
-                max_consecutive_count: Some(1000),
-            },
-        )
-    });
+            DlqPolicy::new(
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: Some(0.01),
+                    max_consecutive_count: Some(1000),
+                },
+            )
+        }),
+    };
 
     let mut processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
 
@@ -198,10 +203,12 @@ pub fn process_message(
             timestamp,
         };
 
-        let res = func(payload, meta);
+        let res = func(payload, meta).unwrap();
         let batch = BytesInsertBatch::new(
+            res.rows,
             timestamp,
-            res.unwrap(),
+            res.origin_timestamp,
+            res.sentry_received_timestamp,
             BTreeMap::from([(partition, (offset, timestamp))]),
         );
         batch.encoded_rows().to_vec()

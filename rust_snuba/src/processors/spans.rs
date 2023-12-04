@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<RowData> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -22,7 +22,11 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&span)?;
 
-    Ok(RowData::from_rows(vec![serialized]))
+    Ok(InsertBatch {
+        rows: RowData::from_rows(vec![serialized]),
+        origin_timestamp: None,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -35,6 +39,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     group_raw: u64,
     is_segment: bool,
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
@@ -49,6 +54,11 @@ struct FromSpanMessage {
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FromMeasurementValue {
+    value: f64,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -200,6 +210,15 @@ impl TryFrom<FromSpanMessage> for Span {
         let tags = from.tags.unwrap_or_default();
         let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = tags.into_iter().unzip();
 
+        let measurements = from.measurements.unwrap_or_default();
+        let (measurement_keys, measurement_raw_values): (Vec<_>, Vec<_>) =
+            measurements.into_iter().unzip();
+
+        let mut measurement_values: Vec<f64> = Vec::new();
+        for measurement in measurement_raw_values {
+            measurement_values.push(measurement.value);
+        }
+
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
             tag_values.push(http_method);
@@ -226,6 +245,8 @@ impl TryFrom<FromSpanMessage> for Span {
             group,
             group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
+            measurement_keys,
+            measurement_values,
             module: from.sentry_tags.module.unwrap_or_default(),
             op: from.sentry_tags.op.unwrap_or_default(),
             parent_span_id: from.parent_span_id,

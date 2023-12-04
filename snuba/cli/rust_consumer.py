@@ -164,7 +164,8 @@ def rust_consumer(
 
     import rust_snuba
 
-    os.environ["RUST_LOG"] = log_level.lower()
+    # TODO: remove after debugging
+    os.environ["RUST_LOG"] = "debug" if not use_rust_processor else log_level.lower()
 
     # XXX: Temporary way to quickly test different values for concurrency
     # Should be removed before this is put into  prod

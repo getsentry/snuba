@@ -3,12 +3,12 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<RowData> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -19,7 +19,11 @@ pub fn process_message(
 
     let serialized = serde_json::to_vec(&msg)?;
 
-    Ok(RowData::from_rows(vec![serialized]))
+    Ok(InsertBatch {
+        rows: RowData::from_rows(vec![serialized]),
+        origin_timestamp: None,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
