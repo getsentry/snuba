@@ -1201,6 +1201,36 @@ class TestSnQLApi(BaseApiTest):
             response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
+    def test_timeseries_processor_join_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                    SELECT count() AS `count` BY events.time
+                    WHERE ga.group_status IN array(0)
+                    AND events.timestamp >= toDateTime('2023-11-27T10:00:00')
+                    AND events.timestamp < toDateTime('2023-11-27T13:00:00')
+                    AND events.project_id IN array({self.project_id})
+                    AND ga.project_id IN array({self.project_id})
+                    ORDER BY events.time ASC
+                    LIMIT 10000
+                    GRANULARITY 300""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert (
+            "(toDateTime(multiply(intDiv(toUInt32(timestamp), 300), 300), 'Universal') AS `_snuba_events.time`)"
+            in data["sql"]
+        )
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
