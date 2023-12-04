@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -6,10 +7,11 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::StreamProcessor;
+use rust_arroyo::processing::{Callbacks, ConsumerState, StreamProcessor};
 use rust_arroyo::types::Topic;
 use rust_arroyo::utils::metrics::configure_metrics;
 
@@ -127,6 +129,22 @@ pub fn consumer_impl(
 
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
+    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(
+        ConsumerStrategyFactory::new(
+            first_storage,
+            logical_topic_name,
+            max_batch_size,
+            max_batch_time,
+            skip_write,
+            ConcurrencyConfig::new(concurrency),
+            python_max_queue_depth,
+            use_rust_processor,
+            health_check_file.map(ToOwned::to_owned),
+        ),
+    ))));
+
+    let consumer = Box::new(KafkaConsumer::new(config, Callbacks(consumer_state.clone())).unwrap());
+
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
     let dlq_policy = match skip_write {
@@ -151,20 +169,9 @@ pub fn consumer_impl(
         }),
     };
 
-    let factory = ConsumerStrategyFactory::new(
-        first_storage,
-        logical_topic_name,
-        max_batch_size,
-        max_batch_time,
-        skip_write,
-        ConcurrencyConfig::new(concurrency),
-        python_max_queue_depth,
-        use_rust_processor,
-        health_check_file.map(ToOwned::to_owned),
-    );
+    let mut processor = StreamProcessor::new(consumer, consumer_state, dlq_policy);
 
-    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
-    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
+    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
 
     let mut handle = processor.get_handle();
 

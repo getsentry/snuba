@@ -25,9 +25,11 @@ pub mod types;
 
 #[derive(Eq, Hash, PartialEq)]
 enum KafkaConsumerState {
+    NotSubscribed,
     Consuming,
     #[allow(dead_code)]
     Error,
+    Closed,
     #[allow(dead_code)]
     Assigning,
     #[allow(dead_code)]
@@ -37,6 +39,8 @@ enum KafkaConsumerState {
 impl KafkaConsumerState {
     fn assert_consuming_state(&self) -> Result<(), ConsumerError> {
         match self {
+            KafkaConsumerState::Closed => Err(ConsumerError::ConsumerClosed),
+            KafkaConsumerState::NotSubscribed => Err(ConsumerError::NotSubscribed),
             KafkaConsumerState::Error => Err(ConsumerError::ConsumerErrored),
             _ => Ok(()),
         }
@@ -167,7 +171,7 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
-    pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
+    pub fn new(config: KafkaConfig, callbacks: C) -> Result<Self, ConsumerError> {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
         let context = CustomContext {
             callbacks,
@@ -181,26 +185,30 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
             .set_log_level(RDKafkaLogLevel::Warning)
             .create_with_context(context)?;
 
-        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
-        consumer.subscribe(&topic_str)?;
-
         Ok(Self {
             consumer,
-            state: KafkaConsumerState::Consuming,
+            state: KafkaConsumerState::NotSubscribed,
             offsets,
         })
-    }
-
-    pub fn shutdown(self) {}
-}
-
-impl<C: AssignmentCallbacks> Drop for KafkaConsumer<C> {
-    fn drop(&mut self) {
-        self.consumer.unsubscribe();
     }
 }
 
 impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C> {
+    fn subscribe(&mut self, topics: &[Topic], _callbacks: C) -> Result<(), ConsumerError> {
+        let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
+        self.consumer.subscribe(&topic_str)?;
+
+        self.state = KafkaConsumerState::Consuming;
+        Ok(())
+    }
+
+    fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
+        self.state.assert_consuming_state()?;
+        self.consumer.unsubscribe();
+
+        Ok(())
+    }
+
     fn poll(
         &mut self,
         timeout: Option<Duration>,
@@ -294,6 +302,15 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
         Ok(())
     }
+
+    // TODO: This should probably go
+    fn close(&mut self) {
+        self.state = KafkaConsumerState::Closed;
+    }
+
+    fn closed(&self) -> bool {
+        self.state == KafkaConsumerState::Closed
+    }
 }
 
 #[cfg(test)]
@@ -355,8 +372,9 @@ mod tests {
             30_000,
             None,
         );
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
     }
 
     #[tokio::test]
@@ -370,8 +388,10 @@ mod tests {
             30_000,
             None,
         );
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test");
-        let mut consumer = KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
+        assert!(consumer.tell().is_err()); // Not subscribed yet
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
         // Getting the assignment may take a while
@@ -387,7 +407,8 @@ mod tests {
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
         assert!(offsets.len() == 1);
-        consumer.shutdown();
+        consumer.unsubscribe().unwrap();
+        consumer.close();
 
         delete_topic("test").await;
     }
@@ -404,8 +425,10 @@ mod tests {
             None,
         );
 
+        let mut consumer = KafkaConsumer::new(configuration, EmptyCallbacks {}).unwrap();
         let topic = Topic::new("test2");
-        let mut consumer = KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
+
+        consumer.subscribe(&[topic], EmptyCallbacks {}).unwrap();
 
         let positions = HashMap::from([(Partition { topic, index: 0 }, 100)]);
 
@@ -420,8 +443,8 @@ mod tests {
         }
 
         consumer.commit_offsets(positions.clone()).unwrap();
-        consumer.shutdown();
-
+        consumer.unsubscribe().unwrap();
+        consumer.close();
         delete_topic("test2").await;
     }
 
