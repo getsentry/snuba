@@ -9,12 +9,16 @@ from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
-    _as_dict_safe,
     enforce_retention,
     extract_extra_tags,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
-from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
+from snuba.processor import (
+    InsertBatch,
+    ProcessedMessage,
+    _as_dict_safe,
+    _ensure_valid_date,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = structlog.get_logger(__name__)
