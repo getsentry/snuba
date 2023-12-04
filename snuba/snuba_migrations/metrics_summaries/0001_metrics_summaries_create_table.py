@@ -14,23 +14,28 @@ dist_table_name = "spans_dist"
 UNKNOWN_SPAN_STATUS = 2
 
 columns: List[Column[Modifiers]] = [
+    # ids
     Column("project_id", UInt(64)),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
     Column("segment_id", UInt(64)),
-    Column("start_timestamp", DateTime()),
-    Column("exclusive_time", Float(64)),
-    Column("op", String(Modifiers(low_cardinality=True))),
-    Column("group", UInt(64)),
-    Column("tags", Nested([("key", String()), ("value", String())])),
-    Column("partition", UInt(16)),
-    Column("offset", UInt(64)),
-    Column("retention_days", UInt(16)),
-    Column("deleted", UInt(8)),
+    # metrics summary
     Column("min", Float(64)),
     Column("max", Float(64)),
     Column("sum", Float(64)),
     Column("count", Float(64)),
+    # metrics metadata
+    Column("tags", Nested([("key", String()), ("value", String())])),
+    # span metadata
+    Column("start_timestamp", DateTime()),
+    Column("exclusive_time", Float(64)),
+    Column("op", String(Modifiers(low_cardinality=True))),
+    Column("group", UInt(64)),
+    # snuba internals
+    Column("partition", UInt(16)),
+    Column("offset", UInt(64)),
+    Column("retention_days", UInt(16)),
+    Column("deleted", UInt(8)),
 ]
 
 

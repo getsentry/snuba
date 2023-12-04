@@ -27,10 +27,7 @@ RetentionDays = int
 
 class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     """
-    Message processor for writing spans data to the spans table.
-    The implementation has taken inspiration from the transactions processor.
-    The initial version of this processor is able to read existing data
-    from the transactions topic and de-normalize it into the spans table.
+    Message processor for writing metrics summary data to the metrics_summaries table.
     """
 
     def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
@@ -45,8 +42,6 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     def _structure_and_validate_message(
         message: MetricsSummaryEvent,
     ) -> Optional[Tuple[MetricsSummaryEvent, RetentionDays]]:
-        if not message.get("trace_id"):
-            return None
         try:
             # We are purposely using a naive datetime here to work with the
             # rest of the codebase. We can be confident that clients are only
@@ -67,12 +62,19 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     ) -> None:
         processed["trace_id"] = str(uuid.UUID(metrics_summary_event["trace_id"]))
         processed["span_id"] = int(metrics_summary_event["span_id"], 16)
-        processed["segment_id"] = processed["span_id"]
+        processed["segment_id"] = int(metrics_summary_event["segment_id"], 16)
+        processed["project_id"] = metrics_summary_event["project_id"]
+
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
             metrics_summary_event["start_timestamp_ms"],
         )
-        processed["duration"] = max(metrics_summary_event["duration_ms"], 0)
         processed["exclusive_time"] = float(metrics_summary_event["exclusive_time_ms"])
+        processed["op"] = metrics_summary_event["op"]
+        processed["group"] = metrics_summary_event["group"]
+
+        for key in {"min", "max", "sum", "count"}:
+            processed[key] = float(metrics_summary_event[key])
+
         tags: Mapping[str, Any] = _as_dict_safe(metrics_summary_event.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
@@ -97,8 +99,6 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
-
-        processed["project_id"] = metrics_summary_event["project_id"]
 
         try:
             self._process_metrics_summary_event(processed, metrics_summary_event)
