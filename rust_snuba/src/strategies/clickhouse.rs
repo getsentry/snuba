@@ -39,12 +39,12 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 
         Box::pin(async move {
             let insert_batch = message.payload();
+            let write_start = SystemTime::now();
 
             if skip_write {
                 tracing::info!("skipping write of {} rows", insert_batch.len());
             } else {
                 tracing::debug!("performing write");
-                let write_start = SystemTime::now();
 
                 let response = client
                     .send(insert_batch.encoded_rows().to_vec())
