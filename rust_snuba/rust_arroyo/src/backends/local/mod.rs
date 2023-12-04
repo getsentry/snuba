@@ -13,7 +13,6 @@ pub struct RebalanceNotSupported;
 
 enum Callback {
     Assign(HashMap<Partition, u64>),
-    Revoke(Vec<Partition>),
 }
 
 struct SubscriptionState<C> {
@@ -35,7 +34,7 @@ impl<'a, TPayload> CommitOffsets for OffsetCommitter<'a, TPayload> {
     }
 }
 
-pub struct LocalConsumer<TPayload, C> {
+pub struct LocalConsumer<TPayload, C: AssignmentCallbacks> {
     id: Uuid,
     group: String,
     broker: LocalBroker<TPayload>,
@@ -47,88 +46,58 @@ pub struct LocalConsumer<TPayload, C> {
     subscription_state: SubscriptionState<C>,
     enable_end_of_partition: bool,
     commit_offset_calls: u32,
-    close_calls: u32,
-    closed: bool,
 }
 
-impl<TPayload, C> LocalConsumer<TPayload, C> {
+impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
     pub fn new(
         id: Uuid,
         broker: LocalBroker<TPayload>,
         group: String,
         enable_end_of_partition: bool,
+        topics: &[Topic],
         callbacks: C,
     ) -> Self {
-        Self {
+        let mut ret = Self {
             id,
             group,
             broker,
             pending_callback: VecDeque::new(),
             paused: HashSet::new(),
             subscription_state: SubscriptionState {
-                topics: Vec::new(),
+                topics: topics.to_vec(),
                 callbacks: Some(callbacks),
                 offsets: HashMap::new(),
                 last_eof_at: HashMap::new(),
             },
             enable_end_of_partition,
             commit_offset_calls: 0,
-            close_calls: 0,
-            closed: false,
-        }
+        };
+
+        let offsets = ret
+            .broker
+            .subscribe(ret.id, ret.group.clone(), topics.to_vec())
+            .unwrap();
+
+        ret.pending_callback.push_back(Callback::Assign(offsets));
+
+        ret
     }
 
     fn is_subscribed<'p>(&self, mut partitions: impl Iterator<Item = &'p Partition>) -> bool {
         let subscribed = &self.subscription_state.offsets;
         partitions.all(|partition| subscribed.contains_key(partition))
     }
+
+    pub fn shutdown(self) {}
 }
 
 impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     for LocalConsumer<TPayload, C>
 {
-    fn subscribe(&mut self, topics: &[Topic], callbacks: C) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
-        let offsets = self
-            .broker
-            .subscribe(self.id, self.group.clone(), topics.to_vec())
-            .unwrap();
-        self.subscription_state.topics = topics.to_vec();
-        self.subscription_state.callbacks = Some(callbacks);
-
-        self.pending_callback.push_back(Callback::Assign(offsets));
-
-        self.subscription_state.last_eof_at.clear();
-        Ok(())
-    }
-
-    fn unsubscribe(&mut self) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
-
-        let partitions = self
-            .broker
-            .unsubscribe(self.id, self.group.clone())
-            .unwrap();
-        self.pending_callback
-            .push_back(Callback::Revoke(partitions));
-
-        self.subscription_state.topics.clear();
-        self.subscription_state.last_eof_at.clear();
-        Ok(())
-    }
-
     fn poll(
         &mut self,
         _timeout: Option<Duration>,
     ) -> Result<Option<BrokerMessage<TPayload>>, ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
-
         while !self.pending_callback.is_empty() {
             let callback = self.pending_callback.pop_front().unwrap();
             match callback {
@@ -137,16 +106,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
                         callbacks.on_assign(offsets.clone());
                     }
                     self.subscription_state.offsets = offsets;
-                }
-                Callback::Revoke(partitions) => {
-                    if let Some(callbacks) = self.subscription_state.callbacks.as_mut() {
-                        let offset_stage = OffsetCommitter {
-                            group: &self.group,
-                            broker: &mut self.broker,
-                        };
-                        callbacks.on_revoke(offset_stage, partitions.clone());
-                    }
-                    self.subscription_state.offsets = HashMap::new();
                 }
             }
         }
@@ -185,9 +144,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     }
 
     fn pause(&mut self, partitions: HashSet<Partition>) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
         if !self.is_subscribed(partitions.iter()) {
             return Err(ConsumerError::EndOfPartition);
         }
@@ -197,9 +153,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     }
 
     fn resume(&mut self, partitions: HashSet<Partition>) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
         if !self.is_subscribed(partitions.iter()) {
             return Err(ConsumerError::UnassignedPartition);
         }
@@ -211,31 +164,18 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
     }
 
     fn paused(&self) -> Result<HashSet<Partition>, ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
         Ok(self.paused.clone())
     }
 
     fn tell(&self) -> Result<HashMap<Partition, u64>, ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
         Ok(self.subscription_state.offsets.clone())
     }
 
     fn seek(&self, _: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
         unimplemented!("Seek is not implemented");
     }
 
     fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        if self.closed {
-            return Err(ConsumerError::ConsumerClosed);
-        }
-
         if !self.is_subscribed(offsets.keys()) {
             return Err(ConsumerError::UnassignedPartition);
         }
@@ -245,13 +185,16 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
 
         Ok(())
     }
+}
 
-    fn close(&mut self) {
+impl<TPayload, C: AssignmentCallbacks> Drop for LocalConsumer<TPayload, C> {
+    fn drop(&mut self) {
         if !self.subscription_state.topics.is_empty() {
             let partitions = self
                 .broker
                 .unsubscribe(self.id, self.group.clone())
                 .unwrap();
+
             if let Some(c) = self.subscription_state.callbacks.as_mut() {
                 let offset_stage = OffsetCommitter {
                     group: &self.group,
@@ -260,12 +203,6 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
                 c.on_revoke(offset_stage, partitions);
             }
         }
-        self.closed = true;
-        self.close_calls += 1;
-    }
-
-    fn closed(&self) -> bool {
-        self.closed
     }
 }
 
@@ -312,12 +249,10 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic1, topic2],
             EmptyCallbacks {},
         );
-        assert!(consumer.subscription_state.topics.is_empty());
 
-        let res = consumer.subscribe(&[topic1, topic2], EmptyCallbacks {});
-        assert!(res.is_ok());
         assert_eq!(consumer.pending_callback.len(), 1);
 
         let _ = consumer.poll(Some(Duration::from_millis(100)));
@@ -328,12 +263,6 @@ mod tests {
         ]);
         assert_eq!(consumer.subscription_state.offsets, expected);
         assert_eq!(consumer.pending_callback.len(), 0);
-
-        let res = consumer.unsubscribe();
-        assert!(res.is_ok());
-        assert_eq!(consumer.pending_callback.len(), 1);
-        let _ = consumer.poll(Some(Duration::from_millis(100)));
-        assert!(consumer.subscription_state.offsets.is_empty());
     }
 
     #[test]
@@ -404,13 +333,10 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic1, topic2],
             TheseCallbacks {},
         );
 
-        let _ = consumer.subscribe(&[topic1, topic2], TheseCallbacks {});
-        let _ = consumer.poll(Some(Duration::from_millis(100)));
-
-        let _ = consumer.unsubscribe();
         let _ = consumer.poll(Some(Duration::from_millis(100)));
     }
 
@@ -446,10 +372,9 @@ mod tests {
             broker,
             "test_group".to_string(),
             true,
+            &[topic2],
             TheseCallbacks {},
         );
-
-        let _ = consumer.subscribe(&[topic2], TheseCallbacks {});
 
         let msg1 = consumer.poll(Some(Duration::from_millis(100))).unwrap();
         assert!(msg1.is_some());
@@ -477,9 +402,9 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[topic2],
             EmptyCallbacks {},
         );
-        let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
 
         assert_eq!(consumer.poll(None).unwrap(), None);
         let _ = consumer.pause(HashSet::from([partition]));
@@ -492,15 +417,15 @@ mod tests {
     #[test]
     fn test_commit() {
         let broker = build_broker();
+        let topic2 = Topic::new("test2");
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            &[topic2],
             EmptyCallbacks {},
         );
-        let topic2 = Topic::new("test2");
-        let _ = consumer.subscribe(&[topic2], EmptyCallbacks {});
         let _ = consumer.poll(None);
         let positions = HashMap::from([(Partition::new(topic2, 0), 100)]);
 

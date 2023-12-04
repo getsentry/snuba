@@ -1,4 +1,4 @@
-use super::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
+use super::types::{BrokerMessage, Partition, TopicOrPartition};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use thiserror::Error;
@@ -90,10 +90,6 @@ pub trait AssignmentCallbacks: Send + Sync {
 /// assignments.) For this reason, it is generally good practice to ensure
 /// offsets are committed as part of the revocation callback.
 pub trait Consumer<TPayload, C>: Send {
-    fn subscribe(&mut self, topic: &[Topic], callbacks: C) -> Result<(), ConsumerError>;
-
-    fn unsubscribe(&mut self) -> Result<(), ConsumerError>;
-
     /// Fetch a message from the consumer. If no message is available before
     /// the timeout, ``None`` is returned.
     ///
@@ -152,10 +148,6 @@ pub trait Consumer<TPayload, C>: Send {
 
     /// Commit offsets.
     fn commit_offsets(&mut self, positions: HashMap<Partition, u64>) -> Result<(), ConsumerError>;
-
-    fn close(&mut self);
-
-    fn closed(&self) -> bool;
 }
 
 pub trait Producer<TPayload>: Send + Sync {

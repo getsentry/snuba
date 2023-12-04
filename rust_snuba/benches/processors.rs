@@ -104,7 +104,6 @@ fn run_bench(
                     break;
                 }
             }
-            processor.shutdown();
         });
 }
 
@@ -178,13 +177,12 @@ fn create_stream_processor(
         broker,
         "test_group".to_string(),
         true,
+        &[topic],
         Callbacks(consumer_state.clone()),
     );
     let consumer = Box::new(consumer);
 
-    let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-    processor.subscribe(topic);
-    processor
+    StreamProcessor::new(consumer, consumer_state, None)
 }
 
 fn functions_payload() -> KafkaPayload {

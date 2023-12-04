@@ -9,6 +9,9 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
+use crate::backends::kafka::config::KafkaConfig;
+use crate::backends::kafka::types::KafkaPayload;
+use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
@@ -138,6 +141,23 @@ pub struct StreamProcessor<TPayload: Clone> {
     dlq_policy: DlqPolicyWrapper<TPayload>,
 }
 
+impl StreamProcessor<KafkaPayload> {
+    pub fn with_kafka<F: ProcessingStrategyFactory<KafkaPayload> + 'static>(
+        config: KafkaConfig,
+        factory: F,
+        topic: Topic,
+        dlq_policy: Option<DlqPolicy<KafkaPayload>>,
+    ) -> Self {
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(factory))));
+        let callbacks = Callbacks(consumer_state.clone());
+
+        // TODO: Can this fail?
+        let consumer = Box::new(KafkaConsumer::new(config, &[topic], callbacks).unwrap());
+
+        Self::new(consumer, consumer_state, dlq_policy)
+    }
+}
+
 impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
@@ -155,11 +175,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             buffered_messages: BufferedMessages::new(),
             dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
-    }
-
-    pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks = Callbacks(self.consumer_state.clone());
-        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -323,7 +338,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     /// The main run loop, see class docstring for more information.
-    pub fn run(&mut self) -> Result<(), RunError> {
+    pub fn run(mut self) -> Result<(), RunError> {
         while !self
             .processor_handle
             .shutdown_requested
@@ -337,11 +352,9 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 }
 
                 drop(trait_callbacks); // unlock mutex so we can close consumer
-                self.consumer.close();
                 return Err(e);
             }
         }
-        self.shutdown();
         Ok(())
     }
 
@@ -349,13 +362,11 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         self.processor_handle.clone()
     }
 
-    pub fn shutdown(&mut self) {
-        self.consumer.close();
-    }
-
     pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.tell().unwrap()
     }
+
+    pub fn shutdown(self) {}
 }
 
 #[cfg(test)]
@@ -427,11 +438,11 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
             Callbacks(consumer_state.clone()),
         ));
 
         let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -451,11 +462,11 @@ mod tests {
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
             Callbacks(consumer_state.clone()),
         ));
 
         let mut processor = StreamProcessor::new(consumer, consumer_state, None);
-        processor.subscribe(Topic::new("test1"));
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();
