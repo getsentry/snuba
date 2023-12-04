@@ -632,7 +632,7 @@ def extract_scope_filters(
 
 def extract_rollup(
     parsed: Mapping[str, Any], mql_context: MQLContext
-) -> tuple[Optional[OrderBy], int, bool]:
+) -> tuple[list[OrderBy], int, Optional[bool]]:
     if not mql_context.rollup:
         raise InvalidQueryException("No rollup specified in MQL context.")
 
@@ -666,7 +666,8 @@ def extract_rollup(
     if not mql_context.rollup.granularity:
         raise InvalidQueryException("No granularity specified in MQL context rollup.")
 
-    return order_by, mql_context.rollup.granularity, mql_context.rollup.totals
+    totals = mql_context.rollup.totals if mql_context.rollup.totals else False
+    return order_by, mql_context.rollup.granularity, totals
 
 
 def extract_limit(mql_context: MQLContext) -> int:
