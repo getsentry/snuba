@@ -16,8 +16,6 @@ class MQLContextValidator:
         fields = query.get_fields()
         returns = {}
         for field in fields:
-            if field == "entity":
-                continue
             returns[field] = getattr(self, f"_visit_{field}")(getattr(query, field))
 
         return self._combine(query, returns)
@@ -26,6 +24,12 @@ class MQLContextValidator:
         self, query: MQLContext, returns: Mapping[str, None | Mapping[str, None]]
     ) -> Mapping[str, Any]:
         return {}
+
+    def _visit_entity(self, entity: str | None) -> None:
+        if entity is None:
+            raise InvalidMQLContextError("entity is required for a MQL context")
+        elif not isinstance(entity, str):
+            raise InvalidMQLContextError("entity must be a str")
 
     def _visit_start(self, start: datetime | None) -> None:
         if start is None:
@@ -108,12 +112,6 @@ class MQLContext:
         return tuple(f.name for f in self_fields)
 
     def validate(self) -> None:
-        # For now, we cannot validate entity because it unknown when
-        # we converting MetricsQuery to MQL. In that specific case, we
-        # need to set the entity on the requesst after serialization.
-
-        # In the future, we should be able to remove entity from this class
-        # entirely when we join entities together.
         VALIDATOR.visit(self)
 
 

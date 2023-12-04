@@ -9,6 +9,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -17,6 +18,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
+from snuba.query.mql.exceptions import InvalidExpressionError, InvalidMQLContextError
 from snuba.query.mql.parser import parse_mql_query
 
 mql_test_cases = [
@@ -369,3 +371,154 @@ def test_format_expressions_from_mql(
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected_query)
     assert eq, reason
+
+
+invalid_mql_test_cases = [
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
+                "granularity": "60",
+                "interval": "10",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        InvalidExpressionError("interval must be greater than or equal to granularity"),
+        id="interval less than granularity",
+    ),
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
+                "granularity": "60",
+                "interval": "60",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        InvalidExpressionError(
+            "Timeseries queries can't be ordered when using interval"
+        ),
+        id="interval and orderby provided",
+    ),
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": {"column_name": "aggregate_value", "direction": ""},
+                "granularity": "60",
+                "interval": "60",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        InvalidQueryException("No entity specified in MQL context."),
+        id="missing entity",
+    ),
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": {"column_name": "aggregate_value", "direction": ""},
+                "granularity": "60",
+                "interval": "60",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        InvalidMQLContextError("No start specified in MQL context."),
+        id="missing start time",
+    ),
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": {"column_name": "aggregate_value", "direction": ""},
+                "granularity": "60",
+                "interval": "60",
+                "with_totals": "",
+            },
+            "scope": {
+                "org_ids": ["1"],
+                "project_ids": ["1"],
+                "use_case_id": "transactions",
+            },
+            "limit": "1000000",
+            "offset": "",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": "123456",
+                "dist": "000888",
+            },
+        },
+        InvalidExpressionError("limit '1000000' is capped at 10,000"),
+        id="missing entity",
+    ),
+]
+
+
+@pytest.mark.parametrize("query_body, mql_context, error", invalid_mql_test_cases)
+def test_invalid_format_expressions_from_mql(
+    query_body: str,
+    mql_context: Dict[str, Any],
+    error: Exception,
+) -> None:
+    generic_metrics = get_dataset("generic_metrics")
+    with pytest.raises(Exception) as exc_info:
+        query, _ = parse_mql_query(query_body, mql_context, generic_metrics)
+    assert str(exc_info.value) == str(error)
