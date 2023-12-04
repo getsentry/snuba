@@ -18,6 +18,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "SEARCH_ISSUES": "search_issues",
     "SPANS": "spans",
     "GROUP_ATTRIBUTES": "group_attributes",
+    "METRICS_SUMMARIES": "metrics_summaries",
 }
 
 
@@ -77,7 +78,7 @@ def register_storage_set_key(key: str) -> StorageSetKey:
 
 
 # Storage sets enabled only when development features are enabled.
-DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
+DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset(StorageSetKey.METRICS_SUMMARIES)
 
 # Storage sets in a group share the same query and distributed nodes but
 # do not have the same local node cluster configuration.
