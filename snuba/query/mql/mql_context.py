@@ -12,6 +12,16 @@ from snuba.query.mql.exceptions import InvalidExpressionError, InvalidMQLContext
 
 
 class MQLContextValidator:
+    def visit(self, query: MQLContext) -> Mapping[str, Any]:
+        fields = query.get_fields()
+        returns = {}
+        for field in fields:
+            if field == "entity":
+                continue
+            returns[field] = getattr(self, f"_visit_{field}")(getattr(query, field))
+
+        return self._combine(query, returns)
+
     def _combine(
         self, query: MQLContext, returns: Mapping[str, None | Mapping[str, None]]
     ) -> Mapping[str, Any]:

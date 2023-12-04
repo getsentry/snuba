@@ -36,6 +36,8 @@ def resolve_metric_id_processor(
     """
     Adds the resolved metric_id to the AST conditions
     """
+    if not mql_context.indexer_mappings:
+        raise InvalidQueryException("No indexer_mappings found in MQL context.")
     if "mri" not in parsed and "public_name" in parsed:
         public_name = parsed["public_name"]
         mri = mql_context.indexer_mappings[public_name]
@@ -65,6 +67,8 @@ def resolve_tag_filters_processor(
     Traverse through all conditions of the AST,
     then finds and replaces tag filters with resolved names
     """
+    if not mql_context.indexer_mappings:
+        raise InvalidQueryException("No indexer_mappings found in MQL context.")
     conditions = parsed.get("filters", None)
     if conditions:
         for condition in conditions:
@@ -92,6 +96,8 @@ def resolve_gropupby_processor(
     Iterates through the groupby and selected_columns in AST,
     then finds and replaces the groupby column with resolved names
     """
+    if not mql_context.indexer_mappings:
+        raise InvalidQueryException("No indexer_mappings found in MQL context.")
     groupbys = parsed.get("groupby", None)
     if groupbys:
         for groupby_column in groupbys:
