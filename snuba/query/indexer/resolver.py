@@ -8,12 +8,13 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.mql.mql_context import MQLContext
 
 
 def resolve_mappings(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     """
     At the time of writting (Nov 30, 2023), the indexer is called within sentry.
@@ -30,22 +31,22 @@ def resolve_mappings(
 def resolve_metric_id_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
 ) -> None:
     """
     Adds the resolved metric_id to the AST conditions
     """
     if "mri" not in parsed and "public_name" in parsed:
         public_name = parsed["public_name"]
-        mri = mql_context["indexer_mappings"][public_name]
+        mri = mql_context.indexer_mappings[public_name]
     else:
         mri = parsed["mri"]
 
-    if mri not in mql_context["indexer_mappings"]:
+    if mri not in mql_context.indexer_mappings:
         raise InvalidQueryException(
             "No mri to metric_id mapping found in MQL context indexer_mappings."
         )
-    metric_id = mql_context["indexer_mappings"][mri]
+    metric_id = mql_context.indexer_mappings[mri]
     query.add_condition_to_ast(
         binary_condition(
             ConditionFunctions.EQ,
@@ -58,7 +59,7 @@ def resolve_metric_id_processor(
 def resolve_tag_filters_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
 ) -> None:
     """
     Traverse through all conditions of the AST,
@@ -71,8 +72,8 @@ def resolve_tag_filters_processor(
             column = condition.parameters[0]  # lhs
             assert isinstance(column, Column)
             column_name = column.column_name
-            if column_name in mql_context["indexer_mappings"]:
-                resolved = mql_context["indexer_mappings"][column_name]
+            if column_name in mql_context.indexer_mappings:
+                resolved = mql_context.indexer_mappings[column_name]
                 lhs_column_name = f"tags_raw[{resolved}]"
                 replace_column = Column(
                     alias=column_name,
@@ -85,7 +86,7 @@ def resolve_tag_filters_processor(
 def resolve_gropupby_processor(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     parsed: Mapping[str, Any],
-    mql_context: Mapping[str, Any],
+    mql_context: MQLContext,
 ) -> None:
     """
     Iterates through the groupby and selected_columns in AST,
@@ -95,8 +96,8 @@ def resolve_gropupby_processor(
     if groupbys:
         for groupby_column in groupbys:
             assert isinstance(groupby_column, Column)
-            if groupby_column.column_name in mql_context["indexer_mappings"]:
-                resolved = mql_context["indexer_mappings"][groupby_column.column_name]
+            if groupby_column.column_name in mql_context.indexer_mappings:
+                resolved = mql_context.indexer_mappings[groupby_column.column_name]
                 resolved_column_name = f"tags_raw[{resolved}]"
                 column = Column(
                     alias=groupby_column.column_name,

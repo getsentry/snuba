@@ -19,9 +19,11 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.mql.mql_context import MetricsScope, MQLContext, Rollup
 from snuba.query.mql.parser import parse_mql_query_initial
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
+from snuba.util import parse_datetime
 
 
 def test_iterate_over_query() -> None:
@@ -242,28 +244,19 @@ def test_initial_parsing_snql() -> None:
 
 def test_initial_parsing_mql() -> None:
     body = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)'
-    serialized_mql_context = {
-        "entity": "generic_metrics_distributions",
-        "start": "2023-11-23T18:30:00",
-        "end": "2023-11-23T22:30:00",
-        "rollup": {
-            "orderby": [{"column_name": "timestamp", "direction": "ASC"}],
-            "granularity": "60",
-            "interval": "60",
-            "with_totals": "",
-        },
-        "scope": {
-            "org_ids": ["1"],
-            "project_ids": ["11"],
-            "use_case_id": "transactions",
-        },
-        "limit": "",
-        "offset": "",
-        "indexer_mappings": {
+    serialized_mql_context = MQLContext(
+        entity="generic_metrics_distributions",
+        start=parse_datetime("2023-11-23T18:30:00"),
+        end=parse_datetime("2023-11-23T22:30:00"),
+        rollup=Rollup(interval=60, granularity=60, totals=False, orderby=None),
+        scope=MetricsScope(org_ids=[1], project_ids=[11], use_case_id="transactions"),
+        limit=None,
+        offset=None,
+        indexer_mappings={
             "d:transactions/duration@millisecond": "123456",
             "dist": "000888",
         },
-    }
+    )
 
     _, query = parse_mql_query_initial(body, serialized_mql_context)
     expressions = query.get_selected_columns()
