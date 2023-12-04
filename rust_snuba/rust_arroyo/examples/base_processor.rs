@@ -2,7 +2,6 @@ extern crate rust_arroyo;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
@@ -27,11 +26,10 @@ fn main() {
         30_000,
         None,
     );
-    let consumer = Box::new(KafkaConsumer::new(config));
-    let topic = Topic::new("test_static");
 
-    let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
-    processor.subscribe(topic);
+    let mut processor =
+        StreamProcessor::with_kafka(config, TestFactory {}, Topic::new("test_static"), None);
+
     for _ in 0..20 {
         processor.run_once().unwrap();
     }

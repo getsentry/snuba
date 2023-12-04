@@ -8,7 +8,6 @@ use rdkafka::message::ToBytes;
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::run_task::RunTask;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
@@ -17,6 +16,7 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+
 use std::time::Duration;
 
 fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
@@ -81,17 +81,13 @@ async fn main() {
         None,
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config.clone()));
-    let mut processor = StreamProcessor::new(
-        consumer,
-        Box::new(ReverseStringAndProduceStrategyFactory {
-            concurrency: ConcurrencyConfig::new(5),
-            config,
-            topic: Topic::new("test_out"),
-        }),
-        None,
-    );
-    processor.subscribe(Topic::new("test_in"));
+    let factory = ReverseStringAndProduceStrategyFactory {
+        concurrency: ConcurrencyConfig::new(5),
+        config: config.clone(),
+        topic: Topic::new("test_out"),
+    };
+
+    let processor = StreamProcessor::with_kafka(config, factory, Topic::new("test_in"), None);
     println!("running processor. transforming from test_in to test_out");
     processor.run().unwrap();
 }

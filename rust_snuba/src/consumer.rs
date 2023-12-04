@@ -6,7 +6,6 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
@@ -126,7 +125,6 @@ pub fn consumer_impl(
         Some(consumer_config.raw_topic.broker_config),
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
@@ -153,23 +151,20 @@ pub fn consumer_impl(
         }),
     };
 
-    let mut processor = StreamProcessor::new(
-        consumer,
-        Box::new(ConsumerStrategyFactory::new(
-            first_storage,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            skip_write,
-            ConcurrencyConfig::new(concurrency),
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file.map(ToOwned::to_owned),
-        )),
-        dlq_policy,
+    let factory = ConsumerStrategyFactory::new(
+        first_storage,
+        logical_topic_name,
+        max_batch_size,
+        max_batch_time,
+        skip_write,
+        ConcurrencyConfig::new(concurrency),
+        python_max_queue_depth,
+        use_rust_processor,
+        health_check_file.map(ToOwned::to_owned),
     );
 
-    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
+    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 
