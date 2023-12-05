@@ -123,9 +123,9 @@ pub struct DlqLimit {
     pub max_consecutive_count: Option<u64>,
 }
 
-/// A record of valid and invalid messages that have been received on a topic.
+/// A record of valid and invalid messages that have been received on a partition.
 #[derive(Debug, Clone, Copy, Default)]
-struct InvalidMessageRecord {
+struct InvalidMessageStats {
     /// The number of valid messages that have been received.
     valid: u64,
     /// The number of invalid messages that have been received.
@@ -139,7 +139,7 @@ struct InvalidMessageRecord {
 #[derive(Debug, Clone, Default)]
 pub struct DlqLimitState {
     limit: DlqLimit,
-    records: HashMap<Partition, InvalidMessageRecord>,
+    records: HashMap<Partition, InvalidMessageStats>,
 }
 
 impl DlqLimitState {
@@ -149,7 +149,7 @@ impl DlqLimitState {
             .map(|(&p, &o)| {
                 (
                     p,
-                    InvalidMessageRecord {
+                    InvalidMessageStats {
                         last_invalid_offset: o - 1,
                         ..Default::default()
                     },
