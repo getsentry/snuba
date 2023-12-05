@@ -142,7 +142,6 @@ pub struct DlqLimitState {
     records: HashMap<Partition, InvalidMessageRecord>,
 }
 
-#[allow(dead_code)]
 impl DlqLimitState {
     fn new(limit: DlqLimit, assignment: &HashMap<Partition, u64>) -> Self {
         let records = assignment
@@ -160,7 +159,12 @@ impl DlqLimitState {
         Self { limit, records }
     }
 
-    fn receive_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
+    /// Records an invalid message.
+    ///
+    /// This updates the internal statistics about the message's partition and
+    /// returns `true` if the message should be produced to the DLQ according to the
+    /// configured limit.
+    fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
         let Some(record) = self.records.get_mut(&message.partition) else {
             // If we don't know about this message's partition, we reject it out of hand.
             return false;
@@ -209,7 +213,6 @@ impl DlqLimitState {
 // TODO: Respect DLQ limits
 pub struct DlqPolicy<TPayload> {
     producer: Box<dyn DlqProducer<TPayload>>,
-    #[allow(dead_code)]
     limit: DlqLimit,
 }
 
@@ -224,6 +227,7 @@ type Futures<TPayload> = VecDeque<(u64, JoinHandle<BrokerMessage<TPayload>>)>;
 
 pub(crate) struct DlqPolicyWrapper<TPayload> {
     dlq_policy: Option<DlqPolicy<TPayload>>,
+    dlq_limit_state: DlqLimitState,
     runtime: Handle,
     // This is a per-partition max
     max_pending_futures: usize,
@@ -235,10 +239,23 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
         let concurrency_config = ConcurrencyConfig::new(10);
         DlqPolicyWrapper {
             dlq_policy,
+            dlq_limit_state: DlqLimitState::default(),
             runtime: concurrency_config.handle(),
             max_pending_futures: 1000,
             futures: BTreeMap::new(),
         }
+    }
+
+    /// Clears the DLQ limits.
+    #[allow(dead_code)]
+    pub fn reset_dlq_limit(&mut self, assignment: &HashMap<Partition, u64>) {
+        let Some(policy) = self.dlq_policy.as_ref() else {
+            return;
+        };
+
+        self.dlq_limit_state = policy
+            .producer
+            .build_initial_state(policy.limit, assignment);
     }
 
     // Removes all completed futures, then appends a future with message to be produced
@@ -263,13 +280,15 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
         }
 
         if let Some(dlq_policy) = &self.dlq_policy {
-            let task = dlq_policy.producer.produce(message.clone());
-            let handle = self.runtime.spawn(task);
+            if self.dlq_limit_state.record_invalid_message(&message) {
+                let task = dlq_policy.producer.produce(message.clone());
+                let handle = self.runtime.spawn(task);
 
-            self.futures
-                .entry(message.partition)
-                .or_default()
-                .push_back((message.offset, handle));
+                self.futures
+                    .entry(message.partition)
+                    .or_default()
+                    .push_back((message.offset, handle));
+            }
         }
     }
 
@@ -464,11 +483,11 @@ mod tests {
         // 1 valid message followed by 4 invalid
         for i in 4..9 {
             let msg = BrokerMessage::new(i, partition, i, chrono::Utc::now());
-            assert!(state.receive_invalid_message(&msg));
+            assert!(state.record_invalid_message(&msg));
         }
 
         // Next message should not be accepted
         let msg = BrokerMessage::new(9, partition, 9, chrono::Utc::now());
-        assert!(!state.receive_invalid_message(&msg));
+        assert!(!state.record_invalid_message(&msg));
     }
 }
