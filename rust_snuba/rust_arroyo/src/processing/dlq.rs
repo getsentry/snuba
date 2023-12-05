@@ -18,7 +18,11 @@ pub trait DlqProducer<TPayload> {
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>>;
 
-    fn build_initial_state(&self) -> DlqLimitState;
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: HashMap<Partition, u64>,
+    ) -> DlqLimitState;
 }
 
 // Drops all invalid messages. Produce returns an immediately resolved future.
@@ -32,8 +36,12 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
         Box::pin(async move { message })
     }
 
-    fn build_initial_state(&self) -> DlqLimitState {
-        DlqLimitState {}
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        _assignment: HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        DlqLimitState::new(limit)
     }
 }
 
@@ -90,24 +98,120 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
         })
     }
 
-    fn build_initial_state(&self) -> DlqLimitState {
-        DlqLimitState {}
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        // XXX: We assume the last offsets were invalid when starting the consumer
+        // TODO: Make this safe with saturating sub?
+        let last_invalid_offsets = assignment.into_iter().map(|(p, o)| (p, o - 1)).collect();
+
+        DlqLimitState {
+            limit,
+            last_invalid_offsets,
+            ..Default::default()
+        }
     }
 }
 
-// Defines any limits that should be placed on the number of messages that are
-// forwarded to the DLQ. This exists to prevent 100% of messages from going into
-// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
-// it may be preferable to stop processing messages altogether and deploy a fix
-// rather than rerouting every message to the DLQ.
-
-// The ratio and max_consecutive_count are counted on a per-partition basis.
+/// Defines any limits that should be placed on the number of messages that are
+/// forwarded to the DLQ. This exists to prevent 100% of messages from going into
+/// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
+/// it may be preferable to stop processing messages altogether and deploy a fix
+/// rather than rerouting every message to the DLQ.
+/// The ratio and max_consecutive_count are counted on a per-partition basis.
+///
+/// The default is no limit.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DlqLimit {
     pub max_invalid_ratio: Option<f64>,
     pub max_consecutive_count: Option<u64>,
 }
 
-pub struct DlqLimitState {}
+impl DlqLimit {
+    fn is_limited(&self) -> bool {
+        self.max_invalid_ratio.is_some() || self.max_consecutive_count.is_some()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DlqLimitState {
+    limit: DlqLimit,
+    valid_messages: HashMap<Partition, u64>,
+    invalid_messages: HashMap<Partition, u64>,
+    consecutive_invalid_messages: HashMap<Partition, u64>,
+    last_invalid_offsets: HashMap<Partition, u64>,
+}
+
+impl DlqLimitState {
+    fn new(limit: DlqLimit) -> Self {
+        Self {
+            limit,
+            valid_messages: HashMap::new(),
+            invalid_messages: HashMap::new(),
+            consecutive_invalid_messages: HashMap::new(),
+            last_invalid_offsets: HashMap::new(),
+        }
+    }
+
+    fn update_invalid_value<T>(&mut self, message: &BrokerMessage<T>) {
+        if !self.limit.is_limited() {
+            return;
+        }
+
+        let partition = message.partition;
+
+        if let Some(&last_invalid_offset) = self.last_invalid_offsets.get(&partition) {
+            if last_invalid_offset > message.offset {
+                tracing::error!("Invalid message raised out of order");
+            } else if last_invalid_offset == message.offset - 1 {
+                *self
+                    .consecutive_invalid_messages
+                    .entry(partition)
+                    .or_insert(0) += 1;
+            } else {
+                let valid_count = message.offset - last_invalid_offset + 1;
+                *self.valid_messages.entry(partition).or_insert(0) += valid_count;
+                self.consecutive_invalid_messages.insert(partition, 1);
+            }
+        }
+
+        *self.invalid_messages.entry(partition).or_insert(0) += 1;
+        self.last_invalid_offsets.insert(partition, message.offset);
+    }
+
+    fn should_accept<T>(&self, message: &BrokerMessage<T>) -> bool {
+        if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
+            let &invalid = self.invalid_messages.get(&message.partition).unwrap_or(&0);
+
+            let &valid = self.valid_messages.get(&message.partition).unwrap_or(&0);
+
+            if valid == 0 {
+                // When no valid messages have been processed, we should not
+                // accept the message into the dlq. It could be an indicator
+                // of severe problems on the pipeline. It is best to let the
+                // consumer backlog in those cases.
+                return false;
+            }
+
+            if (invalid as f64) / (valid as f64) > max_invalid_ratio {
+                return false;
+            }
+        }
+
+        if let Some(max_consecutive_count) = self.limit.max_consecutive_count {
+            if self
+                .consecutive_invalid_messages
+                .get(&message.partition)
+                .map_or(false, |&consecutive| consecutive > max_consecutive_count)
+            {
+                return false;
+            }
+        }
+        true
+    }
+}
 
 // DLQ policy defines the DLQ configuration, and is passed to the stream processor
 // upon creation of the consumer. It consists of the DLQ producer implementation and
@@ -319,8 +423,12 @@ mod tests {
                 Box::pin(async move { message })
             }
 
-            fn build_initial_state(&self) -> DlqLimitState {
-                DlqLimitState {}
+            fn build_initial_state(
+                &self,
+                _limit: DlqLimit,
+                _assignment: HashMap<Partition, u64>,
+            ) -> DlqLimitState {
+                DlqLimitState::default()
             }
         }
 
