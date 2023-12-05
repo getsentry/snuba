@@ -1,7 +1,8 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, Nested, String, UInt
+from snuba.clickhouse.columns import UUID, Array, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
@@ -11,12 +12,10 @@ storage_set_name = StorageSetKey.METRICS_SUMMARIES
 local_table_name = "metrics_summaries_local"
 dist_table_name = "metrics_summaries_dist"
 
-UNKNOWN_SPAN_STATUS = 2
-
 columns: List[Column[Modifiers]] = [
     # ids
     Column("project_id", UInt(64)),
-    Column("metric_id", UInt(64)),
+    Column("metric_id", String(Modifiers(low_cardinality=True))),
     Column("span_id", UInt(64)),
     Column("trace_id", UUID()),
     # metrics summary
@@ -26,8 +25,15 @@ columns: List[Column[Modifiers]] = [
     Column("count", Float(64)),
     # metrics metadata
     Column("tags", Nested([("key", String()), ("value", String())])),
+    Column(
+        "_tags_hash_map",
+        Array(
+            UInt(64),
+            Modifiers(materialized=TAGS_HASH_MAP_COLUMN),
+        ),
+    ),
     # span metadata
-    Column("start_timestamp", DateTime()),
+    Column("end_timestamp", DateTime()),
     # snuba internals
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
@@ -46,13 +52,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, metric_id, start_timestamp)",
+                    order_by="(project_id, metric_id, end_timestamp, cityHash64(span_id))",
                     version_column="deleted",
-                    partition_by="(retention_days, toMonday(start_timestamp))",
+                    partition_by="(retention_days, toMonday(end_timestamp))",
                     sample_by="cityHash64(metric_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
-                    ttl="start_timestamp + toIntervalDay(retention_days)",
+                    ttl="end_timestamp + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
             ),
