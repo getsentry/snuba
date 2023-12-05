@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
-pub trait DlqProducer<TPayload> {
+pub trait DlqProducer<TPayload>: Send + Sync {
     // Send a message to the DLQ.
     fn produce(
         &self,
@@ -254,7 +254,7 @@ pub(crate) struct DlqPolicyWrapper<TPayload> {
     futures: BTreeMap<Partition, Futures<TPayload>>,
 }
 
-impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
+impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn new(dlq_policy: Option<DlqPolicy<TPayload>>) -> Self {
         let concurrency_config = ConcurrencyConfig::new(10);
         DlqPolicyWrapper {
@@ -267,7 +267,6 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     }
 
     /// Clears the DLQ limits.
-    #[allow(dead_code)]
     pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
         let Some(policy) = self.dlq_policy.as_ref() else {
             return;
@@ -301,7 +300,7 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
         if let Some(dlq_policy) = &self.dlq_policy {
             if self.dlq_limit_state.record_invalid_message(&message) {
-                let task = dlq_policy.producer.produce(message.clone());
+                let task = dlq_policy.producer.produce(message);
                 let handle = self.runtime.spawn(task);
 
                 self.futures
