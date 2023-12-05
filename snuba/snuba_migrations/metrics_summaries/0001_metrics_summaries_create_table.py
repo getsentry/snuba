@@ -16,9 +16,10 @@ UNKNOWN_SPAN_STATUS = 2
 columns: List[Column[Modifiers]] = [
     # ids
     Column("project_id", UInt(64)),
-    Column("trace_id", UUID()),
-    Column("span_id", UInt(64)),
+    Column("metric_id", UInt(64)),
     Column("segment_id", UInt(64)),
+    Column("span_id", UInt(64)),
+    Column("trace_id", UUID()),
     # metrics summary
     Column("min", Float(64)),
     Column("max", Float(64)),
@@ -49,10 +50,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, group, cityHash64(span_id))",
+                    order_by="(project_id, metric_id, start_timestamp)",
                     version_column="deleted",
                     partition_by="(retention_days, toMonday(start_timestamp))",
-                    sample_by="cityHash64(span_id)",
+                    sample_by="cityHash64(metric_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="start_timestamp + toIntervalDay(retention_days)",

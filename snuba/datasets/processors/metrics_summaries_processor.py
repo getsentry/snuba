@@ -68,6 +68,7 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
         processed["span_id"] = int(metrics_summary_event["span_id"], 16)
         processed["segment_id"] = int(metrics_summary_event["segment_id"], 16)
         processed["project_id"] = metrics_summary_event["project_id"]
+        processed["metric_id"] = metrics_summary_event["metric_id"]
 
         processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
             metrics_summary_event["start_timestamp_ms"],
