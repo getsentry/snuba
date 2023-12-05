@@ -98,4 +98,4 @@ mandatory_condition_checkers:
 
 stream_loader:
   processor: MetricsSummariesMessageProcessor
-  default_topic: snuba-metrics-summaries
+  default_topic: snuba-spans
