@@ -300,13 +300,15 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
         if let Some(dlq_policy) = &self.dlq_policy {
             if self.dlq_limit_state.record_invalid_message(&message) {
+                let (partition, offset) = (message.partition, message.offset);
+
                 let task = dlq_policy.producer.produce(message);
                 let handle = self.runtime.spawn(task);
 
                 self.futures
-                    .entry(message.partition)
+                    .entry(partition)
                     .or_default()
-                    .push_back((message.offset, handle));
+                    .push_back((offset, handle));
             }
         }
     }
