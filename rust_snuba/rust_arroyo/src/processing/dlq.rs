@@ -104,7 +104,10 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
         assignment: &HashMap<Partition, u64>,
     ) -> DlqLimitState {
         // XXX: We assume the last offsets were invalid when starting the consumer
-        DlqLimitState::new(limit, assignment)
+        DlqLimitState::new(
+            limit,
+            &assignment.iter().map(|(p, o)| (*p, *o - 1)).collect(),
+        )
     }
 }
 
@@ -148,14 +151,14 @@ pub struct DlqLimitState {
 }
 
 impl DlqLimitState {
-    fn new(limit: DlqLimit, assignment: &HashMap<Partition, u64>) -> Self {
-        let records = assignment
+    fn new(limit: DlqLimit, last_invalid_offsets: &HashMap<Partition, u64>) -> Self {
+        let records = last_invalid_offsets
             .iter()
-            .map(|(&p, &o)| {
+            .map(|(&p, &last_invalid_offset)| {
                 (
                     p,
                     InvalidMessageStats {
-                        last_invalid_offset: o - 1,
+                        last_invalid_offset,
                         ..Default::default()
                     },
                 )
