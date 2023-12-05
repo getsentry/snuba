@@ -21,7 +21,7 @@ pub trait DlqProducer<TPayload> {
     fn build_initial_state(
         &self,
         limit: DlqLimit,
-        assignment: HashMap<Partition, u64>,
+        assignment: &HashMap<Partition, u64>,
     ) -> DlqLimitState;
 }
 
@@ -39,9 +39,9 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
     fn build_initial_state(
         &self,
         limit: DlqLimit,
-        _assignment: HashMap<Partition, u64>,
+        _assignment: &HashMap<Partition, u64>,
     ) -> DlqLimitState {
-        DlqLimitState::new(limit)
+        DlqLimitState::new(limit, &HashMap::new())
     }
 }
 
@@ -101,17 +101,10 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
     fn build_initial_state(
         &self,
         limit: DlqLimit,
-        assignment: HashMap<Partition, u64>,
+        assignment: &HashMap<Partition, u64>,
     ) -> DlqLimitState {
         // XXX: We assume the last offsets were invalid when starting the consumer
-        // TODO: Make this safe with saturating sub?
-        let last_invalid_offsets = assignment.into_iter().map(|(p, o)| (p, o - 1)).collect();
-
-        DlqLimitState {
-            limit,
-            last_invalid_offsets,
-            ..Default::default()
-        }
+        DlqLimitState::new(limit, assignment)
     }
 }
 
@@ -120,6 +113,7 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
 /// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
 /// it may be preferable to stop processing messages altogether and deploy a fix
 /// rather than rerouting every message to the DLQ.
+///
 /// The ratio and max_consecutive_count are counted on a per-partition basis.
 ///
 /// The default is no limit.
@@ -129,65 +123,64 @@ pub struct DlqLimit {
     pub max_consecutive_count: Option<u64>,
 }
 
-impl DlqLimit {
-    fn is_limited(&self) -> bool {
-        self.max_invalid_ratio.is_some() || self.max_consecutive_count.is_some()
-    }
+/// A record of valid and invalid messages that have been received on a topic.
+#[derive(Debug, Clone, Copy, Default)]
+struct InvalidMessageRecord {
+    /// The number of valid messages that have been received.
+    valid: u64,
+    /// The number of invalid messages that have been received.
+    invalid: u64,
+    /// The length of the current run of received invalid messages.
+    consecutive_invalid: u64,
+    /// The offset of the last received invalid message.
+    last_invalid_offset: u64,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct DlqLimitState {
     limit: DlqLimit,
-    valid_messages: HashMap<Partition, u64>,
-    invalid_messages: HashMap<Partition, u64>,
-    consecutive_invalid_messages: HashMap<Partition, u64>,
-    last_invalid_offsets: HashMap<Partition, u64>,
+    records: HashMap<Partition, InvalidMessageRecord>,
 }
 
+#[allow(dead_code)]
 impl DlqLimitState {
-    fn new(limit: DlqLimit) -> Self {
-        Self {
-            limit,
-            valid_messages: HashMap::new(),
-            invalid_messages: HashMap::new(),
-            consecutive_invalid_messages: HashMap::new(),
-            last_invalid_offsets: HashMap::new(),
-        }
+    fn new(limit: DlqLimit, assignment: &HashMap<Partition, u64>) -> Self {
+        let records = assignment
+            .iter()
+            .map(|(&p, &o)| {
+                (
+                    p,
+                    InvalidMessageRecord {
+                        last_invalid_offset: o - 1,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
+        Self { limit, records }
     }
 
-    fn update_invalid_value<T>(&mut self, message: &BrokerMessage<T>) {
-        if !self.limit.is_limited() {
-            return;
+    fn receive_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
+        let Some(record) = self.records.get_mut(&message.partition) else {
+            // If we don't know about this message's partition, we reject it out of hand.
+            return false;
+        };
+
+        if record.last_invalid_offset > message.offset {
+            tracing::error!("Invalid message raised out of order");
+        } else if record.last_invalid_offset == message.offset - 1 {
+            record.consecutive_invalid += 1;
+        } else {
+            let valid_count = message.offset - record.last_invalid_offset + 1;
+            record.valid += valid_count;
+            record.consecutive_invalid = 1;
         }
 
-        let partition = message.partition;
+        record.invalid += 1;
+        record.last_invalid_offset = message.offset;
 
-        if let Some(&last_invalid_offset) = self.last_invalid_offsets.get(&partition) {
-            if last_invalid_offset > message.offset {
-                tracing::error!("Invalid message raised out of order");
-            } else if last_invalid_offset == message.offset - 1 {
-                *self
-                    .consecutive_invalid_messages
-                    .entry(partition)
-                    .or_insert(0) += 1;
-            } else {
-                let valid_count = message.offset - last_invalid_offset + 1;
-                *self.valid_messages.entry(partition).or_insert(0) += valid_count;
-                self.consecutive_invalid_messages.insert(partition, 1);
-            }
-        }
-
-        *self.invalid_messages.entry(partition).or_insert(0) += 1;
-        self.last_invalid_offsets.insert(partition, message.offset);
-    }
-
-    fn should_accept<T>(&self, message: &BrokerMessage<T>) -> bool {
         if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
-            let &invalid = self.invalid_messages.get(&message.partition).unwrap_or(&0);
-
-            let &valid = self.valid_messages.get(&message.partition).unwrap_or(&0);
-
-            if valid == 0 {
+            if record.valid == 0 {
                 // When no valid messages have been processed, we should not
                 // accept the message into the dlq. It could be an indicator
                 // of severe problems on the pipeline. It is best to let the
@@ -195,17 +188,13 @@ impl DlqLimitState {
                 return false;
             }
 
-            if (invalid as f64) / (valid as f64) > max_invalid_ratio {
+            if (record.invalid as f64) / (record.valid as f64) > max_invalid_ratio {
                 return false;
             }
         }
 
         if let Some(max_consecutive_count) = self.limit.max_consecutive_count {
-            if self
-                .consecutive_invalid_messages
-                .get(&message.partition)
-                .map_or(false, |&consecutive| consecutive > max_consecutive_count)
-            {
+            if record.consecutive_invalid > max_consecutive_count {
                 return false;
             }
         }
@@ -426,7 +415,7 @@ mod tests {
             fn build_initial_state(
                 &self,
                 _limit: DlqLimit,
-                _assignment: HashMap<Partition, u64>,
+                _assignment: &HashMap<Partition, u64>,
             ) -> DlqLimitState {
                 DlqLimitState::default()
             }
@@ -459,5 +448,27 @@ mod tests {
         wrapper.flush(HashMap::from([(partition, 11)]));
 
         assert_eq!(*producer.call_count.lock().unwrap(), 10);
+    }
+
+    #[test]
+    fn test_dlq_limit_state() {
+        let partition = Partition::new(Topic::new("test_topic"), 0);
+        let limit = DlqLimit {
+            max_invalid_ratio: None,
+            max_consecutive_count: Some(5),
+        };
+
+        let assignment = [(partition, 3)].into_iter().collect();
+        let mut state = DlqLimitState::new(limit, &assignment);
+
+        // 1 valid message followed by 4 invalid
+        for i in 4..9 {
+            let msg = BrokerMessage::new(i, partition, i, chrono::Utc::now());
+            assert!(state.receive_invalid_message(&msg));
+        }
+
+        // Next message should not be accepted
+        let msg = BrokerMessage::new(9, partition, 9, chrono::Utc::now());
+        assert!(!state.receive_invalid_message(&msg));
     }
 }
