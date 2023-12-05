@@ -17,12 +17,6 @@ pub trait DlqProducer<TPayload> {
         &self,
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>>;
-
-    fn build_initial_state(
-        &self,
-        limit: DlqLimit,
-        assignment: &HashMap<Partition, u64>,
-    ) -> DlqLimitState;
 }
 
 // Drops all invalid messages. Produce returns an immediately resolved future.
@@ -34,14 +28,6 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
         Box::pin(async move { message })
-    }
-
-    fn build_initial_state(
-        &self,
-        limit: DlqLimit,
-        _assignment: &HashMap<Partition, u64>,
-    ) -> DlqLimitState {
-        DlqLimitState::new(limit, &HashMap::new())
     }
 }
 
@@ -97,18 +83,6 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
             message
         })
     }
-
-    fn build_initial_state(
-        &self,
-        limit: DlqLimit,
-        assignment: &HashMap<Partition, u64>,
-    ) -> DlqLimitState {
-        // XXX: We assume the last offsets were invalid when starting the consumer
-        DlqLimitState::new(
-            limit,
-            &assignment.iter().map(|(p, o)| (*p, *o - 1)).collect(),
-        )
-    }
 }
 
 /// Defines any limits that should be placed on the number of messages that are
@@ -136,7 +110,7 @@ struct InvalidMessageStats {
     /// The length of the current run of received invalid messages.
     consecutive_invalid: u64,
     /// The offset of the last received invalid message.
-    last_invalid_offset: u64,
+    last_invalid_offset: Option<u64>,
 }
 
 /// Struct that keeps a record of how many valid and invalid messages have been received
@@ -151,10 +125,13 @@ pub struct DlqLimitState {
 }
 
 impl DlqLimitState {
-    fn new(limit: DlqLimit, last_invalid_offsets: &HashMap<Partition, u64>) -> Self {
+    fn new(
+        limit: DlqLimit,
+        last_invalid_offsets: impl IntoIterator<Item = (Partition, Option<u64>)>,
+    ) -> Self {
         let records = last_invalid_offsets
-            .iter()
-            .map(|(&p, &last_invalid_offset)| {
+            .into_iter()
+            .map(|(p, last_invalid_offset)| {
                 (
                     p,
                     InvalidMessageStats {
@@ -179,18 +156,20 @@ impl DlqLimitState {
             return false;
         };
 
-        if record.last_invalid_offset > message.offset {
-            tracing::error!("Invalid message raised out of order");
-        } else if record.last_invalid_offset + 1 == message.offset {
-            record.consecutive_invalid += 1;
-        } else {
-            let valid_count = message.offset - record.last_invalid_offset + 1;
-            record.valid += valid_count;
-            record.consecutive_invalid = 1;
+        if let Some(last_invalid) = record.last_invalid_offset {
+            if last_invalid > message.offset {
+                tracing::error!("Invalid message raised out of order");
+            } else if last_invalid + 1 == message.offset {
+                record.consecutive_invalid += 1;
+            } else {
+                let valid_count = message.offset - last_invalid + 1;
+                record.valid += valid_count;
+                record.consecutive_invalid = 1;
+            }
         }
 
         record.invalid += 1;
-        record.last_invalid_offset = message.offset;
+        record.last_invalid_offset = Some(message.offset);
 
         if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
             if record.valid == 0 {
@@ -262,9 +241,10 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             return;
         };
 
-        self.dlq_limit_state = policy
-            .producer
-            .build_initial_state(policy.limit, assignment);
+        self.dlq_limit_state = DlqLimitState::new(
+            policy.limit,
+            assignment.iter().map(|(p, o)| (*p, o.checked_sub(1))),
+        );
     }
 
     // Removes all completed futures, then appends a future with message to be produced
@@ -439,14 +419,6 @@ mod tests {
                 *self.call_count.lock().unwrap() += 1;
                 Box::pin(async move { message })
             }
-
-            fn build_initial_state(
-                &self,
-                limit: DlqLimit,
-                assignment: &HashMap<Partition, u64>,
-            ) -> DlqLimitState {
-                DlqLimitState::new(limit, assignment)
-            }
         }
 
         let partition = Partition {
@@ -485,8 +457,7 @@ mod tests {
             max_consecutive_count: Some(5),
         };
 
-        let assignment = [(partition, 3)].into_iter().collect();
-        let mut state = DlqLimitState::new(limit, &assignment);
+        let mut state = DlqLimitState::new(limit, [(partition, Some(3))]);
 
         // 1 valid message followed by 4 invalid
         for i in 4..9 {
