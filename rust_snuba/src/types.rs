@@ -43,7 +43,7 @@ impl LatencyRecorder {
         metrics.timing(&format!("insertions.max_{}_ms", metric_name), latency, None);
 
         let latency =
-            ((self.sum_secs * 1000.0 / self.num_values as f64) as u64).saturating_sub(write_time);
+            ((self.sum_secs * 1000.0 / self.num_values as f64) as u64).saturating_sub(write_time * 1000);
         metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
     }
 }
