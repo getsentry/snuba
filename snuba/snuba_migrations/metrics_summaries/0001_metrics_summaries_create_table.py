@@ -17,7 +17,6 @@ columns: List[Column[Modifiers]] = [
     # ids
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
-    Column("segment_id", UInt(64)),
     Column("span_id", UInt(64)),
     Column("trace_id", UUID()),
     # metrics summary
@@ -29,9 +28,6 @@ columns: List[Column[Modifiers]] = [
     Column("tags", Nested([("key", String()), ("value", String())])),
     # span metadata
     Column("start_timestamp", DateTime()),
-    Column("exclusive_time", Float(64)),
-    Column("op", String(Modifiers(low_cardinality=True))),
-    Column("group", UInt(64)),
     # snuba internals
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
