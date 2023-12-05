@@ -1,0 +1,101 @@
+version: v1
+kind: writable_storage
+name: metrics_summaries
+
+storage:
+  key: metrics_summaries
+  set_key: metrics_summaries
+
+readiness_state: partial
+
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: span_id, type: UInt, args: { size: 64 } },
+      { name: trace_id, type: UUID},
+      { name: min, type: Float, args: { size: 64 } },
+      { name: max, type: Float, args: { size: 64 } },
+      { name: sum, type: Float, args: { size: 64 } },
+      { name: count, type: Float, args: { size: 64 } },
+      { name: start_timestamp, type: DateTime },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [ { name: key, type: String }, { name: value, type: String } ],
+          },
+      },
+      {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
+          },
+      },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: deleted, type: UInt, args: { size: 8 } },
+    ]
+  local_table_name: metrics_summaries_local
+  dist_table_name: metrics_summaries_dist
+  partition_format: [retention_days, date]
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+query_processors:
+  - processor: UniqInSelectAndHavingProcessor
+  - processor: UUIDColumnProcessor
+    args:
+      columns: [trace_id]
+  - processor: HexIntColumnProcessor
+    args:
+      columns: [span_id]
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _tags_hash_map
+      killswitch: tags_hash_map_enabled
+  - processor: EmptyTagConditionProcessor
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+  - processor: PrewhereProcessor
+    args:
+      prewhere_candidates:
+        [trace_id, span_id]
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser
+
+query_splitters:
+  - splitter: TimeSplitQueryStrategy
+    args:
+      timestamp_col: start_timestamp
+
+mandatory_condition_checkers:
+  - condition: ProjectIdEnforcer
+
+stream_loader:
+  processor: MetricsSummariesMessageProcessor
+  default_topic: snuba-metrics-summaries

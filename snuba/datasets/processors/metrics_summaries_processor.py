@@ -34,13 +34,12 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     Message processor for writing metrics summary data to the metrics_summaries table.
     """
 
-    def __extract_timestamp(self, timestamp_ms: int) -> Tuple[int, int]:
+    def __extract_timestamp(self, timestamp_sec: float) -> int:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
-        timestamp_sec = timestamp_ms / 1000
         if _ensure_valid_date(datetime.utcfromtimestamp(timestamp_sec)) is None:
             timestamp_sec = int(time.time())
-        return int(timestamp_sec), int(timestamp_ms % 1000)
+        return int(timestamp_sec)
 
     @staticmethod
     def _structure_and_validate_message(
@@ -52,7 +51,7 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
             # sending UTC dates.
             retention_days = enforce_retention(
                 message.get("retention_days"),
-                datetime.utcfromtimestamp(message["start_timestamp_ms"] / 1000),
+                datetime.utcfromtimestamp(message["start_timestamp"]),
             )
         except EventTooOld:
             return None
@@ -66,17 +65,12 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     ) -> None:
         processed["trace_id"] = str(uuid.UUID(metrics_summary_event["trace_id"]))
         processed["span_id"] = int(metrics_summary_event["span_id"], 16)
-        processed["segment_id"] = int(metrics_summary_event["segment_id"], 16)
         processed["project_id"] = metrics_summary_event["project_id"]
         processed["metric_id"] = metrics_summary_event["metric_id"]
 
-        processed["start_timestamp"], processed["start_ms"] = self.__extract_timestamp(
-            metrics_summary_event["start_timestamp_ms"],
+        processed["start_timestamp"] = self.__extract_timestamp(
+            metrics_summary_event["start_timestamp"],
         )
-        processed["exclusive_time"] = float(metrics_summary_event["exclusive_time_ms"])
-        processed["op"] = metrics_summary_event["op"]
-        processed["group"] = metrics_summary_event["group"]
-
         for key in {"min", "max", "sum", "count"}:
             processed[key] = float(metrics_summary_event[key])
 
