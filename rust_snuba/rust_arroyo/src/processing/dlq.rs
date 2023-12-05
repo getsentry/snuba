@@ -178,7 +178,7 @@ impl DlqLimitState {
 
         if record.last_invalid_offset > message.offset {
             tracing::error!("Invalid message raised out of order");
-        } else if record.last_invalid_offset == message.offset - 1 {
+        } else if record.last_invalid_offset + 1 == message.offset {
             record.consecutive_invalid += 1;
         } else {
             let valid_count = message.offset - record.last_invalid_offset + 1;
