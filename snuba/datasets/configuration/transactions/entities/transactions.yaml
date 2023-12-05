@@ -371,6 +371,7 @@ query_processors:
     { processor: ResourceQuotaProcessor, args: { project_field: project_id } },
   ]
 
+validate_data_model: error
 validators:
   [
     {
