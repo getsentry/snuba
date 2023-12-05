@@ -348,6 +348,7 @@ class SpansLoader(DirectoryLoader):
             "0004_spans_group_raw_col",
             "0005_spans_add_sentry_tags",
             "0006_spans_add_profile_id",
+            "0007_spans_add_metrics_summary",
         ]
 
 
@@ -358,4 +359,14 @@ class GroupAttributesLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_group_attributes",
+        ]
+
+
+class MetricsSummariesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.metrics_summaries")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_metrics_summaries_create_table",
         ]
