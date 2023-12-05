@@ -224,9 +224,9 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         // lock, as we can be sure that for the rest of this function, no assignment callback will
         // run.
         let mut consumer_state = self.consumer_state.lock().unwrap();
+        let consumer_state: &mut ConsumerState<_> = &mut consumer_state;
 
-        let strategy = &mut consumer_state.strategy;
-        let Some(strategy) = strategy.as_mut() else {
+        let Some(strategy) = consumer_state.strategy.as_mut() else {
             match self.message.as_ref() {
                 None => return Ok(()),
                 Some(_) => return Err(RunError::InvalidState),
@@ -438,7 +438,10 @@ mod tests {
     fn test_processor() {
         let broker = build_broker();
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(TestFactory {}),
+            None,
+        )));
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -449,7 +452,7 @@ mod tests {
             Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state);
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -462,7 +465,10 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(TestFactory {}),
+            None,
+        )));
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -473,7 +479,7 @@ mod tests {
             Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state);
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();
