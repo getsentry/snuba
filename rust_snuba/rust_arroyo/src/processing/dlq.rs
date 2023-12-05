@@ -167,6 +167,7 @@ impl DlqLimitState {
     fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
         let Some(record) = self.records.get_mut(&message.partition) else {
             // If we don't know about this message's partition, we reject it out of hand.
+            // TODO: Add some logging here?
             return false;
         };
 
