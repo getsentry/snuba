@@ -442,10 +442,10 @@ mod tests {
 
             fn build_initial_state(
                 &self,
-                _limit: DlqLimit,
-                _assignment: &HashMap<Partition, u64>,
+                limit: DlqLimit,
+                assignment: &HashMap<Partition, u64>,
             ) -> DlqLimitState {
-                DlqLimitState::default()
+                DlqLimitState::new(limit, assignment)
             }
         }
 
@@ -458,11 +458,10 @@ mod tests {
 
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
             Box::new(producer.clone()),
-            DlqLimit {
-                max_invalid_ratio: None,
-                max_consecutive_count: Some(1),
-            },
+            DlqLimit::default(),
         )));
+
+        wrapper.reset_dlq_limit(&[(partition, 0)].into_iter().collect());
 
         for i in 0..10 {
             wrapper.produce(BrokerMessage {
