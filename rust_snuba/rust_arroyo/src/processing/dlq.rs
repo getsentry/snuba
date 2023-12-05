@@ -136,6 +136,11 @@ struct InvalidMessageStats {
     last_invalid_offset: u64,
 }
 
+/// Struct that keeps a record of how many valid and invalid messages have been received
+/// per partition and decides whether to produce a message to the DLQ according to a configured limit.
+///
+/// Note that `DlqLimitState` keeps a fixed list of partitions for which it records messages.
+/// Messages on any other partitions will be automatically rejected.
 #[derive(Debug, Clone, Default)]
 pub struct DlqLimitState {
     limit: DlqLimit,
