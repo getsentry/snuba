@@ -15,6 +15,7 @@ use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -32,6 +33,24 @@ enum KafkaConsumerState {
     Assigning,
     #[allow(dead_code)]
     Revoking,
+}
+
+enum InitialOffset {
+    Earliest,
+    Latest,
+    Error,
+}
+
+impl TryFrom<&str> for InitialOffset {
+    type Error = ConsumerError;
+    fn try_from(auto_offset_reset: &str) -> Result<Self, ConsumerError> {
+        match auto_offset_reset {
+            "earliest" => Ok(InitialOffset::Earliest),
+            "latest" => Ok(InitialOffset::Latest),
+            "error" => Ok(InitialOffset::Error),
+            _ => Err(ConsumerError::InvalidConfig),
+        }
+    }
 }
 
 impl KafkaConsumerState {
@@ -88,6 +107,7 @@ impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
 pub struct CustomContext<C: AssignmentCallbacks> {
     callbacks: C,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
+    initial_offset_reset: InitialOffset,
 }
 
 impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
@@ -137,8 +157,38 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         }
     }
 
-    fn post_rebalance(&self, _base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
+    fn post_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
+            let new_tpl = TopicPartitionList::from_topic_map(&list.to_topic_map()).unwrap();
+            let committed_offsets = base_consumer.committed_offsets(new_tpl, None).unwrap();
+
+            let mut offset_map: HashMap<Partition, u64> = HashMap::new();
+
+            for partition in committed_offsets.elements().iter() {
+                let raw_offset = partition.offset().to_raw().unwrap();
+
+                if raw_offset > 0 {
+                    let topic = Topic::new(partition.topic());
+                    offset_map.insert(
+                        Partition::new(topic, partition.partition() as u16),
+                        raw_offset as u64,
+                    );
+                } else {
+                    // TODO: Resolve according to the auto offset reset policy
+                    let (low_watermark, high_watermark) = base_consumer.fetch_watermarks(
+                        partition.topic(),
+                        partition.partition(),
+                        None,
+                    ).unwrap();
+                }
+            }
+
+            let mut offsets = self.consumer_offsets.lock().unwrap();
+            for (partition, offset) in &offset_map {
+                offsets.insert(*partition, *offset);
+            }
+
+            // Prev implmenntation
             let mut map: HashMap<Partition, u64> = HashMap::new();
             for partition in list.elements().iter() {
                 let topic = Topic::new(partition.topic());
@@ -169,9 +219,21 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
+
+        // NOTE: Offsets are explicitly managed as part of the assignment
+        // callback, so preemptively resetting offsets is not enabled when
+        // strict_offset_reset is enabled.
+        let auto_offset_reset = &*config
+            .offset_reset_config()
+            .ok_or(ConsumerError::InvalidConfig)?
+            .auto_offset_reset;
+
+        let initial_offset: InitialOffset = auto_offset_reset.try_into()?;
+
         let context = CustomContext {
             callbacks,
             consumer_offsets: offsets.clone(),
+            initial_offset_reset: initial_offset,
         };
 
         let mut config_obj: ClientConfig = config.into();
