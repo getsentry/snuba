@@ -35,8 +35,6 @@ columns: List[Column[Modifiers]] = [
     # span metadata
     Column("end_timestamp", DateTime()),
     # snuba internals
-    Column("partition", UInt(16)),
-    Column("offset", UInt(64)),
     Column("retention_days", UInt(16)),
     Column("deleted", UInt(8)),
 ]
