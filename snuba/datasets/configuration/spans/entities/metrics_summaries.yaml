@@ -5,14 +5,14 @@ name: metrics_summaries
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: metric_id, type: String },
     { name: span_id, type: UInt, args: { size: 64 } },
     { name: trace_id, type: UUID },
+    { name: metric_name, type: String },
     { name: min, type: Float, args: { size: 64 } },
     { name: max, type: Float, args: { size: 64 } },
     { name: sum, type: Float, args: { size: 64 } },
     { name: count, type: Float, args: { size: 64 } },
-    { name: start_timestamp, type: DateTime },
+    { name: end_timestamp, type: DateTime },
     {
       name: tags,
       type: Nested,
@@ -57,8 +57,10 @@ storage_selector:
 query_processors:
   - processor: TimeSeriesProcessor
     args:
+      time_group_columns:
+        time: end_timestamp
       time_parse_columns:
-        - start_timestamp
+        - end_timestamp
   - processor: BasicFunctionsProcessor
   - processor: ReferrerRateLimiterProcessor
   - processor: ProjectReferrerRateLimiter
@@ -79,4 +81,4 @@ validators:
     args: {}
   - validator: DatetimeConditionValidator
     args: {}
-required_time_column: start_timestamp
+required_time_column: end_timestamp
