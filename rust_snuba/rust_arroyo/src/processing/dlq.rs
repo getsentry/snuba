@@ -185,7 +185,7 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
         for (p, committable_offset) in committable {
             if let Some(values) = self.futures.get_mut(&p) {
-                if let Some((offset, future)) = values.front_mut() {
+                while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
                         let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
