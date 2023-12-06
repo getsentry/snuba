@@ -193,11 +193,8 @@ impl DlqLimitState {
 
         if let Some(last_invalid) = record.last_invalid_offset {
             match message.offset {
-                o if o < last_invalid => {
+                o if o <= last_invalid => {
                     tracing::error!("Invalid message raised out of order")
-                }
-                o if o == last_invalid => {
-                    tracing::error!("Duplicate invalid message raised")
                 }
                 o if o == last_invalid + 1 => record.consecutive_invalid += 1,
                 o => {
