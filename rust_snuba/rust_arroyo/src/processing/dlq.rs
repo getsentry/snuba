@@ -17,6 +17,12 @@ pub trait DlqProducer<TPayload> {
         &self,
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>>;
+
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState;
 }
 
 // Drops all invalid messages. Produce returns an immediately resolved future.
@@ -28,6 +34,14 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
         Box::pin(async move { message })
+    }
+
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        _assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        DlqLimitState::new(limit, None)
     }
 }
 
@@ -82,6 +96,20 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
 
             message
         })
+    }
+
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        // XXX: We assume the last offsets were invalid when starting the consumer
+        DlqLimitState::new(
+            limit,
+            assignment
+                .iter()
+                .filter_map(|(p, o)| Some((*p, o.checked_sub(1)?))),
+        )
     }
 }
 
@@ -243,12 +271,9 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             return;
         };
 
-        self.dlq_limit_state = DlqLimitState::new(
-            policy.limit,
-            assignment
-                .iter()
-                .filter_map(|(p, o)| Some((*p, o.checked_sub(1)?))),
-        );
+        self.dlq_limit_state = policy
+            .producer
+            .build_initial_state(policy.limit, assignment);
     }
 
     // Removes all completed futures, then appends a future with message to be produced
@@ -422,6 +447,14 @@ mod tests {
             ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
                 *self.call_count.lock().unwrap() += 1;
                 Box::pin(async move { message })
+            }
+
+            fn build_initial_state(
+                &self,
+                limit: DlqLimit,
+                assignment: &HashMap<Partition, u64>,
+            ) -> DlqLimitState {
+                DlqLimitState::new(limit, assignment.iter().map(|(p, o)| (*p, *o)))
             }
         }
 
