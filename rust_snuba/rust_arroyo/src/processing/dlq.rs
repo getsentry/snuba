@@ -140,7 +140,7 @@ pub struct InvalidMessageStats {
     pub invalid: u64,
     /// The length of the current run of received invalid messages.
     pub consecutive_invalid: u64,
-    /// The offset of the last received invalid message, if any.
+    /// The offset of the last received invalid message.
     pub last_invalid_offset: u64,
 }
 
