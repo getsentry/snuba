@@ -31,6 +31,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
     "--commit-log-topic",
@@ -113,6 +118,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
 @click.option(
+    "--max-poll-interval-ms",
+    type=int,
+    default=30000,
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -123,6 +133,7 @@ def rust_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -137,6 +148,7 @@ def rust_consumer(
     concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
+    max_poll_interval_ms: int,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
 ) -> None:
@@ -176,10 +188,12 @@ def rust_consumer(
     rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
+        no_strict_offset_reset,
         consumer_config_raw,
         skip_write,
         concurrency_override or concurrency or 1,
         use_rust_processor,
+        max_poll_interval_ms,
         python_max_queue_depth,
         health_check_file,
     )

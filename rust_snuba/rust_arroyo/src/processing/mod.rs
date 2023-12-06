@@ -9,8 +9,11 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
+use crate::backends::kafka::config::KafkaConfig;
+use crate::backends::kafka::types::KafkaPayload;
+use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
-use crate::processing::dlq::{BufferedMessages, DlqPolicy};
+use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
@@ -35,7 +38,7 @@ pub enum RunError {
     Pause(#[source] ConsumerError),
 }
 
-struct ConsumerState<TPayload> {
+pub struct ConsumerState<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
     backpressure_timestamp: Option<Instant>,
@@ -44,6 +47,16 @@ struct ConsumerState<TPayload> {
 }
 
 impl<TPayload> ConsumerState<TPayload> {
+    pub fn new(processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>) -> Self {
+        Self {
+            processing_factory,
+            strategy: None,
+            backpressure_timestamp: None,
+            is_paused: false,
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+        }
+    }
+
     fn clear_backpressure(&mut self) {
         if self.backpressure_timestamp.is_some() {
             self.metrics_buffer.incr_timing(
@@ -55,7 +68,7 @@ impl<TPayload> ConsumerState<TPayload> {
     }
 }
 
-pub struct Callbacks<TPayload>(Arc<Mutex<ConsumerState<TPayload>>>);
+pub struct Callbacks<TPayload>(pub Arc<Mutex<ConsumerState<TPayload>>>);
 
 #[derive(Debug, Clone)]
 pub struct ProcessorHandle {
@@ -75,24 +88,48 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
-    fn on_assign(&self, _: HashMap<Partition, u64>) {
+    fn on_assign(&self, partitions: HashMap<Partition, u64>) {
+        let metrics = get_metrics();
+        metrics.increment(
+            "arroyo.consumer.partitions_assigned.count",
+            partitions.len() as i64,
+            None,
+        );
+
+        let start = Instant::now();
+
         let mut state = self.0.lock().unwrap();
         state.strategy = Some(state.processing_factory.create());
+
+        metrics.timing(
+            "arroyo.consumer.create_strategy.time",
+            start.elapsed().as_millis() as u64,
+            None,
+        );
     }
-    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, _: Vec<Partition>) {
+
+    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, partitions: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
+        metrics.increment(
+            "arroyo.consumer.partitions_revoked.count",
+            partitions.len() as i64,
+            None,
+        );
+
         let start = Instant::now();
 
         let mut state = self.0.lock().unwrap();
         if let Some(s) = state.strategy.as_mut() {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
+                // TODO: DLQ should be flushed here as well
                 tracing::info!("Committing offsets");
                 let res = commit_offsets.commit(commit_request.positions);
 
                 if let Err(err) = res {
-                    tracing::error!("Failed to commit offsets: {:?}", err);
+                    let error: &dyn std::error::Error = &err;
+                    tracing::error!(error, "Failed to commit offsets");
                 }
             }
         }
@@ -123,24 +160,32 @@ pub struct StreamProcessor<TPayload: Clone> {
     processor_handle: ProcessorHandle,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
-    #[allow(dead_code)]
-    dlq_policy: Option<DlqPolicy<TPayload>>,
+    dlq_policy: DlqPolicyWrapper<TPayload>,
 }
 
-impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
+impl StreamProcessor<KafkaPayload> {
+    pub fn with_kafka<F: ProcessingStrategyFactory<KafkaPayload> + 'static>(
+        config: KafkaConfig,
+        factory: F,
+        topic: Topic,
+        dlq_policy: Option<DlqPolicy<KafkaPayload>>,
+    ) -> Self {
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(factory))));
+        let callbacks = Callbacks(consumer_state.clone());
+
+        // TODO: Can this fail?
+        let consumer = Box::new(KafkaConsumer::new(config, &[topic], callbacks).unwrap());
+
+        Self::new(consumer, consumer_state, dlq_policy)
+    }
+}
+
+impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
-        processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
+        consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
         dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState {
-            processing_factory,
-            strategy: None,
-            backpressure_timestamp: None,
-            is_paused: false,
-            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
-        }));
-
         Self {
             consumer,
             consumer_state,
@@ -150,13 +195,8 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
             },
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             buffered_messages: BufferedMessages::new(),
-            dlq_policy,
+            dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
-    }
-
-    pub fn subscribe(&mut self, topic: Topic) {
-        let callbacks = Callbacks(self.consumer_state.clone());
-        self.consumer.subscribe(&[topic], callbacks).unwrap();
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
@@ -188,9 +228,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         self.buffered_messages.append(broker_msg);
                     }
                 }
-                Err(error) => {
-                    tracing::error!(%error, "poll error");
-                    return Err(RunError::Poll(error));
+                Err(err) => {
+                    let error: &dyn std::error::Error = &err;
+                    tracing::error!(error, "poll error");
+                    return Err(RunError::Poll(err));
                 }
             }
         }
@@ -219,11 +260,19 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
+                self.dlq_policy.flush(request.positions.clone());
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
-            Err(e) => {
-                println!("TODOO: Handle invalid message {:?}", e);
-            }
+            Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {
+                Some(msg) => {
+                    self.message = Some(Message {
+                        inner_message: InnerMessage::BrokerMessage(msg),
+                    });
+                }
+                None => {
+                    tracing::error!("Could not find invalid message in buffer");
+                }
+            },
         };
 
         let Some(msg_s) = self.message.take() else {
@@ -246,9 +295,10 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             consumer_state.is_paused = false;
                         }
-                        Err(error) => {
-                            tracing::error!(%error, "pause error");
-                            return Err(RunError::Pause(error));
+                        Err(err) => {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "pause error");
+                            return Err(RunError::Pause(err));
                         }
                     }
                 }
@@ -285,23 +335,32 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                         Ok(()) => {
                             consumer_state.is_paused = true;
                         }
-                        Err(error) => {
-                            tracing::error!(%error, "pause error");
-                            return Err(RunError::Pause(error));
+                        Err(err) => {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "pause error");
+                            return Err(RunError::Pause(err));
                         }
                     }
                 }
             }
             Err(SubmitError::InvalidMessage(message)) => {
-                // TODO: Put this into the DLQ once we have one
-                tracing::error!(?message, "Invalid message");
+                let invalid_message = self
+                    .buffered_messages
+                    .pop(&message.partition, message.offset);
+
+                if let Some(msg) = invalid_message {
+                    tracing::error!(?message, "Invalid message");
+                    self.dlq_policy.produce(msg);
+                } else {
+                    tracing::error!(?message, "Could not retrieve invalid message from buffer");
+                }
             }
         }
         Ok(())
     }
 
     /// The main run loop, see class docstring for more information.
-    pub fn run(&mut self) -> Result<(), RunError> {
+    pub fn run(mut self) -> Result<(), RunError> {
         while !self
             .processor_handle
             .shutdown_requested
@@ -315,11 +374,9 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
                 }
 
                 drop(trait_callbacks); // unlock mutex so we can close consumer
-                self.consumer.close();
                 return Err(e);
             }
         }
-        self.shutdown();
         Ok(())
     }
 
@@ -327,13 +384,11 @@ impl<TPayload: Clone + 'static> StreamProcessor<TPayload> {
         self.processor_handle.clone()
     }
 
-    pub fn shutdown(&mut self) {
-        self.consumer.close();
-    }
-
     pub fn tell(&self) -> HashMap<Partition, u64> {
         self.consumer.tell().unwrap()
     }
+
+    pub fn shutdown(self) {}
 }
 
 #[cfg(test)]
@@ -397,15 +452,19 @@ mod tests {
     #[test]
     fn test_processor() {
         let broker = build_broker();
+
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
+            Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
-        processor.subscribe(Topic::new("test1"));
+        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -418,15 +477,18 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
             broker,
             "test_group".to_string(),
             false,
+            &[Topic::new("test1")],
+            Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, Box::new(TestFactory {}), None);
-        processor.subscribe(Topic::new("test1"));
+        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();

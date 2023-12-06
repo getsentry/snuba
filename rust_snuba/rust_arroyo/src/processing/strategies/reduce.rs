@@ -115,16 +115,19 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
 }
 
 impl<T, TResult: Clone> Reduce<T, TResult> {
-    pub fn new(
-        next_step: Box<dyn ProcessingStrategy<TResult>>,
+    pub fn new<N>(
+        next_step: N,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
-    ) -> Reduce<T, TResult> {
+    ) -> Self
+    where
+        N: ProcessingStrategy<TResult> + 'static,
+    {
         let batch_state = BatchState::new(initial_value.clone(), accumulator.clone());
         Reduce {
-            next_step,
+            next_step: Box::new(next_step),
             accumulator,
             initial_value,
             max_batch_size,
@@ -245,11 +248,11 @@ mod tests {
             acc
         });
 
-        let next_step = Box::new(NextStep {
+        let next_step = NextStep {
             submitted: submitted_messages,
-        });
+        };
 
-        let mut strategy: Reduce<u64, Vec<u64>> = Reduce::new(
+        let mut strategy = Reduce::new(
             next_step,
             accumulator,
             initial_value,

@@ -6,7 +6,6 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
@@ -29,10 +28,12 @@ pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
 ) {
@@ -40,10 +41,12 @@ pub fn consumer(
         consumer_impl(
             consumer_group,
             auto_offset_reset,
+            no_strict_offset_reset,
             consumer_config_raw,
             skip_write,
             concurrency,
             use_rust_processor,
+            max_poll_interval_ms,
             python_max_queue_depth,
             health_check_file,
         )
@@ -54,10 +57,12 @@ pub fn consumer(
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
 ) {
@@ -81,7 +86,7 @@ pub fn consumer_impl(
         tracing::debug!(sentry_dsn = dsn);
         // this forces anyhow to record stack traces when capturing an error:
         std::env::set_var("RUST_BACKTRACE", "1");
-        _sentry_guard = Some(setup_sentry(dsn));
+        _sentry_guard = Some(setup_sentry(&dsn));
     }
 
     // setup arroyo metrics
@@ -118,49 +123,51 @@ pub fn consumer_impl(
         vec![],
         consumer_group.to_owned(),
         auto_offset_reset.to_owned(),
-        false,
+        !no_strict_offset_reset,
+        max_poll_interval_ms,
         Some(consumer_config.raw_topic.broker_config),
     );
 
-    let consumer = Box::new(KafkaConsumer::new(config));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+    // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
+    // writing to the DLQ topics in prod.
+    let dlq_policy = match skip_write {
+        true => None,
+        false => consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer_config =
+                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+            let producer = KafkaProducer::new(producer_config);
 
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-        DlqPolicy::new(
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: Some(0.01),
-                max_consecutive_count: Some(1000),
-            },
-        )
-    });
+            DlqPolicy::new(
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: Some(0.01),
+                    max_consecutive_count: Some(1000),
+                },
+            )
+        }),
+    };
 
-    let mut processor = StreamProcessor::new(
-        consumer,
-        Box::new(ConsumerStrategyFactory::new(
-            first_storage,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            skip_write,
-            ConcurrencyConfig::new(concurrency),
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file.map(ToOwned::to_owned),
-        )),
-        dlq_policy,
+    let factory = ConsumerStrategyFactory::new(
+        first_storage,
+        logical_topic_name,
+        max_batch_size,
+        max_batch_time,
+        skip_write,
+        ConcurrencyConfig::new(concurrency),
+        python_max_queue_depth,
+        use_rust_processor,
+        health_check_file.map(ToOwned::to_owned),
     );
 
-    processor.subscribe(Topic::new(&consumer_config.raw_topic.physical_topic_name));
+    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 
@@ -196,10 +203,12 @@ pub fn process_message(
             timestamp,
         };
 
-        let res = func(payload, meta);
+        let res = func(payload, meta).unwrap();
         let batch = BytesInsertBatch::new(
+            res.rows,
             timestamp,
-            res.unwrap(),
+            res.origin_timestamp,
+            res.sentry_received_timestamp,
             BTreeMap::from([(partition, (offset, timestamp))]),
         );
         batch.encoded_rows().to_vec()

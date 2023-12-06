@@ -1,20 +1,22 @@
-#![allow(dead_code)]
 use crate::backends::kafka::producer::KafkaProducer;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
+use crate::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
 
 pub trait DlqProducer<TPayload> {
     // Send a message to the DLQ.
     fn produce(
         &self,
         message: BrokerMessage<TPayload>,
-    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>>>>;
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>>;
 
     fn build_initial_state(&self) -> DlqLimitState;
 }
@@ -22,11 +24,11 @@ pub trait DlqProducer<TPayload> {
 // Drops all invalid messages. Produce returns an immediately resolved future.
 struct NoopDlqProducer {}
 
-impl<TPayload: 'static> DlqProducer<TPayload> for NoopDlqProducer {
+impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer {
     fn produce(
         &self,
         message: BrokerMessage<TPayload>,
-    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>>>> {
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
         Box::pin(async move { message })
     }
 
@@ -58,7 +60,7 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
     fn produce(
         &self,
         message: BrokerMessage<KafkaPayload>,
-    ) -> Pin<Box<dyn Future<Output = BrokerMessage<KafkaPayload>>>> {
+    ) -> Pin<Box<dyn Future<Output = BrokerMessage<KafkaPayload>> + Send + Sync>> {
         let producer = self.producer.clone();
         let topic = self.topic;
 
@@ -110,14 +112,96 @@ pub struct DlqLimitState {}
 // DLQ policy defines the DLQ configuration, and is passed to the stream processor
 // upon creation of the consumer. It consists of the DLQ producer implementation and
 // any limits that should be applied.
+//
+// TODO: Respect DLQ limits
 pub struct DlqPolicy<TPayload> {
     producer: Box<dyn DlqProducer<TPayload>>,
+    #[allow(dead_code)]
     limit: DlqLimit,
 }
 
 impl<TPayload> DlqPolicy<TPayload> {
     pub fn new(producer: Box<dyn DlqProducer<TPayload>>, limit: DlqLimit) -> Self {
         DlqPolicy { producer, limit }
+    }
+}
+
+// Wraps the DLQ policy and keeps track of messages pending produce/commit.
+type Futures<TPayload> = VecDeque<(u64, JoinHandle<BrokerMessage<TPayload>>)>;
+
+pub(crate) struct DlqPolicyWrapper<TPayload> {
+    dlq_policy: Option<DlqPolicy<TPayload>>,
+    runtime: Handle,
+    // This is a per-partition max
+    max_pending_futures: usize,
+    futures: BTreeMap<Partition, Futures<TPayload>>,
+}
+
+impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
+    pub fn new(dlq_policy: Option<DlqPolicy<TPayload>>) -> Self {
+        let concurrency_config = ConcurrencyConfig::new(10);
+        DlqPolicyWrapper {
+            dlq_policy,
+            runtime: concurrency_config.handle(),
+            max_pending_futures: 1000,
+            futures: BTreeMap::new(),
+        }
+    }
+
+    // Removes all completed futures, then appends a future with message to be produced
+    // to the queue. Blocks if there are too many pending futures until some are done.
+    pub fn produce(&mut self, message: BrokerMessage<TPayload>) {
+        for (_p, values) in self.futures.iter_mut() {
+            while !values.is_empty() {
+                let len = values.len();
+                let (_, future) = &mut values[0];
+                if future.is_finished() {
+                    values.pop_front();
+                } else if len >= self.max_pending_futures {
+                    let res = self.runtime.block_on(future);
+                    if let Err(err) = res {
+                        tracing::error!("Error producing to DLQ: {}", err);
+                    }
+                    values.pop_front();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if let Some(dlq_policy) = &self.dlq_policy {
+            let task = dlq_policy.producer.produce(message.clone());
+            let handle = self.runtime.spawn(task);
+
+            self.futures
+                .entry(message.partition)
+                .or_default()
+                .push_back((message.offset, handle));
+        }
+    }
+
+    // Blocks until all messages up to the committable have been produced so
+    // they are safe to commit.
+    pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
+        for (p, committable_offset) in committable {
+            if let Some(values) = self.futures.get_mut(&p) {
+                if let Some((offset, future)) = values.front_mut() {
+                    // The committable offset is message's offset + 1
+                    if committable_offset > *offset {
+                        let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
+                            self.runtime.block_on(future);
+
+                        if let Err(err) = res {
+                            tracing::error!("Error producing to DLQ: {}", err);
+                        } else {
+                            values.pop_front();
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -183,6 +267,7 @@ impl<TPayload> BufferedMessages<TPayload> {
 mod tests {
     use crate::types::Topic;
     use chrono::Utc;
+    use std::sync::Mutex;
 
     use super::*;
 
@@ -208,5 +293,63 @@ mod tests {
         assert_eq!(buffer.pop(&partition, 1), None); // Removed when we popped offset 8
         assert_eq!(buffer.pop(&partition, 9).unwrap().offset, 9);
         assert_eq!(buffer.pop(&partition, 10), None); // Doesn't exist
+    }
+
+    #[test]
+    fn test_dlq_policy_wrapper() {
+        #[derive(Clone)]
+        struct TestDlqProducer {
+            pub call_count: Arc<Mutex<usize>>,
+        }
+
+        impl TestDlqProducer {
+            fn new() -> Self {
+                TestDlqProducer {
+                    call_count: Arc::new(Mutex::new(0)),
+                }
+            }
+        }
+
+        impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for TestDlqProducer {
+            fn produce(
+                &self,
+                message: BrokerMessage<TPayload>,
+            ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
+                *self.call_count.lock().unwrap() += 1;
+                Box::pin(async move { message })
+            }
+
+            fn build_initial_state(&self) -> DlqLimitState {
+                DlqLimitState {}
+            }
+        }
+
+        let partition = Partition {
+            topic: Topic::new("test"),
+            index: 1,
+        };
+
+        let producer = TestDlqProducer::new();
+
+        let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
+            Box::new(producer.clone()),
+            DlqLimit {
+                max_invalid_ratio: None,
+                max_consecutive_count: Some(1),
+            },
+        )));
+
+        for i in 0..10 {
+            wrapper.produce(BrokerMessage {
+                partition,
+                offset: i,
+                payload: i,
+                timestamp: Utc::now(),
+            });
+        }
+
+        wrapper.flush(HashMap::from([(partition, 11)]));
+
+        assert_eq!(*producer.call_count.lock().unwrap(), 10);
     }
 }

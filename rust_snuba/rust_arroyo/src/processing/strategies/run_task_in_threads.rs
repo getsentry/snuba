@@ -13,6 +13,7 @@ use crate::processing::strategies::{
 };
 use crate::types::Message;
 
+#[derive(Clone, Debug)]
 pub enum RunTaskError {
     RetryableError,
     InvalidMessage(InvalidMessage),
@@ -162,7 +163,8 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                             tracing::error!("retryable error");
                         }
                         Err(error) => {
-                            tracing::error!(%error, "the thread crashed");
+                            let error: &dyn std::error::Error = &error;
+                            tracing::error!(error, "the thread crashed");
                         }
                     }
                 } else {

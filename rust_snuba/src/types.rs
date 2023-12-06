@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::min;
 
 use chrono::{DateTime, Utc};
 use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
@@ -7,26 +7,105 @@ use std::collections::BTreeMap;
 
 pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Default, Clone)]
+struct LatencyRecorder {
+    sum_timestamps: f64,
+    earliest_timestamp: u64,
+    num_values: usize,
+}
+
+impl From<DateTime<Utc>> for LatencyRecorder {
+    fn from(value: DateTime<Utc>) -> Self {
+        let value = value.timestamp_millis();
+        LatencyRecorder {
+            sum_timestamps: value as f64,
+            earliest_timestamp: value as u64,
+            num_values: 1,
+        }
+    }
+}
+
+impl LatencyRecorder {
+    fn merge(&mut self, other: Self) {
+        self.sum_timestamps += other.sum_timestamps;
+        self.earliest_timestamp = min(self.earliest_timestamp, other.earliest_timestamp);
+        self.num_values += other.num_values;
+    }
+
+    fn send_metric(&self, metrics: &BoxMetrics, write_time: DateTime<Utc>, metric_name: &str) {
+        if self.num_values == 0 {
+            return;
+        }
+
+        let write_time = write_time.timestamp_millis() as u64;
+
+        let max_latency = write_time.saturating_sub(self.earliest_timestamp);
+        metrics.timing(
+            &format!("insertions.max_{}_ms", metric_name),
+            max_latency,
+            None,
+        );
+
+        let latency = (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64;
+        metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
+    }
+}
+
+/// The return value of message processors.
+///
+/// NOTE: In Python, this struct crosses a serialization boundary, and so this struct is somewhat
+/// sensitive to serialization speed. If there are additional things that should be returned from
+/// the Rust message processor that are not necessary in Python, it's probably best to duplicate
+/// this struct for Python as there it can be an internal type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct InsertBatch {
+    pub rows: RowData,
+    pub origin_timestamp: Option<DateTime<Utc>>,
+    pub sentry_received_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch {
     rows: RowData,
-    sum_message_timestamp_secs: f64,
-    max_message_timestamp_secs: i64,
+
+    /// when the message was inserted into the snuba topic
+    ///
+    /// In Python this aggregate value is not explicitly tracked on BytesInsertBatch, as the batch
+    /// type contains a list of the original kafka messages which all contain the individual
+    /// timestamp values in metadata.
+    message_timestamp: LatencyRecorder,
+
+    /// when the event was received by Relay
+    origin_timestamp: LatencyRecorder,
+
+    /// when it was received by the ingest consumer in Sentry
+    ///
+    /// May not be recorded for some datasets. This is specifically used for metrics datasets, where
+    /// this represents the latency from ingest-metrics (i.e. before the metrics indexer) to
+    /// insertion into clickhouse
+    sentry_received_timestamp: LatencyRecorder,
+
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
 }
 
 impl BytesInsertBatch {
     pub fn new(
-        timestamp: DateTime<Utc>,
         rows: RowData,
+        message_timestamp: DateTime<Utc>,
+        origin_timestamp: Option<DateTime<Utc>>,
+        sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
     ) -> Self {
-        let unix_timestamp = timestamp.timestamp();
         BytesInsertBatch {
             rows,
-            sum_message_timestamp_secs: unix_timestamp as f64,
-            max_message_timestamp_secs: unix_timestamp,
+            message_timestamp: message_timestamp.into(),
+            origin_timestamp: origin_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
+            sentry_received_timestamp: sentry_received_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
             commit_log_offsets,
         }
     }
@@ -35,37 +114,22 @@ impl BytesInsertBatch {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.commit_log_offsets.extend(other.commit_log_offsets);
         self.rows.num_rows += other.rows.num_rows;
-        self.sum_message_timestamp_secs += other.sum_message_timestamp_secs;
-        self.max_message_timestamp_secs = max(
-            self.max_message_timestamp_secs,
-            other.max_message_timestamp_secs,
-        );
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
         self
     }
 
     pub fn record_message_latency(&self, metrics: &BoxMetrics) {
         let write_time = Utc::now();
 
-        let into_latency = |ts: DateTime<Utc>| (write_time - ts).num_seconds().try_into().ok();
-
-        if let Some(ts) =
-            DateTime::from_timestamp(self.max_message_timestamp_secs, 0).and_then(into_latency)
-        {
-            metrics.timing("insertions.max_latency_ms", ts, None);
-        } else {
-            tracing::error!("overflow while trying to calculate insertions.max_latency_ms metric");
-        }
-
-        if let Some(latency) = DateTime::from_timestamp(
-            (self.sum_message_timestamp_secs / self.rows.num_rows as f64) as i64,
-            0,
-        )
-        .and_then(into_latency)
-        {
-            metrics.timing("insertions.latency_ms", latency, None);
-        } else {
-            tracing::error!("overflow while trying to calculate insertions.latency_ms metric");
-        }
+        self.message_timestamp
+            .send_metric(metrics, write_time, "latency");
+        self.origin_timestamp
+            .send_metric(metrics, write_time, "end_to_end_latency");
+        self.sentry_received_timestamp
+            .send_metric(metrics, write_time, "sentry_received_latency");
     }
 
     pub fn len(&self) -> usize {

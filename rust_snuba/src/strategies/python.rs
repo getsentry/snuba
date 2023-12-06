@@ -16,7 +16,7 @@ use chrono::{DateTime, Utc};
 use pyo3::prelude::*;
 
 use crate::config::MessageProcessorConfig;
-use crate::types::{BytesInsertBatch, RowData};
+use crate::types::{BytesInsertBatch, InsertBatch, RowData};
 
 struct MessageMeta {
     partition: Partition,
@@ -27,12 +27,13 @@ struct MessageMeta {
 enum TaskHandle {
     Procspawn {
         original_message_meta: MessageMeta,
-        join_handle: Mutex<procspawn::JoinHandle<Result<RowData, String>>>,
+        // NOTE: this `Mutex` purely exists to make `TaskHandle` `Sync`
+        join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
         submit_timestamp: SystemTime,
     },
     Immediate {
         original_message_meta: MessageMeta,
-        result: Result<RowData, String>,
+        result: Result<InsertBatch, String>,
         submit_timestamp: SystemTime,
     },
 }
@@ -147,10 +148,12 @@ impl PythonTransformStep {
         };
 
         match message_result {
-            Ok(rows) => {
+            Ok(insert_batch) => {
                 let replacement = BytesInsertBatch::new(
+                    insert_batch.rows,
                     original_message_meta.timestamp,
-                    rows,
+                    insert_batch.origin_timestamp,
+                    insert_batch.sentry_received_timestamp,
                     BTreeMap::from([(
                         original_message_meta.partition.index,
                         (
@@ -208,22 +211,23 @@ impl PythonTransformStep {
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        tracing::debug!("python poll");
+        tracing::debug!("python poll start");
         self.check_for_results(self.max_queue_depth);
-        tracing::debug!("python end poll");
+        tracing::debug!("python poll end");
 
         self.next_step.poll()
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         if self.message_carried_over.is_some() {
+            tracing::debug!("python strategy provides backpressure due to next_step");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
         // if there are a lot of "queued" messages (=messages waiting for a free process), let's
         // not enqueue more.
         if self.queue_needs_drain(self.max_queue_depth) {
-            tracing::debug!("python strategy provides backpressure");
+            tracing::debug!("python strategy provides backpressure due to full queue");
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
@@ -248,16 +252,24 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let args = (payload_bytes, offset, partition.index, timestamp);
 
                 let process_message = |args: (_, _, _, DateTime<Utc>)| {
-                    tracing::debug!(?args, "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<RowData> {
+                    tracing::debug!(args=?(args.1, args.2, args.3), "processing message in subprocess");
+                    Python::with_gil(|py| -> PyResult<InsertBatch> {
                         let fun: Py<PyAny> =
                             PyModule::import(py, "snuba.consumers.rust_processor")?
                                 .getattr("process_rust_message")?
                                 .into();
 
                         let result = fun.call1(py, args)?;
-                        let result_decoded: Vec<Vec<u8>> = result.extract(py)?;
-                        Ok(RowData::from_rows(result_decoded))
+                        let (result_decoded, origin_timestamp, sentry_received_timestamp): (
+                            Vec<Vec<u8>>,
+                            _,
+                            _,
+                        ) = result.extract(py)?;
+                        Ok(InsertBatch {
+                            rows: RowData::from_rows(result_decoded),
+                            origin_timestamp,
+                            sentry_received_timestamp,
+                        })
                     })
                     .map_err(|pyerr| pyerr.to_string())
                 };
@@ -271,7 +283,9 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 let submit_timestamp = SystemTime::now();
 
                 if let Some(ref processing_pool) = self.processing_pool {
+                    tracing::debug!("processing_pool.spawn start");
                     let handle = processing_pool.spawn(args, process_message);
+                    tracing::debug!("processing_pool.spawn end");
 
                     self.handles.push_back(TaskHandle::Procspawn {
                         submit_timestamp,

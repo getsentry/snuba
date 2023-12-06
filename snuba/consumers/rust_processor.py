@@ -14,7 +14,7 @@
 import importlib
 import os
 from datetime import datetime
-from typing import Optional, Sequence, Type
+from typing import Optional, Sequence, Tuple, Type
 
 import rapidjson
 
@@ -48,7 +48,7 @@ initialize_processor()
 
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
-) -> Sequence[bytes]:
+) -> Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]:
     if processor is None:
         raise RuntimeError("processor not yet initialized")
     rv = processor.process_message(
@@ -57,8 +57,12 @@ def process_rust_message(
     )
 
     if rv is None:
-        return []
+        return [], None, None
 
     assert isinstance(rv, InsertBatch), "this consumer does not support replacements"
 
-    return [json_row_encoder.encode(row) for row in rv.rows]
+    return (
+        [json_row_encoder.encode(row) for row in rv.rows],
+        rv.origin_timestamp,
+        rv.sentry_received_timestamp,
+    )

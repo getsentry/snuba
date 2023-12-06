@@ -7,12 +7,9 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.26"
-clap = "2.18.0"
-env_logger = "0.9.0"
-filetime = "0.2.22"
-futures = "0.3.21"
 once_cell = "1.18.0"
-rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer", features = ["cmake-build"] }
+rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer", features = ["cmake-build", "tracing"] }
+sentry = { version = "0.32.0" }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 thiserror = "1.0"

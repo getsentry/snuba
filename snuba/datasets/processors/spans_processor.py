@@ -83,7 +83,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["trace_id"] = str(uuid.UUID(span_event["trace_id"]))
         processed["span_id"] = int(span_event["span_id"], 16)
         processed["segment_id"] = processed["span_id"]
-        processed["is_segment"] = span_event["is_segment"]
+        processed["is_segment"] = 1 if span_event["is_segment"] else 0
         parent_span_id: Optional[str] = span_event.get("parent_span_id", None)
         if parent_span_id:
             processed["parent_span_id"] = int(parent_span_id, 16)
@@ -111,7 +111,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         )
 
         processed["duration"] = max(span_event["duration_ms"], 0)
-        processed["exclusive_time"] = span_event["exclusive_time_ms"]
+        processed["exclusive_time"] = float(span_event["exclusive_time_ms"])
 
     @staticmethod
     def _process_tags(
@@ -166,6 +166,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         TODO: For the top level span belonging to a transaction, we do not know how to fill these
               values yet. For now lets just set them to their default values.
         """
+        if "sentry_tags" not in span_event:
+            return
+
         sentry_tags = span_event["sentry_tags"].copy()
         sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
         processed["sentry_tags.key"] = sentry_tag_keys
