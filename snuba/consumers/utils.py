@@ -58,5 +58,10 @@ def get_reusable_multiprocessing_pool(
     num_processes: int, initializer: Optional[Callable[[], None]]
 ) -> MultiprocessingPool:
     pool = MultiprocessingPool(num_processes, initializer)
-    atexit.register(pool.close)
+
+    def shutdown() -> None:
+        logger.info("Shutting down multiprocessing pool")
+        pool.close()
+
+    atexit.register(shutdown)
     return pool
