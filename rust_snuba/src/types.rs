@@ -46,7 +46,7 @@ impl LatencyRecorder {
             None,
         );
 
-        let latency = write_time as f64 - (self.sum_timestamps / self.num_values as f64) as u64;
+        let latency = (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64;
         metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
     }
 }
