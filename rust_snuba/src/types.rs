@@ -16,7 +16,7 @@ struct LatencyRecorder {
 
 impl From<DateTime<Utc>> for LatencyRecorder {
     fn from(value: DateTime<Utc>) -> Self {
-        let value = value.timestamp();
+        let value = value.timestamp_millis();
         LatencyRecorder {
             sum_timestamps: value as f64,
             earliest_timestamp: value as u64,
@@ -37,17 +37,16 @@ impl LatencyRecorder {
             return;
         }
 
-        let write_time = write_time.timestamp() as u64;
+        let write_time = write_time.timestamp_millis() as u64;
 
-        let max_latency = write_time.saturating_sub(self.earliest_timestamp) * 1000;
+        let max_latency = write_time.saturating_sub(self.earliest_timestamp);
         metrics.timing(
             &format!("insertions.max_{}_ms", metric_name),
             max_latency,
             None,
         );
 
-        let latency = write_time as f64 - (self.sum_timestamps / self.num_values as f64);
-        let latency = (latency * 1000.0) as u64;
+        let latency = write_time as f64 - (self.sum_timestamps / self.num_values as f64) as u64;
         metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
     }
 }
