@@ -14,10 +14,10 @@ dist_table_name = "metrics_summaries_dist"
 columns: List[Column[Modifiers]] = [
     # ids
     Column("project_id", UInt(64)),
-    Column("metric_id", String(Modifiers(low_cardinality=True))),
     Column("span_id", UInt(64)),
     Column("trace_id", UUID()),
     # metrics summary
+    Column("metric_name", String(Modifiers(low_cardinality=True))),
     Column("min", Float(64)),
     Column("max", Float(64)),
     Column("sum", Float(64)),
@@ -42,10 +42,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, metric_id, end_timestamp, cityHash64(span_id))",
+                    order_by="(project_id, metric_name, end_timestamp, cityHash64(span_id))",
                     version_column="deleted",
                     partition_by="(retention_days, toMonday(end_timestamp))",
-                    sample_by="cityHash64(metric_id)",
+                    sample_by="metric_name",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="end_timestamp + toIntervalDay(retention_days)",
