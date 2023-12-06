@@ -248,6 +248,7 @@ query_processors:
   - processor: ProjectRateLimiterProcessor
     args:
       project_column: project_id
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
