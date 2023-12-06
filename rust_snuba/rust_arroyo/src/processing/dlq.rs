@@ -108,13 +108,8 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
             limit,
             assignment
                 .iter()
-                .map(|(p, o)| {
-                    (
-                        *p,
-                        o.checked_sub(1)
-                            .map(InvalidMessageStats::invalid_at)
-                            .unwrap_or_default(),
-                    )
+                .filter_map(|(p, o)| {
+                    Some((*p, o.checked_sub(1).map(InvalidMessageStats::invalid_at)?))
                 })
                 .collect(),
         )
@@ -146,7 +141,7 @@ pub struct InvalidMessageStats {
     /// The length of the current run of received invalid messages.
     pub consecutive_invalid: u64,
     /// The offset of the last received invalid message, if any.
-    pub last_invalid_offset: Option<u64>,
+    pub last_invalid_offset: u64,
 }
 
 impl InvalidMessageStats {
@@ -155,7 +150,7 @@ impl InvalidMessageStats {
     /// The `invalid` and `consecutive_invalid` fields are intentionally left at 0.
     pub fn invalid_at(offset: u64) -> Self {
         Self {
-            last_invalid_offset: Some(offset),
+            last_invalid_offset: offset,
             ..Default::default()
         }
     }
@@ -163,9 +158,6 @@ impl InvalidMessageStats {
 
 /// Struct that keeps a record of how many valid and invalid messages have been received
 /// per partition and decides whether to produce a message to the DLQ according to a configured limit.
-///
-/// Note that `DlqLimitState` keeps a fixed list of partitions for which it records messages.
-/// Messages on any other partitions will be automatically rejected.
 #[derive(Debug, Clone, Default)]
 pub struct DlqLimitState {
     limit: DlqLimit,
@@ -174,9 +166,6 @@ pub struct DlqLimitState {
 
 impl DlqLimitState {
     /// Creates a `DlqLimitState` with a given limit and initial set of records.
-    ///
-    /// The keys in `records` determine the partitions this `DlqLimitState` will
-    /// accept invalid messages for.
     pub fn new(limit: DlqLimit, records: HashMap<Partition, InvalidMessageStats>) -> Self {
         Self { limit, records }
     }
@@ -187,26 +176,32 @@ impl DlqLimitState {
     /// returns `true` if the message should be produced to the DLQ according to the
     /// configured limit.
     fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
-        let Some(record) = self.records.get_mut(&message.partition) else {
-            return false;
-        };
-
-        if let Some(last_invalid) = record.last_invalid_offset {
-            match message.offset {
-                o if o <= last_invalid => {
-                    tracing::error!("Invalid message raised out of order")
+        let record = self
+            .records
+            .entry(message.partition)
+            .and_modify(|record| {
+                let last_invalid = record.last_invalid_offset;
+                match message.offset {
+                    o if o <= last_invalid => {
+                        tracing::error!("Invalid message raised out of order")
+                    }
+                    o if o == last_invalid + 1 => record.consecutive_invalid += 1,
+                    o => {
+                        let valid_count = o - last_invalid + 1;
+                        record.valid += valid_count;
+                        record.consecutive_invalid = 1;
+                    }
                 }
-                o if o == last_invalid + 1 => record.consecutive_invalid += 1,
-                o => {
-                    let valid_count = o - last_invalid + 1;
-                    record.valid += valid_count;
-                    record.consecutive_invalid = 1;
-                }
-            }
-        }
 
-        record.invalid += 1;
-        record.last_invalid_offset = Some(message.offset);
+                record.invalid += 1;
+                record.last_invalid_offset = message.offset;
+            })
+            .or_insert(InvalidMessageStats {
+                valid: 0,
+                invalid: 1,
+                consecutive_invalid: 1,
+                last_invalid_offset: message.offset,
+            });
 
         if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
             if record.valid == 0 {
