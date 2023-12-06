@@ -40,7 +40,11 @@ impl LatencyRecorder {
         let write_time = write_time.timestamp() as u64;
 
         let max_latency = write_time.saturating_sub(self.earliest_timestamp) * 1000;
-        metrics.timing(&format!("insertions.max_{}_ms", metric_name), max_latency, None);
+        metrics.timing(
+            &format!("insertions.max_{}_ms", metric_name),
+            max_latency,
+            None,
+        );
 
         let latency = write_time as f64 - (self.sum_timestamps / self.num_values as f64);
         let latency = (latency * 1000.0) as u64;
