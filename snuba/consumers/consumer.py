@@ -839,7 +839,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
-                # self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
                 pool=get_reusable_multiprocessing_pool(
@@ -847,7 +846,6 @@ class MultistorageConsumerProcessingStrategyFactory(
                 ),
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                # initializer=self.__initialize_parallel_transform,
             )
 
         return RunTask(
