@@ -182,17 +182,22 @@ impl DlqLimitState {
             .records
             .entry(message.partition)
             .and_modify(|record| {
-                if record.last_invalid_offset > message.offset {
-                    tracing::error!("Invalid message raised out of order");
-                } else if record.last_invalid_offset == message.offset {
-                    tracing::error!("Duplicate invalid message raised")
-                } else if record.last_invalid_offset + 1 == message.offset {
-                    record.consecutive_invalid += 1;
-                } else {
-                    let valid_count = message.offset - record.last_invalid_offset + 1;
-                    record.valid += valid_count;
-                    record.consecutive_invalid = 1;
+                let last_invalid = record.last_invalid_offset;
+                match message.offset {
+                    o if o < last_invalid => {
+                        tracing::error!("Invalid message raised out of order")
+                    }
+                    o if o == last_invalid => {
+                        tracing::error!("Duplicate invalid message raised")
+                    }
+                    o if o == last_invalid + 1 => record.consecutive_invalid += 1,
+                    o => {
+                        let valid_count = o - last_invalid + 1;
+                        record.valid += valid_count;
+                        record.consecutive_invalid = 1;
+                    }
                 }
+
                 record.invalid += 1;
                 record.last_invalid_offset = message.offset;
             })
