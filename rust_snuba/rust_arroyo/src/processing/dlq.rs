@@ -273,7 +273,7 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
     /// Clears the DLQ limits.
     #[allow(dead_code)]
-    pub fn reset_dlq_limit(&mut self, assignment: &HashMap<Partition, u64>) {
+    pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
         let Some(policy) = self.dlq_policy.as_ref() else {
             return;
         };
