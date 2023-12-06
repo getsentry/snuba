@@ -191,15 +191,20 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                         Partition::new(topic, partition.partition() as u16),
                         resolved_offset as u64,
                     );
-
-                    // TODO: Call consumer.assign
                 }
             }
+
+            // TODO: Actually implement this
+            base_consumer.assign(the topic partition list);
 
             let mut offsets = self.consumer_offsets.lock().unwrap();
             for (partition, offset) in &offset_map {
                 offsets.insert(*partition, *offset);
             }
+
+            // Ensure that all partitions are resumed on assignment to avoid
+            // carrying over state from a previous assignment.
+            base_consumer.resume(the topic partition list);
 
             self.callbacks.on_assign(offset_map);
         }
