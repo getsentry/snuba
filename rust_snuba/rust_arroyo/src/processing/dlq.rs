@@ -110,7 +110,7 @@ struct InvalidMessageStats {
     /// The length of the current run of received invalid messages.
     consecutive_invalid: u64,
     /// The offset of the last received invalid message.
-    last_invalid_offset: Option<u64>,
+    last_invalid_offset: u64,
 }
 
 /// Struct that keeps a record of how many valid and invalid messages have been received
@@ -127,7 +127,7 @@ pub struct DlqLimitState {
 impl DlqLimitState {
     fn new(
         limit: DlqLimit,
-        last_invalid_offsets: impl IntoIterator<Item = (Partition, Option<u64>)>,
+        last_invalid_offsets: impl IntoIterator<Item = (Partition, u64)>,
     ) -> Self {
         let records = last_invalid_offsets
             .into_iter()
@@ -150,26 +150,28 @@ impl DlqLimitState {
     /// returns `true` if the message should be produced to the DLQ according to the
     /// configured limit.
     fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
-        let Some(record) = self.records.get_mut(&message.partition) else {
-            // If we don't know about this message's partition, we reject it out of hand.
-            // TODO: Add some logging here?
-            return false;
-        };
-
-        if let Some(last_invalid) = record.last_invalid_offset {
-            if last_invalid > message.offset {
-                tracing::error!("Invalid message raised out of order");
-            } else if last_invalid + 1 == message.offset {
-                record.consecutive_invalid += 1;
-            } else {
-                let valid_count = message.offset - last_invalid + 1;
-                record.valid += valid_count;
-                record.consecutive_invalid = 1;
-            }
-        }
-
-        record.invalid += 1;
-        record.last_invalid_offset = Some(message.offset);
+        let record = self
+            .records
+            .entry(message.partition)
+            .and_modify(|record| {
+                if record.last_invalid_offset > message.offset {
+                    tracing::error!("Invalid message raised out of order");
+                } else if record.last_invalid_offset + 1 == message.offset {
+                    record.consecutive_invalid += 1;
+                } else {
+                    let valid_count = message.offset - record.last_invalid_offset + 1;
+                    record.valid += valid_count;
+                    record.consecutive_invalid = 1;
+                }
+                record.invalid += 1;
+                record.last_invalid_offset = message.offset;
+            })
+            .or_insert(InvalidMessageStats {
+                valid: 0,
+                invalid: 1,
+                consecutive_invalid: 1,
+                last_invalid_offset: message.offset,
+            });
 
         if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
             if record.valid == 0 {
@@ -243,7 +245,9 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
         self.dlq_limit_state = DlqLimitState::new(
             policy.limit,
-            assignment.iter().map(|(p, o)| (*p, o.checked_sub(1))),
+            assignment
+                .iter()
+                .filter_map(|(p, o)| Some((*p, o.checked_sub(1)?))),
         );
     }
 
@@ -457,7 +461,7 @@ mod tests {
             max_consecutive_count: Some(5),
         };
 
-        let mut state = DlqLimitState::new(limit, [(partition, Some(3))]);
+        let mut state = DlqLimitState::new(limit, [(partition, 3)]);
 
         // 1 valid message followed by 4 invalid
         for i in 4..9 {
