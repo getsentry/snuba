@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::min;
 
 use chrono::{DateTime, Utc};
 use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
