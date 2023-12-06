@@ -107,7 +107,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
         if let Some(s) = state.strategy.as_mut() {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
-                // TODO: DLQ should be flushed here as well
+                state.dlq_policy.flush(&commit_request.positions);
                 tracing::info!("Committing offsets");
                 let res = commit_offsets.commit(commit_request.positions);
 
@@ -245,7 +245,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
-                consumer_state.dlq_policy.flush(request.positions.clone());
+                consumer_state.dlq_policy.flush(&request.positions);
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
             Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {

@@ -315,8 +315,8 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
     // Blocks until all messages up to the committable have been produced so
     // they are safe to commit.
-    pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
-        for (p, committable_offset) in committable {
+    pub fn flush(&mut self, committable: &HashMap<Partition, u64>) {
+        for (&p, &committable_offset) in committable {
             if let Some(values) = self.futures.get_mut(&p) {
                 if let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
@@ -479,7 +479,7 @@ mod tests {
             DlqLimit::default(),
         )));
 
-        wrapper.reset_dlq_limits(&[(partition, 0)].into_iter().collect());
+        wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
 
         for i in 0..10 {
             wrapper.produce(BrokerMessage {
@@ -490,7 +490,7 @@ mod tests {
             });
         }
 
-        wrapper.flush(HashMap::from([(partition, 11)]));
+        wrapper.flush(&HashMap::from([(partition, 11)]));
 
         assert_eq!(*producer.call_count.lock().unwrap(), 10);
     }
@@ -505,9 +505,7 @@ mod tests {
 
         let mut state = DlqLimitState::new(
             limit,
-            [(partition, InvalidMessageStats::invalid_at(3))]
-                .into_iter()
-                .collect(),
+            HashMap::from([(partition, InvalidMessageStats::invalid_at(3))]),
         );
 
         // 1 valid message followed by 4 invalid
