@@ -188,14 +188,12 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
                 while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
-                        let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
-                            self.runtime.block_on(future);
-
-                        if let Err(err) = res {
-                            tracing::error!("Error producing to DLQ: {}", err);
-                        } else {
-                            values.pop_front();
+                        if let Err(error) = self.runtime.block_on(future) {
+                            let error: &dyn std::error::Error = &error;
+                            tracing::error!(error, "Error producing to DLQ");
                         }
+
+                        values.pop_front();
                     } else {
                         break;
                     }
