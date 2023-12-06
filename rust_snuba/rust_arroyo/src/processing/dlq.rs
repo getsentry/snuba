@@ -184,6 +184,8 @@ impl DlqLimitState {
             .and_modify(|record| {
                 if record.last_invalid_offset > message.offset {
                     tracing::error!("Invalid message raised out of order");
+                } else if record.last_invalid_offset == message.offset {
+                    tracing::error!("Duplicate invalid message raised")
                 } else if record.last_invalid_offset + 1 == message.offset {
                     record.consecutive_invalid += 1;
                 } else {
