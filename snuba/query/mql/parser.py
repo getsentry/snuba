@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
@@ -21,10 +22,16 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Literal,
+)
 from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.mql.mql_context import Limit, MetricsScope, MQLContext, Offset, Rollup
+from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
@@ -38,11 +45,22 @@ from snuba.query.snql.parser import (
 )
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
+from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
-MQL_VISITOR_DICT = Dict[
-    str, Union[str, Union[str, List[SelectedExpression], List[Column]]]
-]
+# The parser returns a bunch of different types, so create a single aggregate type to
+# capture everything.
+MQLSTUFF = Dict[str, Union[str, List[SelectedExpression], List[Expression]]]
 logger = logging.getLogger("snuba.mql.parser")
+
+
+@dataclass
+class InitialParseResult:
+    aggregate: SelectedExpression | None = None
+    groupby: List[SelectedExpression] | None = None
+    conditions: List[Expression] | None = None
+    mri: str | None = None
+    public_name: str | None = None
+    metric_id: int | None = None
 
 
 class MQLVisitor(NodeVisitor):  # type: ignore
@@ -50,32 +68,15 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
 
-    def visit(self, node: Node) -> Any:
-        """Walk a parse tree, transforming it into a MetricsQuery object.
-
-        Recursively descend a parse tree, dispatching to the method named after
-        the rule in the :class:`~parsimonious.grammar.Grammar` that produced
-        each node. If, for example, a rule was... ::
-
-            bold = '<b>'
-
-        ...the ``visit_bold()`` method would be called.
-        """
-        method = getattr(self, "visit_" + node.expr_name, self.generic_visit)
-        try:
-            result = method(node, [self.visit(n) for n in node])
-            return result
-        except Exception as e:
-            raise e
-
     def visit_expression(
         self,
         node: Node,
         children: Tuple[
-            MQL_VISITOR_DICT,
+            InitialParseResult,
             Any,
         ],
-    ) -> MQL_VISITOR_DICT:
+    ) -> InitialParseResult:
+        # zero_or_more_others is used for formulas, which aren't supported yet
         args, zero_or_more_others = children
         return args
 
@@ -85,8 +86,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_term(
         self,
         node: Node,
-        children: Tuple[MQL_VISITOR_DICT, Any],
-    ) -> MQL_VISITOR_DICT:
+        children: Tuple[InitialParseResult, Any],
+    ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
             raise InvalidQueryException("Arithmetic function not supported yet")
@@ -98,8 +99,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_coefficient(
         self,
         node: Node,
-        children: Tuple[MQL_VISITOR_DICT],
-    ) -> MQL_VISITOR_DICT:
+        children: Tuple[InitialParseResult],
+    ) -> InitialParseResult:
         return children[0]
 
     def visit_number(self, node: Node, children: Sequence[Any]) -> float:
@@ -109,33 +110,31 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            MQL_VISITOR_DICT,
+            InitialParseResult,
             Sequence[Any],
             Sequence[Any],
             Any,
         ],
-    ) -> MQL_VISITOR_DICT:
+    ) -> InitialParseResult:
         target, packed_filters, packed_groupbys, *_ = children
-        assert isinstance(target, dict)
         if packed_filters:
             assert isinstance(packed_filters, list)
             _, _, filter_expr, *_ = packed_filters[0]
-            if "filters" in target:
-                assert isinstance(target["filters"], list)
-                target["filters"] = target["filters"] + [filter_expr]
+            if target.conditions is not None:
+                target.conditions = target.conditions + [filter_expr]
             else:
-                target["filters"] = [filter_expr]
+                target.conditions = [filter_expr]
 
         if packed_groupbys:
             assert isinstance(packed_groupbys, list)
             group_by = packed_groupbys[0]
             if not isinstance(group_by, list):
                 group_by = [group_by]
-            if "groupby" in target:
-                assert isinstance(target["groupby"], list)
-                target["groupby"] = target["groupby"] + group_by
+            if target.groupby is not None:
+                # assert isinstance(target["groupby"], list)
+                target.groupby = target.groupby + group_by
             else:
-                target["groupby"] = group_by
+                target.groupby = group_by
 
         return target
 
@@ -163,9 +162,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         children: Tuple[Sequence[Union[str, Sequence[str]]], Any],
     ) -> FunctionCall:
         factor, *_ = children
-        if isinstance(factor, FunctionCall):
+        if isinstance(factor, FunctionCall):  # type: ignore
             # If we have a parenthesized expression, we just return it.
-            return factor
+            return factor  # type: ignore
         condition_op, lhs, _, _, _, rhs = factor
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
@@ -211,16 +210,16 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         node: Node,
         children: Tuple[
             Tuple[
-                MQL_VISITOR_DICT,
+                InitialParseResult,
             ],
-            Sequence[list[Column]],
+            Sequence[list[SelectedExpression]],
         ],
-    ) -> MQL_VISITOR_DICT:
+    ) -> InitialParseResult:
         targets, packed_groupbys = children
         target = targets[0]
         if packed_groupbys:
             group_by = packed_groupbys[0]
-            target["groupby"] = group_by
+            target.groupby = group_by
 
         return target
 
@@ -228,16 +227,19 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[Any, Any, Any, Sequence[Sequence[str]]],
-    ) -> list[Column]:
+    ) -> list[SelectedExpression]:
         *_, groupbys = children
         groupby = groupbys[0]
         if isinstance(groupby, str):
             groupby = [groupby]
         columns = [
-            Column(
-                alias=column_name,
-                table_name=None,
-                column_name=column_name,
+            SelectedExpression(
+                column_name,
+                Column(
+                    alias=column_name,
+                    table_name=None,
+                    column_name=column_name,
+                ),
             )
             for column_name in groupby
         ]
@@ -282,20 +284,20 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_target(
         self,
         node: Node,
-        children: Sequence[Union[MQL_VISITOR_DICT, Sequence[MQL_VISITOR_DICT]]],
-    ) -> MQL_VISITOR_DICT:
+        children: Sequence[Union[InitialParseResult, Sequence[InitialParseResult]]],
+    ) -> InitialParseResult:
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
-        assert isinstance(target, dict)
+        assert isinstance(target, InitialParseResult)
         return target
 
     def visit_variable(self, node: Node, children: Sequence[Any]) -> str:
         raise InvalidQueryException("Variables are not supported yet")
 
     def visit_nested_expression(
-        self, node: Node, children: Tuple[Any, Any, MQL_VISITOR_DICT]
-    ) -> MQL_VISITOR_DICT:
+        self, node: Node, children: Tuple[Any, Any, InitialParseResult]
+    ) -> InitialParseResult:
         return children[2]
 
     def visit_aggregate(
@@ -306,29 +308,24 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Tuple[
                 Any,
                 Any,
-                MQL_VISITOR_DICT,
+                InitialParseResult,
                 Any,
                 Any,
             ],
         ],
-    ) -> MQL_VISITOR_DICT:
+    ) -> InitialParseResult:
         aggregate_name, zero_or_one = children
         _, _, target, *_ = zero_or_one
-        if "mri" in target:
-            metric_name = target["mri"]
-        else:
-            metric_name = target["public_name"]
-        selected_aggregate = [
-            SelectedExpression(
-                name=f"{aggregate_name}({metric_name})",
-                expression=FunctionCall(
-                    alias=AGGREGATE_ALIAS,
-                    function_name=aggregate_name,
-                    parameters=tuple(Column(None, None, "value")),
-                ),
+        metric_name = str(target.mri if target.mri else target.public_name)
+        selected_aggregate = SelectedExpression(
+            AGGREGATE_ALIAS,
+            expression=FunctionCall(
+                f"{aggregate_name}({metric_name})",
+                function_name=aggregate_name,
+                parameters=tuple(Column(None, None, "value")),
             ),
-        ]
-        target["selected_aggregate"] = selected_aggregate
+        )
+        target.aggregate = selected_aggregate
         return target
 
     def visit_curried_aggregate(
@@ -337,37 +334,31 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         children: Tuple[
             str,
             Tuple[Any, Any, Sequence[Sequence[Union[str, int, float]]], Any, Any],
-            Tuple[Any, Any, MQL_VISITOR_DICT, Any, Any],
+            Tuple[Any, Any, InitialParseResult, Any, Any],
         ],
-    ) -> MQL_VISITOR_DICT:
+    ) -> InitialParseResult:
         aggregate_name, agg_params, zero_or_one = children
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
+        metric_name = str(target.mri if target.mri else target.public_name)
 
-        if "mri" in target:
-            metric_name = target["mri"]
-        else:
-            metric_name = target["public_name"]
         params_str = ", ".join(map(str, aggregate_params))
-        selected_aggregate_column = [
-            SelectedExpression(
+        selected_aggregate_column = SelectedExpression(
+            AGGREGATE_ALIAS,
+            CurriedFunctionCall(
                 f"{aggregate_name}({params_str})({metric_name})",
-                CurriedFunctionCall(
-                    AGGREGATE_ALIAS,
-                    FunctionCall(
-                        None,
-                        aggregate_name,
-                        tuple(
-                            Literal(alias=None, value=param)
-                            for param in aggregate_params
-                        ),
+                FunctionCall(
+                    None,
+                    aggregate_name,
+                    tuple(
+                        Literal(alias=None, value=param) for param in aggregate_params
                     ),
-                    (Column(None, None, "value"),),
                 ),
-            )
-        ]
-        target["selected_aggregate"] = selected_aggregate_column
+                (Column(None, None, "value"),),
+            ),
+        )
+        target.aggregate = selected_aggregate_column
         return target
 
     def visit_param(
@@ -397,25 +388,29 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         assert isinstance(node.text, str)
         return node.text
 
-    def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> dict[str, str]:
+    def visit_quoted_mri(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return {"mri": str(node.text[1:-1])}
+        return InitialParseResult(mri=str(node.text[1:-1]))
 
-    def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> dict[str, str]:
+    def visit_unquoted_mri(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return {"mri": str(node.text)}
+        return InitialParseResult(mri=str(node.text))
 
     def visit_quoted_public_name(
         self, node: Node, children: Sequence[Any]
-    ) -> dict[str, str]:
+    ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return {"public_name": str(node.text[1:-1])}
+        return InitialParseResult(public_name=str(node.text[1:-1]))
 
     def visit_unquoted_public_name(
         self, node: Node, children: Sequence[Any]
-    ) -> dict[str, str]:
+    ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return {"public_name": str(node.text)}
+        return InitialParseResult(public_name=str(node.text))
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -426,172 +421,93 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_initial(
+def parse_mql_query_body(
     body: str,
-    mql_context: MQLContext,
-) -> Tuple[Mapping[str, Any], Union[CompositeQuery[QueryEntity], LogicalQuery]]:
+) -> LogicalQuery:
     """
-    Parses the query body MQL generating the AST. This only takes into
-    account the initial query body. Extensions are parsed by extension
-    processors and are supposed to update the AST.
+    Parse the MQL to create an initial query. Then augments that query using the context
+    information provided.
     """
     try:
         """
         Example of parsed tree for:
         'max(transaction.user{dist:["dist1", "dist2"]}) by transaction',
 
-        {
+        InitialParseResult(
             'public_name': 'transaction.user',
-            'selected_aggregate': [SelectedExpression(name='sum(d:transactions/duration@millisecond)', expression=sum(value) AS `aggregate_value`)],
-            'filters': [IN(dist, tuple('dist1', 'dist2'))],
-            'groupby': [Column('transaction')]
-        }
+            'selected_aggregate': [SelectedExpression(name='aggregate_value', expression=sum(value) AS `sum(d:transactions/duration@millisecond)`)],
+            'filters': [in(Column('dist'), tuple('dist1', 'dist2'))],
+            'groupby': [SelectedExpression(name='transaction', Column('transaction')],
+        )
         """
         exp_tree = MQL_GRAMMAR.parse(body)
-        parsed: dict[str, Any] = MQLVisitor().visit(exp_tree)
-        selected_columns = assemble_selected_columns(
-            parsed.get("selected_aggregate", None), parsed.get("groupby", None)
+        parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        if not parsed.aggregate:
+            raise ParsingException("No aggregate specified in MQL query")
+
+        selected_columns = [parsed.aggregate]
+        if parsed.groupby:
+            selected_columns.extend(parsed.groupby)
+        groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+        id_value = parsed.metric_id or parsed.mri or parsed.public_name
+        metric_id_condition = binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "metric_id"),
+            Literal(None, id_value),
         )
-        conditions = parsed.get("filters", None)
-        if conditions:
-            conditions = combine_and_conditions(conditions)
+        if parsed.conditions:
+            conditions = combine_and_conditions(
+                [metric_id_condition, *parsed.conditions]
+            )
+        else:
+            conditions = metric_id_condition
+
         query = LogicalQuery(
             from_clause=None,
             selected_columns=selected_columns,
             condition=conditions,
-            groupby=parsed.get("groupby", None),
+            groupby=groupby,
         )
     except Exception as e:
         raise e
 
-    if not mql_context.entity:
-        raise InvalidQueryException("No entity specified in MQL context")
-    entity_key = EntityKey(mql_context.entity)
-    query.set_from_clause(
-        QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
-    )
-
-    mql_context_args = extract_mql_context(parsed, mql_context, entity_key)
-    query.add_condition_to_ast(mql_context_args["filters"])
-    query.set_ast_orderby(mql_context_args["order_by"])
-    query.set_limit(mql_context_args["limit"])
-    query.set_offset(mql_context_args["offset"])
-    query.set_granularity(mql_context_args["granularity"])
-    query.set_totals(mql_context_args["totals"])
-
-    return parsed, query
+    return query
 
 
-def assemble_selected_columns(
-    selected_aggregate: Optional[list[SelectedExpression]],
-    groupby: Optional[list[Column]],
-) -> list[SelectedExpression]:
-    selected_columns = selected_aggregate if selected_aggregate else []
-    if groupby:
-        groupby_selected_columns = [
-            SelectedExpression(name=column.alias, expression=column)
-            for column in groupby
-        ]
-        selected_columns.extend(groupby_selected_columns)
-    return selected_columns
+def populate_start_end_time(
+    query: LogicalQuery, mql_context: MQLContext, entity_key: EntityKey
+) -> None:
+    try:
+        start = parse_datetime(mql_context.start)
+        end = parse_datetime(mql_context.end)
+    except Exception as e:
+        raise ParsingException("Invalid start or end time") from e
 
-
-def extract_mql_context(
-    parsed: Mapping[str, Any],
-    mql_context: MQLContext,
-    entity_key: EntityKey,
-) -> Mapping[str, Any]:
-    """
-    Extracts all metadata from MQL context, creates the appropriate expressions for them,
-    and returns them in a formatted dictionary.
-
-    Example of serialized MQL context:
-        "mql_context": {
-            "entity": "generic_metrics_distributions"
-            "start": "2023-01-02T03:04:05+00:00",
-            "end": "2023-01-16T03:04:05+00:00",
-            "rollup": {
-                    "orderby": {"column_name": "timestamp", "direction": "ASC"},
-                    "granularity": "3600",
-                    "interval": "3600",
-                    "with_totals": "",
-            },
-            "scope": {
-                    "org_ids": ["1"],
-                    "project_ids": ["11"],
-                    "use_case_id": "transactions",
-            },
-            "limit": "",
-            "offset": "0",
-            "indexer_mappings": {
-                "d:transactions/duration@millisecond": "123456", ...
-            }
-        }
-    """
-    mql_context_args: dict[str, Any] = {}
-    filters = []
-    if not mql_context.indexer_mappings:
-        raise InvalidQueryException("No indexer mappings specified in MQL context.")
-
-    filters.extend(extract_scope_filters(parsed, mql_context))
-    filters.extend(extract_start_end_time_filters(parsed, mql_context, entity_key))
-    order_by, granularity, totals = extract_rollup(parsed, mql_context)
-    limit = extract_limit(mql_context)
-    offset = extract_offset(mql_context)
-
-    mql_context_args["filters"] = combine_and_conditions(filters)
-    mql_context_args["order_by"] = order_by
-    mql_context_args["granularity"] = granularity
-    mql_context_args["totals"] = totals
-    mql_context_args["limit"] = limit
-    mql_context_args["offset"] = offset
-
-    return mql_context_args
-
-
-def extract_start_end_time_filters(
-    parsed: Mapping[str, Any], mql_context: MQLContext, entity_key: EntityKey
-) -> list[FunctionCall]:
-    filters = []
-    if not mql_context.start or not mql_context.end:
-        raise InvalidQueryException(
-            "No start or end specified in MQL context indexer_mappings."
-        )
     entity = get_entity(entity_key)
     required_timestamp_column = (
         entity.required_time_column if entity.required_time_column else "timestamp"
     )
+    filters = []
     filters.append(
         binary_condition(
             ConditionFunctions.GTE,
-            Column(alias=None, table_name=None, column_name=required_timestamp_column),
-            FunctionCall(
-                alias=None,
-                function_name="toDateTime",
-                parameters=(Literal(alias=None, value=mql_context.start.isoformat()),),
-            ),
-        )
+            Column(None, None, column_name=required_timestamp_column),
+            Literal(None, value=start),
+        ),
     )
     filters.append(
         binary_condition(
             ConditionFunctions.LT,
-            Column(alias=None, table_name=None, column_name=required_timestamp_column),
-            FunctionCall(
-                alias=None,
-                function_name="toDateTime",
-                parameters=(Literal(alias=None, value=mql_context.end.isoformat()),),
-            ),
-        )
+            Column(None, None, column_name=required_timestamp_column),
+            Literal(None, value=end),
+        ),
     )
-    return filters
+    query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def extract_scope_filters(
-    parsed: Mapping[str, Any], mql_context: MQLContext
-) -> list[FunctionCall]:
+def populate_scope(query: LogicalQuery, mql_context: MQLContext) -> None:
     filters = []
-    if not mql_context.scope:
-        raise InvalidQueryException("No scope specified in MQL context.")
     filters.append(
         binary_condition(
             ConditionFunctions.IN,
@@ -627,63 +543,120 @@ def extract_scope_filters(
             Literal(alias=None, value=mql_context.scope.use_case_id),
         )
     )
-    return filters
+    query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def extract_rollup(
-    parsed: Mapping[str, Any], mql_context: MQLContext
-) -> tuple[list[OrderBy], int, Optional[bool]]:
-    if not mql_context.rollup:
-        raise InvalidQueryException("No rollup specified in MQL context.")
+def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
+    rollup = mql_context.rollup
 
-    # Extract orderby, TODO: we need to change this when we actually support order_by
-    order_by = []
-    if mql_context.rollup.orderby:
-        order_by = [
-            OrderBy(
-                mql_context.rollup.orderby,
-                Column(
-                    alias=None,
-                    table_name=None,
-                    column_name=AGGREGATE_ALIAS,
+    # Validate/populate granularity
+    if rollup.granularity not in GRANULARITIES_AVAILABLE:
+        raise ParsingException(
+            f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
+        )
+
+    query.add_condition_to_ast(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "granularity"),
+            Literal(None, rollup.granularity),
+        )
+    )
+
+    # Validate totals/orderby
+    if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
+        raise ParsingException("with_totals must be a string, either 'True' or 'False'")
+    if rollup.orderby is not None and rollup.orderby not in ("ASC", "DESC"):
+        raise ParsingException("orderby must be either 'ASC' or 'DESC'")
+    if rollup.interval is not None and rollup.orderby is not None:
+        raise ParsingException("orderby is not supported when interval is specified")
+    if rollup.interval and (
+        rollup.interval < GRANULARITIES_AVAILABLE[0]
+        or rollup.interval < rollup.granularity
+    ):
+        raise ParsingException(
+            f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
+        )
+
+    with_totals = rollup.with_totals == "True"
+    if rollup.interval:
+        # If an interval is specified, then we need to group the time by that interval,
+        # return the time in the select, and order the results by that time.
+        time_expression = FunctionCall(
+            "time",
+            "toStartOfInterval",
+            parameters=(
+                Column(None, None, "timestamp"),
+                FunctionCall(
+                    None,
+                    "toIntervalSecond",
+                    (Literal(None, rollup.interval),),
                 ),
-            )
-        ]
-    elif mql_context.rollup.interval:
-        order_by = [
-            OrderBy(
-                OrderByDirection.ASC,
-                Column(
-                    alias=None,
-                    table_name=None,
-                    column_name="timestamp",
-                ),
-            )
-        ]
+                Literal(None, "Universal"),
+            ),
+        )
+        selected = list(query.get_selected_columns())
+        selected.append(SelectedExpression("time", time_expression))
+        query.set_ast_selected_columns(selected)
 
-    # Extract granularity
-    # TODO: We eventually want to move the automatic granularity functionality in Sentry into here.
-    if not mql_context.rollup.granularity:
-        raise InvalidQueryException("No granularity specified in MQL context rollup.")
+        groupby = query.get_groupby()
+        if groupby:
+            query.set_ast_groupby(list(groupby) + [time_expression])
+        else:
+            query.set_ast_groupby([time_expression])
 
-    totals = mql_context.rollup.totals if mql_context.rollup.totals else False
-    return order_by, mql_context.rollup.granularity, totals
+        orderby = OrderBy(OrderByDirection.ASC, time_expression)
+        query.set_ast_orderby([orderby])
+
+        if with_totals:
+            query.set_totals(True)
+    elif rollup.orderby is not None:
+        direction = (
+            OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
+        )
+        orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
+        query.set_ast_orderby([orderby])
 
 
-def extract_limit(mql_context: MQLContext) -> int:
+def populate_limit(query: LogicalQuery, mql_context: MQLContext) -> None:
+    limit = 1000
     if mql_context.limit:
-        if mql_context.limit.limit > MAX_LIMIT:
+        if mql_context.limit > MAX_LIMIT:
             raise ParsingException(
                 "queries cannot have a limit higher than 10000", should_report=False
             )
-        return mql_context.limit.limit
-    return 1000
+        limit = mql_context.limit
+
+    query.set_limit(limit)
 
 
-def extract_offset(mql_context: MQLContext) -> int:
+def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
     if mql_context.offset:
-        return mql_context.offset.offset
-    return 0
+        if mql_context.offset < 0:
+            raise ParsingException("offset must be greater than or equal to 0")
+        query.set_offset(mql_context.offset)
+
+
+def populate_query_from_mql_context(
+    query: LogicalQuery, mql_context_dict: dict[str, Any]
+) -> tuple[LogicalQuery, MQLContext]:
+    mql_context = MQLContext.from_dict(mql_context_dict)
+
+    try:
+        entity_key = EntityKey(mql_context.entity)
+        query.set_from_clause(
+            QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
+        )
+    except Exception as e:
+        raise ParsingException(f"Invalid entity {mql_context.entity}") from e
+
+    populate_start_end_time(query, mql_context, entity_key)
+    populate_scope(query, mql_context)
+    populate_rollup(query, mql_context)
+    populate_limit(query, mql_context)
+    populate_offset(query, mql_context)
+
+    return query, mql_context
 
 
 CustomProcessors = Sequence[
@@ -691,82 +664,21 @@ CustomProcessors = Sequence[
 ]
 
 
-def build_mql_context(mql_context_dict: Mapping[str, Any]) -> MQLContext:
-    fields = [
-        "entity",
-        "start",
-        "end",
-        "scope",
-        "rollup",
-        "limit",
-        "offset",
-        "indexer_mappings",
-    ]
-    for field in fields:
-        if field not in mql_context_dict:
-            print(f"No {field} specified in MQL context.")
-            raise InvalidQueryException(f"No {field} specified in MQL context.")
-
-    # Create scope object
-    scope = MetricsScope(
-        org_ids=list(map(int, mql_context_dict["scope"]["org_ids"])),
-        project_ids=list(map(int, mql_context_dict["scope"]["project_ids"])),
-        use_case_id=mql_context_dict["scope"]["use_case_id"],
-    )
-
-    # create rollup object
-    direction = None
-    if mql_context_dict["rollup"]["orderby"]["direction"] != "":
-        direction = OrderByDirection(mql_context_dict["rollup"]["orderby"]["direction"])
-    granularity = int(mql_context_dict["rollup"]["granularity"])
-    interval = None
-    if mql_context_dict["rollup"]["interval"] != "":
-        interval = int(mql_context_dict["rollup"]["interval"])
-    totals = False
-    if mql_context_dict["rollup"]["with_totals"] == "True":
-        totals = True
-    rollup = Rollup(
-        orderby=direction,
-        granularity=granularity,
-        interval=interval,
-        totals=totals,
-    )
-
-    # Create limit and offset object
-    limit = None
-    if mql_context_dict["limit"] != "":
-        limit = Limit(int(mql_context_dict["limit"]))
-    offset = None
-    if mql_context_dict["offset"] != "":
-        offset = Offset(int(mql_context_dict["offset"]))
-    return MQLContext(
-        entity=mql_context_dict["entity"],
-        start=parse_datetime(mql_context_dict["start"]),
-        end=parse_datetime(mql_context_dict["end"]),
-        rollup=rollup,
-        scope=scope,
-        limit=limit,
-        offset=offset,
-        indexer_mappings=mql_context_dict["indexer_mappings"],
-    )
-
-
 def parse_mql_query(
     body: str,
-    mql_context_dict: Mapping[str, Any],
+    mql_context_dict: dict[str, Any],
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
-    with sentry_sdk.start_span(
-        op="validate", description="load_and_validate_mql_context"
-    ):
-        mql_context = build_mql_context(mql_context_dict)
-        mql_context.validate()
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        parsed, query = parse_mql_query_initial(body, mql_context)
+        query = parse_mql_query_body(body)
+    with sentry_sdk.start_span(
+        op="parser", description="populate_query_from_mql_context"
+    ):
+        query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        query = resolve_mappings(query, parsed, mql_context)
+        resolve_mappings(query, mql_context.indexer_mappings)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -777,6 +689,7 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
+    # TODO: Figure out what to put for the anonymized string
     with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
         snql_anonymized = format_snql_anonymized(query).get_sql()
 
