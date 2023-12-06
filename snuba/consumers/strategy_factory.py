@@ -18,6 +18,7 @@ from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
 from snuba.consumers.dlq import ExitAfterNMessages
+from snuba.consumers.utils import get_reusable_multiprocessing_pool
 from snuba.processor import ReplacementBatch
 
 ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
@@ -151,12 +152,13 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
-                self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
+                pool=get_reusable_multiprocessing_pool(
+                    self.__processes, self.__initialize_parallel_transform
+                ),
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                initializer=self.__initialize_parallel_transform,
             )
 
         if self.__prefilter is not None:

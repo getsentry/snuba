@@ -57,6 +57,7 @@ from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.schemas import _NOOP_CODEC, get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.consumers.utils import get_reusable_multiprocessing_pool
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -389,7 +390,6 @@ def build_batch_writer(
     commit_log_config: Optional[CommitLogConfig] = None,
     slice_id: Optional[int] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
-
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
 
@@ -839,12 +839,15 @@ class MultistorageConsumerProcessingStrategyFactory(
             inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
-                self.__processes,
+                # self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
+                pool=get_reusable_multiprocessing_pool(
+                    self.__processes, self.__initialize_parallel_transform
+                ),
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                initializer=self.__initialize_parallel_transform,
+                # initializer=self.__initialize_parallel_transform,
             )
 
         return RunTask(
