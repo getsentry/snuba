@@ -92,7 +92,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let metrics = get_metrics();
         metrics.increment(
             "arroyo.consumer.partitions_assigned.count",
-            partitions.len(),
+            partitions.len() as i64,
             None,
         );
 
@@ -113,7 +113,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         let metrics = get_metrics();
         metrics.increment(
             "arroyo.consumer.partitions_revoked.count",
-            partitions.len(),
+            partitions.len() as i64,
             None,
         );
 
