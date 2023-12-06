@@ -41,7 +41,7 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
         limit: DlqLimit,
         _assignment: &HashMap<Partition, u64>,
     ) -> DlqLimitState {
-        DlqLimitState::new(limit, None)
+        DlqLimitState::new(limit, HashMap::new())
     }
 }
 
@@ -108,7 +108,15 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
             limit,
             assignment
                 .iter()
-                .filter_map(|(p, o)| Some((*p, o.checked_sub(1)?))),
+                .map(|(p, o)| {
+                    (
+                        *p,
+                        o.checked_sub(1)
+                            .map(InvalidMessageStats::invalid_at)
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect(),
         )
     }
 }
@@ -130,15 +138,27 @@ pub struct DlqLimit {
 
 /// A record of valid and invalid messages that have been received on a partition.
 #[derive(Debug, Clone, Copy, Default)]
-struct InvalidMessageStats {
+pub struct InvalidMessageStats {
     /// The number of valid messages that have been received.
-    valid: u64,
+    pub valid: u64,
     /// The number of invalid messages that have been received.
-    invalid: u64,
+    pub invalid: u64,
     /// The length of the current run of received invalid messages.
-    consecutive_invalid: u64,
-    /// The offset of the last received invalid message.
-    last_invalid_offset: u64,
+    pub consecutive_invalid: u64,
+    /// The offset of the last received invalid message, if any.
+    pub last_invalid_offset: Option<u64>,
+}
+
+impl InvalidMessageStats {
+    /// Creates an empty record with the last invalid message received at `offset`.
+    ///
+    /// The `invalid` and `consecutive_invalid` fields are intentionally left at 0.
+    pub fn invalid_at(offset: u64) -> Self {
+        Self {
+            last_invalid_offset: Some(offset),
+            ..Default::default()
+        }
+    }
 }
 
 /// Struct that keeps a record of how many valid and invalid messages have been received
@@ -153,22 +173,11 @@ pub struct DlqLimitState {
 }
 
 impl DlqLimitState {
-    fn new(
-        limit: DlqLimit,
-        last_invalid_offsets: impl IntoIterator<Item = (Partition, u64)>,
-    ) -> Self {
-        let records = last_invalid_offsets
-            .into_iter()
-            .map(|(p, last_invalid_offset)| {
-                (
-                    p,
-                    InvalidMessageStats {
-                        last_invalid_offset,
-                        ..Default::default()
-                    },
-                )
-            })
-            .collect();
+    /// Creates a `DlqLimitState` with a given limit and initial set of records.
+    ///
+    /// The keys in `records` determine the partitions this `DlqLimitState` will
+    /// accept invalid messages for.
+    pub fn new(limit: DlqLimit, records: HashMap<Partition, InvalidMessageStats>) -> Self {
         Self { limit, records }
     }
 
@@ -178,35 +187,29 @@ impl DlqLimitState {
     /// returns `true` if the message should be produced to the DLQ according to the
     /// configured limit.
     fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
-        let record = self
-            .records
-            .entry(message.partition)
-            .and_modify(|record| {
-                let last_invalid = record.last_invalid_offset;
-                match message.offset {
-                    o if o < last_invalid => {
-                        tracing::error!("Invalid message raised out of order")
-                    }
-                    o if o == last_invalid => {
-                        tracing::error!("Duplicate invalid message raised")
-                    }
-                    o if o == last_invalid + 1 => record.consecutive_invalid += 1,
-                    o => {
-                        let valid_count = o - last_invalid + 1;
-                        record.valid += valid_count;
-                        record.consecutive_invalid = 1;
-                    }
-                }
+        let Some(record) = self.records.get_mut(&message.partition) else {
+            return false;
+        };
 
-                record.invalid += 1;
-                record.last_invalid_offset = message.offset;
-            })
-            .or_insert(InvalidMessageStats {
-                valid: 0,
-                invalid: 1,
-                consecutive_invalid: 1,
-                last_invalid_offset: message.offset,
-            });
+        if let Some(last_invalid) = record.last_invalid_offset {
+            match message.offset {
+                o if o < last_invalid => {
+                    tracing::error!("Invalid message raised out of order")
+                }
+                o if o == last_invalid => {
+                    tracing::error!("Duplicate invalid message raised")
+                }
+                o if o == last_invalid + 1 => record.consecutive_invalid += 1,
+                o => {
+                    let valid_count = o - last_invalid + 1;
+                    record.valid += valid_count;
+                    record.consecutive_invalid = 1;
+                }
+            }
+        }
+
+        record.invalid += 1;
+        record.last_invalid_offset = Some(message.offset);
 
         if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
             if record.valid == 0 {
@@ -461,7 +464,13 @@ mod tests {
                 limit: DlqLimit,
                 assignment: &HashMap<Partition, u64>,
             ) -> DlqLimitState {
-                DlqLimitState::new(limit, assignment.iter().map(|(p, o)| (*p, *o)))
+                DlqLimitState::new(
+                    limit,
+                    assignment
+                        .iter()
+                        .map(|(p, _)| (*p, InvalidMessageStats::default()))
+                        .collect(),
+                )
             }
         }
 
@@ -477,7 +486,7 @@ mod tests {
             DlqLimit::default(),
         )));
 
-        wrapper.reset_dlq_limit(&[(partition, 0)].into_iter().collect());
+        wrapper.reset_dlq_limits(&[(partition, 0)].into_iter().collect());
 
         for i in 0..10 {
             wrapper.produce(BrokerMessage {
@@ -501,7 +510,12 @@ mod tests {
             max_consecutive_count: Some(5),
         };
 
-        let mut state = DlqLimitState::new(limit, [(partition, 3)]);
+        let mut state = DlqLimitState::new(
+            limit,
+            [(partition, InvalidMessageStats::invalid_at(3))]
+                .into_iter()
+                .collect(),
+        );
 
         // 1 valid message followed by 4 invalid
         for i in 4..9 {
