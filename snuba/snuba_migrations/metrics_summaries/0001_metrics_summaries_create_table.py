@@ -1,8 +1,7 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Array, Column, DateTime, Nested, String, UInt
+from snuba.clickhouse.columns import UUID, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
@@ -25,13 +24,6 @@ columns: List[Column[Modifiers]] = [
     Column("count", Float(64)),
     # metrics metadata
     Column("tags", Nested([("key", String()), ("value", String())])),
-    Column(
-        "_tags_hash_map",
-        Array(
-            UInt(64),
-            Modifiers(materialized=TAGS_HASH_MAP_COLUMN),
-        ),
-    ),
     # span metadata
     Column("end_timestamp", DateTime()),
     # snuba internals
