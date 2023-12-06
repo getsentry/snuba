@@ -167,19 +167,32 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             for partition in committed_offsets.elements().iter() {
                 let raw_offset = partition.offset().to_raw().unwrap();
 
+                let topic = Topic::new(partition.topic());
+
                 if raw_offset > 0 {
-                    let topic = Topic::new(partition.topic());
                     offset_map.insert(
                         Partition::new(topic, partition.partition() as u16),
                         raw_offset as u64,
                     );
                 } else {
-                    // TODO: Resolve according to the auto offset reset policy
-                    let (low_watermark, high_watermark) = base_consumer.fetch_watermarks(
-                        partition.topic(),
-                        partition.partition(),
-                        None,
-                    ).unwrap();
+                    // Resolve according to the auto offset reset policy
+                    let (low_watermark, high_watermark) = base_consumer
+                        .fetch_watermarks(partition.topic(), partition.partition(), None)
+                        .unwrap();
+
+                    let resolved_offset = match self.initial_offset_reset {
+                        InitialOffset::Earliest => low_watermark,
+                        InitialOffset::Latest => high_watermark,
+                        InitialOffset::Error => {
+                            panic!("received unexpected offset");
+                        }
+                    };
+                    offset_map.insert(
+                        Partition::new(topic, partition.partition() as u16),
+                        resolved_offset as u64,
+                    );
+
+                    // TODO: Call consumer.assign
                 }
             }
 
@@ -188,19 +201,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 offsets.insert(*partition, *offset);
             }
 
-            // Prev implmenntation
-            let mut map: HashMap<Partition, u64> = HashMap::new();
-            for partition in list.elements().iter() {
-                let topic = Topic::new(partition.topic());
-                let index = partition.partition() as u16;
-                let offset = partition.offset().to_raw().unwrap();
-                map.insert(Partition::new(topic, index), offset as u64);
-            }
-            let mut offsets = self.consumer_offsets.lock().unwrap();
-            for (partition, offset) in &map {
-                offsets.insert(*partition, *offset);
-            }
-            self.callbacks.on_assign(map);
+            self.callbacks.on_assign(offset_map);
         }
     }
 }
@@ -220,9 +221,6 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
 
-        // NOTE: Offsets are explicitly managed as part of the assignment
-        // callback, so preemptively resetting offsets is not enabled when
-        // strict_offset_reset is enabled.
         let auto_offset_reset = &*config
             .offset_reset_config()
             .ok_or(ConsumerError::InvalidConfig)?
