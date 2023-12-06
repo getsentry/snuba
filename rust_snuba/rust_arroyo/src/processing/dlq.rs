@@ -140,7 +140,7 @@ pub struct InvalidMessageStats {
     pub invalid: u64,
     /// The length of the current run of received invalid messages.
     pub consecutive_invalid: u64,
-    /// The offset of the last received invalid message, if any.
+    /// The offset of the last received invalid message.
     pub last_invalid_offset: u64,
 }
 
@@ -318,17 +318,15 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn flush(&mut self, committable: &HashMap<Partition, u64>) {
         for (&p, &committable_offset) in committable {
             if let Some(values) = self.futures.get_mut(&p) {
-                if let Some((offset, future)) = values.front_mut() {
+                while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
-                        let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
-                            self.runtime.block_on(future);
-
-                        if let Err(err) = res {
-                            tracing::error!("Error producing to DLQ: {}", err);
-                        } else {
-                            values.pop_front();
+                        if let Err(error) = self.runtime.block_on(future) {
+                            let error: &dyn std::error::Error = &error;
+                            tracing::error!(error, "Error producing to DLQ");
                         }
+
+                        values.pop_front();
                     } else {
                         break;
                     }

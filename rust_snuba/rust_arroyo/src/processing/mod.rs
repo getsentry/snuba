@@ -93,14 +93,36 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
     // Revisit this so that it is not the callback that perform the
     // initialization.  But we just provide a signal back to the
     // processor to do that.
-    fn on_assign(&self, assignment: HashMap<Partition, u64>) {
+    fn on_assign(&self, partitions: HashMap<Partition, u64>) {
+        let metrics = get_metrics();
+        metrics.increment(
+            "arroyo.consumer.partitions_assigned.count",
+            partitions.len() as i64,
+            None,
+        );
+
+        let start = Instant::now();
+
         let mut state = self.0.lock().unwrap();
         state.strategy = Some(state.processing_factory.create());
-        state.dlq_policy.reset_dlq_limits(&assignment);
+        state.dlq_policy.reset_dlq_limits(&partitions);
+
+        metrics.timing(
+            "arroyo.consumer.create_strategy.time",
+            start.elapsed().as_millis() as u64,
+            None,
+        );
     }
-    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, _: Vec<Partition>) {
+
+    fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, partitions: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
         let metrics = get_metrics();
+        metrics.increment(
+            "arroyo.consumer.partitions_revoked.count",
+            partitions.len() as i64,
+            None,
+        );
+
         let start = Instant::now();
 
         let mut state = self.0.lock().unwrap();

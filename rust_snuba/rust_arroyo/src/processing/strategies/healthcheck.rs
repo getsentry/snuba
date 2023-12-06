@@ -36,7 +36,8 @@ impl<Next> HealthCheck<Next> {
         if now < self.deadline {
             return;
         }
-        if let Err(err) = filetime::set_file_mtime(&self.path, filetime::FileTime::now()) {
+
+        if let Err(err) = std::fs::File::create(&self.path) {
             let error: &dyn std::error::Error = &err;
             tracing::error!(error);
         }

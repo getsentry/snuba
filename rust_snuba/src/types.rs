@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::min;
 
 use chrono::{DateTime, Utc};
 use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
@@ -9,17 +9,17 @@ pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
 #[derive(Debug, Default, Clone)]
 struct LatencyRecorder {
-    sum_secs: f64,
-    max_secs: u64,
+    sum_timestamps: f64,
+    earliest_timestamp: u64,
     num_values: usize,
 }
 
 impl From<DateTime<Utc>> for LatencyRecorder {
     fn from(value: DateTime<Utc>) -> Self {
-        let value = value.timestamp();
+        let value = value.timestamp_millis();
         LatencyRecorder {
-            sum_secs: value as f64,
-            max_secs: value as u64,
+            sum_timestamps: value as f64,
+            earliest_timestamp: value as u64,
             num_values: 1,
         }
     }
@@ -27,8 +27,8 @@ impl From<DateTime<Utc>> for LatencyRecorder {
 
 impl LatencyRecorder {
     fn merge(&mut self, other: Self) {
-        self.sum_secs += other.sum_secs;
-        self.max_secs = max(self.max_secs, other.max_secs);
+        self.sum_timestamps += other.sum_timestamps;
+        self.earliest_timestamp = min(self.earliest_timestamp, other.earliest_timestamp);
         self.num_values += other.num_values;
     }
 
@@ -37,13 +37,16 @@ impl LatencyRecorder {
             return;
         }
 
-        let write_time = write_time.timestamp() as u64;
+        let write_time = write_time.timestamp_millis() as u64;
 
-        let latency = self.max_secs.saturating_sub(write_time) * 1000;
-        metrics.timing(&format!("insertions.max_{}_ms", metric_name), latency, None);
+        let max_latency = write_time.saturating_sub(self.earliest_timestamp);
+        metrics.timing(
+            &format!("insertions.max_{}_ms", metric_name),
+            max_latency,
+            None,
+        );
 
-        let latency =
-            ((self.sum_secs * 1000.0 / self.num_values as f64) as u64).saturating_sub(write_time);
+        let latency = (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64;
         metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
     }
 }
