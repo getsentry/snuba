@@ -27,7 +27,6 @@ from snuba.query.expressions import (
     Column,
     Expression,
     ExpressionVisitor,
-    FunctionCall,
     SubscriptableReference,
 )
 
@@ -415,64 +414,6 @@ class Query(DataSource, ABC):
         return self.__get_all_ast_referenced_expressions(
             [selected.expression for selected in self.__selected_columns], Column
         )
-
-    def find_and_replace_column_in_condition(
-        self, find_column_name: str, replace_column: Column
-    ) -> None:
-        condition = self.get_condition()
-        new_conditions = self._rebuild_condition_tree_with_replaced_column(
-            condition, find_column_name, replace_column
-        )
-        self.set_ast_condition(new_conditions)
-
-    def _rebuild_condition_tree_with_replaced_column(
-        self,
-        condition: Optional[Expression],
-        find_column_name: str,
-        replace_column: Column,
-    ) -> Expression:
-        assert isinstance(condition, FunctionCall)
-        parameters = []
-        for parameter in condition.parameters:
-            if isinstance(parameter, FunctionCall):
-                new_parameter = self._rebuild_condition_tree_with_replaced_column(
-                    parameter, find_column_name, replace_column
-                )
-                parameters.append(new_parameter)
-            else:
-                if isinstance(parameter, Column):
-                    if parameter.column_name == find_column_name:
-                        parameter = replace_column
-                parameters.append(parameter)
-
-        return FunctionCall(None, condition.function_name, tuple(parameters))
-
-    def find_and_replace_column_in_groupby_and_selected_columns(
-        self, find_column_name: str, replace_column: Column
-    ) -> None:
-        groupby = self.get_groupby()
-        new_groupby_columns = []
-        for column in groupby:
-            assert isinstance(column, Column)
-            if column.column_name == find_column_name:
-                column = replace_column
-            new_groupby_columns.append(column)
-
-        selected_columns = self.get_selected_columns()
-        new_selected_columns = []
-        for selected_column in selected_columns:
-            assert isinstance(selected_column, SelectedExpression)
-            if (
-                isinstance(selected_column.expression, Column)
-                and selected_column.expression.column_name == find_column_name
-            ):
-                selected_column = SelectedExpression(
-                    selected_column.name, replace_column
-                )
-            new_selected_columns.append(selected_column)
-
-        self.set_ast_groupby(new_groupby_columns)
-        self.set_ast_selected_columns(new_selected_columns)
 
     def validate_aliases(self) -> bool:
         """

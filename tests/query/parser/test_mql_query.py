@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import re
 from datetime import datetime
 from typing import Any, Dict
 
@@ -18,10 +21,296 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
-from snuba.query.mql.exceptions import InvalidExpressionError, InvalidMQLContextError
 from snuba.query.mql.parser import parse_mql_query
+from snuba.query.parser.exceptions import ParsingException
+
+# Commonly used expressions
+from_distributions = QueryEntity(
+    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+)
+
+time_expression = FunctionCall(
+    "_snuba_time",
+    "toStartOfInterval",
+    (
+        Column("_snuba_timestamp", None, "timestamp"),
+        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+        Literal(None, "Universal"),
+    ),
+)
+
 
 mql_test_cases = [
+    pytest.param(
+        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2023-11-23T18:30:00",
+            "end": "2023-11-23T22:30:00",
+            "rollup": {
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": "False",
+                "orderby": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [11],
+                "use_case_id": "transactions",
+            },
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "dist": 888,
+                "transaction": 111111,
+                "status_code": 222222,
+            },
+            "limit": None,
+            "offset": None,
+        },
+        Query(
+            from_distributions,
+            selected_columns=[
+                SelectedExpression(
+                    "aggregate_value",
+                    FunctionCall(
+                        "_snuba_sum(d:transactions/duration@millisecond)",
+                        "sum",
+                        (Column("_snuba_value", None, "value"),),
+                    ),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    SubscriptableReference(
+                        "_snuba_tags_raw[111111]",
+                        Column("_snuba_tags_raw", None, "tags_raw"),
+                        Literal(None, "111111"),
+                    ),
+                ),
+                SelectedExpression(
+                    "status_code",
+                    SubscriptableReference(
+                        "_snuba_tags_raw[222222]",
+                        Column("_snuba_tags_raw", None, "tags_raw"),
+                        Literal(None, "222222"),
+                    ),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression,
+                ),
+            ],
+            groupby=[
+                SubscriptableReference(
+                    "_snuba_tags_raw[111111]",
+                    Column("_snuba_tags_raw", None, "tags_raw"),
+                    Literal(None, "111111"),
+                ),
+                SubscriptableReference(
+                    "_snuba_tags_raw[222222]",
+                    Column("_snuba_tags_raw", None, "tags_raw"),
+                    Literal(None, "222222"),
+                ),
+                time_expression,
+            ],
+            condition=FunctionCall(
+                alias=None,
+                function_name="and",
+                parameters=(
+                    FunctionCall(
+                        alias=None,
+                        function_name="equals",
+                        parameters=(
+                            Column(
+                                alias="_snuba_granularity",
+                                table_name=None,
+                                column_name="granularity",
+                            ),
+                            Literal(alias=None, value=60),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="and",
+                        parameters=(
+                            FunctionCall(
+                                alias=None,
+                                function_name="in",
+                                parameters=(
+                                    Column(
+                                        alias="_snuba_project_id",
+                                        table_name=None,
+                                        column_name="project_id",
+                                    ),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="tuple",
+                                        parameters=(Literal(alias=None, value=11),),
+                                    ),
+                                ),
+                            ),
+                            FunctionCall(
+                                alias=None,
+                                function_name="and",
+                                parameters=(
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="in",
+                                        parameters=(
+                                            Column(
+                                                alias="_snuba_org_id",
+                                                table_name=None,
+                                                column_name="org_id",
+                                            ),
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="tuple",
+                                                parameters=(
+                                                    Literal(alias=None, value=1),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="and",
+                                        parameters=(
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="equals",
+                                                parameters=(
+                                                    Column(
+                                                        alias="_snuba_use_case_id",
+                                                        table_name=None,
+                                                        column_name="use_case_id",
+                                                    ),
+                                                    Literal(
+                                                        alias=None, value="transactions"
+                                                    ),
+                                                ),
+                                            ),
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="and",
+                                                parameters=(
+                                                    FunctionCall(
+                                                        alias=None,
+                                                        function_name="greaterOrEquals",
+                                                        parameters=(
+                                                            Column(
+                                                                alias="_snuba_timestamp",
+                                                                table_name=None,
+                                                                column_name="timestamp",
+                                                            ),
+                                                            Literal(
+                                                                alias=None,
+                                                                value=datetime(
+                                                                    2023, 11, 23, 18, 30
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                    FunctionCall(
+                                                        alias=None,
+                                                        function_name="and",
+                                                        parameters=(
+                                                            FunctionCall(
+                                                                alias=None,
+                                                                function_name="less",
+                                                                parameters=(
+                                                                    Column(
+                                                                        alias="_snuba_timestamp",
+                                                                        table_name=None,
+                                                                        column_name="timestamp",
+                                                                    ),
+                                                                    Literal(
+                                                                        alias=None,
+                                                                        value=datetime(
+                                                                            2023,
+                                                                            11,
+                                                                            23,
+                                                                            22,
+                                                                            30,
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                            FunctionCall(
+                                                                alias=None,
+                                                                function_name="and",
+                                                                parameters=(
+                                                                    FunctionCall(
+                                                                        alias=None,
+                                                                        function_name="equals",
+                                                                        parameters=(
+                                                                            Column(
+                                                                                alias="_snuba_metric_id",
+                                                                                table_name=None,
+                                                                                column_name="metric_id",
+                                                                            ),
+                                                                            Literal(
+                                                                                alias=None,
+                                                                                value=123456,
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                    FunctionCall(
+                                                                        alias=None,
+                                                                        function_name="in",
+                                                                        parameters=(
+                                                                            SubscriptableReference(
+                                                                                alias="_snuba_tags_raw[888]",
+                                                                                column=Column(
+                                                                                    alias="_snuba_tags_raw",
+                                                                                    table_name=None,
+                                                                                    column_name="tags_raw",
+                                                                                ),
+                                                                                key=Literal(
+                                                                                    alias=None,
+                                                                                    value="888",
+                                                                                ),
+                                                                            ),
+                                                                            FunctionCall(
+                                                                                alias=None,
+                                                                                function_name="tuple",
+                                                                                parameters=(
+                                                                                    Literal(
+                                                                                        alias=None,
+                                                                                        value="dist1",
+                                                                                    ),
+                                                                                    Literal(
+                                                                                        alias=None,
+                                                                                        value="dist2",
+                                                                                    ),
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.ASC,
+                    expression=time_expression,
+                )
+            ],
+            limit=1000,
+            offset=0,
+        ),
+        id="test of resolved query",
+    ),
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
@@ -29,18 +318,18 @@ mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
-                "granularity": "60",
-                "interval": "",
-                "with_totals": "",
+                "orderby": "ASC",
+                "granularity": 60,
+                "interval": None,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "",
-            "offset": "",
+            "limit": None,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
@@ -173,18 +462,18 @@ mql_test_cases = [
             "start": "2021-01-01T01:36:00",
             "end": "2021-01-05T04:15:00",
             "rollup": {
-                "orderby": {"column_name": "", "direction": ""},
-                "granularity": "3600",
-                "interval": "",
-                "with_totals": "",
+                "orderby": None,
+                "granularity": 3600,
+                "interval": None,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "100",
-            "offset": "3",
+            "limit": 100,
+            "offset": 3,
             "indexer_mappings": {
                 "transaction.user": "s:transactions/user@none",
                 "s:transactions/user@none": "567890",
@@ -200,9 +489,9 @@ mql_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "quantiles(0.5, 0.75)(transaction.user)",
+                    "aggregate_value",
                     CurriedFunctionCall(
-                        "_snuba_aggregate_value",
+                        "_snuba_quantiles(0.5, 0.75)(transaction.user)",
                         FunctionCall(
                             None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
                         ),
@@ -381,24 +670,24 @@ invalid_mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
-                "granularity": "60",
-                "interval": "10",
-                "with_totals": "",
+                "orderby": None,
+                "granularity": 60,
+                "interval": 10,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "",
-            "offset": "",
+            "limit": None,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
             },
         },
-        InvalidExpressionError("interval must be greater than or equal to granularity"),
+        ParsingException("interval 10 must be greater than or equal to granularity 6"),
         id="interval less than granularity",
     ),
     pytest.param(
@@ -408,26 +697,24 @@ invalid_mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": "ASC"},
-                "granularity": "60",
-                "interval": "60",
-                "with_totals": "",
+                "orderby": "DESC",
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "",
-            "offset": "",
+            "limit": None,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
             },
         },
-        InvalidExpressionError(
-            "Timeseries queries can't be ordered when using interval"
-        ),
+        ParsingException("orderby is not supported when interval is specified"),
         id="interval and orderby provided",
     ),
     pytest.param(
@@ -436,24 +723,24 @@ invalid_mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": ""},
-                "granularity": "60",
-                "interval": "60",
-                "with_totals": "",
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "",
-            "offset": "",
+            "limit": None,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
             },
         },
-        InvalidQueryException("No entity specified in MQL context."),
+        InvalidQueryException("MQL context: missing required field 'entity'"),
         id="missing entity",
     ),
     pytest.param(
@@ -462,24 +749,24 @@ invalid_mql_test_cases = [
             "entity": "generic_metrics_distributions",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": ""},
-                "granularity": "60",
-                "interval": "60",
-                "with_totals": "",
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "",
-            "offset": "",
+            "limit": None,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
             },
         },
-        InvalidMQLContextError("No start specified in MQL context."),
+        ParsingException("MQL context: missing required field 'start'"),
         id="missing start time",
     ),
     pytest.param(
@@ -489,25 +776,25 @@ invalid_mql_test_cases = [
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
-                "orderby": {"column_name": "aggregate_value", "direction": ""},
-                "granularity": "60",
-                "interval": "60",
-                "with_totals": "",
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
             },
             "scope": {
-                "org_ids": ["1"],
-                "project_ids": ["1"],
+                "org_ids": [1],
+                "project_ids": [1],
                 "use_case_id": "transactions",
             },
-            "limit": "1000000",
-            "offset": "",
+            "limit": 1000000,
+            "offset": None,
             "indexer_mappings": {
                 "d:transactions/duration@millisecond": "123456",
                 "dist": "000888",
             },
         },
-        InvalidExpressionError("limit '1000000' is capped at 10,000"),
-        id="missing entity",
+        ParsingException("queries cannot have a limit higher than 10000"),
+        id="missing limit",
     ),
 ]
 
@@ -519,6 +806,5 @@ def test_invalid_format_expressions_from_mql(
     error: Exception,
 ) -> None:
     generic_metrics = get_dataset("generic_metrics")
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(type(error), match=re.escape(str(error))):
         query, _ = parse_mql_query(query_body, mql_context, generic_metrics)
-    assert str(exc_info.value) == str(error)

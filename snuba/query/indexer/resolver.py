@@ -1,115 +1,73 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Union
-
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.mql.mql_context import MQLContext
+
+
+def resolve(value: str, mapping: dict[str, str | int]) -> str | int:
+    """
+    Resolve a value to a new value using a mapping.
+    Raise an exception if the value is not in the mapping.
+    """
+    if value in mapping:
+        return mapping[value]
+
+    raise InvalidQueryException(f"Could not resolve {value}")
+
+
+def resolve_tag_mappings(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+    indexer_mapping: dict[str, str | int],
+) -> None:
+    def resolve_tag_column(exp: Expression) -> Expression:
+        if isinstance(exp, Column) and exp.column_name in indexer_mapping:
+            return Column(
+                alias=exp.alias,
+                table_name=exp.table_name,
+                # TODO: Metrics (non-generic metrics) queries use `tags` instead of `tags_raw`
+                column_name=f"tags_raw[{resolve(exp.column_name, indexer_mapping)}]",
+            )
+        return exp
+
+    query.transform_expressions(resolve_tag_column)
+
+
+def resolve_metric_id(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+    indexer_mappings: dict[str, str | int],
+) -> None:
+    def resolve_metric_id_column(exp: Expression) -> Expression:
+        # Metric IDs are built into the queries as conditions, e.g. metric_id = X
+        # However X could be a public name ("transaction.duration") or an MRI ("d:transactions/duration@millisecond")
+        # Resolve those strings down to the integer metric ID.
+
+        if isinstance(exp, Literal) and exp.value in indexer_mappings:
+            # This could be a public_name or an mri. public_name -> mri -> metric_id
+            # So we need to resolve the MRI potentially as well.
+            mapping = resolve(str(exp.value), indexer_mappings)
+            if isinstance(mapping, int):
+                metric_id = mapping
+            else:
+                metric_id = int(resolve(mapping, indexer_mappings))
+
+            return Literal(None, metric_id)
+        return exp
+
+    query.transform_expressions(resolve_metric_id_column)
 
 
 def resolve_mappings(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    parsed: Mapping[str, Any],
-    mql_context: MQLContext,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+    mappings: dict[str, str | int],
+) -> None:
     """
     At the time of writting (Nov 30, 2023), the indexer is called within sentry.
     This might be subjected to change in the future. As a result, this function
     mimics the behavior of the indexer to resolve the metric_id and tag filters
     by using the indexer_mapping provided by the client.
     """
-    resolve_metric_id_processor(query, parsed, mql_context)
-    resolve_tag_filters_processor(query, parsed, mql_context)
-    resolve_gropupby_processor(query, parsed, mql_context)
-    return query
-
-
-def resolve_metric_id_processor(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    parsed: Mapping[str, Any],
-    mql_context: MQLContext,
-) -> None:
-    """
-    Adds the resolved metric_id to the AST conditions
-    """
-    if not mql_context.indexer_mappings:
-        raise InvalidQueryException("No indexer_mappings found in MQL context.")
-    if "mri" not in parsed and "public_name" in parsed:
-        public_name = parsed["public_name"]
-        mri = mql_context.indexer_mappings[public_name]
-    else:
-        mri = parsed["mri"]
-
-    if mri not in mql_context.indexer_mappings:
-        raise InvalidQueryException(
-            "No mri to metric_id mapping found in MQL context indexer_mappings."
-        )
-    metric_id = mql_context.indexer_mappings[mri]
-    query.add_condition_to_ast(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(alias=None, table_name=None, column_name="metric_id"),
-            Literal(alias=None, value=metric_id),
-        )
-    )
-
-
-def resolve_tag_filters_processor(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    parsed: Mapping[str, Any],
-    mql_context: MQLContext,
-) -> None:
-    """
-    Traverse through all conditions of the AST,
-    then finds and replaces tag filters with resolved names
-    """
-    if not mql_context.indexer_mappings:
-        raise InvalidQueryException("No indexer_mappings found in MQL context.")
-    conditions = parsed.get("filters", None)
-    if conditions:
-        for condition in conditions:
-            assert isinstance(condition, FunctionCall)
-            column = condition.parameters[0]  # lhs
-            assert isinstance(column, Column)
-            column_name = column.column_name
-            if column_name in mql_context.indexer_mappings:
-                resolved = mql_context.indexer_mappings[column_name]
-                lhs_column_name = f"tags_raw[{resolved}]"
-                replace_column = Column(
-                    alias=column_name,
-                    table_name=None,
-                    column_name=lhs_column_name,
-                )
-                query.find_and_replace_column_in_condition(column_name, replace_column)
-
-
-def resolve_gropupby_processor(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    parsed: Mapping[str, Any],
-    mql_context: MQLContext,
-) -> None:
-    """
-    Iterates through the groupby and selected_columns in AST,
-    then finds and replaces the groupby column with resolved names
-    """
-    if not mql_context.indexer_mappings:
-        raise InvalidQueryException("No indexer_mappings found in MQL context.")
-    groupbys = parsed.get("groupby", None)
-    if groupbys:
-        for groupby_column in groupbys:
-            assert isinstance(groupby_column, Column)
-            if groupby_column.column_name in mql_context.indexer_mappings:
-                resolved = mql_context.indexer_mappings[groupby_column.column_name]
-                resolved_column_name = f"tags_raw[{resolved}]"
-                column = Column(
-                    alias=groupby_column.column_name,
-                    table_name=None,
-                    column_name=resolved_column_name,
-                )
-                query.find_and_replace_column_in_groupby_and_selected_columns(
-                    groupby_column.column_name, column
-                )
+    resolve_metric_id(query, mappings)
+    resolve_tag_mappings(query, mappings)
