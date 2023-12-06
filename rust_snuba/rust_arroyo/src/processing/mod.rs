@@ -335,7 +335,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
 
                 if let Some(msg) = invalid_message {
                     tracing::error!(?message, "Invalid message");
-                    self.consumer_state.lock().unwrap().dlq_policy.produce(msg);
+                    consumer_state.dlq_policy.produce(msg);
                 } else {
                     tracing::error!(?message, "Could not retrieve invalid message from buffer");
                 }
