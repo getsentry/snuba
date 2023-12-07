@@ -150,7 +150,7 @@ mod tests {
             InitialOffset::Latest,
             false,
             30_000,
-            None,
+            Default::default(),
         );
 
         let partition = Partition::new(Topic::new("test"), 0);

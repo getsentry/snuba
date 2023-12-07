@@ -48,8 +48,10 @@ mod tests {
     fn test_producer() {
         let topic = Topic::new("test");
         let destination = TopicOrPartition::Topic(topic);
-        let configuration =
-            KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);
+        let configuration = KafkaConfig::new_producer_config(
+            vec!["127.0.0.1:9092".to_string()],
+            Default::default(),
+        );
 
         let producer = KafkaProducer::new(configuration);
 

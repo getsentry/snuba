@@ -79,7 +79,7 @@ async fn main() {
         InitialOffset::Latest,
         false,
         30_000,
-        None,
+        Default::default(),
     );
 
     let factory = ReverseStringAndProduceStrategyFactory {

@@ -130,7 +130,7 @@ pub fn consumer_impl(
         ),
         !no_strict_offset_reset,
         max_poll_interval_ms,
-        Some(consumer_config.raw_topic.broker_config),
+        consumer_config.raw_topic.broker_config,
     );
 
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
@@ -141,7 +141,7 @@ pub fn consumer_impl(
         true => None,
         false => consumer_config.dlq_topic.map(|dlq_topic_config| {
             let producer_config =
-                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+                KafkaConfig::new_producer_config(vec![], dlq_topic_config.broker_config);
             let producer = KafkaProducer::new(producer_config);
 
             let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(

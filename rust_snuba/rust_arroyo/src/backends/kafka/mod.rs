@@ -540,7 +540,7 @@ mod tests {
             InitialOffset::Latest,
             false,
             30_000,
-            None,
+            Default::default(),
         );
         let topic = Topic::new("test");
         KafkaConsumer::new(configuration, &[topic], EmptyCallbacks {}).unwrap();
@@ -555,7 +555,7 @@ mod tests {
             InitialOffset::Latest,
             false,
             30_000,
-            None,
+            Default::default(),
         );
         let mut consumer =
             KafkaConsumer::new(configuration, &[topic.topic], EmptyCallbacks {}).unwrap();
@@ -647,7 +647,7 @@ mod tests {
             InitialOffset::Latest,
             false,
             30_000,
-            None,
+            Default::default(),
         );
 
         let mut consumer =
