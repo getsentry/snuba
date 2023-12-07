@@ -177,10 +177,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
     fn post_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
             let committed_offsets = base_consumer
-                .committed_offsets(
-                    (*list).clone(),
-                    None,
-                )
+                .committed_offsets((*list).clone(), None)
                 .unwrap();
 
             let mut offset_map: HashMap<Partition, u64> = HashMap::new();
@@ -225,12 +222,16 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 .unwrap();
             }
 
-            base_consumer.assign(&tpl).expect("failed to assign partitions");
+            base_consumer
+                .assign(&tpl)
+                .expect("failed to assign partitions");
             self.consumer_offsets.lock().unwrap().extend(&offset_map);
 
             // Ensure that all partitions are resumed on assignment to avoid
             // carrying over state from a previous assignment.
-            base_consumer.resume(&tpl).expect("failed to resume partitions");
+            base_consumer
+                .resume(&tpl)
+                .expect("failed to resume partitions");
 
             self.callbacks.on_assign(offset_map);
         }
