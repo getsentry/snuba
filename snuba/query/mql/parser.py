@@ -131,7 +131,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             if not isinstance(group_by, list):
                 group_by = [group_by]
             if target.groupby is not None:
-                # assert isinstance(target["groupby"], list)
                 target.groupby = target.groupby + group_by
             else:
                 target.groupby = group_by

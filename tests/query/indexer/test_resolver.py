@@ -87,7 +87,7 @@ metric_id_test_cases = [
         ),
         {
             "transaction.user": "s:transactions/user@none",
-            "s:transactions/user@none": "567890",
+            "s:transactions/user@none": 567890,
         },
         LogicalQuery(
             from_clause=QueryEntity(
@@ -112,7 +112,7 @@ metric_id_test_cases = [
                 "equals",
                 (
                     Column(None, None, "metric_id"),
-                    Literal(None, "567890"),
+                    Literal(None, 567890),
                 ),
             ),
             limit=1000,
