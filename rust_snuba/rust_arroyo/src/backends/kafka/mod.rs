@@ -202,7 +202,6 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 }
             }
 
-            // TODO: Actually implement this
             let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
             for (partition, offset) in offset_map {
                 tpl.add_partition_offset(
