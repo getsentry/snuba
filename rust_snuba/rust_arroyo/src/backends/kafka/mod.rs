@@ -178,14 +178,14 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         if let Rebalance::Assign(list) = rebalance {
             let committed_offsets = base_consumer
                 .committed_offsets(
-                    TopicPartitionList::from_topic_map(&list.to_topic_map()).unwrap(),
+                    (*list).clone(),
                     None,
                 )
                 .unwrap();
 
             let mut offset_map: HashMap<Partition, u64> = HashMap::new();
 
-            for partition in committed_offsets.elements().iter() {
+            for partition in committed_offsets.elements() {
                 let raw_offset = partition.offset().to_raw().unwrap();
 
                 let topic = Topic::new(partition.topic());
@@ -225,17 +225,12 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 .unwrap();
             }
 
-            if let Err(e) = base_consumer.assign(&tpl) {
-                let error: &dyn std::error::Error = &e;
-                tracing::error!(error, "Failed to assign partitions");
-            }
+            base_consumer.assign(&tpl).expect("failed to assign partitions");
+            self.consumer_offsets.lock().unwrap().extend(&offset_map);
 
             // Ensure that all partitions are resumed on assignment to avoid
             // carrying over state from a previous assignment.
-            if let Err(e) = base_consumer.resume(&tpl) {
-                let error: &dyn std::error::Error = &e;
-                tracing::error!(error, "Failed to resume partitions");
-            }
+            base_consumer.resume(&tpl).expect("failed to resume partitions");
 
             self.callbacks.on_assign(offset_map);
         }
@@ -481,7 +476,7 @@ mod tests {
 
         let offsets = consumer.tell().unwrap();
         // One partition was assigned
-        assert!(offsets.len() == 1);
+        assert_eq!(offsets.len(), 1);
         consumer.shutdown();
 
         delete_topic("test").await;
