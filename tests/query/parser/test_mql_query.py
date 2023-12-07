@@ -623,11 +623,7 @@ mql_test_cases = [
                                 None,
                                 "in",
                                 (
-                                    Column(
-                                        "_snuba_project_id",
-                                        None,
-                                        "project_id",
-                                    ),
+                                    Column("_snuba_project_id", None, "project_id"),
                                     FunctionCall(
                                         None,
                                         "tuple",
