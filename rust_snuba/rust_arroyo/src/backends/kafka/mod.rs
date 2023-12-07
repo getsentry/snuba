@@ -177,7 +177,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
 
                 let topic = Topic::new(partition.topic());
 
-                if raw_offset > 0 {
+                if raw_offset >= 0 {
                     offset_map.insert(
                         Partition::new(topic, partition.partition() as u16),
                         raw_offset as u64,
