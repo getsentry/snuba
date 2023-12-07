@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::config::{KafkaConfig, KafkaConsumerConfig};
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
@@ -122,7 +122,7 @@ pub fn consumer_impl(
         first_storage.name,
     );
 
-    let config = KafkaConfig::new_consumer_config(
+    let config = KafkaConsumerConfig::new(
         vec![],
         consumer_group.to_owned(),
         auto_offset_reset.parse().expect(

@@ -1,4 +1,5 @@
-use super::kafka::config::KafkaConfig;
+use self::config::KafkaConsumerConfig;
+
 use super::AssignmentCallbacks;
 use super::CommitOffsets;
 use super::Consumer as ArroyoConsumer;
@@ -306,12 +307,14 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
-    pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
+    pub fn new(
+        config: KafkaConsumerConfig,
+        topics: &[Topic],
+        callbacks: C,
+    ) -> Result<Self, ConsumerError> {
         let offset_state = Arc::new(Mutex::new(OffsetState::default()));
-        let initial_offset_reset = config
-            .offset_reset_config()
-            .ok_or(ConsumerError::InvalidConfig)?
-            .auto_offset_reset;
+
+        let initial_offset_reset = config.offset_reset.auto_offset_reset;
 
         let context = CustomContext {
             hub: Hub::current(),
@@ -482,7 +485,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::{AssignmentCallbacks, InitialOffset, KafkaConsumer};
-    use crate::backends::kafka::config::KafkaConfig;
+    use crate::backends::kafka::config::{KafkaConfig, KafkaConsumerConfig};
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::KafkaPayload;
     use crate::backends::{Consumer, Producer};
@@ -531,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_subscribe() {
-        let configuration = KafkaConfig::new_consumer_config(
+        let configuration = KafkaConsumerConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group".to_string(),
             InitialOffset::Latest,
@@ -546,7 +549,7 @@ mod tests {
     #[test]
     fn test_tell() {
         let topic = TestTopic::create("test-tell");
-        let configuration = KafkaConfig::new_consumer_config(
+        let configuration = KafkaConsumerConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group-1".to_string(),
             InitialOffset::Latest,
@@ -579,7 +582,7 @@ mod tests {
     #[test]
     fn test_offset_reset_strict() {
         let topic = TestTopic::create("test-offset-reset-strict");
-        let configuration = KafkaConfig::new_consumer_config(
+        let configuration = KafkaConsumerConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group-1".to_string(),
             InitialOffset::Earliest,
@@ -638,7 +641,7 @@ mod tests {
     #[test]
     fn test_commit() {
         let topic = TestTopic::create("test-commit");
-        let configuration = KafkaConfig::new_consumer_config(
+        let configuration = KafkaConsumerConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group-2".to_string(),
             InitialOffset::Latest,
@@ -675,7 +678,7 @@ mod tests {
     #[test]
     fn test_pause() {
         let topic = TestTopic::create("test-pause");
-        let configuration = KafkaConfig::new_consumer_config(
+        let configuration = KafkaConsumerConfig::new(
             vec![get_default_broker()],
             // for this particular test, a separate consumer group is apparently needed, as
             // otherwise random rebalancing events will occur when other tests with the same

@@ -1,6 +1,6 @@
 extern crate rust_arroyo;
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::config::KafkaConsumerConfig;
 use rust_arroyo::backends::kafka::InitialOffset;
 use rust_arroyo::backends::kafka::KafkaConsumer;
 use rust_arroyo::backends::AssignmentCallbacks;
@@ -18,7 +18,7 @@ impl AssignmentCallbacks for EmptyCallbacks {
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let config = KafkaConfig::new_consumer_config(
+    let config = KafkaConsumerConfig::new(
         vec!["127.0.0.1:9092".to_string()],
         "my_group".to_string(),
         InitialOffset::Latest,

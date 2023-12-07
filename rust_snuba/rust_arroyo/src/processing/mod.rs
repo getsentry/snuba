@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 
-use crate::backends::kafka::config::KafkaConfig;
+use crate::backends::kafka::config::KafkaConsumerConfig;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
@@ -204,7 +204,7 @@ pub struct StreamProcessor<TPayload: Clone> {
 
 impl StreamProcessor<KafkaPayload> {
     pub fn with_kafka<F: ProcessingStrategyFactory<KafkaPayload> + 'static>(
-        config: KafkaConfig,
+        config: KafkaConsumerConfig,
         factory: F,
         topic: Topic,
         dlq_policy: Option<DlqPolicy<KafkaPayload>>,

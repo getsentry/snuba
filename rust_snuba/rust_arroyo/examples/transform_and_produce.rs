@@ -5,7 +5,7 @@
 extern crate rust_arroyo;
 
 use rdkafka::message::ToBytes;
-use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::config::{KafkaConfig, KafkaConsumerConfig};
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::InitialOffset;
@@ -73,7 +73,7 @@ async fn main() {
         }
     }
 
-    let config = KafkaConfig::new_consumer_config(
+    let config = KafkaConsumerConfig::new(
         vec!["0.0.0.0:9092".to_string()],
         "my_group".to_string(),
         InitialOffset::Latest,
@@ -84,7 +84,7 @@ async fn main() {
 
     let factory = ReverseStringAndProduceStrategyFactory {
         concurrency: ConcurrencyConfig::new(5),
-        config: config.clone(),
+        config: config.core.clone(),
         topic: Topic::new("test_out"),
     };
 

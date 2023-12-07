@@ -1,7 +1,7 @@
 extern crate rust_arroyo;
 
 use chrono::Duration;
-use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::config::KafkaConsumerConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::InitialOffset;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
@@ -19,7 +19,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for TestFactory {
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let config = KafkaConfig::new_consumer_config(
+    let config = KafkaConsumerConfig::new(
         vec!["127.0.0.1:9092".to_string()],
         "my_group".to_string(),
         InitialOffset::Latest,
