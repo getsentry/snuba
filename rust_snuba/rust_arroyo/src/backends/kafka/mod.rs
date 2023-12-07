@@ -163,8 +163,12 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
 
     fn post_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
-            let new_tpl = TopicPartitionList::from_topic_map(&list.to_topic_map()).unwrap();
-            let committed_offsets = base_consumer.committed_offsets(new_tpl, None).unwrap();
+            let committed_offsets = base_consumer
+                .committed_offsets(
+                    TopicPartitionList::from_topic_map(&list.to_topic_map()).unwrap(),
+                    None,
+                )
+                .unwrap();
 
             let mut offset_map: HashMap<Partition, u64> = HashMap::new();
 
@@ -199,7 +203,17 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             // TODO: Actually implement this
-            base_consumer.assign(the topic partition list);
+            let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
+            for (partition, offset) in offset_map {
+                tpl.add_partition_offset(
+                    partition.topic.as_str(),
+                    partition.index as i32,
+                    Offset::from_raw(offset as i64),
+                )
+                .unwrap();
+            }
+
+            base_consumer.assign(&tpl);
 
             let mut offsets = self.consumer_offsets.lock().unwrap();
             for (partition, offset) in &offset_map {
@@ -208,7 +222,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
 
             // Ensure that all partitions are resumed on assignment to avoid
             // carrying over state from a previous assignment.
-            base_consumer.resume(the topic partition list);
+            base_consumer.resume(&tpl);
 
             self.callbacks.on_assign(offset_map);
         }
