@@ -9,16 +9,6 @@ pub struct OffsetResetConfig {
     pub strict_offset_reset: bool,
 }
 
-impl OffsetResetConfig {
-    fn for_rdkafka(&self) -> InitialOffset {
-        if self.strict_offset_reset {
-            InitialOffset::Error
-        } else {
-            self.auto_offset_reset
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct KafkaConfig {
     config_map: HashMap<String, String>,
@@ -101,7 +91,12 @@ impl From<KafkaConfig> for RdKafkaConfig {
         // callback, so preemptively resetting offsets is not enabled when
         // strict_offset_reset is enabled.
         if let Some(config) = cfg.offset_reset_config {
-            config_obj.set("auto.offset.reset", config.for_rdkafka().to_string());
+            let auto_offset_reset = if config.strict_offset_reset {
+                InitialOffset::Error
+            } else {
+                config.auto_offset_reset
+            };
+            config_obj.set("auto.offset.reset", auto_offset_reset.to_string());
         }
         config_obj
     }
