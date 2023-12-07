@@ -1,10 +1,22 @@
 use rdkafka::config::ClientConfig as RdKafkaConfig;
 use std::collections::HashMap;
 
+use super::InitialOffset;
+
 #[derive(Debug, Clone)]
 pub struct OffsetResetConfig {
-    pub auto_offset_reset: String,
+    pub auto_offset_reset: InitialOffset,
     pub strict_offset_reset: bool,
+}
+
+impl OffsetResetConfig {
+    fn for_rdkafka(&self) -> InitialOffset {
+        if self.strict_offset_reset {
+            InitialOffset::Error
+        } else {
+            self.auto_offset_reset
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -32,7 +44,7 @@ impl KafkaConfig {
     pub fn new_consumer_config(
         bootstrap_servers: Vec<String>,
         group_id: String,
-        auto_offset_reset: String,
+        auto_offset_reset: InitialOffset,
         strict_offset_reset: bool,
         max_poll_interval_ms: usize,
         override_params: Option<HashMap<String, String>>,
@@ -79,24 +91,18 @@ impl KafkaConfig {
 }
 
 impl From<KafkaConfig> for RdKafkaConfig {
-    fn from(item: KafkaConfig) -> Self {
+    fn from(cfg: KafkaConfig) -> Self {
         let mut config_obj = RdKafkaConfig::new();
-        for (key, val) in item.config_map.iter() {
+        for (key, val) in cfg.config_map.iter() {
             config_obj.set(key, val);
         }
 
         // NOTE: Offsets are explicitly managed as part of the assignment
         // callback, so preemptively resetting offsets is not enabled when
         // strict_offset_reset is enabled.
-        if let Some(config) = item.offset_reset_config {
-            let auto_offset_reset = match config.strict_offset_reset {
-                true => "error",
-                false => &config.auto_offset_reset,
-            };
-
-            config_obj.set("auto.offset.reset", auto_offset_reset);
+        if let Some(config) = cfg.offset_reset_config {
+            config_obj.set("auto.offset.reset", config.for_rdkafka().to_string());
         }
-
         config_obj
     }
 }
@@ -115,6 +121,8 @@ fn apply_override_params(
 
 #[cfg(test)]
 mod tests {
+    use crate::backends::kafka::InitialOffset;
+
     use super::KafkaConfig;
     use rdkafka::config::ClientConfig as RdKafkaConfig;
     use std::collections::HashMap;
@@ -124,7 +132,7 @@ mod tests {
         let config = KafkaConfig::new_consumer_config(
             vec!["127.0.0.1:9092".to_string()],
             "my-group".to_string(),
-            "error".to_string(),
+            InitialOffset::Error,
             false,
             30_000,
             Some(HashMap::from([(

@@ -16,7 +16,8 @@ use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use sentry::Hub;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::convert::TryFrom;
+use std::fmt;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -36,15 +37,27 @@ enum KafkaConsumerState {
     Revoking,
 }
 
-enum InitialOffset {
+#[derive(Debug, Clone, Copy, Default)]
+pub enum InitialOffset {
     Earliest,
     Latest,
+    #[default]
     Error,
 }
 
-impl TryFrom<&str> for InitialOffset {
-    type Error = ConsumerError;
-    fn try_from(auto_offset_reset: &str) -> Result<Self, ConsumerError> {
+impl fmt::Display for InitialOffset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InitialOffset::Earliest => write!(f, "earliest"),
+            InitialOffset::Latest => write!(f, "latest"),
+            InitialOffset::Error => write!(f, "error"),
+        }
+    }
+}
+
+impl FromStr for InitialOffset {
+    type Err = ConsumerError;
+    fn from_str(auto_offset_reset: &str) -> Result<Self, Self::Err> {
         match auto_offset_reset {
             "earliest" => Ok(InitialOffset::Earliest),
             "latest" => Ok(InitialOffset::Latest),
@@ -203,7 +216,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
-            for (partition, offset) in offset_map.iter() {
+            for (partition, offset) in &offset_map {
                 tpl.add_partition_offset(
                     partition.topic.as_str(),
                     partition.index as i32,
@@ -213,13 +226,15 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             if let Err(e) = base_consumer.assign(&tpl) {
-                tracing::error!("Failed to assign partitions: {}", e);
+                let error: &dyn std::error::Error = &e;
+                tracing::error!(error, "Failed to assign partitions");
             }
 
             // Ensure that all partitions are resumed on assignment to avoid
             // carrying over state from a previous assignment.
             if let Err(e) = base_consumer.resume(&tpl) {
-                tracing::error!("Failed to resume partitions: {}", e);
+                let error: &dyn std::error::Error = &e;
+                tracing::error!(error, "Failed to resume partitions");
             }
 
             self.callbacks.on_assign(offset_map);
@@ -242,18 +257,16 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
 
-        let auto_offset_reset = &*config
+        let initial_offset_reset = config
             .offset_reset_config()
             .ok_or(ConsumerError::InvalidConfig)?
             .auto_offset_reset;
-
-        let initial_offset: InitialOffset = auto_offset_reset.try_into()?;
 
         let context = CustomContext {
             hub: Hub::current(),
             callbacks,
             consumer_offsets: offsets.clone(),
-            initial_offset_reset: initial_offset,
+            initial_offset_reset,
         };
 
         let mut config_obj: ClientConfig = config.into();
@@ -380,7 +393,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
 #[cfg(test)]
 mod tests {
-    use super::{AssignmentCallbacks, KafkaConsumer};
+    use super::{AssignmentCallbacks, InitialOffset, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::Consumer;
     use crate::types::{Partition, Topic};
@@ -432,7 +445,7 @@ mod tests {
         let configuration = KafkaConfig::new_consumer_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group".to_string(),
-            "latest".to_string(),
+            InitialOffset::Latest,
             false,
             30_000,
             None,
@@ -447,7 +460,7 @@ mod tests {
         let configuration = KafkaConfig::new_consumer_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group-1".to_string(),
-            "latest".to_string(),
+            InitialOffset::Latest,
             false,
             30_000,
             None,
@@ -480,7 +493,7 @@ mod tests {
         let configuration = KafkaConfig::new_consumer_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my-group-2".to_string(),
-            "latest".to_string(),
+            InitialOffset::Latest,
             false,
             30_000,
             None,
