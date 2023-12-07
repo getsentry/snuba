@@ -76,7 +76,7 @@ def snql_conditions_with_default(*conditions: str) -> str:
     return " AND ".join(list(conditions) + DEFAULT_TEST_QUERY_CONDITIONS)
 
 
-test_cases = [
+snql_test_cases = [
     pytest.param(
         """
            MATCH (events)
@@ -1182,8 +1182,8 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_query", test_cases)
-def test_format_expressions(query_body: str, expected_query: Query) -> None:
+@pytest.mark.parametrize("query_body, expected_query", snql_test_cases)
+def test_format_expressions_from_snql(query_body: str, expected_query: Query) -> None:
     events = get_dataset("events")
     query, _ = parse_snql_query(str(query_body), events)
 
