@@ -162,9 +162,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         children: Tuple[Sequence[Union[str, Sequence[str]]], Any],
     ) -> FunctionCall:
         factor, *_ = children
-        if isinstance(factor, FunctionCall):  # type: ignore
+        if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
-            return factor  # type: ignore
+            return factor
         condition_op, lhs, _, _, _, rhs = factor
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
