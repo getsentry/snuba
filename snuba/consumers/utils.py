@@ -1,12 +1,6 @@
-import atexit
 import logging
 import time
-from functools import lru_cache
-from typing import Callable, Optional
 
-from arroyo.processing.strategies.run_task_with_multiprocessing import (
-    MultiprocessingPool,
-)
 from confluent_kafka import KafkaException
 from confluent_kafka.admin import AdminClient
 
@@ -51,17 +45,3 @@ def get_partition_count(topic: Topic, timeout: float = 2.0) -> int:
     total_partition_count = len(topic_metadata.partitions.keys())
     logger.info(f"Total of {total_partition_count} partition(s) for {topic.value}.")
     return total_partition_count
-
-
-@lru_cache(maxsize=None)
-def get_reusable_multiprocessing_pool(
-    num_processes: int, initializer: Optional[Callable[[], None]]
-) -> MultiprocessingPool:
-    pool = MultiprocessingPool(num_processes, initializer)
-
-    def shutdown() -> None:
-        logger.info("Shutting down multiprocessing pool")
-        pool.close()
-
-    atexit.register(shutdown)
-    return pool

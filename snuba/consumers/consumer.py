@@ -39,6 +39,9 @@ from arroyo.processing.strategies import (
     RunTaskInThreads,
     RunTaskWithMultiprocessing,
 )
+from arroyo.processing.strategies.run_task_with_multiprocessing import (
+    MultiprocessingPool,
+)
 from arroyo.types import (
     BaseValue,
     BrokerValue,
@@ -57,7 +60,6 @@ from snuba import environment, state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.schemas import _NOOP_CODEC, get_json_codec
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.consumers.utils import get_reusable_multiprocessing_pool
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -800,6 +802,11 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacements,
             slice_id,
         )
+        self.__pool = (
+            MultiprocessingPool(self.__processes, initialize_parallel_transform)
+            if self.__processes is not None
+            else None
+        )
 
     def create_with_partitions(
         self,
@@ -833,7 +840,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             Union[FilteredPayload, MultistorageKafkaPayload]
         ]
 
-        if self.__processes is None:
+        if self.__pool is None:
             inner_strategy = RunTask(transform_function, collect)
         else:
             inner_strategy = RunTaskWithMultiprocessing(
@@ -841,9 +848,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 collect,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
-                pool=get_reusable_multiprocessing_pool(
-                    self.__processes, self.__initialize_parallel_transform
-                ),
+                pool=self.__pool,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
             )
@@ -855,3 +860,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 inner_strategy,
             ),
         )
+
+    def shutdown(self) -> None:
+        if self.__pool:
+            self.__pool.close()
