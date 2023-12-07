@@ -44,16 +44,21 @@ pub struct ConsumerState<TPayload> {
     backpressure_timestamp: Option<Instant>,
     is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
+    dlq_policy: DlqPolicyWrapper<TPayload>,
 }
 
-impl<TPayload> ConsumerState<TPayload> {
-    pub fn new(processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>) -> Self {
+impl<TPayload: Send + Sync + 'static> ConsumerState<TPayload> {
+    pub fn new(
+        processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
+        dlq_policy: Option<DlqPolicy<TPayload>>,
+    ) -> Self {
         Self {
             processing_factory,
             strategy: None,
             backpressure_timestamp: None,
             is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
+            dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
     }
 
@@ -81,7 +86,7 @@ impl ProcessorHandle {
     }
 }
 
-impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
+impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload> {
     // TODO: Having the initialization of the strategy here
     // means that ProcessingStrategy and ProcessingStrategyFactory
     // have to be Send and Sync, which is really limiting and unnecessary.
@@ -100,6 +105,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
 
         let mut state = self.0.lock().unwrap();
         state.strategy = Some(state.processing_factory.create());
+        state.dlq_policy.reset_dlq_limits(&partitions);
 
         metrics.timing(
             "arroyo.consumer.create_strategy.time",
@@ -123,7 +129,7 @@ impl<TPayload: 'static> AssignmentCallbacks for Callbacks<TPayload> {
         if let Some(s) = state.strategy.as_mut() {
             s.close();
             if let Ok(Some(commit_request)) = s.join(None) {
-                // TODO: DLQ should be flushed here as well
+                state.dlq_policy.flush(&commit_request.positions);
                 tracing::info!("Committing offsets");
                 let res = commit_offsets.commit(commit_request.positions);
 
@@ -160,7 +166,6 @@ pub struct StreamProcessor<TPayload: Clone> {
     processor_handle: ProcessorHandle,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
-    dlq_policy: DlqPolicyWrapper<TPayload>,
 }
 
 impl StreamProcessor<KafkaPayload> {
@@ -170,13 +175,16 @@ impl StreamProcessor<KafkaPayload> {
         topic: Topic,
         dlq_policy: Option<DlqPolicy<KafkaPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(factory))));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(factory),
+            dlq_policy,
+        )));
         let callbacks = Callbacks(consumer_state.clone());
 
         // TODO: Can this fail?
         let consumer = Box::new(KafkaConsumer::new(config, &[topic], callbacks).unwrap());
 
-        Self::new(consumer, consumer_state, dlq_policy)
+        Self::new(consumer, consumer_state)
     }
 }
 
@@ -184,7 +192,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
         consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
-        dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
         Self {
             consumer,
@@ -195,7 +202,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             },
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             buffered_messages: BufferedMessages::new(),
-            dlq_policy: DlqPolicyWrapper::new(dlq_policy),
         }
     }
 
@@ -240,6 +246,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         // lock, as we can be sure that for the rest of this function, no assignment callback will
         // run.
         let mut consumer_state = self.consumer_state.lock().unwrap();
+        let consumer_state: &mut ConsumerState<_> = &mut consumer_state;
 
         let Some(strategy) = consumer_state.strategy.as_mut() else {
             match self.message.as_ref() {
@@ -260,7 +267,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                     self.buffered_messages.pop(partition, offset - 1);
                 }
 
-                self.dlq_policy.flush(request.positions.clone());
+                consumer_state.dlq_policy.flush(&request.positions);
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
             Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {
@@ -350,7 +357,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
 
                 if let Some(msg) = invalid_message {
                     tracing::error!(?message, "Invalid message");
-                    self.dlq_policy.produce(msg);
+                    consumer_state.dlq_policy.produce(msg);
                 } else {
                     tracing::error!(?message, "Could not retrieve invalid message from buffer");
                 }
@@ -453,7 +460,10 @@ mod tests {
     fn test_processor() {
         let broker = build_broker();
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(TestFactory {}),
+            None,
+        )));
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -464,7 +474,7 @@ mod tests {
             Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state);
         let res = processor.run_once();
         assert!(res.is_ok())
     }
@@ -477,7 +487,10 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(Box::new(TestFactory {}))));
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(TestFactory {}),
+            None,
+        )));
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -488,7 +501,7 @@ mod tests {
             Callbacks(consumer_state.clone()),
         ));
 
-        let mut processor = StreamProcessor::new(consumer, consumer_state, None);
+        let mut processor = StreamProcessor::new(consumer, consumer_state);
         let res = processor.run_once();
         assert!(res.is_ok());
         let res = processor.run_once();
