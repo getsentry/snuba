@@ -13,6 +13,7 @@ use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
 use rdkafka::error::KafkaError;
 use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
+use sentry::Hub;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -105,6 +106,7 @@ impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
 }
 
 pub struct CustomContext<C: AssignmentCallbacks> {
+    hub: Arc<Hub>,
     callbacks: C,
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
     initial_offset_reset: InitialOffset,
@@ -112,7 +114,7 @@ pub struct CustomContext<C: AssignmentCallbacks> {
 
 impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
     fn log(&self, level: RDKafkaLogLevel, fac: &str, log_message: &str) {
-        match level {
+        Hub::run(self.hub.clone(), || match level {
             RDKafkaLogLevel::Emerg
             | RDKafkaLogLevel::Alert
             | RDKafkaLogLevel::Critical
@@ -128,12 +130,14 @@ impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
             RDKafkaLogLevel::Debug => {
                 tracing::debug!("librdkafka: {fac} {log_message}");
             }
-        }
+        })
     }
 
     fn error(&self, error: KafkaError, reason: &str) {
-        let error: &dyn std::error::Error = &error;
-        tracing::error!(error, "librdkafka: {error}: {reason}");
+        Hub::run(self.hub.clone(), || {
+            let error: &dyn std::error::Error = &error;
+            tracing::error!(error, "librdkafka: {error}: {reason}");
+        })
     }
 }
 
@@ -234,6 +238,7 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
         let initial_offset: InitialOffset = auto_offset_reset.try_into()?;
 
         let context = CustomContext {
+            hub: Hub::current(),
             callbacks,
             consumer_offsets: offsets.clone(),
             initial_offset_reset: initial_offset,
