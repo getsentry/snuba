@@ -19,7 +19,7 @@ ENABLE_DEV_FEATURES = True
 # rather than the pretty formatted one. If you're debugging
 # something and you're at your wit's end, try setting this to False
 # to explore the unrefined Expression structure
-PRETTY_FORMAT_EXPRESSIONS = False
+PRETTY_FORMAT_EXPRESSIONS = True
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it
