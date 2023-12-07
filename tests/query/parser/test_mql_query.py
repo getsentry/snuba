@@ -113,118 +113,114 @@ mql_test_cases = [
                 time_expression,
             ],
             condition=FunctionCall(
-                alias=None,
-                function_name="and",
-                parameters=(
+                None,
+                "and",
+                (
                     FunctionCall(
-                        alias=None,
-                        function_name="equals",
-                        parameters=(
+                        None,
+                        "equals",
+                        (
                             Column(
-                                alias="_snuba_granularity",
-                                table_name=None,
-                                column_name="granularity",
+                                "_snuba_granularity",
+                                None,
+                                "granularity",
                             ),
-                            Literal(alias=None, value=60),
+                            Literal(None, 60),
                         ),
                     ),
                     FunctionCall(
-                        alias=None,
-                        function_name="and",
-                        parameters=(
+                        None,
+                        "and",
+                        (
                             FunctionCall(
-                                alias=None,
-                                function_name="in",
-                                parameters=(
+                                None,
+                                "in",
+                                (
                                     Column(
-                                        alias="_snuba_project_id",
-                                        table_name=None,
-                                        column_name="project_id",
+                                        "_snuba_project_id",
+                                        None,
+                                        "project_id",
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="tuple",
-                                        parameters=(Literal(alias=None, value=11),),
+                                        None,
+                                        "tuple",
+                                        (Literal(None, 11),),
                                     ),
                                 ),
                             ),
                             FunctionCall(
-                                alias=None,
-                                function_name="and",
-                                parameters=(
+                                None,
+                                "and",
+                                (
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="in",
-                                        parameters=(
+                                        None,
+                                        "in",
+                                        (
                                             Column(
-                                                alias="_snuba_org_id",
-                                                table_name=None,
-                                                column_name="org_id",
+                                                "_snuba_org_id",
+                                                None,
+                                                "org_id",
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="tuple",
-                                                parameters=(
-                                                    Literal(alias=None, value=1),
-                                                ),
+                                                None,
+                                                "tuple",
+                                                (Literal(None, 1),),
                                             ),
                                         ),
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="and",
-                                        parameters=(
+                                        None,
+                                        "and",
+                                        (
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="equals",
-                                                parameters=(
+                                                None,
+                                                "equals",
+                                                (
                                                     Column(
-                                                        alias="_snuba_use_case_id",
-                                                        table_name=None,
-                                                        column_name="use_case_id",
+                                                        "_snuba_use_case_id",
+                                                        None,
+                                                        "use_case_id",
                                                     ),
-                                                    Literal(
-                                                        alias=None, value="transactions"
-                                                    ),
+                                                    Literal(None, "transactions"),
                                                 ),
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="and",
-                                                parameters=(
+                                                None,
+                                                "and",
+                                                (
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="greaterOrEquals",
-                                                        parameters=(
+                                                        None,
+                                                        "greaterOrEquals",
+                                                        (
                                                             Column(
-                                                                alias="_snuba_timestamp",
-                                                                table_name=None,
-                                                                column_name="timestamp",
+                                                                "_snuba_timestamp",
+                                                                None,
+                                                                "timestamp",
                                                             ),
                                                             Literal(
-                                                                alias=None,
-                                                                value=datetime(
+                                                                None,
+                                                                datetime(
                                                                     2023, 11, 23, 18, 30
                                                                 ),
                                                             ),
                                                         ),
                                                     ),
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="and",
-                                                        parameters=(
+                                                        None,
+                                                        "and",
+                                                        (
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="less",
-                                                                parameters=(
+                                                                None,
+                                                                "less",
+                                                                (
                                                                     Column(
-                                                                        alias="_snuba_timestamp",
-                                                                        table_name=None,
-                                                                        column_name="timestamp",
+                                                                        "_snuba_timestamp",
+                                                                        None,
+                                                                        "timestamp",
                                                                     ),
                                                                     Literal(
-                                                                        alias=None,
-                                                                        value=datetime(
+                                                                        None,
+                                                                        datetime(
                                                                             2023,
                                                                             11,
                                                                             23,
@@ -235,51 +231,51 @@ mql_test_cases = [
                                                                 ),
                                                             ),
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="and",
-                                                                parameters=(
+                                                                None,
+                                                                "and",
+                                                                (
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="equals",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "equals",
+                                                                        (
                                                                             Column(
-                                                                                alias="_snuba_metric_id",
-                                                                                table_name=None,
-                                                                                column_name="metric_id",
+                                                                                "_snuba_metric_id",
+                                                                                None,
+                                                                                "metric_id",
                                                                             ),
                                                                             Literal(
-                                                                                alias=None,
-                                                                                value=123456,
+                                                                                None,
+                                                                                123456,
                                                                             ),
                                                                         ),
                                                                     ),
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="in",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "in",
+                                                                        (
                                                                             SubscriptableReference(
-                                                                                alias="_snuba_tags_raw[888]",
+                                                                                "_snuba_tags_raw[888]",
                                                                                 column=Column(
-                                                                                    alias="_snuba_tags_raw",
-                                                                                    table_name=None,
-                                                                                    column_name="tags_raw",
+                                                                                    "_snuba_tags_raw",
+                                                                                    None,
+                                                                                    "tags_raw",
                                                                                 ),
                                                                                 key=Literal(
-                                                                                    alias=None,
-                                                                                    value="888",
+                                                                                    None,
+                                                                                    "888",
                                                                                 ),
                                                                             ),
                                                                             FunctionCall(
-                                                                                alias=None,
-                                                                                function_name="tuple",
-                                                                                parameters=(
+                                                                                None,
+                                                                                "tuple",
+                                                                                (
                                                                                     Literal(
-                                                                                        alias=None,
-                                                                                        value="dist1",
+                                                                                        None,
+                                                                                        "dist1",
                                                                                     ),
                                                                                     Literal(
-                                                                                        alias=None,
-                                                                                        value="dist2",
+                                                                                        None,
+                                                                                        "dist2",
                                                                                     ),
                                                                                 ),
                                                                             ),
@@ -351,118 +347,114 @@ mql_test_cases = [
             ],
             groupby=[],
             condition=FunctionCall(
-                alias=None,
-                function_name="and",
-                parameters=(
+                None,
+                "and",
+                (
                     FunctionCall(
-                        alias=None,
-                        function_name="equals",
-                        parameters=(
+                        None,
+                        "equals",
+                        (
                             Column(
-                                alias="_snuba_granularity",
-                                table_name=None,
-                                column_name="granularity",
+                                "_snuba_granularity",
+                                None,
+                                "granularity",
                             ),
-                            Literal(alias=None, value=60),
+                            Literal(None, 60),
                         ),
                     ),
                     FunctionCall(
-                        alias=None,
-                        function_name="and",
-                        parameters=(
+                        None,
+                        "and",
+                        (
                             FunctionCall(
-                                alias=None,
-                                function_name="in",
-                                parameters=(
+                                None,
+                                "in",
+                                (
                                     Column(
-                                        alias="_snuba_project_id",
-                                        table_name=None,
-                                        column_name="project_id",
+                                        "_snuba_project_id",
+                                        None,
+                                        "project_id",
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="tuple",
-                                        parameters=(Literal(alias=None, value=1),),
+                                        None,
+                                        "tuple",
+                                        (Literal(None, 1),),
                                     ),
                                 ),
                             ),
                             FunctionCall(
-                                alias=None,
-                                function_name="and",
-                                parameters=(
+                                None,
+                                "and",
+                                (
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="in",
-                                        parameters=(
+                                        None,
+                                        "in",
+                                        (
                                             Column(
-                                                alias="_snuba_org_id",
-                                                table_name=None,
-                                                column_name="org_id",
+                                                "_snuba_org_id",
+                                                None,
+                                                "org_id",
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="tuple",
-                                                parameters=(
-                                                    Literal(alias=None, value=1),
-                                                ),
+                                                None,
+                                                "tuple",
+                                                (Literal(None, 1),),
                                             ),
                                         ),
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="and",
-                                        parameters=(
+                                        None,
+                                        "and",
+                                        (
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="equals",
-                                                parameters=(
+                                                None,
+                                                "equals",
+                                                (
                                                     Column(
-                                                        alias="_snuba_use_case_id",
-                                                        table_name=None,
-                                                        column_name="use_case_id",
+                                                        "_snuba_use_case_id",
+                                                        None,
+                                                        "use_case_id",
                                                     ),
-                                                    Literal(
-                                                        alias=None, value="transactions"
-                                                    ),
+                                                    Literal(None, "transactions"),
                                                 ),
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="and",
-                                                parameters=(
+                                                None,
+                                                "and",
+                                                (
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="greaterOrEquals",
-                                                        parameters=(
+                                                        None,
+                                                        "greaterOrEquals",
+                                                        (
                                                             Column(
-                                                                alias="_snuba_timestamp",
-                                                                table_name=None,
-                                                                column_name="timestamp",
+                                                                "_snuba_timestamp",
+                                                                None,
+                                                                "timestamp",
                                                             ),
                                                             Literal(
-                                                                alias=None,
-                                                                value=datetime(
+                                                                None,
+                                                                datetime(
                                                                     2021, 1, 1, 0, 0
                                                                 ),
                                                             ),
                                                         ),
                                                     ),
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="and",
-                                                        parameters=(
+                                                        None,
+                                                        "and",
+                                                        (
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="less",
-                                                                parameters=(
+                                                                None,
+                                                                "less",
+                                                                (
                                                                     Column(
-                                                                        alias="_snuba_timestamp",
-                                                                        table_name=None,
-                                                                        column_name="timestamp",
+                                                                        "_snuba_timestamp",
+                                                                        None,
+                                                                        "timestamp",
                                                                     ),
                                                                     Literal(
-                                                                        alias=None,
-                                                                        value=datetime(
+                                                                        None,
+                                                                        datetime(
                                                                             2021,
                                                                             1,
                                                                             2,
@@ -473,51 +465,51 @@ mql_test_cases = [
                                                                 ),
                                                             ),
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="and",
-                                                                parameters=(
+                                                                None,
+                                                                "and",
+                                                                (
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="equals",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "equals",
+                                                                        (
                                                                             Column(
-                                                                                alias="_snuba_metric_id",
-                                                                                table_name=None,
-                                                                                column_name="metric_id",
+                                                                                "_snuba_metric_id",
+                                                                                None,
+                                                                                "metric_id",
                                                                             ),
                                                                             Literal(
-                                                                                alias=None,
-                                                                                value=123456,
+                                                                                None,
+                                                                                123456,
                                                                             ),
                                                                         ),
                                                                     ),
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="in",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "in",
+                                                                        (
                                                                             SubscriptableReference(
-                                                                                alias="_snuba_tags_raw[888]",
+                                                                                "_snuba_tags_raw[888]",
                                                                                 column=Column(
-                                                                                    alias="_snuba_tags_raw",
-                                                                                    table_name=None,
-                                                                                    column_name="tags_raw",
+                                                                                    "_snuba_tags_raw",
+                                                                                    None,
+                                                                                    "tags_raw",
                                                                                 ),
                                                                                 key=Literal(
-                                                                                    alias=None,
-                                                                                    value="888",
+                                                                                    None,
+                                                                                    "888",
                                                                                 ),
                                                                             ),
                                                                             FunctionCall(
-                                                                                alias=None,
-                                                                                function_name="tuple",
-                                                                                parameters=(
+                                                                                None,
+                                                                                "tuple",
+                                                                                (
                                                                                     Literal(
-                                                                                        alias=None,
-                                                                                        value="dist1",
+                                                                                        None,
+                                                                                        "dist1",
                                                                                     ),
                                                                                     Literal(
-                                                                                        alias=None,
-                                                                                        value="dist2",
+                                                                                        None,
+                                                                                        "dist2",
                                                                                     ),
                                                                                 ),
                                                                             ),
@@ -541,9 +533,9 @@ mql_test_cases = [
                 OrderBy(
                     OrderByDirection.ASC,
                     Column(
-                        alias="_snuba_aggregate_value",
-                        table_name=None,
-                        column_name="aggregate_value",
+                        "_snuba_aggregate_value",
+                        None,
+                        "aggregate_value",
                     ),
                 )
             ],
@@ -608,118 +600,114 @@ mql_test_cases = [
                 ),
             ],
             condition=FunctionCall(
-                alias=None,
-                function_name="and",
-                parameters=(
+                None,
+                "and",
+                (
                     FunctionCall(
-                        alias=None,
-                        function_name="equals",
-                        parameters=(
+                        None,
+                        "equals",
+                        (
                             Column(
-                                alias="_snuba_granularity",
-                                table_name=None,
-                                column_name="granularity",
+                                "_snuba_granularity",
+                                None,
+                                "granularity",
                             ),
-                            Literal(alias=None, value=3600),
+                            Literal(None, 3600),
                         ),
                     ),
                     FunctionCall(
-                        alias=None,
-                        function_name="and",
-                        parameters=(
+                        None,
+                        "and",
+                        (
                             FunctionCall(
-                                alias=None,
-                                function_name="in",
-                                parameters=(
+                                None,
+                                "in",
+                                (
                                     Column(
-                                        alias="_snuba_project_id",
-                                        table_name=None,
-                                        column_name="project_id",
+                                        "_snuba_project_id",
+                                        None,
+                                        "project_id",
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="tuple",
-                                        parameters=(Literal(alias=None, value=1),),
+                                        None,
+                                        "tuple",
+                                        (Literal(None, 1),),
                                     ),
                                 ),
                             ),
                             FunctionCall(
-                                alias=None,
-                                function_name="and",
-                                parameters=(
+                                None,
+                                "and",
+                                (
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="in",
-                                        parameters=(
+                                        None,
+                                        "in",
+                                        (
                                             Column(
-                                                alias="_snuba_org_id",
-                                                table_name=None,
-                                                column_name="org_id",
+                                                "_snuba_org_id",
+                                                None,
+                                                "org_id",
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="tuple",
-                                                parameters=(
-                                                    Literal(alias=None, value=1),
-                                                ),
+                                                None,
+                                                "tuple",
+                                                (Literal(None, 1),),
                                             ),
                                         ),
                                     ),
                                     FunctionCall(
-                                        alias=None,
-                                        function_name="and",
-                                        parameters=(
+                                        None,
+                                        "and",
+                                        (
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="equals",
-                                                parameters=(
+                                                None,
+                                                "equals",
+                                                (
                                                     Column(
-                                                        alias="_snuba_use_case_id",
-                                                        table_name=None,
-                                                        column_name="use_case_id",
+                                                        "_snuba_use_case_id",
+                                                        None,
+                                                        "use_case_id",
                                                     ),
-                                                    Literal(
-                                                        alias=None, value="transactions"
-                                                    ),
+                                                    Literal(None, "transactions"),
                                                 ),
                                             ),
                                             FunctionCall(
-                                                alias=None,
-                                                function_name="and",
-                                                parameters=(
+                                                None,
+                                                "and",
+                                                (
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="greaterOrEquals",
-                                                        parameters=(
+                                                        None,
+                                                        "greaterOrEquals",
+                                                        (
                                                             Column(
-                                                                alias="_snuba_timestamp",
-                                                                table_name=None,
-                                                                column_name="timestamp",
+                                                                "_snuba_timestamp",
+                                                                None,
+                                                                "timestamp",
                                                             ),
                                                             Literal(
-                                                                alias=None,
-                                                                value=datetime(
+                                                                None,
+                                                                datetime(
                                                                     2021, 1, 1, 1, 36
                                                                 ),
                                                             ),
                                                         ),
                                                     ),
                                                     FunctionCall(
-                                                        alias=None,
-                                                        function_name="and",
-                                                        parameters=(
+                                                        None,
+                                                        "and",
+                                                        (
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="less",
-                                                                parameters=(
+                                                                None,
+                                                                "less",
+                                                                (
                                                                     Column(
-                                                                        alias="_snuba_timestamp",
-                                                                        table_name=None,
-                                                                        column_name="timestamp",
+                                                                        "_snuba_timestamp",
+                                                                        None,
+                                                                        "timestamp",
                                                                     ),
                                                                     Literal(
-                                                                        alias=None,
-                                                                        value=datetime(
+                                                                        None,
+                                                                        datetime(
                                                                             2021,
                                                                             1,
                                                                             5,
@@ -730,79 +718,79 @@ mql_test_cases = [
                                                                 ),
                                                             ),
                                                             FunctionCall(
-                                                                alias=None,
-                                                                function_name="and",
-                                                                parameters=(
+                                                                None,
+                                                                "and",
+                                                                (
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="equals",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "equals",
+                                                                        (
                                                                             Column(
-                                                                                alias="_snuba_metric_id",
-                                                                                table_name=None,
-                                                                                column_name="metric_id",
+                                                                                "_snuba_metric_id",
+                                                                                None,
+                                                                                "metric_id",
                                                                             ),
                                                                             Literal(
-                                                                                alias=None,
-                                                                                value=567890,
+                                                                                None,
+                                                                                567890,
                                                                             ),
                                                                         ),
                                                                     ),
                                                                     FunctionCall(
-                                                                        alias=None,
-                                                                        function_name="and",
-                                                                        parameters=(
+                                                                        None,
+                                                                        "and",
+                                                                        (
                                                                             FunctionCall(
-                                                                                alias=None,
-                                                                                function_name="notIn",
-                                                                                parameters=(
+                                                                                None,
+                                                                                "notIn",
+                                                                                (
                                                                                     SubscriptableReference(
-                                                                                        alias="_snuba_tags_raw[000888]",
+                                                                                        "_snuba_tags_raw[000888]",
                                                                                         column=Column(
-                                                                                            alias="_snuba_tags_raw",
-                                                                                            table_name=None,
-                                                                                            column_name="tags_raw",
+                                                                                            "_snuba_tags_raw",
+                                                                                            None,
+                                                                                            "tags_raw",
                                                                                         ),
                                                                                         key=Literal(
-                                                                                            alias=None,
-                                                                                            value="000888",
+                                                                                            None,
+                                                                                            "000888",
                                                                                         ),
                                                                                     ),
                                                                                     FunctionCall(
-                                                                                        alias=None,
-                                                                                        function_name="tuple",
-                                                                                        parameters=(
+                                                                                        None,
+                                                                                        "tuple",
+                                                                                        (
                                                                                             Literal(
-                                                                                                alias=None,
-                                                                                                value="dist1",
+                                                                                                None,
+                                                                                                "dist1",
                                                                                             ),
                                                                                             Literal(
-                                                                                                alias=None,
-                                                                                                value="dist2",
+                                                                                                None,
+                                                                                                "dist2",
                                                                                             ),
                                                                                         ),
                                                                                     ),
                                                                                 ),
                                                                             ),
                                                                             FunctionCall(
-                                                                                alias=None,
-                                                                                function_name="equals",
-                                                                                parameters=(
+                                                                                None,
+                                                                                "equals",
+                                                                                (
                                                                                     SubscriptableReference(
-                                                                                        alias="_snuba_tags_raw[000777]",
+                                                                                        "_snuba_tags_raw[000777]",
                                                                                         column=Column(
-                                                                                            alias="_snuba_tags_raw",
-                                                                                            table_name=None,
-                                                                                            column_name="tags_raw",
+                                                                                            "_snuba_tags_raw",
+                                                                                            None,
+                                                                                            "tags_raw",
                                                                                         ),
                                                                                         key=Literal(
-                                                                                            alias=None,
-                                                                                            value="000777",
+                                                                                            None,
+                                                                                            "000777",
                                                                                         ),
                                                                                     ),
                                                                                     Literal(
-                                                                                        alias=None,
-                                                                                        value="bar",
+                                                                                        None,
+                                                                                        "bar",
                                                                                     ),
                                                                                 ),
                                                                             ),
