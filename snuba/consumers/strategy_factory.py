@@ -14,6 +14,9 @@ from arroyo.processing.strategies import (
 )
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
+from arroyo.processing.strategies.run_task_with_multiprocessing import (
+    MultiprocessingPool,
+)
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
@@ -98,6 +101,11 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__output_block_size = output_block_size
         self.__initialize_parallel_transform = initialize_parallel_transform
         self.__health_check_file = health_check_file
+        self.__pool = (
+            MultiprocessingPool(self.__processes, self.__initialize_parallel_transform)
+            if self.__processes
+            else None
+        )
 
     def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
@@ -145,18 +153,17 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         transform_function = self.__process_message
 
         strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
-        if self.__processes is None:
+        if self.__pool is None:
             strategy = RunTask(transform_function, collect)
         else:
             strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
-                self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
+                pool=self.__pool,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                initializer=self.__initialize_parallel_transform,
             )
 
         if self.__prefilter is not None:
@@ -173,3 +180,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = Healthcheck(self.__health_check_file, strategy)
 
         return strategy
+
+    def shutdown(self) -> None:
+        if self.__pool:
+            self.__pool.close()
