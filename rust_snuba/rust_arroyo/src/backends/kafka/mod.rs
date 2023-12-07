@@ -203,25 +203,24 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             }
 
             let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
-            for (partition, offset) in offset_map {
+            for (partition, offset) in offset_map.iter() {
                 tpl.add_partition_offset(
                     partition.topic.as_str(),
                     partition.index as i32,
-                    Offset::from_raw(offset as i64),
+                    Offset::from_raw(*offset as i64),
                 )
                 .unwrap();
             }
 
-            base_consumer.assign(&tpl);
-
-            let mut offsets = self.consumer_offsets.lock().unwrap();
-            for (partition, offset) in &offset_map {
-                offsets.insert(*partition, *offset);
+            if let Err(e) = base_consumer.assign(&tpl) {
+                tracing::error!("Failed to assign partitions: {}", e);
             }
 
             // Ensure that all partitions are resumed on assignment to avoid
             // carrying over state from a previous assignment.
-            base_consumer.resume(&tpl);
+            if let Err(e) = base_consumer.resume(&tpl) {
+                tracing::error!("Failed to resume partitions: {}", e);
+            }
 
             self.callbacks.on_assign(offset_map);
         }
