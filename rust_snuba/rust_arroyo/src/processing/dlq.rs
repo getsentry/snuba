@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
-pub trait DlqProducer<TPayload> {
+pub trait DlqProducer<TPayload>: Send + Sync {
     // Send a message to the DLQ.
     fn produce(
         &self,
@@ -254,7 +254,7 @@ pub(crate) struct DlqPolicyWrapper<TPayload> {
     futures: BTreeMap<Partition, Futures<TPayload>>,
 }
 
-impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
+impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn new(dlq_policy: Option<DlqPolicy<TPayload>>) -> Self {
         let concurrency_config = ConcurrencyConfig::new(10);
         DlqPolicyWrapper {
@@ -267,7 +267,6 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     }
 
     /// Clears the DLQ limits.
-    #[allow(dead_code)]
     pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
         let Some(policy) = self.dlq_policy.as_ref() else {
             return;
@@ -301,21 +300,23 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
         if let Some(dlq_policy) = &self.dlq_policy {
             if self.dlq_limit_state.record_invalid_message(&message) {
-                let task = dlq_policy.producer.produce(message.clone());
+                let (partition, offset) = (message.partition, message.offset);
+
+                let task = dlq_policy.producer.produce(message);
                 let handle = self.runtime.spawn(task);
 
                 self.futures
-                    .entry(message.partition)
+                    .entry(partition)
                     .or_default()
-                    .push_back((message.offset, handle));
+                    .push_back((offset, handle));
             }
         }
     }
 
     // Blocks until all messages up to the committable have been produced so
     // they are safe to commit.
-    pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
-        for (p, committable_offset) in committable {
+    pub fn flush(&mut self, committable: &HashMap<Partition, u64>) {
+        for (&p, &committable_offset) in committable {
             if let Some(values) = self.futures.get_mut(&p) {
                 while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
@@ -476,7 +477,7 @@ mod tests {
             DlqLimit::default(),
         )));
 
-        wrapper.reset_dlq_limits(&[(partition, 0)].into_iter().collect());
+        wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
 
         for i in 0..10 {
             wrapper.produce(BrokerMessage {
@@ -487,7 +488,7 @@ mod tests {
             });
         }
 
-        wrapper.flush(HashMap::from([(partition, 11)]));
+        wrapper.flush(&HashMap::from([(partition, 11)]));
 
         assert_eq!(*producer.call_count.lock().unwrap(), 10);
     }
@@ -502,9 +503,7 @@ mod tests {
 
         let mut state = DlqLimitState::new(
             limit,
-            [(partition, InvalidMessageStats::invalid_at(3))]
-                .into_iter()
-                .collect(),
+            HashMap::from([(partition, InvalidMessageStats::invalid_at(3))]),
         );
 
         // 1 valid message followed by 4 invalid
