@@ -272,9 +272,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             }
             Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {
                 Some(msg) => {
-                    self.message = Some(Message {
-                        inner_message: InnerMessage::BrokerMessage(msg),
-                    });
+                    tracing::error!(?e, "Invalid message");
+                    consumer_state.dlq_policy.produce(msg);
                 }
                 None => {
                     tracing::error!("Could not find invalid message in buffer");
