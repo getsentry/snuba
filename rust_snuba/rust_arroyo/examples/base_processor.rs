@@ -2,6 +2,7 @@ extern crate rust_arroyo;
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::backends::kafka::InitialOffset;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::processing::StreamProcessor;
@@ -21,7 +22,7 @@ fn main() {
     let config = KafkaConfig::new_consumer_config(
         vec!["127.0.0.1:9092".to_string()],
         "my_group".to_string(),
-        "latest".to_string(),
+        InitialOffset::Latest,
         false,
         30_000,
         None,

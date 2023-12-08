@@ -90,6 +90,7 @@ mod tests {
     use super::*;
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
+    use crate::backends::kafka::InitialOffset;
     use crate::processing::strategies::InvalidMessage;
     use crate::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use chrono::Utc;
@@ -99,7 +100,7 @@ mod tests {
         let config = KafkaConfig::new_consumer_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             "my_group".to_string(),
-            "latest".to_string(),
+            InitialOffset::Latest,
             false,
             30_000,
             None,
