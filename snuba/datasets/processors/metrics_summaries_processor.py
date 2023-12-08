@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
 import structlog
+from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
@@ -14,7 +15,7 @@ from snuba.datasets.events_format import (
     extract_extra_tags,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
-from snuba.datasets.processors.spans_processor import RetentionDays, SpanEvent
+from snuba.datasets.processors.spans_processor import RetentionDays
 from snuba.processor import (
     InsertBatch,
     ProcessedMessage,
@@ -80,10 +81,10 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
         }
 
         processed_rows: MetricsSummaries = []
-
-        for metric_mri, metric_values in span_event.get("_metrics_summary", {}).items():
+        metrics_summary: Mapping[str, Any] = span_event.get("_metrics_summary", {})  # type: ignore
+        for metric_mri, metric_values in metrics_summary.items():
             for metric_value in metric_values:
-                processed = deepcopy(common_fields)
+                processed: MutableMapping[str, Any] = deepcopy(common_fields)
 
                 tags: Mapping[str, Any] = _as_dict_safe(metric_value.get("tags", None))
                 processed["tags.key"], processed["tags.value"] = extract_extra_tags(
