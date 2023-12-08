@@ -36,7 +36,7 @@ schema:
   ]
 
 storages:
-  - storage: spans
+  - storage: metrics_summaries
     is_writable: true
     translation_mappers:
       subscriptables:
@@ -68,7 +68,7 @@ query_processors:
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: [project_id, metric_mri]
+      required_filter_columns: [project_id]
   - validator: TagConditionValidator
     args: {}
   - validator: DatetimeConditionValidator
