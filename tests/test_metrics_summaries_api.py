@@ -23,7 +23,6 @@ def utc_yesterday_12_15() -> datetime:
 
 
 @pytest.mark.clickhouse_db
-@pytest.mark.redis_db
 class TestMetricsSummariesApi(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -40,13 +39,15 @@ class TestMetricsSummariesApi(BaseApiTest):
         self.post = _build_snql_post_methods
 
         self.write_storage = get_storage(StorageKey.METRICS_SUMMARIES)
-        self.count = 10
+
         self.project_id = 1
         self.metric_mri = "c:sentry.events.outcomes@none"
+        self.unique_span_ids = [int("deadbeafdeadbeef", 16)]
+
         self.base_time = utc_yesterday_12_15()
         self.start_time = self.base_time
         self.end_time = self.base_time + timedelta(seconds=10)
-        self.unique_span_ids = [int("deadbeafdeadbeef", 16)]
+
         self.generate_metrics_summaries()
 
     def generate_metrics_summaries(
@@ -91,8 +92,6 @@ class TestMetricsSummariesApi(BaseApiTest):
         assert data["data"][0]["unique_span_ids"] == self.unique_span_ids
 
     def test_tags_query(self) -> None:
-        self.generate_metrics_summaries()
-
         tag_key = "topic"
         tag_value = "outcomes-billing"
 
