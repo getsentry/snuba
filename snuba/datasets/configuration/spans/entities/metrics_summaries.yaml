@@ -7,7 +7,7 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: span_id, type: UInt, args: { size: 64 } },
     { name: trace_id, type: UUID },
-    { name: metric_name, type: String },
+    { name: metric_mri, type: String },
     { name: min, type: Float, args: { size: 64 } },
     { name: max, type: Float, args: { size: 64 } },
     { name: sum, type: Float, args: { size: 64 } },
@@ -31,8 +31,6 @@ schema:
           schema_modifiers: [readonly],
         },
     },
-    { name: partition, type: UInt, args: { size: 16 } },
-    { name: offset, type: UInt, args: { size: 64 } },
     { name: retention_days, type: UInt, args: { size: 16 } },
     { name: deleted, type: UInt, args: { size: 8 } },
   ]
@@ -55,12 +53,6 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
-  - processor: TimeSeriesProcessor
-    args:
-      time_group_columns:
-        time: end_timestamp
-      time_parse_columns:
-        - end_timestamp
   - processor: BasicFunctionsProcessor
   - processor: ReferrerRateLimiterProcessor
   - processor: ProjectReferrerRateLimiter
@@ -76,9 +68,10 @@ query_processors:
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: [project_id]
+      required_filter_columns: [project_id, metric_mri]
   - validator: TagConditionValidator
     args: {}
   - validator: DatetimeConditionValidator
     args: {}
+
 required_time_column: end_timestamp

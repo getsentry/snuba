@@ -6,20 +6,20 @@ storage:
   key: metrics_summaries
   set_key: metrics_summaries
 
-readiness_state: partial
+readiness_state: experimental
 
 schema:
   columns:
     [
       { name: project_id, type: UInt, args: { size: 64 } },
-      { name: metric_id, type: String },
+      { name: metric_mri, type: String },
       { name: span_id, type: UInt, args: { size: 64 } },
       { name: trace_id, type: UUID},
       { name: min, type: Float, args: { size: 64 } },
       { name: max, type: Float, args: { size: 64 } },
       { name: sum, type: Float, args: { size: 64 } },
-      { name: count, type: Float, args: { size: 64 } },
-      { name: start_timestamp, type: DateTime },
+      { name: count, type: UInt, args: { size: 64 } },
+      { name: end_timestamp, type: DateTime },
       {
         name: tags,
         type: Nested,
@@ -38,8 +38,6 @@ schema:
             schema_modifiers: [ readonly ],
           },
       },
-      { name: partition, type: UInt, args: { size: 16 } },
-      { name: offset, type: UInt, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: deleted, type: UInt, args: { size: 8 } },
     ]
@@ -84,7 +82,7 @@ query_processors:
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
-        [trace_id, span_id]
+        [project_id, metric_mri]
   - processor: TableRateLimit
   - processor: TupleUnaliaser
 
