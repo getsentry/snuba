@@ -81,7 +81,9 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
         }
 
         processed_rows: MetricsSummaries = []
-        metrics_summary: Mapping[str, Any] = span_event.get("_metrics_summary", {})  # type: ignore
+        metrics_summary: Mapping[str, Any] = _as_dict_safe(
+            span_event.get("_metrics_summary", None)
+        )
         for metric_mri, metric_values in metrics_summary.items():
             for metric_value in metric_values:
                 processed: MutableMapping[str, Any] = deepcopy(common_fields)
