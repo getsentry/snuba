@@ -17,7 +17,7 @@ from snuba.processor import InsertBatch
 
 @dataclass
 class SpanEventExample:
-    dist: Optional[str]
+    project_id: int
     duration_ms: int
     environment: Optional[str]
     event_id: str
@@ -53,7 +53,7 @@ class SpanEventExample:
             "group_raw": self.group_raw,
             "is_segment": False,
             "parent_span_id": self.parent_span_id,
-            "project_id": 1,
+            "project_id": self.project_id,
             "received": self.received,
             "retention_days": self.retention_days,
             "segment_id": self.segment_id,
@@ -87,7 +87,7 @@ class SpanEventExample:
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
         return [
             {
-                "project_id": 1,
+                "project_id": self.project_id,
                 "transaction_op": self.op,
                 "trace_id": str(UUID(self.trace_id)),
                 "span_id": int(self.span_id, 16),
@@ -272,7 +272,7 @@ def __get_timestamps() -> Tuple[float, float, float]:
 def get_span_event() -> SpanEventExample:
     received, start, finish = __get_timestamps()
     return SpanEventExample(
-        dist="",
+        project_id=1,
         duration_ms=int(1000 * (finish - start)),
         environment="prod",
         event_id="e5e062bf2e1d4afd96fd2f90b6770431",
