@@ -366,4 +366,7 @@ class MetricsSummariesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.metrics_summaries")
 
     def get_migrations(self) -> Sequence[str]:
-        return []
+        return [
+            "0001_metrics_summaries_create_table",
+            "0002_metrics_summaries_add_tags_hashmap",
+        ]
