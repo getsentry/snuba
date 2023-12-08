@@ -176,6 +176,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
 
     fn post_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
         if let Rebalance::Assign(list) = rebalance {
+            println!("starting assignment callback");
             let committed_offsets = base_consumer
                 .committed_offsets((*list).clone(), None)
                 .unwrap();
@@ -297,9 +298,31 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         timeout: Option<Duration>,
     ) -> Result<Option<BrokerMessage<KafkaPayload>>, ConsumerError> {
         self.state.assert_consuming_state()?;
+        println!("starting poll");
 
         let duration = timeout.unwrap_or(Duration::ZERO);
         let res = self.consumer.poll(duration);
+
+        if let Some(Err(e)) = &res {
+            // TODO: This is just blindly resetting the offset on any error and not even
+            // checking the error code right now.
+            println!("res {:?}", e);
+            if !self.offsets.lock().unwrap().is_empty() {
+                let mut tpl = TopicPartitionList::with_capacity(self.offsets.lock().unwrap().len());
+                let offsets = self.offsets.lock().unwrap();
+                for (partition, offset) in offsets.iter() {
+                    tpl.add_partition_offset(
+                        partition.topic.as_str(),
+                        partition.index as i32,
+                        Offset::from_raw(*offset as i64),
+                    )?;
+                }
+
+                self.consumer.assign(&tpl).expect("failed to assign");
+            }
+
+            return Ok(None);
+        }
 
         match res {
             None => Ok(None),
