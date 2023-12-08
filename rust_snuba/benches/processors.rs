@@ -159,7 +159,7 @@ fn create_stream_processor(
     messages: usize,
 ) -> StreamProcessor<KafkaPayload> {
     let factory = create_factory(concurrency, processor, schema);
-    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory)));
+    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory, None)));
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
 
@@ -182,7 +182,7 @@ fn create_stream_processor(
     );
     let consumer = Box::new(consumer);
 
-    StreamProcessor::new(consumer, consumer_state, None)
+    StreamProcessor::new(consumer, consumer_state)
 }
 
 fn functions_payload() -> KafkaPayload {

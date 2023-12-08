@@ -26,9 +26,8 @@ from snuba.query.matchers import (
 )
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
+from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
-#: Granularities for which a materialized view exist, in ascending order
-GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
 DEFAULT_GRANULARITY_RAW = 60
 
 

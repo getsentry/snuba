@@ -293,7 +293,13 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "experimental",
+    "partial",
+    "complete",
+}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_FAIL_QUERIES: bool = True
