@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Sequence
 
 import pytest
 
@@ -25,29 +25,34 @@ def utc_yesterday_12_15() -> datetime:
 @pytest.mark.clickhouse_db
 class TestMetricsSummariesApi(BaseApiTest):
     @pytest.fixture
-    def test_app(self) -> Any:
-        return self.app
+    def write_storage(self) -> Any:
+        return get_storage(StorageKey.METRICS_SUMMARIES)
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "metrics_summaries"
+    def project_id(self) -> int:
+        return 1
 
-    @pytest.fixture(autouse=True)
-    def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
-    ) -> None:
-        self.post = _build_snql_post_methods
+    @pytest.fixture
+    def metric_mri(self) -> str:
+        return "c:sentry.events.outcomes@none"
 
-        self.write_storage = get_storage(StorageKey.METRICS_SUMMARIES)
+    @pytest.fixture
+    def unique_span_ids(self) -> Sequence[int]:
+        return [int("deadbeafdeadbeef", 16)]
 
-        self.project_id = 1
-        self.metric_mri = "c:sentry.events.outcomes@none"
-        self.unique_span_ids = [int("deadbeafdeadbeef", 16)]
+    @pytest.fixture
+    def base_time(self) -> datetime:
+        return utc_yesterday_12_15()
 
-        self.base_time = utc_yesterday_12_15()
-        self.start_time = self.base_time
-        self.end_time = self.base_time + timedelta(seconds=10)
+    @pytest.fixture
+    def start_time(self) -> datetime:
+        return self.base_time()
 
+    @pytest.fixture
+    def end_time(self) -> datetime:
+        return self.start_time() + timedelta(seconds=10)
+
+    def setUp(self) -> None:
         self.generate_metrics_summaries()
 
     def generate_metrics_summaries(
@@ -60,7 +65,7 @@ class TestMetricsSummariesApi(BaseApiTest):
             .get_processor()
             .process_message(
                 get_span_event().serialize(),
-                KafkaMessageMetadata(0, 0, self.base_time),
+                KafkaMessageMetadata(0, 0, self.base_time.timestamp()),
             )
         ]
         write_processed_messages(self.write_storage, [row for row in rows if row])
