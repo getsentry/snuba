@@ -68,7 +68,9 @@ query_processors:
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: [project_id]
+      required_filter_columns:
+        - project_id
+        - metric_mri
   - validator: TagConditionValidator
     args: {}
   - validator: DatetimeConditionValidator

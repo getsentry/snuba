@@ -49,7 +49,7 @@ class TestMetricsSummariesApi(BaseApiTest):
         ) - timedelta(seconds=10)
 
     @pytest.fixture
-    def end_time(self, span_event_dict) -> datetime:
+    def end_time(self, span_event_dict: Mapping[str, Any]) -> datetime:
         return (
             datetime.fromtimestamp(
                 span_event_dict["start_timestamp_ms"] / 1000,
@@ -71,7 +71,7 @@ class TestMetricsSummariesApi(BaseApiTest):
         self,
         span_event_dict: Mapping[str, Any],
         writable_table_storage: WritableTableStorage,
-    ):
+    ) -> None:
         assert isinstance(writable_table_storage, WritableTableStorage)
         rows = [
             writable_table_storage.get_table_writer()
@@ -96,7 +96,7 @@ class TestMetricsSummariesApi(BaseApiTest):
     ) -> None:
         self.generate_metrics_summaries(span_event_dict, writable_table_storage)
         query_str = f"""MATCH (metrics_summaries)
-                    SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id
+                    SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
                     WHERE project_id = {project_id}
                     AND metric_mri = '{metric_mri}'
                     AND end_timestamp >= toDateTime('{start_time}')
@@ -133,7 +133,7 @@ class TestMetricsSummariesApi(BaseApiTest):
         tag_key = "topic"
         tag_value = "outcomes-billing"
         query_str = f"""MATCH (metrics_summaries)
-                    SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id
+                    SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
                     WHERE project_id = {project_id}
                     AND metric_mri = '{metric_mri}'
                     AND tags[{tag_key}] = '{tag_value}'
