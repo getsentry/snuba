@@ -81,12 +81,17 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
 
         processed_rows: MetricsSummaries = []
 
-        for metric_name, metric_values in span_event.get("metrics_summary", {}).items():
+        for metric_mri, metric_values in span_event.get("metrics_summary", {}).items():
             for metric_value in metric_values:
                 processed = deepcopy(common_fields)
-                processed["metric_id"] = metric_name
-                for key in {"min", "max", "sum", "count"}:
+
+                processed["metric_mri"] = metric_mri
+                processed["count"] = int(metric_value["count"])
+
+                for key in {"min", "max", "sum"}:
                     processed[key] = float(metric_value[key])
+
+                processed_rows.append(processed)
 
         return processed_rows
 
