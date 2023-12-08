@@ -136,7 +136,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=20)
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
 @click.option(
     "--enforce-schema",
     type=bool,
@@ -201,6 +201,7 @@ def consumer(
     group_instance_id: Optional[str],
     skip_write: bool,
 ) -> None:
+
     setup_logging(log_level)
     setup_sentry()
 

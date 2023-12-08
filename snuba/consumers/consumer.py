@@ -39,9 +39,6 @@ from arroyo.processing.strategies import (
     RunTaskInThreads,
     RunTaskWithMultiprocessing,
 )
-from arroyo.processing.strategies.run_task_with_multiprocessing import (
-    MultiprocessingPool,
-)
 from arroyo.types import (
     BaseValue,
     BrokerValue,
@@ -392,6 +389,7 @@ def build_batch_writer(
     commit_log_config: Optional[CommitLogConfig] = None,
     slice_id: Optional[int] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
+
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
 
@@ -802,11 +800,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacements,
             slice_id,
         )
-        self.__pool = (
-            MultiprocessingPool(self.__processes, initialize_parallel_transform)
-            if self.__processes is not None
-            else None
-        )
 
     def create_with_partitions(
         self,
@@ -840,17 +833,18 @@ class MultistorageConsumerProcessingStrategyFactory(
             Union[FilteredPayload, MultistorageKafkaPayload]
         ]
 
-        if self.__pool is None:
+        if self.__processes is None:
             inner_strategy = RunTask(transform_function, collect)
         else:
             inner_strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
+                self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
-                pool=self.__pool,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
+                initializer=self.__initialize_parallel_transform,
             )
 
         return RunTask(
@@ -860,7 +854,3 @@ class MultistorageConsumerProcessingStrategyFactory(
                 inner_strategy,
             ),
         )
-
-    def shutdown(self) -> None:
-        if self.__pool:
-            self.__pool.close()
