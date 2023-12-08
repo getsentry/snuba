@@ -70,7 +70,6 @@ validators:
     args:
       required_filter_columns:
         - project_id
-        - metric_mri
   - validator: TagConditionValidator
     args: {}
   - validator: DatetimeConditionValidator
