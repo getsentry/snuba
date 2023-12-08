@@ -122,7 +122,9 @@ pub fn consumer_impl(
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
-        auto_offset_reset.to_owned(),
+        auto_offset_reset.parse().expect(
+            "Invalid value for `auto_offset_reset`. Valid values: `error`, `earliest`, `latest`",
+        ),
         !no_strict_offset_reset,
         max_poll_interval_ms,
         Some(consumer_config.raw_topic.broker_config),

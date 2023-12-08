@@ -8,6 +8,7 @@ use rdkafka::message::ToBytes;
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::backends::kafka::InitialOffset;
 use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::run_task::RunTask;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
@@ -75,7 +76,7 @@ async fn main() {
     let config = KafkaConfig::new_consumer_config(
         vec!["0.0.0.0:9092".to_string()],
         "my_group".to_string(),
-        "latest".to_string(),
+        InitialOffset::Latest,
         false,
         30_000,
         None,
