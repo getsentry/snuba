@@ -67,7 +67,6 @@ class TestMetricsSummariesApi(BaseApiTest):
     def span_event_dict(self, span_event: SpanEventExample) -> Mapping[str, Any]:
         return span_event.serialize()
 
-    @pytest.fixture(autouse=True)
     def generate_metrics_summaries(
         self,
         span_event_dict: Mapping[str, Any],
@@ -91,8 +90,11 @@ class TestMetricsSummariesApi(BaseApiTest):
         metric_mri: str,
         start_time: datetime,
         end_time: datetime,
+        span_event_dict: Mapping[str, Any],
+        writable_table_storage: WritableTableStorage,
         unique_span_ids: Sequence[str],
     ) -> None:
+        self.generate_metrics_summaries(span_event_dict, writable_table_storage)
         query_str = f"""MATCH (metrics_summaries)
                     SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id
                     WHERE project_id = {project_id}
@@ -119,12 +121,15 @@ class TestMetricsSummariesApi(BaseApiTest):
 
     def test_tags_query(
         self,
+        span_event_dict: Mapping[str, Any],
+        writable_table_storage: WritableTableStorage,
         project_id: int,
         metric_mri: str,
         start_time: datetime,
         end_time: datetime,
         unique_span_ids: Sequence[str],
     ) -> None:
+        self.generate_metrics_summaries(span_event_dict, writable_table_storage)
         tag_key = "topic"
         tag_value = "outcomes-billing"
         query_str = f"""MATCH (metrics_summaries)
