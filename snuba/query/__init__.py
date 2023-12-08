@@ -31,6 +31,10 @@ from snuba.query.expressions import (
 )
 
 
+class FromClauseNotSet(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class LimitBy:
     limit: int
@@ -208,6 +212,9 @@ class Query(DataSource, ABC):
 
     def set_offset(self, offset: int) -> None:
         self.__offset = offset
+
+    def set_totals(self, totals: bool) -> None:
+        self.__totals = totals
 
     def has_totals(self) -> bool:
         return self.__totals
@@ -523,7 +530,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         self.__from_clause = from_clause
 
     def get_from_clause(self) -> TSimpleDataSource:
-        assert self.__from_clause is not None, "Data source has not been provided yet."
+        if self.__from_clause is None:
+            raise FromClauseNotSet("Data source has not been provided yet.")
         return self.__from_clause
 
     def set_from_clause(self, from_clause: TSimpleDataSource) -> None:

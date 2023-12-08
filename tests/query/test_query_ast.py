@@ -229,7 +229,7 @@ def test_get_all_columns() -> None:
     }
 
 
-def test_initial_parsing() -> None:
+def test_initial_parsing_snql() -> None:
     # Initial parsing created a map object for groupby clause, should be a list
     body = "MATCH (events) SELECT col BY title"
     query = parse_snql_query_initial(body)

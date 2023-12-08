@@ -103,6 +103,8 @@ from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
 
+MAX_LIMIT = 10000
+
 logger = logging.getLogger("snuba.snql.parser")
 
 snql_grammar = Grammar(
@@ -223,7 +225,7 @@ class OrTuple(NamedTuple):
 
 class SnQLVisitor(NodeVisitor):  # type: ignore
     """
-    Builds Snuba AST expressions from the Parsimonious parse tree.
+    Builds Snuba AST expressions from the SnQL Parsimonious parse tree.
     """
 
     @staticmethod
@@ -949,7 +951,7 @@ def parse_snql_query_initial(
     limit = parsed.get_limit()
     if limit is None:
         parsed.set_limit(1000)
-    elif limit > 10000:
+    elif limit > MAX_LIMIT:
         raise ParsingException(
             "queries cannot have a limit higher than 10000", should_report=False
         )
