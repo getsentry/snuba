@@ -309,6 +309,8 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
                     .entry(partition)
                     .or_default()
                     .push_back((offset, handle));
+            } else {
+                panic!("DLQ limit was reached");
             }
         }
     }
