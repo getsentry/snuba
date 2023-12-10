@@ -285,6 +285,10 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
                 let len = values.len();
                 let (_, future) = &mut values[0];
                 if future.is_finished() {
+                    let res = self.runtime.block_on(future);
+                    if let Err(err) = res {
+                        tracing::error!("Error producing to DLQ: {}", err);
+                    }
                     values.pop_front();
                 } else if len >= self.max_pending_futures {
                     let res = self.runtime.block_on(future);
