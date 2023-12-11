@@ -4,3 +4,4 @@ name: spans
 
 entities:
   - spans
+  - metrics_summaries
