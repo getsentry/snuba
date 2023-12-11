@@ -563,10 +563,20 @@ mod tests {
             KafkaConsumer::new(configuration, &[topic.topic], EmptyCallbacks {}).unwrap();
         assert_eq!(consumer.tell().unwrap(), HashMap::new());
 
-        let consumer_message = consumer
-            .poll(Some(Duration::from_millis(25_000)))
-            .unwrap()
-            .unwrap();
+        let mut consumer_message = None;
+
+        for _ in 0..10 {
+            consumer_message = consumer
+                .poll(Some(Duration::from_millis(5_000)))
+                .unwrap();
+
+            if consumer_message.is_some() {
+                break;
+            }
+        }
+
+        let consumer_message = consumer_message.unwrap();
+
         assert_eq!(consumer_message.offset, 0);
         let consumer_payload = consumer_message.payload.payload().unwrap();
         // ensure that our weird workarounds in consumer callbacks (polling the consumer and
