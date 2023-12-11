@@ -420,7 +420,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 
 
 @application.route("/<dataset:dataset>/mql", methods=["GET", "POST"])
-@util.time_request("query")
+@util.time_request("query", {"mql": "true"})
 def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "POST":
         body = parse_request_body(http_request)
