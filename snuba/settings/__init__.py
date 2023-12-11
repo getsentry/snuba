@@ -345,9 +345,6 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
 
-# Enable spans ingestion
-ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
-
 # Enable group attributes consumer
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
     "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
