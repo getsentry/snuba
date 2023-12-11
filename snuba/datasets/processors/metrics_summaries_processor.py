@@ -48,7 +48,7 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
     def _structure_and_validate_message(
         message: SpanEvent,
     ) -> Optional[Tuple[SpanEvent, RetentionDays]]:
-        if not message.get("trace_id"):
+        if not message.get("_metrics_summary"):
             return None
         try:
             # We are purposely using a naive datetime here to work with the
