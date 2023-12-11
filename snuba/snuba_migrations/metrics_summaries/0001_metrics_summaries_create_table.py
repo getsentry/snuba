@@ -45,7 +45,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(project_id, metric_mri, end_timestamp, cityHash64(span_id))",
                     version_column="deleted",
                     partition_by="(retention_days, toMonday(end_timestamp))",
-                    sample_by="metric_mri",
+                    sample_by="cityHash64(metric_mri)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="end_timestamp + toIntervalDay(retention_days)",
