@@ -32,6 +32,7 @@ pub fn process_message(
 
 #[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
+    #[serde(default)]
     _metrics_summary: Value,
     #[serde(default)]
     description: String,
