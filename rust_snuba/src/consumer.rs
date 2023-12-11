@@ -28,6 +28,7 @@ pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
@@ -40,6 +41,7 @@ pub fn consumer(
         consumer_impl(
             consumer_group,
             auto_offset_reset,
+            no_strict_offset_reset,
             consumer_config_raw,
             skip_write,
             concurrency,
@@ -55,6 +57,7 @@ pub fn consumer(
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
@@ -119,8 +122,10 @@ pub fn consumer_impl(
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
-        auto_offset_reset.to_owned(),
-        false,
+        auto_offset_reset.parse().expect(
+            "Invalid value for `auto_offset_reset`. Valid values: `error`, `earliest`, `latest`",
+        ),
+        !no_strict_offset_reset,
         max_poll_interval_ms,
         Some(consumer_config.raw_topic.broker_config),
     );

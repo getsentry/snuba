@@ -64,6 +64,7 @@ query_processors:
       time_parse_columns:
         - received
 
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
