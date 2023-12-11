@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
@@ -167,6 +168,7 @@ class SpanEventExample:
                     "GET",
                     self.op,
                 ],
+                "metrics_summary": json.dumps(self._metrics_summary),
             },
         ]
 
