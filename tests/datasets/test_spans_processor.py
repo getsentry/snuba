@@ -4,6 +4,7 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 from uuid import UUID
 
 import pytest
+import rapidjson
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import (
     SpanEvent,
     _MeasurementValue,
@@ -167,6 +168,7 @@ class SpanEventExample:
                     "GET",
                     self.op,
                 ],
+                "metrics_summary": rapidjson.dumps(self._metrics_summary),
             },
         ]
 
