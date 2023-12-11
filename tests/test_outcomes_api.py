@@ -5,7 +5,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
 import simplejson as json
-from sentry_relay import DataCategory
+from sentry_relay.consts import DataCategory
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.factory import get_writable_storage
