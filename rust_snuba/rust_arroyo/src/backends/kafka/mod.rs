@@ -247,7 +247,10 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             // message here, we are resetting offsets to something else, and (hopefully) not commit
             // anything before that
             if let Some(Err(err)) = base_consumer.poll(Some(Duration::from_millis(10))) {
-                if matches!(err.rdkafka_error_code(), Some(RDKafkaErrorCode::AutoOffsetReset)) {
+                if matches!(
+                    err.rdkafka_error_code(),
+                    Some(RDKafkaErrorCode::AutoOffsetReset)
+                ) {
                     tracing::info!("polling failed during rebalancing, resetting offsets manually");
                 } else {
                     panic!("consumer poll failed in callback: {}", err);
