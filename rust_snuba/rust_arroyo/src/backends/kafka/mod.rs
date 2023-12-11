@@ -13,6 +13,7 @@ use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
 use rdkafka::error::KafkaError;
 use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
+use rdkafka::types::RDKafkaErrorCode;
 use sentry::Hub;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -245,8 +246,12 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             // buffer. but it shouldn't matter which case we hit, because even if poll() returns a
             // message here, we are resetting offsets to something else, and (hopefully) not commit
             // anything before that
-            if let Some(Err(_)) = base_consumer.poll(Some(Duration::from_millis(10))) {
-                tracing::info!("polling failed during rebalancing, resetting offsets manually");
+            if let Some(Err(err)) = base_consumer.poll(Some(Duration::from_millis(10))) {
+                if matches!(err.rdkafka_error_code(), Some(RDKafkaErrorCode::AutoOffsetReset)) {
+                    tracing::info!("polling failed during rebalancing, resetting offsets manually");
+                } else {
+                    panic!("consumer poll failed in callback: {}", err);
+                }
             }
 
             base_consumer
