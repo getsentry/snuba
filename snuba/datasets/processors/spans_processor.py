@@ -1,3 +1,4 @@
+import json
 import numbers
 import random
 import time
@@ -84,6 +85,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["span_id"] = int(span_event["span_id"], 16)
         processed["segment_id"] = processed["span_id"]
         processed["is_segment"] = 1 if span_event["is_segment"] else 0
+
         parent_span_id: Optional[str] = span_event.get("parent_span_id", None)
         if parent_span_id:
             processed["parent_span_id"] = int(parent_span_id, 16)
@@ -112,6 +114,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
 
         processed["duration"] = max(span_event["duration_ms"], 0)
         processed["exclusive_time"] = float(span_event["exclusive_time_ms"])
+
+        if metrics_summary := span_event.get("_metrics_summary"):
+            processed["metrics_summary"] = json.dumps(metrics_summary)
 
     @staticmethod
     def _process_tags(
