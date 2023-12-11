@@ -566,9 +566,7 @@ mod tests {
         let mut consumer_message = None;
 
         for _ in 0..10 {
-            consumer_message = consumer
-                .poll(Some(Duration::from_millis(5_000)))
-                .unwrap();
+            consumer_message = consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
 
             if consumer_message.is_some() {
                 break;
