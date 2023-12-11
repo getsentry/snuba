@@ -1,4 +1,3 @@
-import json
 import numbers
 import random
 import time
@@ -6,6 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
+import rapidjson
 import structlog
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
@@ -116,7 +116,7 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["exclusive_time"] = float(span_event["exclusive_time_ms"])
 
         if metrics_summary := span_event.get("_metrics_summary"):
-            processed["metrics_summary"] = json.dumps(metrics_summary)
+            processed["metrics_summary"] = rapidjson.dumps(metrics_summary)
 
     @staticmethod
     def _process_tags(

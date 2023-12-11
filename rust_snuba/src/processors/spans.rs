@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
@@ -31,6 +32,7 @@ pub fn process_message(
 
 #[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
+    _metrics_summary: Value,
     #[serde(default)]
     description: String,
     duration_ms: u32,
@@ -163,6 +165,8 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    metrics_summary: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -234,6 +238,11 @@ impl TryFrom<FromSpanMessage> for Span {
             tag_values.push(transaction_method);
         }
 
+        let metrics_summary = match from._metrics_summary {
+            Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
+            _ => "".into(),
+        };
+
         Ok(Self {
             action: from.sentry_tags.action.unwrap_or_default(),
             description: from.description,
@@ -247,6 +256,7 @@ impl TryFrom<FromSpanMessage> for Span {
             is_segment: if from.is_segment { 1 } else { 0 },
             measurement_keys,
             measurement_values,
+            metrics_summary,
             module: from.sentry_tags.module.unwrap_or_default(),
             op: from.sentry_tags.op.unwrap_or_default(),
             parent_span_id: from.parent_span_id,
