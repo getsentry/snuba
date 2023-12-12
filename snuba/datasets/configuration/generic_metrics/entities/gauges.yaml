@@ -73,12 +73,6 @@ storages:
         - mapper: AggregateFunctionMapper
           args:
             column_to_map: value
-            from_name: avg
-            to_name: avgMerge
-            aggr_col_name: avg
-        - mapper: AggregateFunctionMapper
-          args:
-            column_to_map: value
             from_name: min
             to_name: minMerge
             aggr_col_name: min
