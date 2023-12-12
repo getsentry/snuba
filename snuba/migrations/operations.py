@@ -70,7 +70,12 @@ class SqlOperation(ABC):
                 ClickhouseClientSettings.MIGRATE, node
             )
             logger.info(f"Executing on {self.target.value} node: {node}")
-            connection.execute(self.format_sql(), settings=self._settings)
+            try:
+                connection.execute(self.format_sql(), settings=self._settings)
+            except Exception:
+                logger.exception(
+                    f"Failed to execute operation on {self.storage_set}, target: {self.target}"
+                )
 
     @abstractmethod
     def format_sql(self) -> str:
