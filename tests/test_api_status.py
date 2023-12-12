@@ -102,7 +102,7 @@ class TestApiCodes(BaseApiTest):
                 "memory-exceeded",
                 "for",
             ),
-            (TimeoutError("test"), "cache-set-timeout", "against"),
+            (TimeoutError("test"), "query-timeout", "for"),
             (ExecutionTimeoutError("test"), "cache-wait-timeout", "against"),
             (
                 ClickhouseError(
