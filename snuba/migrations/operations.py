@@ -76,6 +76,7 @@ class SqlOperation(ABC):
                 logger.exception(
                     f"Failed to execute operation on {self.storage_set}, target: {self.target}"
                 )
+                raise
 
     @abstractmethod
     def format_sql(self) -> str:
