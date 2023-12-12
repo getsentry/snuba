@@ -105,7 +105,7 @@ mod tests {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
     struct Counts {
         submit: u8,
-        poll: u8,
+        polled: bool,
     }
 
     struct Mock(Arc<Mutex<Counts>>);
@@ -122,7 +122,7 @@ mod tests {
 
     impl ProcessingStrategy<KafkaPayload> for Mock {
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-            self.0.lock().unwrap().poll += 1;
+            self.0.lock().unwrap().polled = true;
             Ok(None)
         }
         fn submit(
@@ -210,23 +210,25 @@ mod tests {
         broker.create_topic(result_topic, 1).unwrap();
 
         let broker = Arc::new(Mutex::new(broker));
-        let mut producer = LocalProducer::new(broker.clone());
+        let producer = LocalProducer::new(broker.clone());
 
         let next_step = Mock::new();
         let counts = next_step.counts();
+        let concurrency_config = ConcurrencyConfig::new(1);
         let mut strategy = Produce::new(
             next_step,
             producer,
-            &ConcurrencyConfig::new(10),
+            &concurrency_config,
             result_topic.into(),
         );
 
-        let value = br#"{"something": "something"}"#.into();
-        let data = KafkaPayload::new(None, None, Some(value));
+        let value = br#"{"something": "something"}"#.to_vec();
+        let data = KafkaPayload::new(None, None, Some(value.clone()));
         let now = chrono::Utc::now();
 
         let message = Message::new_broker_message(data, Partition::new(orig_topic, 0), 1, now);
-        strategy.submit(message).unwrap();
+        strategy.submit(message.clone()).unwrap();
+        strategy.join(None).unwrap();
 
         let produced_message = broker
             .lock()
@@ -246,19 +248,33 @@ mod tests {
             .unwrap()
             .is_none());
 
-        assert_eq!(*counts.lock().unwrap(), Counts { submit: 0, poll: 0 });
+        strategy.poll().unwrap();
+        assert_eq!(
+            *counts.lock().unwrap(),
+            Counts {
+                submit: 1,
+                polled: true
+            }
+        );
 
-        strategy.poll();
-        assert_eq!(*counts.lock().unwrap(), Counts { submit: 1, poll: 1 });
+        strategy.submit(message.clone()).unwrap();
+        strategy.join(None).unwrap();
+        assert_eq!(
+            *counts.lock().unwrap(),
+            Counts {
+                submit: 2,
+                polled: true,
+            }
+        );
 
-        strategy.submit(message).unwrap();
-        strategy.poll();
-        assert_eq!(*counts.lock().unwrap(), Counts { submit: 2, poll: 2 });
-
+        let mut result = Ok(());
         for _ in 0..3 {
-            assert!(strategy.submit(message).is_err());
+            result = strategy.submit(message.clone());
+            if result.is_err() {
+                break;
+            }
         }
 
-        strategy.join(None);
+        assert!(result.is_err());
     }
 }

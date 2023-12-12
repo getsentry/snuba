@@ -239,14 +239,14 @@ impl<TPayload: Send + Sync + 'static> Producer<TPayload> for LocalProducer<TPayl
     ) -> Result<(), ProducerError> {
         let mut broker = self.broker.lock().unwrap();
         let partition = match destination {
-            crate::types::TopicOrPartition::Topic(t) => {
+            TopicOrPartition::Topic(t) => {
                 let max_partitions = broker
                     .get_topic_partition_count(t)
                     .map_err(|_| ProducerError::ProducerErrorred)?;
                 let partition = thread_rng().gen_range(0..max_partitions);
                 Partition::new(*t, partition)
             }
-            crate::types::TopicOrPartition::Partition(p) => *p,
+            TopicOrPartition::Partition(p) => *p,
         };
 
         broker
