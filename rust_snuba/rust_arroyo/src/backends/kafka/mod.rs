@@ -246,7 +246,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
             // buffer. but it shouldn't matter which case we hit, because even if poll() returns a
             // message here, we are resetting offsets to something else, and (hopefully) not commit
             // anything before that
-            if let Some(Err(err)) = base_consumer.poll(Some(Duration::from_millis(10))) {
+            if let Some(Err(err)) = base_consumer.poll(Some(Duration::from_millis(100))) {
                 if matches!(
                     err.rdkafka_error_code(),
                     Some(RDKafkaErrorCode::AutoOffsetReset)
