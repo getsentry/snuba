@@ -59,6 +59,8 @@ class RequestStatus(Enum):
     CACHE_SET_TIMEOUT = "cache-set-timeout"
     # The thread waiting for a cache result to be written times out
     CACHE_WAIT_TIMEOUT = "cache-wait-timeout"
+    # If the query takes longer than 30 seconds to run, and the thread is killed by the cache
+    QUERY_TIMEOUT = "query-timeout"
     # Clickhouse predicted the query would time out. TOO_SLOW
     PREDICTED_TIMEOUT = "predicted-timeout"
     # Clickhouse timeout, TIMEOUT_EXCEEDED
@@ -91,6 +93,7 @@ SLO_FOR = {
     RequestStatus.INVALID_REQUEST,
     RequestStatus.INVALID_TYPING,
     RequestStatus.RATE_LIMITED,
+    RequestStatus.QUERY_TIMEOUT,
     RequestStatus.PREDICTED_TIMEOUT,
     RequestStatus.MEMORY_EXCEEDED,
 }
@@ -122,7 +125,7 @@ def get_request_status(cause: Exception | None = None) -> Status:
     elif isinstance(cause, ClickhouseError):
         slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
     elif isinstance(cause, TimeoutError):
-        slo_status = RequestStatus.CACHE_SET_TIMEOUT
+        slo_status = RequestStatus.QUERY_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
     elif isinstance(
