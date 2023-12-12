@@ -74,7 +74,7 @@ class SqlOperation(ABC):
                 connection.execute(self.format_sql(), settings=self._settings)
             except Exception:
                 logger.exception(
-                    f"Failed to execute operation on {self.storage_set}, target: {self.target}"
+                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
                 )
                 raise
 
