@@ -107,6 +107,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "spans",
             "group_attributes",
             "generic_metrics_gauges",
+            "metrics_summaries",
         },
         "single_node": True,
     },
@@ -292,7 +293,13 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "experimental",
+    "partial",
+    "complete",
+}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_FAIL_QUERIES: bool = True
@@ -337,9 +344,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
-
-# Enable spans ingestion
-ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Enable group attributes consumer
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(

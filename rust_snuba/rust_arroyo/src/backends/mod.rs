@@ -10,6 +10,9 @@ pub mod storages;
 #[non_exhaustive]
 #[derive(Error, Debug)]
 pub enum ConsumerError {
+    #[error("Invalid config")]
+    InvalidConfig,
+
     #[error("End of partition reached")]
     EndOfPartition,
 

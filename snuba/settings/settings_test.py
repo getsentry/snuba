@@ -12,7 +12,13 @@ RECORD_QUERIES = True
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "partial",
+    "complete",
+    "experimental",
+}
 ENABLE_DEV_FEATURES = True
 
 # Sometimes we want the raw structure of an expression

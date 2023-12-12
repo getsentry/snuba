@@ -8,17 +8,20 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
-pub trait DlqProducer<TPayload> {
+pub trait DlqProducer<TPayload>: Send + Sync {
     // Send a message to the DLQ.
     fn produce(
         &self,
         message: BrokerMessage<TPayload>,
     ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>>;
 
-    fn build_initial_state(&self) -> DlqLimitState;
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState;
 }
 
 // Drops all invalid messages. Produce returns an immediately resolved future.
@@ -32,8 +35,12 @@ impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for NoopDlqProducer 
         Box::pin(async move { message })
     }
 
-    fn build_initial_state(&self) -> DlqLimitState {
-        DlqLimitState {}
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        _assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        DlqLimitState::new(limit, HashMap::new())
     }
 }
 
@@ -90,24 +97,133 @@ impl DlqProducer<KafkaPayload> for KafkaDlqProducer {
         })
     }
 
-    fn build_initial_state(&self) -> DlqLimitState {
-        DlqLimitState {}
+    fn build_initial_state(
+        &self,
+        limit: DlqLimit,
+        assignment: &HashMap<Partition, u64>,
+    ) -> DlqLimitState {
+        // XXX: We assume the last offsets were invalid when starting the consumer
+        DlqLimitState::new(
+            limit,
+            assignment
+                .iter()
+                .filter_map(|(p, o)| {
+                    Some((*p, o.checked_sub(1).map(InvalidMessageStats::invalid_at)?))
+                })
+                .collect(),
+        )
     }
 }
 
-// Defines any limits that should be placed on the number of messages that are
-// forwarded to the DLQ. This exists to prevent 100% of messages from going into
-// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
-// it may be preferable to stop processing messages altogether and deploy a fix
-// rather than rerouting every message to the DLQ.
-
-// The ratio and max_consecutive_count are counted on a per-partition basis.
+/// Defines any limits that should be placed on the number of messages that are
+/// forwarded to the DLQ. This exists to prevent 100% of messages from going into
+/// the DLQ if something is misconfigured or bad code is deployed. In this scenario,
+/// it may be preferable to stop processing messages altogether and deploy a fix
+/// rather than rerouting every message to the DLQ.
+///
+/// The ratio and max_consecutive_count are counted on a per-partition basis.
+///
+/// The default is no limit.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DlqLimit {
     pub max_invalid_ratio: Option<f64>,
     pub max_consecutive_count: Option<u64>,
 }
 
-pub struct DlqLimitState {}
+/// A record of valid and invalid messages that have been received on a partition.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InvalidMessageStats {
+    /// The number of valid messages that have been received.
+    pub valid: u64,
+    /// The number of invalid messages that have been received.
+    pub invalid: u64,
+    /// The length of the current run of received invalid messages.
+    pub consecutive_invalid: u64,
+    /// The offset of the last received invalid message.
+    pub last_invalid_offset: u64,
+}
+
+impl InvalidMessageStats {
+    /// Creates an empty record with the last invalid message received at `offset`.
+    ///
+    /// The `invalid` and `consecutive_invalid` fields are intentionally left at 0.
+    pub fn invalid_at(offset: u64) -> Self {
+        Self {
+            last_invalid_offset: offset,
+            ..Default::default()
+        }
+    }
+}
+
+/// Struct that keeps a record of how many valid and invalid messages have been received
+/// per partition and decides whether to produce a message to the DLQ according to a configured limit.
+#[derive(Debug, Clone, Default)]
+pub struct DlqLimitState {
+    limit: DlqLimit,
+    records: HashMap<Partition, InvalidMessageStats>,
+}
+
+impl DlqLimitState {
+    /// Creates a `DlqLimitState` with a given limit and initial set of records.
+    pub fn new(limit: DlqLimit, records: HashMap<Partition, InvalidMessageStats>) -> Self {
+        Self { limit, records }
+    }
+
+    /// Records an invalid message.
+    ///
+    /// This updates the internal statistics about the message's partition and
+    /// returns `true` if the message should be produced to the DLQ according to the
+    /// configured limit.
+    fn record_invalid_message<T>(&mut self, message: &BrokerMessage<T>) -> bool {
+        let record = self
+            .records
+            .entry(message.partition)
+            .and_modify(|record| {
+                let last_invalid = record.last_invalid_offset;
+                match message.offset {
+                    o if o <= last_invalid => {
+                        tracing::error!("Invalid message raised out of order")
+                    }
+                    o if o == last_invalid + 1 => record.consecutive_invalid += 1,
+                    o => {
+                        let valid_count = o - last_invalid + 1;
+                        record.valid += valid_count;
+                        record.consecutive_invalid = 1;
+                    }
+                }
+
+                record.invalid += 1;
+                record.last_invalid_offset = message.offset;
+            })
+            .or_insert(InvalidMessageStats {
+                valid: 0,
+                invalid: 1,
+                consecutive_invalid: 1,
+                last_invalid_offset: message.offset,
+            });
+
+        if let Some(max_invalid_ratio) = self.limit.max_invalid_ratio {
+            if record.valid == 0 {
+                // When no valid messages have been processed, we should not
+                // accept the message into the dlq. It could be an indicator
+                // of severe problems on the pipeline. It is best to let the
+                // consumer backlog in those cases.
+                return false;
+            }
+
+            if (record.invalid as f64) / (record.valid as f64) > max_invalid_ratio {
+                return false;
+            }
+        }
+
+        if let Some(max_consecutive_count) = self.limit.max_consecutive_count {
+            if record.consecutive_invalid > max_consecutive_count {
+                return false;
+            }
+        }
+        true
+    }
+}
 
 // DLQ policy defines the DLQ configuration, and is passed to the stream processor
 // upon creation of the consumer. It consists of the DLQ producer implementation and
@@ -116,7 +232,6 @@ pub struct DlqLimitState {}
 // TODO: Respect DLQ limits
 pub struct DlqPolicy<TPayload> {
     producer: Box<dyn DlqProducer<TPayload>>,
-    #[allow(dead_code)]
     limit: DlqLimit,
 }
 
@@ -131,21 +246,35 @@ type Futures<TPayload> = VecDeque<(u64, JoinHandle<BrokerMessage<TPayload>>)>;
 
 pub(crate) struct DlqPolicyWrapper<TPayload> {
     dlq_policy: Option<DlqPolicy<TPayload>>,
-    runtime: Handle,
+    dlq_limit_state: DlqLimitState,
+    // need to keep concurrency config around in order to not drop runtime
+    concurrency_config: ConcurrencyConfig,
     // This is a per-partition max
     max_pending_futures: usize,
     futures: BTreeMap<Partition, Futures<TPayload>>,
 }
 
-impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
+impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn new(dlq_policy: Option<DlqPolicy<TPayload>>) -> Self {
         let concurrency_config = ConcurrencyConfig::new(10);
         DlqPolicyWrapper {
             dlq_policy,
-            runtime: concurrency_config.handle(),
+            dlq_limit_state: DlqLimitState::default(),
+            concurrency_config,
             max_pending_futures: 1000,
             futures: BTreeMap::new(),
         }
+    }
+
+    /// Clears the DLQ limits.
+    pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
+        let Some(policy) = self.dlq_policy.as_ref() else {
+            return;
+        };
+
+        self.dlq_limit_state = policy
+            .producer
+            .build_initial_state(policy.limit, assignment);
     }
 
     // Removes all completed futures, then appends a future with message to be produced
@@ -155,10 +284,8 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             while !values.is_empty() {
                 let len = values.len();
                 let (_, future) = &mut values[0];
-                if future.is_finished() {
-                    values.pop_front();
-                } else if len >= self.max_pending_futures {
-                    let res = self.runtime.block_on(future);
+                if future.is_finished() || len >= self.max_pending_futures {
+                    let res = self.concurrency_config.handle().block_on(future);
                     if let Err(err) = res {
                         tracing::error!("Error producing to DLQ: {}", err);
                     }
@@ -170,32 +297,39 @@ impl<TPayload: Clone + Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
         }
 
         if let Some(dlq_policy) = &self.dlq_policy {
-            let task = dlq_policy.producer.produce(message.clone());
-            let handle = self.runtime.spawn(task);
+            if self.dlq_limit_state.record_invalid_message(&message) {
+                tracing::info!("producing message to dlq");
+                let (partition, offset) = (message.partition, message.offset);
 
-            self.futures
-                .entry(message.partition)
-                .or_default()
-                .push_back((message.offset, handle));
+                let task = dlq_policy.producer.produce(message);
+                let handle = self.concurrency_config.handle().spawn(task);
+
+                self.futures
+                    .entry(partition)
+                    .or_default()
+                    .push_back((offset, handle));
+            } else {
+                tracing::info!("dlq limit reached, dropping message");
+            }
+        } else {
+            tracing::info!("dlq policy missing, dropping message");
         }
     }
 
     // Blocks until all messages up to the committable have been produced so
     // they are safe to commit.
-    pub fn flush(&mut self, committable: HashMap<Partition, u64>) {
-        for (p, committable_offset) in committable {
+    pub fn flush(&mut self, committable: &HashMap<Partition, u64>) {
+        for (&p, &committable_offset) in committable {
             if let Some(values) = self.futures.get_mut(&p) {
-                if let Some((offset, future)) = values.front_mut() {
+                while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
-                        let res: Result<BrokerMessage<TPayload>, tokio::task::JoinError> =
-                            self.runtime.block_on(future);
-
-                        if let Err(err) = res {
-                            tracing::error!("Error producing to DLQ: {}", err);
-                        } else {
-                            values.pop_front();
+                        if let Err(error) = self.concurrency_config.handle().block_on(future) {
+                            let error: &dyn std::error::Error = &error;
+                            tracing::error!(error, "Error producing to DLQ");
                         }
+
+                        values.pop_front();
                     } else {
                         break;
                     }
@@ -315,12 +449,25 @@ mod tests {
                 &self,
                 message: BrokerMessage<TPayload>,
             ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
-                *self.call_count.lock().unwrap() += 1;
-                Box::pin(async move { message })
+                let call_count = self.call_count.clone();
+                Box::pin(async move {
+                    *call_count.lock().unwrap() += 1;
+                    message
+                })
             }
 
-            fn build_initial_state(&self) -> DlqLimitState {
-                DlqLimitState {}
+            fn build_initial_state(
+                &self,
+                limit: DlqLimit,
+                assignment: &HashMap<Partition, u64>,
+            ) -> DlqLimitState {
+                DlqLimitState::new(
+                    limit,
+                    assignment
+                        .iter()
+                        .map(|(p, _)| (*p, InvalidMessageStats::default()))
+                        .collect(),
+                )
             }
         }
 
@@ -333,11 +480,10 @@ mod tests {
 
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
             Box::new(producer.clone()),
-            DlqLimit {
-                max_invalid_ratio: None,
-                max_consecutive_count: Some(1),
-            },
+            DlqLimit::default(),
         )));
+
+        wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
 
         for i in 0..10 {
             wrapper.produce(BrokerMessage {
@@ -348,8 +494,32 @@ mod tests {
             });
         }
 
-        wrapper.flush(HashMap::from([(partition, 11)]));
+        wrapper.flush(&HashMap::from([(partition, 11)]));
 
         assert_eq!(*producer.call_count.lock().unwrap(), 10);
+    }
+
+    #[test]
+    fn test_dlq_limit_state() {
+        let partition = Partition::new(Topic::new("test_topic"), 0);
+        let limit = DlqLimit {
+            max_invalid_ratio: None,
+            max_consecutive_count: Some(5),
+        };
+
+        let mut state = DlqLimitState::new(
+            limit,
+            HashMap::from([(partition, InvalidMessageStats::invalid_at(3))]),
+        );
+
+        // 1 valid message followed by 4 invalid
+        for i in 4..9 {
+            let msg = BrokerMessage::new(i, partition, i, chrono::Utc::now());
+            assert!(state.record_invalid_message(&msg));
+        }
+
+        // Next message should not be accepted
+        let msg = BrokerMessage::new(9, partition, 9, chrono::Utc::now());
+        assert!(!state.record_invalid_message(&msg));
     }
 }

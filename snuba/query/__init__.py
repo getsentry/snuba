@@ -213,6 +213,9 @@ class Query(DataSource, ABC):
     def set_offset(self, offset: int) -> None:
         self.__offset = offset
 
+    def set_totals(self, totals: bool) -> None:
+        self.__totals = totals
+
     def has_totals(self) -> bool:
         return self.__totals
 
