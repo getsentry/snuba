@@ -63,7 +63,11 @@ impl LatencyRecorder {
             None,
         );
 
-        metrics.timing(&format!("insertions.{}_ms", metric_name), self.avg_value_ms(write_time), None);
+        metrics.timing(
+            &format!("insertions.{}_ms", metric_name),
+            self.avg_value_ms(write_time),
+            None,
+        );
     }
 }
 
