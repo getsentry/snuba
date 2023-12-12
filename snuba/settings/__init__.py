@@ -107,14 +107,15 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "spans",
             "group_attributes",
             "generic_metrics_gauges",
+            "metrics_summaries",
         },
         "single_node": True,
     },
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = None
-DOGSTATSD_PORT: int | None = None
+DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_STATSD_HOST") or None
+DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
@@ -343,9 +344,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
-
-# Enable spans ingestion
-ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Enable group attributes consumer
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(

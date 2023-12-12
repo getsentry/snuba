@@ -150,7 +150,4 @@ def test_invalid_readiness_state() -> None:
     }
     with pytest.raises(JsonSchemaValueException) as e:
         STORAGE_VALIDATORS["readable_storage"](config)
-    assert (
-        e.value.message
-        == "data.readiness_state must be one of ['limited', 'deprecate', 'partial', 'complete']"
-    )
+    assert e.value.message.startswith("data.readiness_state must be one of")

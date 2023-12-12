@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from sentry_kafka_schemas.schema_types.outcomes_v1 import Outcome
-from sentry_relay import DataCategory
+from sentry_relay.consts import DataCategory
 
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata

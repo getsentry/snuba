@@ -7,11 +7,21 @@ use std::collections::BTreeMap;
 
 pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 struct LatencyRecorder {
     sum_timestamps: f64,
     earliest_timestamp: u64,
     num_values: usize,
+}
+
+impl Default for LatencyRecorder {
+    fn default() -> Self {
+        LatencyRecorder {
+            sum_timestamps: 0.0,
+            earliest_timestamp: u64::MAX,
+            num_values: 0,
+        }
+    }
 }
 
 impl From<DateTime<Utc>> for LatencyRecorder {
@@ -32,22 +42,32 @@ impl LatencyRecorder {
         self.num_values += other.num_values;
     }
 
+    fn max_value_ms(&self, write_time: DateTime<Utc>) -> u64 {
+        let write_time = write_time.timestamp_millis() as u64;
+        write_time.saturating_sub(self.earliest_timestamp)
+    }
+
+    fn avg_value_ms(&self, write_time: DateTime<Utc>) -> u64 {
+        let write_time = write_time.timestamp_millis() as u64;
+        (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
+    }
+
     fn send_metric(&self, metrics: &BoxMetrics, write_time: DateTime<Utc>, metric_name: &str) {
         if self.num_values == 0 {
             return;
         }
 
-        let write_time = write_time.timestamp_millis() as u64;
-
-        let max_latency = write_time.saturating_sub(self.earliest_timestamp);
         metrics.timing(
             &format!("insertions.max_{}_ms", metric_name),
-            max_latency,
+            self.max_value_ms(write_time),
             None,
         );
 
-        let latency = (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64;
-        metrics.timing(&format!("insertions.{}_ms", metric_name), latency, None);
+        metrics.timing(
+            &format!("insertions.{}_ms", metric_name),
+            self.avg_value_ms(write_time),
+            None,
+        );
     }
 }
 
@@ -173,4 +193,33 @@ pub struct KafkaMessageMetadata {
     pub partition: u16,
     pub offset: u64,
     pub timestamp: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::*;
+
+    #[test]
+    fn test_latency_recorder_basic() {
+        // emulate how Reduce works when creating a batch for inserting into clickhouse, because
+        // that's where we use it in practice. Reduce starts with a default() accumulator
+        let mut accumulator = LatencyRecorder::default();
+
+        // then there's one row being merged into the current batch
+        let now = Utc.timestamp_opt(61, 0).unwrap();
+        accumulator.merge(LatencyRecorder::from(now));
+
+        // then another row
+        let now = Utc.timestamp_opt(63, 0).unwrap();
+        accumulator.merge(LatencyRecorder::from(now));
+
+        // finally, when flushing the batch, we record the metric. let's see if LatencyRecorder did
+        // the math right:
+        assert_eq!(accumulator.num_values, 2);
+        let now = Utc.timestamp_opt(65, 0).unwrap();
+        assert_eq!(accumulator.max_value_ms(now), 4000);
+        assert_eq!(accumulator.avg_value_ms(now), 3000);
+    }
 }

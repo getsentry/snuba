@@ -59,6 +59,15 @@ schema:
         },
     },
     {
+      name: sentry_tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
       name: measurements,
       type: Nested,
       args:
@@ -72,6 +81,15 @@ schema:
     },
     {
       name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
+        },
+    },
+    {
+      name: _sentry_tags_hash_map,
       type: Array,
       args:
         {
@@ -101,6 +119,14 @@ storages:
           args:
             from_column_table: null
             from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: sentry_tags
             to_nested_col_table: null
             to_nested_col_name: tags
             value_subcolumn_name: value
