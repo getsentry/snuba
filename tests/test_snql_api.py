@@ -78,7 +78,8 @@ class TestSnQLApi(BaseApiTest):
             [get_raw_transaction()],
         )
 
-    def test_buggy_query(self) -> None:
+    def test_avg_gauges(self) -> None:
+        # est that `avg(value)` works on gauges even thouh that agregate function doesn't exist on the table
         query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
         `aggregate_value` BY toStartOfInterval(timestamp, toIntervalSecond(1800), 'Universal') AS `time`
         WHERE granularity = 60 AND metric_id = 87269488 AND (org_id IN array(1) AND project_id IN array(1)
