@@ -428,45 +428,45 @@ mod tests {
         assert_eq!(buffer.pop(&partition, 10), None); // Doesn't exist
     }
 
+    #[derive(Clone)]
+    struct TestDlqProducer {
+        pub call_count: Arc<Mutex<usize>>,
+    }
+
+    impl TestDlqProducer {
+        fn new() -> Self {
+            TestDlqProducer {
+                call_count: Arc::new(Mutex::new(0)),
+            }
+        }
+    }
+
+    impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for TestDlqProducer {
+        fn produce(
+            &self,
+            message: BrokerMessage<TPayload>,
+        ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
+            *self.call_count.lock().unwrap() += 1;
+            Box::pin(async move { message })
+        }
+
+        fn build_initial_state(
+            &self,
+            limit: DlqLimit,
+            assignment: &HashMap<Partition, u64>,
+        ) -> DlqLimitState {
+            DlqLimitState::new(
+                limit,
+                assignment
+                    .iter()
+                    .map(|(p, _)| (*p, InvalidMessageStats::default()))
+                    .collect(),
+            )
+        }
+    }
+
     #[test]
     fn test_dlq_policy_wrapper() {
-        #[derive(Clone)]
-        struct TestDlqProducer {
-            pub call_count: Arc<Mutex<usize>>,
-        }
-
-        impl TestDlqProducer {
-            fn new() -> Self {
-                TestDlqProducer {
-                    call_count: Arc::new(Mutex::new(0)),
-                }
-            }
-        }
-
-        impl<TPayload: Send + Sync + 'static> DlqProducer<TPayload> for TestDlqProducer {
-            fn produce(
-                &self,
-                message: BrokerMessage<TPayload>,
-            ) -> Pin<Box<dyn Future<Output = BrokerMessage<TPayload>> + Send + Sync>> {
-                *self.call_count.lock().unwrap() += 1;
-                Box::pin(async move { message })
-            }
-
-            fn build_initial_state(
-                &self,
-                limit: DlqLimit,
-                assignment: &HashMap<Partition, u64>,
-            ) -> DlqLimitState {
-                DlqLimitState::new(
-                    limit,
-                    assignment
-                        .iter()
-                        .map(|(p, _)| (*p, InvalidMessageStats::default()))
-                        .collect(),
-                )
-            }
-        }
-
         let partition = Partition {
             topic: Topic::new("test"),
             index: 1,
@@ -493,6 +493,38 @@ mod tests {
         wrapper.flush(&HashMap::from([(partition, 11)]));
 
         assert_eq!(*producer.call_count.lock().unwrap(), 10);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_dlq_policy_wrapper_limit_exceeded() {
+        let partition = Partition {
+            topic: Topic::new("test"),
+            index: 1,
+        };
+
+        let producer = TestDlqProducer::new();
+
+        let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
+            Box::new(producer.clone()),
+            DlqLimit {
+                max_invalid_ratio: None,
+                max_consecutive_count: Some(5),
+            },
+        )));
+
+        wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
+
+        for i in 0..10 {
+            wrapper.produce(BrokerMessage {
+                partition,
+                offset: i,
+                payload: i,
+                timestamp: Utc::now(),
+            });
+        }
+
+        wrapper.flush(&HashMap::from([(partition, 11)]));
     }
 
     #[test]
