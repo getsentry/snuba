@@ -8,7 +8,6 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
 pub trait DlqProducer<TPayload>: Send + Sync {
@@ -248,7 +247,8 @@ type Futures<TPayload> = VecDeque<(u64, JoinHandle<BrokerMessage<TPayload>>)>;
 pub(crate) struct DlqPolicyWrapper<TPayload> {
     dlq_policy: Option<DlqPolicy<TPayload>>,
     dlq_limit_state: DlqLimitState,
-    runtime: Handle,
+    // need to keep concurrency config around in order to not drop runtime
+    concurrency_config: ConcurrencyConfig,
     // This is a per-partition max
     max_pending_futures: usize,
     futures: BTreeMap<Partition, Futures<TPayload>>,
@@ -260,7 +260,7 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
         DlqPolicyWrapper {
             dlq_policy,
             dlq_limit_state: DlqLimitState::default(),
-            runtime: concurrency_config.handle(),
+            concurrency_config,
             max_pending_futures: 1000,
             futures: BTreeMap::new(),
         }
@@ -284,10 +284,8 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             while !values.is_empty() {
                 let len = values.len();
                 let (_, future) = &mut values[0];
-                if future.is_finished() {
-                    values.pop_front();
-                } else if len >= self.max_pending_futures {
-                    let res = self.runtime.block_on(future);
+                if future.is_finished() || len >= self.max_pending_futures {
+                    let res = self.concurrency_config.handle().block_on(future);
                     if let Err(err) = res {
                         tracing::error!("Error producing to DLQ: {}", err);
                     }
@@ -300,10 +298,11 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
         if let Some(dlq_policy) = &self.dlq_policy {
             if self.dlq_limit_state.record_invalid_message(&message) {
+                tracing::info!("producing message to dlq");
                 let (partition, offset) = (message.partition, message.offset);
 
                 let task = dlq_policy.producer.produce(message);
-                let handle = self.runtime.spawn(task);
+                let handle = self.concurrency_config.handle().spawn(task);
 
                 self.futures
                     .entry(partition)
@@ -312,6 +311,8 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             } else {
                 panic!("DLQ limit was reached");
             }
+        } else {
+            tracing::info!("dlq policy missing, dropping message");
         }
     }
 
@@ -323,7 +324,7 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
                 while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
-                        if let Err(error) = self.runtime.block_on(future) {
+                        if let Err(error) = self.concurrency_config.handle().block_on(future) {
                             let error: &dyn std::error::Error = &error;
                             tracing::error!(error, "Error producing to DLQ");
                         }
