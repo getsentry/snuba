@@ -17,7 +17,7 @@ columns: List[Column[Modifiers]] = [
     Column("span_id", UInt(64)),
     Column("trace_id", UUID()),
     # metrics summary
-    Column("metric_mri", String(Modifiers(low_cardinality=True))),
+    Column("metric_mri", String()),
     Column("min", Float(64)),
     Column("max", Float(64)),
     Column("sum", Float(64)),
