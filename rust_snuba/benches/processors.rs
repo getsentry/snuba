@@ -174,7 +174,7 @@ fn create_stream_processor(
 
     let consumer = LocalConsumer::new(
         Uuid::nil(),
-        broker,
+        Arc::new(Mutex::new(broker)),
         "test_group".to_string(),
         true,
         &[topic],

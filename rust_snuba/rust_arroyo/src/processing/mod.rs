@@ -466,7 +466,7 @@ mod tests {
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             false,
             &[Topic::new("test1")],
@@ -493,7 +493,7 @@ mod tests {
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             false,
             &[Topic::new("test1")],
