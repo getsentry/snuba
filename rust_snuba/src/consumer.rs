@@ -163,6 +163,7 @@ pub fn consumer_impl(
         max_batch_time,
         skip_write,
         ConcurrencyConfig::new(concurrency),
+        ConcurrencyConfig::new(2),
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),

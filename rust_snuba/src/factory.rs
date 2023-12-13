@@ -21,7 +21,8 @@ pub struct ConsumerStrategyFactory {
     max_batch_size: usize,
     max_batch_time: Duration,
     skip_write: bool,
-    concurrency: ConcurrencyConfig,
+    processing_concurrency: ConcurrencyConfig,
+    clickhouse_concurrency: ConcurrencyConfig,
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
@@ -35,7 +36,8 @@ impl ConsumerStrategyFactory {
         max_batch_size: usize,
         max_batch_time: Duration,
         skip_write: bool,
-        concurrency: ConcurrencyConfig,
+        processing_concurrency: ConcurrencyConfig,
+        clickhouse_concurrency: ConcurrencyConfig,
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
@@ -46,7 +48,8 @@ impl ConsumerStrategyFactory {
             max_batch_size,
             max_batch_time,
             skip_write,
-            concurrency,
+            processing_concurrency,
+            clickhouse_concurrency,
             python_max_queue_depth,
             use_rust_processor,
             health_check_file,
@@ -58,17 +61,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let accumulator = Arc::new(BytesInsertBatch::merge);
 
-        let clickhouse_concurrency = ConcurrencyConfig::with_runtime(
-            self.concurrency.concurrency,
-            self.concurrency.handle(),
-        );
         let next_step = Reduce::new(
             Box::new(ClickhouseWriterStep::new(
                 CommitOffsets::new(Duration::from_secs(1)),
                 self.storage_config.clickhouse_cluster.clone(),
                 self.storage_config.clickhouse_table_name.clone(),
                 self.skip_write,
-                &clickhouse_concurrency,
+                &self.clickhouse_concurrency,
             )),
             accumulator,
             BytesInsertBatch::default(),
@@ -87,12 +86,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 func,
                 &self.logical_topic_name,
                 false,
-                &self.concurrency,
+                &self.processing_concurrency,
             ),
             _ => Box::new(
                 PythonTransformStep::new(
                     self.storage_config.message_processor.clone(),
-                    self.concurrency.concurrency,
+                    self.processing_concurrency.concurrency,
                     self.python_max_queue_depth,
                     next_step,
                 )

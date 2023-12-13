@@ -136,14 +136,18 @@ fn create_factory(
         },
     };
 
-    let concurrency = ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let processing_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let clickhouse_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
         schema.into(),
         1_000,
         Duration::from_millis(10),
         true,
-        concurrency,
+        processing_concurrency,
+        clickhouse_concurrency,
         None,
         true,
         None,
