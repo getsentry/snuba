@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import MigrationGroup, ReadinessState
 from snuba.migrations.policies import (
     AllMigrationsPolicy,
     MigrationPolicy,
@@ -91,6 +91,17 @@ class TestMigrationPolicies:
             assert POLICIES[policy_str].can_run(migration_key) == expected
         else:
             assert POLICIES[policy_str].can_reverse(migration_key) == expected
+
+    @patch(
+        "snuba.migrations.policies.get_group_readiness_state",
+        return_value=ReadinessState.EXPERIMENTAL,
+    )
+    def test_experimental_groups(self, mock_readiness_state: Mock) -> None:
+        migration_key = MigrationKey(
+            MigrationGroup("test_migration"), "0001_create_test_table"
+        )
+        assert NonBlockingMigrationsPolicy().can_run(migration_key) == True
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
 
     @patch(
         "snuba.migrations.runner.Runner.get_status",
