@@ -213,7 +213,7 @@ impl<TPayload, C: AssignmentCallbacks> Drop for LocalConsumer<TPayload, C> {
     }
 }
 
-pub(crate) struct LocalProducer<TPayload> {
+pub struct LocalProducer<TPayload> {
     broker: Arc<Mutex<LocalBroker<TPayload>>>,
 }
 
