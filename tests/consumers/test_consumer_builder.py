@@ -64,6 +64,7 @@ consumer_builder = ConsumerBuilder(
     slice_id=None,
     join_timeout=5,
     enforce_schema=True,
+    metrics_tags={},
 )
 
 optional_consumer_config = resolve_consumer_config(
@@ -110,6 +111,7 @@ consumer_builder_with_opt = ConsumerBuilder(
     slice_id=None,
     join_timeout=5,
     enforce_schema=True,
+    metrics_tags={},
 )
 
 

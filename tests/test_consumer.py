@@ -88,6 +88,7 @@ def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
         input_block_size=None,
         output_block_size=None,
         health_check_file=health_check_file.strpath,
+        metrics_tags={},
     )
 
     commit_function = Mock()
